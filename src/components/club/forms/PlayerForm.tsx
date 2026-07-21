@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { PaymentStatus, PlayerFormValues, PlayerStatus } from "@/types/club";
 import { normalizePlayerFormValues } from "@/lib/club/player-form";
 
@@ -44,12 +44,17 @@ export default function PlayerForm({
     ...defaultValues,
     ...initialValues,
   });
+  const [selectedFileName, setSelectedFileName] = useState("");
+  const [photoError, setPhotoError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     setFormValues({
       ...defaultValues,
       ...initialValues,
     });
+    setSelectedFileName("");
+    setPhotoError(null);
   }, [initialValues]);
 
   const fullNameSeed = useMemo(
@@ -77,6 +82,8 @@ export default function PlayerForm({
           fullNameSeed,
         )}`,
       );
+      setSelectedFileName("");
+      setPhotoError(null);
       return;
     }
 
@@ -86,41 +93,135 @@ export default function PlayerForm({
         fullNameSeed,
       )}&background=0D8ABC&color=fff`,
     );
+    setSelectedFileName("");
+    setPhotoError(null);
+  };
+
+  const openFileDialog = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handlePhotoFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) {
+      return;
+    }
+
+    if (!file.type.startsWith("image/")) {
+      setPhotoError("Selectionnez un fichier image valide.");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result !== "string") {
+        setPhotoError("Impossible de charger l'image.");
+        return;
+      }
+      updateField("photoUrl", reader.result);
+      setSelectedFileName(file.name);
+      setPhotoError(null);
+    };
+    reader.onerror = () => {
+      setPhotoError("Impossible de lire ce fichier.");
+    };
+    reader.readAsDataURL(file);
   };
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
         <div className="md:col-span-2 xl:col-span-3">
-          <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
-            Photo (URL)
-          </label>
-          <input
-            value={formValues.photoUrl}
-            onChange={(event) => updateField("photoUrl", event.target.value)}
-            placeholder="https://..."
-            className={inputClassName}
-          />
-          <div className="mt-3 flex flex-wrap items-center gap-2">
+          <div className="flex flex-col gap-4 md:flex-row md:items-start">
             <button
               type="button"
-              className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300"
-              onClick={() => assignGeneratedAvatar("dicebear")}
+              onClick={openFileDialog}
+              className="group relative flex h-28 w-28 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-dashed border-gray-300 bg-gray-50 hover:border-brand-400 hover:bg-brand-50/40 dark:border-gray-700 dark:bg-gray-800/40 dark:hover:border-brand-500/60"
             >
-              Avatar DiceBear
+              {formValues.photoUrl ? (
+                <img
+                  src={formValues.photoUrl}
+                  alt="Apercu joueur"
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <div className="flex flex-col items-center gap-1 text-gray-500 dark:text-gray-400">
+                  <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white text-brand-500 shadow-theme-xs dark:bg-gray-900">
+                    <svg
+                      width="16"
+                      height="16"
+                      viewBox="0 0 16 16"
+                      fill="none"
+                      xmlns="http://www.w3.org/2000/svg"
+                    >
+                      <path
+                        d="M8 3.333v9.334M3.333 8h9.334"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                        strokeLinecap="round"
+                      />
+                    </svg>
+                  </span>
+                  <span className="text-[11px] font-medium">Ajouter</span>
+                </div>
+              )}
+              <span className="pointer-events-none absolute inset-0 border border-white/40" />
             </button>
-            <button
-              type="button"
-              className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300"
-              onClick={() => assignGeneratedAvatar("ui-avatars")}
-            >
-              Avatar Initiales
-            </button>
-            <input
-              type="file"
-              className="block text-xs text-gray-500 file:mr-4 file:rounded-md file:border-0 file:bg-gray-100 file:px-3 file:py-2 file:text-xs file:font-medium file:text-gray-700 hover:file:bg-gray-200 dark:text-gray-400 dark:file:bg-gray-800 dark:file:text-gray-300"
-            />
+
+            <div className="min-w-0 flex-1">
+              <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
+                Photo (URL)
+              </label>
+              <input
+                value={formValues.photoUrl}
+                onChange={(event) => {
+                  updateField("photoUrl", event.target.value);
+                  setSelectedFileName("");
+                  setPhotoError(null);
+                }}
+                placeholder="https://..."
+                className={inputClassName}
+              />
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300"
+                  onClick={() => assignGeneratedAvatar("dicebear")}
+                >
+                  Avatar DiceBear
+                </button>
+                <button
+                  type="button"
+                  className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300"
+                  onClick={() => assignGeneratedAvatar("ui-avatars")}
+                >
+                  Avatar Initiales
+                </button>
+                <button
+                  type="button"
+                  onClick={openFileDialog}
+                  className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300"
+                >
+                  Choose File
+                </button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handlePhotoFileChange}
+                  className="sr-only"
+                />
+                <span className="text-xs text-gray-500 dark:text-gray-400">
+                  {selectedFileName || "No file chosen"}
+                </span>
+              </div>
+            </div>
           </div>
+          {photoError ? (
+            <p className="mt-2 text-xs text-error-600 dark:text-error-400">
+              {photoError}
+            </p>
+          ) : null}
         </div>
 
         <div>

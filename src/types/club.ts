@@ -16,6 +16,7 @@ export type MatchState = "FT" | "A venir";
 
 export interface Player {
   id: string;
+  matricule?: string;
   nom: string;
   prenom: string;
   photoUrl: string;
@@ -30,6 +31,7 @@ export interface Player {
   cotisationMontant: number;
   cotisationStatut: PaymentStatus;
   dernierPaiement: string;
+  saison?: string;
 }
 
 export interface ClubEvent {
@@ -50,6 +52,20 @@ export interface Payment {
   periode: string;
   methode: PaymentMethod;
   datePaiement?: string;
+  remarque?: string;
+}
+
+export interface Invoice {
+  id: string;
+  noFacture: string;
+  playerId: string;
+  sessionId: string;
+  remarque: string;
+  montantAPayer: number;
+  montantPaye: number;
+  dateFacture: string;
+  datePaiement?: string;
+  statut: PaymentStatus;
 }
 
 export interface Parent {

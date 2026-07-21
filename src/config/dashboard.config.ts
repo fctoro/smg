@@ -15,6 +15,7 @@ export type PlayerColumnKey =
   | "cotisation"
   | "montant"
   | "dernierPaiement"
+  | "saison"
   | "actions";
 
 export interface DashboardWidgetConfig {
@@ -58,6 +59,7 @@ const defaultPlayerColumns: PlayerColumnConfig[] = [
   { key: "cotisation", label: "Cotisation", enabled: true },
   { key: "montant", label: "Montant", enabled: true },
   { key: "dernierPaiement", label: "Dernier paiement", enabled: true },
+  { key: "saison", label: "Saison", enabled: true },
   { key: "actions", label: "Actions", enabled: true },
 ];
 

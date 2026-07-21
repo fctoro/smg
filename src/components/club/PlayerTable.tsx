@@ -33,6 +33,7 @@ const defaultColumns: PlayerColumnKey[] = [
   "cotisation",
   "montant",
   "dernierPaiement",
+  "saison",
   "actions",
 ];
 
@@ -117,9 +118,7 @@ export default function PlayerTable({
     if (trimmed.length > 0) {
       return trimmed;
     }
-    return `https://ui-avatars.com/api/?name=${encodeURIComponent(
-      fullName,
-    )}&background=0D8ABC&color=fff`;
+    return "/images/user/user-01.jpg";
   };
 
   return (
@@ -177,7 +176,7 @@ export default function PlayerTable({
                   isHeader
                   className="py-3 text-start text-theme-xs font-medium text-gray-500 dark:text-gray-400"
                 >
-                  Avatar + Nom
+                  Photo + Nom
                 </TableCell>
               ) : null}
               {visibleColumnSet.has("poste") ? (
@@ -228,6 +227,14 @@ export default function PlayerTable({
                   Dernier paiement
                 </TableCell>
               ) : null}
+              {visibleColumnSet.has("saison") ? (
+                <TableCell
+                  isHeader
+                  className="py-3 text-start text-theme-xs font-medium text-gray-500 dark:text-gray-400"
+                >
+                  Saison
+                </TableCell>
+              ) : null}
               {visibleColumnSet.has("actions") ? (
                 <TableCell
                   isHeader
@@ -271,8 +278,9 @@ export default function PlayerTable({
                           <p className="text-theme-sm font-medium text-gray-800 dark:text-white/90">
                             {fullName}
                           </p>
-                          <p className="text-theme-xs text-gray-500 dark:text-gray-400">
-                            {player.email}
+                          <p className="text-theme-xs font-semibold text-error-600 dark:text-error-500 mt-1 flex items-center gap-1.5">
+                            <span className="flex h-1.5 w-1.5 rounded-full bg-error-500"></span>
+                            {player.matricule || `FCT-XXXX-${String(player.id).padStart(4, "0")}`}
                           </p>
                         </div>
                       </div>
@@ -318,6 +326,11 @@ export default function PlayerTable({
                   {visibleColumnSet.has("dernierPaiement") ? (
                     <TableCell className="py-3 text-theme-sm text-gray-500 dark:text-gray-400">
                       {formatClubDate(player.dernierPaiement)}
+                    </TableCell>
+                  ) : null}
+                  {visibleColumnSet.has("saison") ? (
+                    <TableCell className="py-3 text-theme-sm text-gray-500 dark:text-gray-400">
+                      {player.saison || "-"}
                     </TableCell>
                   ) : null}
                   {visibleColumnSet.has("actions") ? (

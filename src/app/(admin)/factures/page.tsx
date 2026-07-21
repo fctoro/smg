@@ -11,13 +11,14 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import Link from "next/link";
 import { useClubData } from "@/context/ClubDataContext";
 import { formatClubCurrency, formatClubDate, getPlayerFullName } from "@/lib/club/metrics";
+import { colorFromPaymentStatus, paymentStatusLabel } from "@/lib/club/status";
 
-export default function PaymentsPage() {
-  const { payments, players } = useClubData();
+export default function InvoicesPage() {
+  const { invoices, players } = useClubData();
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedStatus, setSelectedStatus] = useState("all");
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 12;
 
@@ -26,45 +27,59 @@ export default function PaymentsPage() {
     [players],
   );
 
-  const filteredPayments = useMemo(() => {
+  const filteredInvoices = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
-    return payments
-      .filter((payment) => {
-        const player = playerMap.get(payment.playerId);
+    return invoices
+      .filter((invoice) => {
+        const player = playerMap.get(invoice.playerId);
         if (!player) return false;
         const playerName = getPlayerFullName(player).toLowerCase();
-        return !query || playerName.includes(query);
+        const noFacture = invoice.noFacture.toLowerCase();
+        
+        const matchesSearch = !query || playerName.includes(query) || noFacture.includes(query);
+        const matchesStatus =
+          selectedStatus === "all" || invoice.statut === selectedStatus;
+          
+        return matchesSearch && matchesStatus;
       })
       .sort((a, b) => {
-        const dateA = new Date(a.datePaiement || 0).getTime();
-        const dateB = new Date(b.datePaiement || 0).getTime();
+        const dateA = new Date(a.dateFacture || 0).getTime();
+        const dateB = new Date(b.dateFacture || 0).getTime();
         return dateB - dateA;
       });
-  }, [payments, playerMap, searchQuery]);
+  }, [invoices, playerMap, searchQuery, selectedStatus]);
 
-  const totalPages = Math.max(1, Math.ceil(filteredPayments.length / pageSize));
+  const totalPages = Math.max(1, Math.ceil(filteredInvoices.length / pageSize));
   const currentPageSafe = Math.min(currentPage, totalPages);
-  const pagedPayments = filteredPayments.slice(
+  const pagedInvoices = filteredInvoices.slice(
     (currentPageSafe - 1) * pageSize,
     currentPageSafe * pageSize,
   );
 
   const handleExport = () => {
     const headers = [
-      "joueur",
-      "montant",
-      "date_paiement",
-      "informations"
+      "NoFacture",
+      "Joueur",
+      "DateFacture",
+      "MontantAPayer",
+      "MontantPaye",
+      "Statut",
+      "DatePaiement",
+      "Remarque"
     ];
 
-    const rows = filteredPayments.map((payment) => {
-      const player = playerMap.get(payment.playerId)!;
+    const rows = filteredInvoices.map((invoice) => {
+      const player = playerMap.get(invoice.playerId)!;
       const playerName = getPlayerFullName(player);
       return [
+        invoice.noFacture,
         playerName,
-        String(payment.montant),
-        payment.datePaiement ?? "",
-        payment.remarque ?? "",
+        invoice.dateFacture,
+        String(invoice.montantAPayer),
+        String(invoice.montantPaye),
+        invoice.statut,
+        invoice.datePaiement ?? "",
+        invoice.remarque ?? "",
       ];
     });
 
@@ -81,7 +96,7 @@ export default function PaymentsPage() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `paiements-${Date.now()}.csv`;
+    link.download = `factures-${Date.now()}.csv`;
     document.body.appendChild(link);
     link.click();
     link.remove();
@@ -90,18 +105,32 @@ export default function PaymentsPage() {
 
   return (
     <div>
-      <PageBreadcrumb pageTitle="Paiements" />
+      <PageBreadcrumb pageTitle="Factures" />
 
-      <div className="mb-6 grid gap-3 lg:grid-cols-3">
+      <div className="mb-6 grid gap-3 lg:grid-cols-4">
         <input
           value={searchQuery}
           onChange={(event) => {
             setSearchQuery(event.target.value);
             setCurrentPage(1);
           }}
-          placeholder="Rechercher un joueur"
+          placeholder="Rechercher par joueur ou n° de facture"
           className="h-11 w-full rounded-lg border border-gray-300 bg-transparent px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs placeholder:text-gray-400 focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
         />
+
+        <select
+          value={selectedStatus}
+          onChange={(event) => {
+            setSelectedStatus(event.target.value);
+            setCurrentPage(1);
+          }}
+          className="h-11 w-full rounded-lg border border-gray-300 bg-transparent px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
+        >
+          <option value="all">Tous statuts</option>
+          <option value="paid">Payé</option>
+          <option value="pending">En attente (Acompte)</option>
+          <option value="late">Impayé</option>
+        </select>
 
         <button
           type="button"
@@ -110,64 +139,74 @@ export default function PaymentsPage() {
         >
           Export CSV
         </button>
-
-        <Link
-          href="/paiements/nouveau"
-          className="rounded-lg bg-brand-500 px-4 py-2.5 text-center text-sm font-medium text-white hover:bg-brand-600"
-        >
-          + Ajouter
-        </Link>
       </div>
 
       <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white px-4 pb-3 pt-4 dark:border-gray-800 dark:bg-white/[0.03] sm:px-6">
         <div className="mb-4 text-sm text-gray-500 dark:text-gray-400">
-          {filteredPayments.length} paiement(s)
+          {filteredInvoices.length} facture(s)
         </div>
         <div className="max-w-full overflow-x-auto">
           <Table>
             <TableHeader className="border-y border-gray-100 dark:border-gray-800">
               <TableRow>
                 <TableCell isHeader className="py-3 text-start text-theme-xs font-medium text-gray-500 dark:text-gray-400">
+                  N° Facture
+                </TableCell>
+                <TableCell isHeader className="py-3 text-start text-theme-xs font-medium text-gray-500 dark:text-gray-400">
+                  Date
+                </TableCell>
+                <TableCell isHeader className="py-3 text-start text-theme-xs font-medium text-gray-500 dark:text-gray-400">
                   Joueur
                 </TableCell>
                 <TableCell isHeader className="py-3 text-start text-theme-xs font-medium text-gray-500 dark:text-gray-400">
-                  Date paiement
+                  À Payer
                 </TableCell>
                 <TableCell isHeader className="py-3 text-start text-theme-xs font-medium text-gray-500 dark:text-gray-400">
-                  Montant
+                  Déjà Payé
                 </TableCell>
                 <TableCell isHeader className="py-3 text-start text-theme-xs font-medium text-gray-500 dark:text-gray-400">
-                  Informations
+                  Statut
+                </TableCell>
+                <TableCell isHeader className="py-3 text-start text-theme-xs font-medium text-gray-500 dark:text-gray-400">
+                  Remarque
                 </TableCell>
               </TableRow>
             </TableHeader>
             <TableBody className="divide-y divide-gray-100 dark:divide-gray-800">
-              {pagedPayments.length === 0 ? (
+              {pagedInvoices.length === 0 ? (
                 <TableRow>
-                  <td
-                    colSpan={7}
-                    className="py-6 text-center text-theme-sm text-gray-500 dark:text-gray-400"
-                  >
-                    Aucun paiement trouve.
+                  <td colSpan={7} className="py-6 text-center text-theme-sm text-gray-500 dark:text-gray-400">
+                    Aucune facture trouvée.
                   </td>
                 </TableRow>
               ) : (
-                pagedPayments.map((payment) => {
-                  const player = playerMap.get(payment.playerId)!;
+                pagedInvoices.map((invoice) => {
+                  const player = playerMap.get(invoice.playerId)!;
                   return (
-                    <TableRow key={payment.id}>
+                    <TableRow key={invoice.id}>
+                      <TableCell className="py-3 text-theme-sm font-medium text-brand-500">
+                        {invoice.noFacture}
+                      </TableCell>
+                      <TableCell className="py-3 text-theme-sm text-gray-500 dark:text-gray-400">
+                        {formatClubDate(invoice.dateFacture)}
+                      </TableCell>
                       <TableCell className="py-3 text-theme-sm text-gray-800 dark:text-white/90">
                         {getPlayerFullName(player)}
                       </TableCell>
-                      <TableCell className="py-3 text-theme-sm text-gray-700 dark:text-gray-300 font-medium">
-                        {payment.datePaiement ? formatClubDate(payment.datePaiement) : "-"}
+                      <TableCell className="py-3 text-theme-sm font-medium text-gray-800 dark:text-white/90">
+                        {formatClubCurrency(invoice.montantAPayer)}
                       </TableCell>
                       <TableCell className="py-3 text-theme-sm text-gray-500 dark:text-gray-400">
-                        {formatClubCurrency(payment.montant)}
+                        {formatClubCurrency(invoice.montantPaye)}
                       </TableCell>
                       <TableCell className="py-3 text-theme-sm text-gray-500 dark:text-gray-400">
-                        <span className="block truncate max-w-[200px]" title={payment.remarque}>
-                          {payment.remarque || "-"}
+                        <Badge size="sm" color={colorFromPaymentStatus(invoice.statut)}>
+                          {paymentStatusLabel[invoice.statut]}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="py-3 text-theme-sm text-gray-500 dark:text-gray-400">
+                        <span className="block truncate max-w-[200px]" title={invoice.remarque}>
+                          {invoice.remarque}
                         </span>
                       </TableCell>
                     </TableRow>
@@ -180,7 +219,7 @@ export default function PaymentsPage() {
       </div>
 
       {totalPages > 1 ? (
-        <div className="mt-4 flex justify-end print:hidden">
+        <div className="mt-4 flex justify-end">
           <Pagination
             currentPage={currentPageSafe}
             totalPages={totalPages}

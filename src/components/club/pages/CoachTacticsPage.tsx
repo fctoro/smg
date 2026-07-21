@@ -570,9 +570,10 @@ export default function CoachTacticsPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 2xl:grid-cols-12">
-        <div className="order-2 2xl:col-span-3">
-          <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03]">
+      <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03]">
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,760px)_360px] xl:items-start xl:justify-start xl:gap-5">
+        <div className="order-2 xl:order-2">
+          <div className="rounded-2xl border border-gray-200 bg-gray-50/60 p-5 dark:border-gray-700 dark:bg-white/[0.02]">
             <h3 className="text-base font-semibold text-gray-800 dark:text-white/90">
               Banc des remplacants
             </h3>
@@ -710,8 +711,8 @@ export default function CoachTacticsPage() {
           </div>
         </div>
 
-        <div className="order-1 2xl:col-span-9">
-          <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03]">
+        <div className="order-1 xl:order-1">
+          <div className="p-0">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
               <div className="grid flex-1 gap-4 sm:grid-cols-2">
                 <div>
@@ -773,7 +774,7 @@ export default function CoachTacticsPage() {
             </p>
 
             <div className="mt-5">
-              <div className="relative mx-auto aspect-[3/4] w-full max-w-[560px] overflow-hidden rounded-3xl border-2 border-emerald-300/80 shadow-2xl dark:border-emerald-500/40">
+              <div className="relative mr-auto aspect-[3/4] w-full overflow-hidden rounded-3xl border-2 border-emerald-300/80 shadow-2xl dark:border-emerald-500/40">
                 <div className="absolute inset-0 bg-gradient-to-b from-emerald-500 via-emerald-600 to-emerald-800" />
                 <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.22),transparent_58%)]" />
                 <div className="absolute inset-0 bg-[repeating-linear-gradient(to_bottom,transparent,transparent_54px,rgba(255,255,255,0.12)_55px,transparent_56px)]" />
@@ -826,6 +827,7 @@ export default function CoachTacticsPage() {
             </div>
           </div>
         </div>
+      </div>
       </div>
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-12">

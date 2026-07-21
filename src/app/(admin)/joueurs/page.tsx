@@ -35,17 +35,8 @@ export default function PlayersPage() {
     enabledPlayerColumns.length > 0 ? enabledPlayerColumns : undefined;
 
   return (
-    <div>
+    <div className="space-y-6">
       <PageBreadcrumb pageTitle="Joueurs" />
-
-      <div className="mb-6 flex items-center justify-end">
-        <Link
-          href="/joueurs/nouveau"
-          className="rounded-lg bg-brand-500 px-4 py-2.5 text-sm font-medium text-white hover:bg-brand-600"
-        >
-          + Ajouter un joueur
-        </Link>
-      </div>
 
       <PlayerTable
         players={players}
@@ -53,6 +44,14 @@ export default function PlayersPage() {
         onViewPlayer={(player) => router.push(`/joueurs/${player.id}`)}
         onEditPlayer={(player) => router.push(`/joueurs/${player.id}/modifier`)}
         onDeletePlayer={(player) => handleDeletePlayer(player.id)}
+        actionButton={
+          <Link
+            href="/joueurs/nouveau"
+            className="inline-flex h-11 items-center justify-center whitespace-nowrap rounded-lg bg-brand-500 px-4 text-sm font-medium text-white shadow-theme-xs hover:bg-brand-600"
+          >
+            + Ajouter un joueur
+          </Link>
+        }
       />
     </div>
   );

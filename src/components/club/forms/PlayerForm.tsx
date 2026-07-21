@@ -337,8 +337,9 @@ export default function PlayerForm({
             className={selectClassName}
           >
             <option value="actif">Actif</option>
-            <option value="blesse">Blesse</option>
+            <option value="blesse">Blessé</option>
             <option value="suspendu">Suspendu</option>
+            <option value="abandonne">Abandonné</option>
           </select>
         </div>
 

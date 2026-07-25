@@ -74,21 +74,6 @@ export default function ClubDashboardPage() {
   const recentPlayers = getRecentPlayers(players, 6);
   const upcomingEvents = getUpcomingEvents(events, 4, now);
 
-<<<<<<< HEAD
-  const revenueTrend = useMemo(() => {
-    const curr = currentRevenue.usd > 0 || currentRevenue.htg === 0 ? currentRevenue.usd : currentRevenue.htg;
-    const prev = previousRevenue.usd > 0 || previousRevenue.htg === 0 ? previousRevenue.usd : previousRevenue.htg;
-    
-    if (prev === 0) {
-      return { value: "Nouveau", direction: "up" as const };
-    }
-    const variation = ((curr - prev) / prev) * 100;
-    return {
-      value: `${Math.abs(variation).toFixed(1)}%`,
-      direction: variation >= 0 ? ("up" as const) : ("down" as const),
-    };
-  }, [currentRevenue, previousRevenue]);
-=======
   const revenueTrendUS = { value: "", direction: "up" as const };
   const revenueTrendHTG = { value: "", direction: "up" as const };
 

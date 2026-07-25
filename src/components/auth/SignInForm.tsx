@@ -4,7 +4,7 @@ import Label from "@/components/form/Label";
 import Button from "@/components/ui/button/Button";
 import { EyeCloseIcon, EyeIcon } from "@/icons";
 import React, { useState } from "react";
-import { createClient } from "@/lib/supabase/client";
+import { supabase } from "@/lib/supabaseClient";
 
 const getDefaultSectionsForRole = (normalizedRole: string): string[] => {
   switch (normalizedRole) {
@@ -31,8 +31,6 @@ export default function SignInForm() {
     setError(null);
 
     try {
-      const supabase = createClient();
-      
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,

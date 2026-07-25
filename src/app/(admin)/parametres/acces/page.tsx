@@ -1,7 +1,8 @@
 "use client";
 import React, { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import { createUser, getUsersList, deleteUser, updateUserPassword } from "@/app/actions/user";
+import { PencilIcon } from "@/icons";
+import { createUser, getUsersList, deleteUser, updateUserPassword, updateUserAccess } from "@/app/actions/user";
 
 type Profile = {
   id: string;
@@ -56,10 +57,7 @@ export default function AccessControlPage() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
 
-  // Edit Password State
-  const [editingUserId, setEditingUserId] = useState<string | null>(null);
-  const [newPasswordValue, setNewPasswordValue] = useState("");
-  const [passwordUpdating, setPasswordUpdating] = useState(false);
+  const [editingAccessUserId, setEditingAccessUserId] = useState<string | null>(null);
 
   const [activeConfigRole, setActiveConfigRole] = useState<string>("Admin");
   const [configSaving, setConfigSaving] = useState(false);
@@ -126,17 +124,45 @@ export default function AccessControlPage() {
     form.append("role", formData.role);
     form.append("sections", JSON.stringify(selectedSections));
 
-    const result = await createUser(form);
+    let result;
+    if (editingAccessUserId) {
+      if (formData.password) {
+        const pwdResult = await updateUserPassword(editingAccessUserId, formData.password);
+        if (pwdResult?.error) {
+          setMessage({ text: pwdResult.error, type: "error" });
+          setSaving(false);
+          return;
+        }
+      }
+      result = await updateUserAccess(editingAccessUserId, formData.role, selectedSections);
+    } else {
+      result = await createUser(form);
+    }
 
     if (result.error) {
       setMessage({ text: result.error, type: "error" });
     } else {
-      setMessage({ text: `Compte ${formData.role} créé avec succès avec ${selectedSections.length} section(s) attribuée(s) !`, type: "success" });
+      const action = editingAccessUserId ? "mis à jour" : "créé";
+      setMessage({ text: `Compte ${formData.role} ${action} avec succès avec ${selectedSections.length} section(s) attribuée(s) !`, type: "success" });
+      setEditingAccessUserId(null);
       setFormData({ email: "", password: "", role: "Admin" });
       setSelectedSections(rolePermissions["Admin"]);
       fetchProfiles();
     }
     setSaving(false);
+  };
+
+  const handleEditAccess = (user: Profile) => {
+    if (editingAccessUserId === user.id) {
+      setEditingAccessUserId(null);
+      setFormData({ email: "", password: "", role: "Admin" });
+      setSelectedSections(rolePermissions["Admin"]);
+      return;
+    }
+
+    setEditingAccessUserId(user.id);
+    setFormData({ email: user.email, password: "", role: user.role });
+    setSelectedSections(user.sections || rolePermissions[user.role] || []);
   };
 
   const handleDeleteUser = async (user: Profile) => {
@@ -151,24 +177,6 @@ export default function AccessControlPage() {
     } else {
       alert(`Le compte ${user.email} a été supprimé avec succès.`);
       fetchProfiles();
-    }
-  };
-
-  const handleSaveNewPassword = async (userId: string) => {
-    if (!newPasswordValue || newPasswordValue.length < 6) {
-      alert("Le mot de passe doit contenir au moins 6 caractères.");
-      return;
-    }
-    setPasswordUpdating(true);
-    const res = await updateUserPassword(userId, newPasswordValue);
-    setPasswordUpdating(false);
-
-    if (res?.error) {
-      alert(`Erreur: ${res.error}`);
-    } else {
-      alert("Mot de passe mis à jour avec succès !");
-      setEditingUserId(null);
-      setNewPasswordValue("");
     }
   };
 
@@ -242,18 +250,14 @@ export default function AccessControlPage() {
                     {/* Actions buttons: Edit Password & Delete */}
                     <div className="flex items-center gap-2 self-end sm:self-auto pt-2 sm:pt-0">
                       <button
-                        onClick={() => {
-                          setEditingUserId(editingUserId === profile.id ? null : profile.id);
-                          setNewPasswordValue("");
-                        }}
-                        className="px-3 py-1.5 rounded-lg border border-[#e2e8f0] text-[13px] font-medium text-[#334155] hover:bg-[#f8fafc] hover:border-[#cbd5e1] transition-colors flex items-center gap-1.5"
+                        onClick={() => handleEditAccess(profile)}
+                        className="px-3 py-1.5 rounded-lg border border-[#e2e8f0] text-[13px] font-medium text-[#334155] hover:bg-[#f8fafc] hover:border-[#cbd5e1] transition-colors flex items-center gap-2"
                       >
-                        <svg className="w-4 h-4 text-[#64748b]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
-                        </svg>
-                        {editingUserId === profile.id ? "Annuler" : "Modifier mot de passe"}
+                        <span className="inline-flex items-center justify-center w-5 h-5 text-[#64748b]">
+                          <PencilIcon className="w-4 h-4" />
+                        </span>
+                        {editingAccessUserId === profile.id ? "Annuler" : "Modifier"}
                       </button>
-
                       {!isYou && (
                         <button
                           onClick={() => handleDeleteUser(profile)}
@@ -268,25 +272,6 @@ export default function AccessControlPage() {
                       )}
                     </div>
 
-                    {/* Inline edit password panel */}
-                    {editingUserId === profile.id && (
-                      <div className="w-full sm:col-span-2 pt-3 border-t border-[#f1f5f9] flex flex-col sm:flex-row items-center gap-3">
-                        <input
-                          type="password"
-                          placeholder="Nouveau mot de passe (min 6 car.)"
-                          value={newPasswordValue}
-                          onChange={(e) => setNewPasswordValue(e.target.value)}
-                          className="w-full sm:w-72 h-10 px-3 bg-[#f8fafc] border border-[#e2e8f0] rounded-lg text-[13px] text-[#0f172a] focus:border-[#0f172a] outline-none"
-                        />
-                        <button
-                          onClick={() => handleSaveNewPassword(profile.id)}
-                          disabled={passwordUpdating}
-                          className="w-full sm:w-auto px-4 py-2 bg-[#0f172a] text-white text-[13px] font-semibold rounded-lg hover:bg-[#1e293b] transition-colors disabled:opacity-50"
-                        >
-                          {passwordUpdating ? "Enregistrement..." : "Enregistrer"}
-                        </button>
-                      </div>
-                    )}
                   </div>
                 );
               })}
@@ -299,7 +284,7 @@ export default function AccessControlPage() {
       <div className="bg-white rounded-xl border border-[#e2e8f0] overflow-hidden shadow-sm">
         <div className="px-6 pt-6 pb-2">
           <h2 className="text-[13px] font-bold text-[#94a3b8] uppercase tracking-wider">
-            CRÉER UN NOUVEAU COMPTE
+            {editingAccessUserId ? "MODIFIER LES ACCÈS D'UN COMPTE" : "CRÉER UN NOUVEAU COMPTE"}
           </h2>
         </div>
         
@@ -352,20 +337,27 @@ export default function AccessControlPage() {
                 type="email" 
                 placeholder="nom@fctoro.club"
                 required
-                className="w-full h-11 px-4 bg-[#f8fafc] border border-[#e2e8f0] rounded-lg text-[14px] text-[#0f172a] placeholder-[#94a3b8] focus:border-[#0f172a] outline-none transition-colors" 
+                disabled={!!editingAccessUserId}
+                className="w-full h-11 px-4 bg-[#f8fafc] disabled:cursor-not-allowed disabled:bg-[#e2e8f0] border border-[#e2e8f0] rounded-lg text-[14px] text-[#0f172a] placeholder-[#94a3b8] focus:border-[#0f172a] outline-none transition-colors" 
               />
+              {editingAccessUserId && (
+                <p className="text-[12px] text-[#64748b] mt-1">L'email ne peut pas être modifié ici. Modifiez uniquement le rôle et les sections.</p>
+              )}
             </div>
 
             <div className="space-y-2">
-              <label className="text-[14px] font-medium text-[#334155]">Mot de passe provisoire <span className="text-red-500">*</span></label>
+              <label className="text-[14px] font-medium text-[#334155]">
+                {editingAccessUserId ? "Mot de passe (laisser vide si inchangé)" : "Mot de passe provisoire"}
+                {editingAccessUserId ? "" : <span className="text-red-500">*</span>}
+              </label>
               <div className="relative">
                 <input 
                   name="password"
                   value={formData.password}
                   onChange={handleInputChange}
                   type={showPassword ? "text" : "password"} 
-                  placeholder="••••••••"
-                  required
+                  placeholder={editingAccessUserId ? "•••••••• (facultatif)" : "••••••••"}
+                  required={!editingAccessUserId}
                   className="w-full h-11 px-4 pr-11 bg-[#f1f5f9] border border-[#e2e8f0] rounded-lg text-[14px] text-[#0f172a] placeholder-[#94a3b8] focus:border-[#0f172a] outline-none transition-colors" 
                 />
                 <button 
@@ -432,7 +424,7 @@ export default function AccessControlPage() {
               <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
               </svg>
-              {saving ? "Création..." : `Créer le compte ${formData.role}`}
+              {saving ? (editingAccessUserId ? "Mise à jour..." : "Création...") : (editingAccessUserId ? `Mettre à jour ${formData.role}` : `Créer le compte ${formData.role}`)}
             </button>
           </div>
         </form>

@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useUserRole } from "@/context/UserRoleContext";
-import { createClient } from "@/lib/supabase/client";
+import { supabase } from "@/lib/supabaseClient";
 
 export default function ProfilePage() {
   const { userEmail, isSuperAdmin, isCoach, isFinance, userSections } = useUserRole();
@@ -20,7 +20,6 @@ export default function ProfilePage() {
     setMounted(true);
     async function fetchUserData() {
       try {
-        const supabase = createClient();
         const { data } = await supabase.auth.getUser();
         if (data?.user?.created_at) {
           setCreatedDate(new Date(data.user.created_at).toLocaleDateString("fr-FR", {
@@ -54,8 +53,6 @@ export default function ProfilePage() {
     setUpdating(true);
 
     try {
-      const supabase = createClient();
-
       // Step 1: Re-authenticate with current password to verify it
       const { data: userData } = await supabase.auth.getUser();
       const email = userData?.user?.email;

@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { usePathname } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
+import { supabase } from "@/lib/supabaseClient";
 
 export type UserRole = "super admin" | "admin" | "coach" | "finance";
 
@@ -80,7 +80,6 @@ export const UserRoleProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   useEffect(() => {
     async function syncUserRole() {
       try {
-        const supabase = createClient();
         const { data } = await supabase.auth.getUser();
         if (data?.user) {
           const email = data.user.email || "";

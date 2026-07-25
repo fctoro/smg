@@ -61,10 +61,10 @@ const adminNavItems: NavItem[] = [
   },
   {
     icon: <BoxCubeIcon />,
-    name: "Staff",
+    name: "Employés",
     subItems: [
-      { name: "Liste", path: "/staff" },
-      { name: "Ajouter", path: "/staff/nouveau" },
+      { name: "Liste", path: "/employes" },
+      { name: "Ajouter", path: "/employes/nouveau" },
     ],
   },
   {

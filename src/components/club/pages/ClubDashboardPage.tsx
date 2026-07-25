@@ -119,7 +119,6 @@ export default function ClubDashboardPage() {
       totalHTG: methods[m].totalHTG
     }));
   }, [payments, selectedYear, isAllTime]);
->>>>>>> 1726d6c (feat: refonte du Dashboard analytique avec ApexCharts, séparation US/HTG et correctifs dates)
 
   const tableColumns = useMemo(() => {
     if (enabledPlayerColumns.length > 0) return enabledPlayerColumns;

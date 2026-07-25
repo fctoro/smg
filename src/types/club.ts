@@ -190,3 +190,20 @@ export interface AlumniFormValues {
   poste: string;
   situationActuelle: string;
 }
+
+export interface PayrollRecord {
+  id: string;
+  employeId: string;
+  employeNom: string;
+  employePrenom: string;
+  fonction: string;
+  mois: string;
+  salaireBase: number;
+  bonus: number;
+  deductions: number;
+  netAPayer: number;
+  statut: "paye" | "en_attente" | "annule";
+  datePaiement?: string;
+  modePaiement: "virement" | "especes" | "chèque" | "mobile";
+  notes?: string;
+}

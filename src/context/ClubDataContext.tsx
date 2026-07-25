@@ -435,32 +435,6 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
               };
             })
             .filter((p: Payment) => p.montant > 0 || p.montantUS > 0 || p.montantHTG > 0);
-            .map((p: any): Payment => {
-              // Déterminer la devise en fonction des champs disponibles
-              let devise: "USD" | "HTG" = "USD";
-              let montant = 0;
-              
-              if (p.MntPayeUS && p.MntPayeUS > 0) {
-                devise = "USD";
-                montant = p.MntPayeUS;
-              } else if (p.MntPayeGd && p.MntPayeGd > 0) {
-                devise = "HTG";
-                montant = p.MntPayeGd;
-              }
-              
-              return {
-                id: String(p.Id),
-                playerId: String(p.EtudiantId),
-                montant: montant,
-                devise: devise,
-                statut: "paid" as any, // Historique des transactions = payé
-                periode: p.DateTransact ? p.DateTransact.substring(0, 7) : new Date().toISOString().substring(0, 7),
-                methode: (p.ModePaiement || "especes") as any,
-                datePaiement: p.DateTransact ? p.DateTransact.split("T")[0] : undefined,
-                remarque: p.Remarque || p.Description || "",
-              };
-            })
-            .filter((p: Payment) => p.montant > 0); // On exclut les paiements à 0
           setPayments(fetchedPayments);
         } else {
           setPayments(

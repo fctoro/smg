@@ -11,7 +11,7 @@ export default function UserDropdown() {
   const [isOpen, setIsOpen] = useState(false);
   const [userEmail, setUserEmail] = useState<string>("");
   const [mounted, setMounted] = useState(false);
-  const { isCoach, isSuperAdmin } = useUserRole();
+  const { isCoach, isFinance, isSuperAdmin } = useUserRole();
 
   useEffect(() => {
     setMounted(true);
@@ -60,6 +60,8 @@ export default function UserDropdown() {
     ? "Administrateur"
     : isSuperAdmin
     ? "Super Admin"
+    : isFinance
+    ? "Finance"
     : isCoach
     ? "Coach"
     : "Administrateur";

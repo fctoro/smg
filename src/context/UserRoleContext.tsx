@@ -4,7 +4,7 @@ import React, { createContext, useContext, useState, useEffect } from "react";
 import { usePathname } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
-export type UserRole = "super admin" | "admin" | "coach";
+export type UserRole = "super admin" | "admin" | "coach" | "finance";
 
 const ALL_SECTIONS = [
   "Dashboard",
@@ -23,11 +23,23 @@ interface UserRoleContextType {
   userEmail: string;
   isCoach: boolean;
   isAdmin: boolean;
+  isFinance: boolean;
   isSuperAdmin: boolean;
   userSections: string[];
   setRole: (role: UserRole) => void;
   toggleRole: () => void;
 }
+
+const getDefaultSectionsForRole = (normalizedRole: string): string[] => {
+  switch (normalizedRole) {
+    case "coach":
+      return ["Dashboard", "Joueurs", "Evenements"];
+    case "finance":
+      return ["Dashboard", "Paiements", "Factures"];
+    default:
+      return ["Dashboard", "Joueurs", "Parents", "Evenements", "Paiements", "Factures"];
+  }
+};
 
 const UserRoleContext = createContext<UserRoleContextType | undefined>(undefined);
 
@@ -93,9 +105,7 @@ export const UserRoleProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             localStorage.setItem("fctoro_user_role", normalized);
             const activeSections = (Array.isArray(metaSections) && metaSections.length > 0)
               ? metaSections
-              : (normalized === "coach" 
-                  ? ["Dashboard", "Joueurs", "Evenements"] 
-                  : ["Dashboard", "Joueurs", "Parents", "Evenements", "Paiements", "Factures"]);
+              : getDefaultSectionsForRole(normalized);
             setUserSections(activeSections);
             localStorage.setItem("fctoro_user_sections", JSON.stringify(activeSections));
             return;
@@ -114,9 +124,7 @@ export const UserRoleProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             localStorage.setItem("fctoro_user_role", normalized);
             const activeSections = (Array.isArray(profile.sections) && profile.sections.length > 0)
               ? profile.sections
-              : (normalized === "coach" 
-                  ? ["Dashboard", "Joueurs", "Evenements"] 
-                  : ["Dashboard", "Joueurs", "Parents", "Evenements", "Paiements", "Factures"]);
+              : getDefaultSectionsForRole(normalized);
             setUserSections(activeSections);
             localStorage.setItem("fctoro_user_sections", JSON.stringify(activeSections));
             return;
@@ -146,6 +154,7 @@ export const UserRoleProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const isSuperAdmin = role === "super admin" || userEmail === "footballclubtoro@gmail.com";
   const isCoach = role === "coach";
+  const isFinance = role === "finance";
   const isAdmin = role === "admin" && !isSuperAdmin;
 
   return (
@@ -155,6 +164,7 @@ export const UserRoleProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         userEmail,
         isCoach,
         isAdmin,
+        isFinance,
         isSuperAdmin,
         userSections: isSuperAdmin ? ALL_SECTIONS : userSections,
         setRole,

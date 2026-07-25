@@ -5,7 +5,7 @@ import { useUserRole } from "@/context/UserRoleContext";
 import { createClient } from "@/lib/supabase/client";
 
 export default function ProfilePage() {
-  const { userEmail, isSuperAdmin, isCoach, userSections } = useUserRole();
+  const { userEmail, isSuperAdmin, isCoach, isFinance, userSections } = useUserRole();
   const [createdDate, setCreatedDate] = useState<string>("");
   const [mounted, setMounted] = useState(false);
 
@@ -94,7 +94,7 @@ export default function ProfilePage() {
     }
   };
 
-  const roleLabel = !mounted ? "Administrateur" : isSuperAdmin ? "Super Admin" : isCoach ? "Coach" : "Administrateur";
+  const roleLabel = !mounted ? "Administrateur" : isSuperAdmin ? "Super Admin" : isFinance ? "Finance" : isCoach ? "Coach" : "Administrateur";
 
   return (
     <div className="max-w-4xl mx-auto p-4 md:p-8 space-y-8 font-sans">

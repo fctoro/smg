@@ -27,6 +27,7 @@ const SECTIONS = [
 const ACCOUNT_TYPES = [
   { id: "Super Admin", label: "Super Admin", description: "Accès complet à l'ensemble de la plateforme" },
   { id: "Admin", label: "Administrateur", description: "Gestion quotidienne des opérations du club" },
+  { id: "Finance", label: "Finance", description: "Gestion des paiements, factures et suivi financier" },
   { id: "Coach", label: "Coach", description: "Accès limité aux entraînements et effectifs" },
 ];
 
@@ -47,6 +48,7 @@ export default function AccessControlPage() {
   const [rolePermissions, setRolePermissions] = useState<Record<string, string[]>>({
     "Super Admin": [...SECTIONS],
     "Admin": ["Dashboard", "Joueurs", "Parents", "Evenements", "Paiements", "Factures"],
+    "Finance": ["Dashboard", "Paiements", "Factures"],
     "Coach": ["Dashboard", "Joueurs", "Evenements"],
   });
 
@@ -313,7 +315,7 @@ export default function AccessControlPage() {
             <label className="text-[14px] font-semibold text-[#334155]">
               Type de compte <span className="text-red-500">*</span>
             </label>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
               {ACCOUNT_TYPES.map(type => (
                 <div
                   key={type.id}

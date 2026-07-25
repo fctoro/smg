@@ -173,7 +173,7 @@ export default function PayrollPage() {
     const net = formData.salaireBase + formData.bonus - formData.deductions;
     const targetMois = `${formData.annee}-${formData.mois}`;
 
-    const recordData = {
+    const recordData: Omit<PayrollRecord, "id"> = {
       employeId: targetEmp.id,
       employeNom: targetEmp.nom,
       employePrenom: targetEmp.prenom,
@@ -194,7 +194,19 @@ export default function PayrollPage() {
       
       const newRecord: PayrollRecord = {
         id: insertedData.Id || `pay-${Date.now()}`,
-        ...recordData,
+        employeId: recordData.employeId,
+        employeNom: recordData.employeNom,
+        employePrenom: recordData.employePrenom,
+        fonction: recordData.fonction,
+        mois: recordData.mois,
+        salaireBase: recordData.salaireBase,
+        bonus: recordData.bonus,
+        deductions: recordData.deductions,
+        netAPayer: recordData.netAPayer,
+        statut: recordData.statut,
+        datePaiement: typeof recordData.datePaiement === 'string' ? recordData.datePaiement : undefined,
+        modePaiement: recordData.modePaiement,
+        notes: recordData.notes,
         pieceJointe: insertedData.PieceJointe,
       };
 

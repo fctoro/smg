@@ -213,7 +213,7 @@ export interface PayrollRecord {
   deductions: number;
   netAPayer: number;
   statut: "paye" | "en_attente" | "annule";
-  datePaiement?: string;
+  datePaiement?: string | null;
   modePaiement: "virement" | "especes" | "chèque" | "mobile";
   notes?: string;
   pieceJointe?: string;

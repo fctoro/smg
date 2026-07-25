@@ -3,7 +3,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { revalidatePath } from "next/cache";
 
-// Initialize Supabase Admin client (requires service_role_key to bypass RLS and create users)
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
@@ -15,24 +14,55 @@ const supabaseAdmin = createClient(
   }
 );
 
+export async function getUsersList() {
+  try {
+    const { data: authData, error: authError } = await supabaseAdmin.auth.admin.listUsers();
+    if (authError || !authData?.users) {
+      return { users: [] };
+    }
+
+    const { data: profiles } = await supabaseAdmin.from("profiles").select("*");
+    const profileMap = new Map((profiles || []).map(p => [p.id, p]));
+
+    const users = authData.users.map(u => {
+      const prof = profileMap.get(u.id);
+      const metaRole = u.user_metadata?.role;
+      return {
+        id: u.id,
+        email: u.email || "",
+        full_name: prof?.full_name || u.user_metadata?.full_name || u.email || "Utilisateur",
+        role: prof?.role || metaRole || (u.email === "footballclubtoro@gmail.com" ? "Super Admin" : "Admin"),
+        sections: prof?.sections || u.user_metadata?.sections || [],
+        created_at: u.created_at || new Date().toISOString()
+      };
+    });
+
+    return { users };
+  } catch (err: any) {
+    return { users: [] };
+  }
+}
+
 export async function createUser(formData: FormData) {
   try {
     const email = formData.get("email") as string;
     const password = formData.get("password") as string;
-    const fullName = formData.get("fullName") as string;
-    const phone = formData.get("phone") as string;
+    const rawFullName = formData.get("fullName") as string;
     const role = formData.get("role") as string;
+    const rawSections = formData.get("sections") as string;
 
-    if (!email || !password || !fullName || !role) {
-      return { error: "Veuillez remplir tous les champs obligatoires." };
+    if (!email || !password || !role) {
+      return { error: "Veuillez remplir l'adresse email et le mot de passe." };
     }
 
-    // 1. Create the user in auth.users
+    const sections = rawSections ? JSON.parse(rawSections) : [];
+    const fullName = rawFullName && rawFullName.trim() ? rawFullName.trim() : email;
+
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
       email: email,
       password: password,
-      email_confirm: true, // Auto-confirm email so they can log in immediately
-      user_metadata: { full_name: fullName }
+      email_confirm: true,
+      user_metadata: { full_name: fullName, role: role, sections: sections }
     });
 
     if (authError) {
@@ -40,29 +70,63 @@ export async function createUser(formData: FormData) {
     }
 
     if (authData.user) {
-      // 2. Insert into the public.profiles table
       const { error: profileError } = await supabaseAdmin
         .from("profiles")
-        .insert([
+        .upsert([
           {
             id: authData.user.id,
             full_name: fullName,
-            phone: phone,
             role: role,
+            sections: sections,
           }
         ]);
 
       if (profileError) {
-        // If profile creation fails, we might want to delete the user or handle it, 
-        // but for now return the error.
-        return { error: `User created but profile failed: ${profileError.message}` };
+        console.error("Profile upsert error:", profileError);
       }
     }
 
-    revalidatePath("/parametres/utilisateurs");
+    revalidatePath("/parametres/acces");
     return { success: true };
     
   } catch (err: any) {
     return { error: err.message || "Une erreur inattendue est survenue." };
+  }
+}
+
+export async function deleteUser(userId: string) {
+  try {
+    if (!userId) return { error: "ID utilisateur manquant." };
+
+    const { error: authErr } = await supabaseAdmin.auth.admin.deleteUser(userId);
+    if (authErr) {
+      return { error: authErr.message };
+    }
+
+    await supabaseAdmin.from("profiles").delete().eq("id", userId);
+
+    revalidatePath("/parametres/acces");
+    return { success: true };
+  } catch (err: any) {
+    return { error: err.message || "Impossible de supprimer l'utilisateur." };
+  }
+}
+
+export async function updateUserPassword(userId: string, newPassword: string) {
+  try {
+    if (!userId || !newPassword) return { error: "Données manquantes." };
+
+    const { error: updateErr } = await supabaseAdmin.auth.admin.updateUserById(userId, {
+      password: newPassword
+    });
+
+    if (updateErr) {
+      return { error: updateErr.message };
+    }
+
+    revalidatePath("/parametres/acces");
+    return { success: true };
+  } catch (err: any) {
+    return { error: err.message || "Impossible de modifier le mot de passe." };
   }
 }

@@ -21,6 +21,7 @@ export interface Player {
   prenom: string;
   photoUrl: string;
   poste: string;
+  sexe: "Féminin" | "Masculin";
   categorie: string;
   statut: PlayerStatus;
   telephone: string;
@@ -29,6 +30,7 @@ export interface Player {
   dateNaissance: string;
   adresse: string;
   cotisationMontant: number;
+  cotisationDevise: "US" | "HTG";
   cotisationStatut: PaymentStatus;
   dernierPaiement: string;
   saison?: string;
@@ -47,12 +49,15 @@ export interface ClubEvent {
 export interface Payment {
   id: string;
   playerId: string;
-  montant: number;
+  montant: number; // Keep for backward compatibility if needed, or total in one currency
+  montantUS: number;
+  montantHTG: number;
   statut: PaymentStatus;
   periode: string;
   methode: PaymentMethod;
   datePaiement?: string;
   remarque?: string;
+  devise?: "US" | "HTG";
 }
 
 export interface Invoice {
@@ -63,9 +68,12 @@ export interface Invoice {
   remarque: string;
   montantAPayer: number;
   montantPaye: number;
+  montantUS: number;
+  montantHTG: number;
   dateFacture: string;
   datePaiement?: string;
   statut: PaymentStatus;
+  devise?: "US" | "HTG";
 }
 
 export interface Parent {
@@ -146,12 +154,14 @@ export interface PlayerFormValues {
   prenom: string;
   dateNaissance: string;
   poste: string;
+  sexe: "Féminin" | "Masculin";
   categorie: string;
   telephone: string;
   email: string;
   adresse: string;
   statut: PlayerStatus;
   cotisationMontant: number;
+  cotisationDevise: "US" | "HTG";
   cotisationStatut: PaymentStatus;
 }
 
@@ -206,4 +216,5 @@ export interface PayrollRecord {
   datePaiement?: string;
   modePaiement: "virement" | "especes" | "chèque" | "mobile";
   notes?: string;
+  pieceJointe?: string;
 }

@@ -8,21 +8,32 @@ import PlayerForm from "@/components/club/forms/PlayerForm";
 import { useClubData } from "@/context/ClubDataContext";
 import { PlayerFormValues } from "@/types/club";
 import { createPlayerFromForm } from "@/lib/club/player-form";
+import { DEFAULT_CATEGORIES } from "@/config/dashboard.config";
+import { addPlayerToSupabase } from "@/lib/club/supabase-crud";
 
 export default function NewPlayerPage() {
   const router = useRouter();
   const { players, setPlayers } = useClubData();
 
   const categories = useMemo(
-    () => [...new Set(players.map((player) => player.categorie))],
+    () => [...new Set([...DEFAULT_CATEGORIES, ...players.map((player) => player.categorie)])],
     [players],
   );
 
-  const handleSubmit = (values: PlayerFormValues) => {
+  const handleSubmit = async (values: PlayerFormValues) => {
     const today = new Date().toISOString().slice(0, 10);
-    const newPlayer = createPlayerFromForm(`p-${Date.now()}`, values, today);
-    setPlayers((prevPlayers) => [newPlayer, ...prevPlayers]);
-    router.push("/joueurs");
+    const newPlayerLocal = createPlayerFromForm(`temp-${Date.now()}`, values, today);
+    
+    try {
+      const inserted = await addPlayerToSupabase(newPlayerLocal);
+      if (inserted && inserted.EtudiantID) {
+        const newPlayer = { ...newPlayerLocal, id: String(inserted.EtudiantID) };
+        setPlayers((prevPlayers) => [newPlayer, ...prevPlayers]);
+        router.push("/joueurs");
+      }
+    } catch (error) {
+      alert("Erreur lors de la création. Veuillez réessayer.");
+    }
   };
 
   return (

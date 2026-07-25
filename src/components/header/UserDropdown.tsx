@@ -1,16 +1,31 @@
 "use client";
 import Image from "next/image";
 import Link from "next/link";
-import React, { useState } from "react";
-import { useRouter } from "next/navigation";
+import React, { useState, useEffect } from "react";
 import { Dropdown } from "../ui/dropdown/Dropdown";
 import { DropdownItem } from "../ui/dropdown/DropdownItem";
 import { useUserRole } from "@/context/UserRoleContext";
+import { createClient } from "@/lib/supabase/client";
 
 export default function UserDropdown() {
   const [isOpen, setIsOpen] = useState(false);
-  const { role, setRole, isCoach } = useUserRole();
-  const router = useRouter();
+  const [userEmail, setUserEmail] = useState<string>("");
+  const [mounted, setMounted] = useState(false);
+  const { isCoach, isSuperAdmin } = useUserRole();
+
+  useEffect(() => {
+    setMounted(true);
+    async function getUser() {
+      try {
+        const supabase = createClient();
+        const { data } = await supabase.auth.getUser();
+        if (data?.user?.email) {
+          setUserEmail(data.user.email);
+        }
+      } catch (e) {}
+    }
+    getUser();
+  }, []);
 
   function toggleDropdown(e: React.MouseEvent<HTMLButtonElement, MouseEvent>) {
     e.stopPropagation();
@@ -21,16 +36,33 @@ export default function UserDropdown() {
     setIsOpen(false);
   }
 
-  const handleToggleCoachMode = () => {
+  const handleSignOut = async (e: React.MouseEvent) => {
+    e.preventDefault();
     closeDropdown();
-    if (isCoach) {
-      setRole("admin");
-      router.push("/dashboard");
-    } else {
-      setRole("coach");
-      router.push("/coach");
+    const confirmed = window.confirm("Êtes-vous sûr de vouloir vous déconnecter du système ?");
+    if (!confirmed) return;
+
+    try {
+      const supabase = createClient();
+      await supabase.auth.signOut();
+    } catch (err) {
+      console.error("SignOut error:", err);
+    } finally {
+      localStorage.removeItem("fctoro_user_role");
+      localStorage.removeItem("fctoro_user_email");
+      localStorage.removeItem("fctoro_user_sections");
+      window.location.href = "/signin";
     }
   };
+
+  // Always render "Administrateur" on server to match SSR, swap after mount
+  const displayRoleLabel = !mounted
+    ? "Administrateur"
+    : isSuperAdmin
+    ? "Super Admin"
+    : isCoach
+    ? "Coach"
+    : "Administrateur";
 
   return (
     <div className="relative">
@@ -43,16 +75,19 @@ export default function UserDropdown() {
             width={44}
             height={44}
             src="/images/user/owner.jpg"
-            alt="Kensly Eugene"
+            alt={userEmail || "Utilisateur"}
           />
         </span>
 
         <div className="flex flex-col text-left mr-1">
-          <span className="block font-medium text-theme-sm text-gray-900 dark:text-white leading-tight">
-            Kensly
+          <span className="block font-medium text-theme-sm text-gray-900 dark:text-white leading-tight max-w-[150px] truncate" suppressHydrationWarning>
+            {userEmail || "Utilisateur"}
           </span>
-          <span className="block text-[11px] font-semibold text-brand-600 dark:text-brand-400 leading-tight">
-            {isCoach ? "Coach Principal" : "Administrateur"}
+          <span
+            className="block text-[11px] font-semibold text-brand-600 dark:text-brand-400 leading-tight"
+            suppressHydrationWarning
+          >
+            {displayRoleLabel}
           </span>
         </div>
 
@@ -82,33 +117,16 @@ export default function UserDropdown() {
         className="absolute right-0 mt-[17px] flex w-[280px] flex-col rounded-2xl border border-gray-200 bg-white p-3 shadow-theme-lg dark:border-gray-800 dark:bg-gray-dark z-99999"
       >
         <div className="pb-3 border-b border-gray-200 dark:border-gray-800">
-          <span className="block font-medium text-gray-700 text-theme-sm dark:text-gray-400">
-            Kensly Eugene
+          <span className="block font-medium text-gray-700 text-theme-sm dark:text-gray-400 truncate">
+            {userEmail}
           </span>
-          <span className="mt-0.5 block text-theme-xs text-gray-500 dark:text-gray-400">
-            kensly.eugene@fctoro.club
-          </span>
-          <span className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-700 dark:bg-brand-500/15 dark:text-brand-300">
+          <span className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-700 dark:bg-brand-500/15 dark:text-brand-300" suppressHydrationWarning>
             <span className="h-1.5 w-1.5 rounded-full bg-brand-500" />
-            {isCoach ? "Connecté en Coach" : "Connecté en Administrateur"}
+            Connecté en {displayRoleLabel}
           </span>
         </div>
 
         <ul className="flex flex-col gap-1 pt-3 pb-3 border-b border-gray-200 dark:border-gray-800">
-          <li>
-            <button
-              onClick={handleToggleCoachMode}
-              className="w-full flex items-center justify-between gap-3 px-3 py-2 font-medium rounded-lg text-theme-sm bg-brand-50/70 text-brand-700 hover:bg-brand-100 dark:bg-brand-500/10 dark:text-brand-300 dark:hover:bg-brand-500/20 transition"
-            >
-              <div className="flex items-center gap-2">
-                <span className="text-base">⚽</span>
-                <span>{isCoach ? "Mode Administrateur" : "Espace Coach"}</span>
-              </div>
-              <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-brand-200 dark:bg-brand-500/30">
-                {isCoach ? "Admin" : "Coach"}
-              </span>
-            </button>
-          </li>
           <li>
             <DropdownItem
               onItemClick={closeDropdown}
@@ -135,9 +153,9 @@ export default function UserDropdown() {
             </DropdownItem>
           </li>
         </ul>
-        <Link
-          href="/signin"
-          className="flex items-center gap-3 px-3 py-2 mt-3 font-medium text-gray-700 rounded-lg group text-theme-sm hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-white/5 dark:hover:text-gray-300"
+        <button
+          onClick={handleSignOut}
+          className="w-full flex items-center gap-3 px-3 py-2 mt-3 font-medium text-gray-700 rounded-lg group text-theme-sm hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-white/5 dark:hover:text-gray-300 transition-colors text-left"
         >
           <svg
             className="fill-gray-500 group-hover:fill-gray-700 dark:group-hover:fill-gray-300"
@@ -155,7 +173,7 @@ export default function UserDropdown() {
             />
           </svg>
           Se déconnecter
-        </Link>
+        </button>
       </Dropdown>
     </div>
   );

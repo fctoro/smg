@@ -66,15 +66,15 @@ export default function ProfilePage() {
         <form onSubmit={handlePasswordChange} className="space-y-4">
           <div>
             <Label>Nouveau mot de passe</Label>
-            <Input name="password" type="password" placeholder="Nouveau mot de passe" required />
+            <Input name="password" type="password" placeholder="Nouveau mot de passe" />
           </div>
           <div>
             <Label>Confirmer le mot de passe</Label>
-            <Input name="confirmPassword" type="password" placeholder="Confirmez le mot de passe" required />
+            <Input name="confirmPassword" type="password" placeholder="Confirmer le mot de passe" />
           </div>
 
           <div className="pt-2">
-            <Button type="submit" disabled={loading}>
+            <Button disabled={loading}>
               {loading ? "Mise à jour..." : "Mettre à jour le mot de passe"}
             </Button>
           </div>

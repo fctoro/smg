@@ -13,7 +13,7 @@ import Badge from "@/components/ui/badge/Badge";
 import Pagination from "@/components/tables/Pagination";
 import { EyeIcon, PencilIcon, TrashBinIcon } from "@/icons";
 import { Player } from "@/types/club";
-import { PlayerColumnKey } from "@/config/dashboard.config";
+import { PlayerColumnKey, DEFAULT_CATEGORIES } from "@/config/dashboard.config";
 import {
   formatClubCurrency,
   formatClubDate,
@@ -28,8 +28,9 @@ import {
 const defaultColumns: PlayerColumnKey[] = [
   "avatarNom",
   "poste",
-  "categorie",
+  "sexe",
   "statut",
+  "categorie",
   "cotisation",
   "montant",
   "dernierPaiement",
@@ -73,10 +74,18 @@ export default function PlayerTable({
     [columns],
   );
 
-  const categories = useMemo(
-    () => [...new Set(players.map((player) => player.categorie))].sort(),
-    [players],
-  );
+  const categories = useMemo(() => {
+    const customCats = players.map((player) => player.categorie).filter(Boolean);
+    const combined = [...DEFAULT_CATEGORIES, ...customCats];
+    const uniqueMap = new Map<string, string>();
+    combined.forEach((cat) => {
+      const key = cat.trim().toLowerCase();
+      if (!uniqueMap.has(key)) {
+        uniqueMap.set(key, cat.trim());
+      }
+    });
+    return Array.from(uniqueMap.values());
+  }, [players]);
 
   const seasons = useMemo(
     () =>
@@ -93,7 +102,8 @@ export default function PlayerTable({
         const fullName = getPlayerFullName(player).toLowerCase();
         const nameMatches = !query || fullName.includes(query);
         const categoryMatches =
-          selectedCategory === "all" || player.categorie === selectedCategory;
+          selectedCategory === "all" ||
+          (player.categorie || "").trim().toLowerCase() === selectedCategory.trim().toLowerCase();
         const seasonMatches =
           selectedSeason === "all" || player.saison === selectedSeason;
         const statusMatches =
@@ -223,12 +233,12 @@ export default function PlayerTable({
                   Poste
                 </TableCell>
               ) : null}
-              {visibleColumnSet.has("categorie") ? (
+              {visibleColumnSet.has("sexe") ? (
                 <TableCell
                   isHeader
                   className="py-3 text-start text-theme-xs font-medium text-gray-500 dark:text-gray-400"
                 >
-                  Catégorie
+                  Sexe
                 </TableCell>
               ) : null}
               {visibleColumnSet.has("statut") ? (
@@ -237,6 +247,14 @@ export default function PlayerTable({
                   className="py-3 text-start text-theme-xs font-medium text-gray-500 dark:text-gray-400"
                 >
                   Statut
+                </TableCell>
+              ) : null}
+              {visibleColumnSet.has("categorie") ? (
+                <TableCell
+                  isHeader
+                  className="py-3 text-start text-theme-xs font-medium text-gray-500 dark:text-gray-400"
+                >
+                  Catégorie
                 </TableCell>
               ) : null}
               {visibleColumnSet.has("cotisation") ? (
@@ -330,9 +348,9 @@ export default function PlayerTable({
                       {player.poste}
                     </TableCell>
                   ) : null}
-                  {visibleColumnSet.has("categorie") ? (
+                  {visibleColumnSet.has("sexe") ? (
                     <TableCell className="py-3 text-theme-sm text-gray-500 dark:text-gray-400">
-                      {player.categorie}
+                      {player.sexe}
                     </TableCell>
                   ) : null}
                   {visibleColumnSet.has("statut") ? (
@@ -340,6 +358,11 @@ export default function PlayerTable({
                       <Badge size="sm" color={colorFromPlayerStatus(player.statut)}>
                         {playerStatusLabel[player.statut]}
                       </Badge>
+                    </TableCell>
+                  ) : null}
+                  {visibleColumnSet.has("categorie") ? (
+                    <TableCell className="py-3 text-theme-sm text-gray-500 dark:text-gray-400">
+                      {player.categorie}
                     </TableCell>
                   ) : null}
                   {visibleColumnSet.has("cotisation") ? (
@@ -359,7 +382,7 @@ export default function PlayerTable({
                   ) : null}
                   {visibleColumnSet.has("montant") ? (
                     <TableCell className="py-3 text-theme-sm font-medium text-gray-700 dark:text-gray-300">
-                      {formatClubCurrency(player.cotisationMontant)}
+                      {formatClubCurrency(player.cotisationMontant, player.cotisationDevise)}
                     </TableCell>
                   ) : null}
                   {visibleColumnSet.has("dernierPaiement") ? (

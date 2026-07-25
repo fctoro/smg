@@ -1,8 +1,8 @@
 "use client";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { useSidebar } from "../context/SidebarContext";
 import { useUserRole } from "../context/UserRoleContext";
 import {
@@ -18,7 +18,6 @@ import {
   TaskIcon,
   TableIcon,
   UserCircleIcon,
-  UserIcon,
 } from "../icons/index";
 
 type NavItem = {
@@ -28,7 +27,7 @@ type NavItem = {
   subItems?: { name: string; path: string; pro?: boolean; new?: boolean }[];
 };
 
-// Standard Admin items - Note: "Classement" and "Coach FIFA" removed per user request
+// Standard Admin items
 const adminNavItems: NavItem[] = [
   {
     icon: <GridIcon />,
@@ -93,7 +92,7 @@ const adminNavItems: NavItem[] = [
   },
 ];
 
-// Dedicated Coach Portal items - Reserved exclusively for Coach login/role
+// Dedicated Coach Portal items
 const coachNavItems: NavItem[] = [
   {
     icon: <TaskIcon />,
@@ -122,26 +121,67 @@ const coachNavItems: NavItem[] = [
   },
 ];
 
-const othersItems: NavItem[] = [
+const baseOthersItems: NavItem[] = [
   {
     icon: <PlugInIcon />,
     name: "Parametres",
     subItems: [
       { name: "Club", path: "/parametres", pro: false },
       { name: "Dashboard", path: "/parametres/dashboard", pro: false },
+      { name: "Gestion des accès", path: "/parametres/acces", pro: false },
     ],
   },
 ];
 
 const AppSidebar: React.FC = () => {
   const { isExpanded, isMobileOpen, isHovered, setIsHovered } = useSidebar();
-  const { role, setRole, isCoach } = useUserRole();
+  const { role, isCoach, isAdmin, isSuperAdmin, userSections } = useUserRole();
   const pathname = usePathname();
-  const router = useRouter();
+  const [mounted, setMounted] = useState(false);
 
-  // If path starts with /coach, display coach navigation
-  const inCoachArea = pathname.startsWith("/coach") || isCoach;
-  const currentNavItems = inCoachArea ? coachNavItems : adminNavItems;
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const inCoachArea = pathname.startsWith("/coach");
+
+  // Filter main menu items dynamically
+  const filteredMainItems = useMemo(() => {
+    if (isSuperAdmin) {
+      return adminNavItems;
+    }
+    if (isCoach) {
+      // Coach: always show coach items first, then any extra admin sections granted by super admin
+      const grantedAdminSections = adminNavItems.filter((item) => userSections.includes(item.name));
+      return [...coachNavItems, ...grantedAdminSections];
+    }
+    return adminNavItems.filter((item) => userSections.includes(item.name));
+  }, [isCoach, isSuperAdmin, userSections]);
+
+  // Filter Parametres items
+  const filteredOthersItems = useMemo(() => {
+    if (isSuperAdmin) {
+      return baseOthersItems;
+    }
+    if (!userSections.includes("Paramètres")) {
+      return [];
+    }
+    return baseOthersItems.map((item) => {
+      if (item.name === "Parametres" && item.subItems) {
+        return {
+          ...item,
+          subItems: item.subItems.filter((sub) => sub.path !== "/parametres/acces"),
+        };
+      }
+      return item;
+    });
+  }, [isSuperAdmin, userSections]);
+
+  // Use coachNavItems as the SSR default when on /coach to avoid flash
+  const displayMainItems = inCoachArea
+    ? (mounted ? filteredMainItems : coachNavItems)
+    : (mounted ? filteredMainItems : adminNavItems);
+  const displayOthersItems = (mounted ? filteredOthersItems : (inCoachArea ? [] : baseOthersItems));
 
   const isSubItemActive = useCallback(
     (path: string) => {
@@ -186,7 +226,7 @@ const AppSidebar: React.FC = () => {
           {nav.subItems ? (
             <button
               onClick={() => handleSubmenuToggle(index, menuType)}
-              className={`menu-item group  ${
+              className={`menu-item group ${
                 openSubmenu?.type === menuType && openSubmenu?.index === index
                   ? "menu-item-active"
                   : "menu-item-inactive"
@@ -197,7 +237,7 @@ const AppSidebar: React.FC = () => {
               }`}
             >
               <span
-                className={` ${
+                className={`${
                   openSubmenu?.type === menuType && openSubmenu?.index === index
                     ? "menu-item-icon-active"
                     : "menu-item-icon-inactive"
@@ -210,7 +250,7 @@ const AppSidebar: React.FC = () => {
               )}
               {(isExpanded || isHovered || isMobileOpen) && (
                 <ChevronDownIcon
-                  className={`ml-auto w-5 h-5 transition-transform duration-200  ${
+                  className={`ml-auto w-5 h-5 transition-transform duration-200 ${
                     openSubmenu?.type === menuType &&
                     openSubmenu?.index === index
                       ? "rotate-180 text-brand-500"
@@ -267,30 +307,6 @@ const AppSidebar: React.FC = () => {
                       }`}
                     >
                       {subItem.name}
-                      <span className="flex items-center gap-1 ml-auto">
-                        {subItem.new && (
-                          <span
-                            className={`ml-auto ${
-                              isSubItemActive(subItem.path)
-                                ? "menu-dropdown-badge-active"
-                                : "menu-dropdown-badge-inactive"
-                            } menu-dropdown-badge `}
-                          >
-                            new
-                          </span>
-                        )}
-                        {subItem.pro && (
-                          <span
-                            className={`ml-auto ${
-                              isSubItemActive(subItem.path)
-                                ? "menu-dropdown-badge-active"
-                                : "menu-dropdown-badge-inactive"
-                            } menu-dropdown-badge `}
-                          >
-                            pro
-                          </span>
-                        )}
-                      </span>
                     </Link>
                   </li>
                 ))}
@@ -314,7 +330,7 @@ const AppSidebar: React.FC = () => {
   useEffect(() => {
     let submenuMatched = false;
     ["main", "others"].forEach((menuType) => {
-      const items = menuType === "main" ? currentNavItems : othersItems;
+      const items = menuType === "main" ? displayMainItems : displayOthersItems;
       items.forEach((nav, index) => {
         if (nav.subItems) {
           nav.subItems.forEach((subItem) => {
@@ -333,7 +349,7 @@ const AppSidebar: React.FC = () => {
     if (!submenuMatched) {
       setOpenSubmenu(null);
     }
-  }, [pathname, isActive, currentNavItems]);
+  }, [pathname, isActive, displayMainItems, displayOthersItems]);
 
   useEffect(() => {
     if (openSubmenu !== null) {
@@ -360,15 +376,15 @@ const AppSidebar: React.FC = () => {
     });
   };
 
-  const handleSwitchRole = () => {
-    if (inCoachArea) {
-      setRole("admin");
-      router.push("/dashboard");
-    } else {
-      setRole("coach");
-      router.push("/coach");
-    }
-  };
+  const subtitleLabel = !mounted
+    ? "Club Dashboard"
+    : inCoachArea
+    ? "Espace Coach"
+    : isCoach
+    ? "Compte Coach"
+    : isAdmin
+    ? "Compte Admin"
+    : "Club Dashboard";
 
   return (
     <aside
@@ -404,8 +420,8 @@ const AppSidebar: React.FC = () => {
                 <p className="text-lg font-semibold leading-5 text-gray-900 dark:text-white">
                   FC Toro
                 </p>
-                <p className="text-xs font-medium text-brand-600 dark:text-brand-400">
-                  {inCoachArea ? "Espace Coach" : "Club Dashboard"}
+                <p className="text-xs font-medium text-brand-600 dark:text-brand-400" suppressHydrationWarning>
+                  {subtitleLabel}
                 </p>
               </div>
             </div>
@@ -423,7 +439,7 @@ const AppSidebar: React.FC = () => {
 
       <div className="flex flex-col flex-1 overflow-y-auto duration-300 ease-linear no-scrollbar">
         <nav className="mb-6">
-          <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-4" suppressHydrationWarning>
             <div>
               <h2
                 className={`mb-4 text-xs uppercase flex leading-[20px] text-gray-400 ${
@@ -438,25 +454,27 @@ const AppSidebar: React.FC = () => {
                   <HorizontaLDots />
                 )}
               </h2>
-              {renderMenuItems(currentNavItems, "main")}
+              {renderMenuItems(displayMainItems, "main")}
             </div>
 
-            <div>
-              <h2
-                className={`mb-4 text-xs uppercase flex leading-[20px] text-gray-400 ${
-                  !isExpanded && !isHovered
-                    ? "lg:justify-center"
-                    : "justify-start"
-                }`}
-              >
-                {isExpanded || isHovered || isMobileOpen ? (
-                  "Config"
-                ) : (
-                  <HorizontaLDots />
-                )}
-              </h2>
-              {renderMenuItems(othersItems, "others")}
-            </div>
+            {displayOthersItems.length > 0 && (
+              <div>
+                <h2
+                  className={`mb-4 text-xs uppercase flex leading-[20px] text-gray-400 ${
+                    !isExpanded && !isHovered
+                      ? "lg:justify-center"
+                      : "justify-start"
+                  }`}
+                >
+                  {isExpanded || isHovered || isMobileOpen ? (
+                    "Config"
+                  ) : (
+                    <HorizontaLDots />
+                  )}
+                </h2>
+                {renderMenuItems(displayOthersItems, "others")}
+              </div>
+            )}
           </div>
         </nav>
       </div>

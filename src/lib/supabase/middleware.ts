@@ -27,48 +27,43 @@ export async function updateSession(request: NextRequest) {
     }
   )
 
-  // Get current user session
   const {
     data: { user },
   } = await supabase.auth.getUser()
 
-  const isAuthPage = request.nextUrl.pathname.startsWith('/signin') || request.nextUrl.pathname.startsWith('/signup')
+  const isAuthPage = 
+    request.nextUrl.pathname.startsWith('/signin') || 
+    request.nextUrl.pathname.startsWith('/signup') ||
+    request.nextUrl.pathname.startsWith('/forgot-password') ||
+    request.nextUrl.pathname.startsWith('/reset-password')
 
-  // If user is not logged in and tries to access a protected route
   if (!user && !isAuthPage && request.nextUrl.pathname !== '/') {
-    // Redirect to signin
     const url = request.nextUrl.clone()
     url.pathname = '/signin'
     return NextResponse.redirect(url)
   }
 
-  // If user is logged in and tries to access signin page or root
-  if (user && (isAuthPage || request.nextUrl.pathname === '/')) {
+  if (user && (request.nextUrl.pathname.startsWith('/signin') || request.nextUrl.pathname.startsWith('/signup') || request.nextUrl.pathname === '/')) {
     const url = request.nextUrl.clone()
     url.pathname = '/dashboard'
     return NextResponse.redirect(url)
   }
-  
-  // Role-based access control can be added here by fetching the profile
-  if (user && request.nextUrl.pathname !== '/dashboard' && !isAuthPage) {
-    // Note: Doing DB queries in middleware can slow down requests.
-    // For large scale apps, RBAC info is better stored in JWT custom claims.
-    // We do a simple fetch here for demonstration.
+
+  // Strict restriction for /parametres/acces: Only Super Admin allowed
+  if (user && request.nextUrl.pathname.startsWith('/parametres/acces')) {
     const { data: profile } = await supabase
       .from('profiles')
       .select('role')
       .eq('id', user.id)
       .single()
 
-    const role = profile?.role
+    const userRole = (profile?.role || '').toLowerCase();
+    const isSuperAdmin = userRole === 'super admin' || user.email === 'footballclubtoro@gmail.com';
 
-    // Example basic protection for Admin/Super Admin only routes
-    if (request.nextUrl.pathname.startsWith('/parametres')) {
-      if (role !== 'Super Admin' && role !== 'Admin') {
-        const url = request.nextUrl.clone()
-        url.pathname = '/dashboard'
-        return NextResponse.redirect(url)
-      }
+    if (!isSuperAdmin) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/dashboard'
+      return NextResponse.redirect(url)
     }
   }
 

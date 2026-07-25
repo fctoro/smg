@@ -163,7 +163,7 @@ export default function PaymentsPage() {
                         {payment.datePaiement ? formatClubDate(payment.datePaiement) : "-"}
                       </TableCell>
                       <TableCell className="py-3 text-theme-sm text-gray-500 dark:text-gray-400">
-                        {formatClubCurrency(payment.montant)}
+                        {formatClubCurrency(payment.montant, payment.devise)}
                       </TableCell>
                       <TableCell className="py-3 text-theme-sm text-gray-500 dark:text-gray-400">
                         <span className="block truncate max-w-[200px]" title={payment.remarque}>

@@ -18,7 +18,7 @@ const defaultSettings: ClubSettingsForm = {
   logoUrl: "/images/logo/fc-toro.png",
   primaryColor: "#D11829",
   secondaryColor: "#0D4EA6",
-  categories: "U13, U15, U17, Senior",
+  categories: "ti toro, U8, U10, U12, U14, U16, U18",
   roles: "Coach, Assistant, Admin, Medical",
 };
 

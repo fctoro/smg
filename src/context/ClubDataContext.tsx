@@ -20,6 +20,7 @@ import {
   PlayerStatus,
   StaffMember,
   Invoice,
+  PayrollRecord,
 } from "@/types/club";
 import { supabase } from "@/lib/supabaseClient";
 
@@ -42,6 +43,8 @@ interface ClubDataContextValue {
   setPayments: SetState<Payment[]>;
   invoices: Invoice[];
   setInvoices: SetState<Invoice[]>;
+  payrollRecords: PayrollRecord[];
+  setPayrollRecords: SetState<PayrollRecord[]>;
   hydrated: boolean;
 }
 
@@ -56,6 +59,7 @@ const STORAGE_KEYS = {
   events: "club-data-events-v1",
   payments: "club-data-payments-v1",
   invoices: "club-data-invoices-v1",
+  payrollRecords: "club-data-payroll-v2",
 };
 
 const parseStoredArray = <T,>(value: string | null, fallback: T[]): T[] => {
@@ -79,6 +83,7 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
   const [events, setEvents] = useState<ClubEvent[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [payrollRecords, setPayrollRecords] = useState<PayrollRecord[]>([]);
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
@@ -96,7 +101,7 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
           while (true) {
             const { data, error } = await supabase.from(table).select("*").range(from, from + step - 1);
             if (error) {
-              console.error(`Erreur ${table}:`, error);
+              console.warn(`Information ${table}:`, error.message || error);
               break;
             }
             if (data && data.length > 0) {
@@ -110,13 +115,16 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
           return allData;
         };
 
-        const [etudiantsData, paiementsData, inscriptionsData, sessionsData, facturesData, employesData] = await Promise.all([
+        const [etudiantsData, paiementsData, inscriptionsData, sessionsData, facturesData, employesData, alumniData, evenementsData, payrollData] = await Promise.all([
           fetchAll("tblEtudiants"),
           fetchAll("tblPaiements"),
           fetchAll("tblInscriptions"),
           fetchAll("tblSessions"),
           fetchAll("tblFacture"),
-          fetchAll("tblEmployes")
+          fetchAll("tblEmployes"),
+          fetchAll("tblAlumni").catch(() => []),
+          fetchAll("tblEvenements").catch(() => []),
+          fetchAll("tblPayroll").catch(() => [])
         ]);
 
         const sessionsMap = new Map();
@@ -247,8 +255,41 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
               prenom: d.Prenom || "",
               photoUrl: d.PhotoUrl || "/images/user/silhouette.svg",
               poste: "Joueur",
-              categorie: d.Sexe === "F" ? "Féminine" : "Masculin", 
+              sexe: d.Sexe === "F" ? "Féminin" : "Masculin", 
+              categorie: (() => {
+                const rawCat = (d.Categorie || d.categorie || d.Category || d.category || "").toString().trim();
+                const lowerCat = rawCat.toLowerCase();
+
+                if (rawCat && lowerCat !== "ti toro" && lowerCat !== "titoro" && lowerCat !== "default") {
+                  if (/^u-?\d+$/i.test(lowerCat)) {
+                    const num = lowerCat.replace(/[^\d]/g, "");
+                    return `U${num}`;
+                  }
+                  return rawCat;
+                }
+
+                if (d.DateNaissance) {
+                  const dt = new Date(d.DateNaissance);
+                  if (!isNaN(dt.getTime())) {
+                    const birthYear = dt.getFullYear();
+                    const currentYear = new Date().getFullYear();
+                    const age = currentYear - birthYear;
+
+                    if (age <= 6) return "ti toro";
+                    if (age <= 8) return "U8";
+                    if (age <= 10) return "U10";
+                    if (age <= 12) return "U12";
+                    if (age <= 14) return "U14";
+                    if (age <= 16) return "U16";
+                    if (age <= 18) return "U18";
+                    return "Senior";
+                  }
+                }
+
+                return rawCat || "ti toro";
+              })(),
               statut: playerStatus,
+              cotisationDevise: d.CotisationDevise || "US",
               telephone: d.Telephone || "",
               email: d.Email || "",
               dateInscription: d.DtCreation ? d.DtCreation.split("T")[0] : new Date().toISOString().split("T")[0],
@@ -313,13 +354,16 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
               id: String(p.Id),
               playerId: String(p.EtudiantId),
               montant: p.MntPayeUS || p.MntPayeGd || 0,
+              devise: p.MntPayeGd ? "HTG" : "US",
+              montantUS: p.MntPayeUS || 0,
+              montantHTG: p.MntPayeGd || 0,
               statut: "paid" as any, // Historique des transactions = payé
               periode: p.DateTransact ? p.DateTransact.substring(0, 7) : new Date().toISOString().substring(0, 7),
               methode: (p.ModePaiement || "especes") as any,
               datePaiement: p.DateTransact ? p.DateTransact.split("T")[0] : undefined,
               remarque: p.Remarque || p.Description || "",
             }))
-            .filter((p: Payment) => p.montant > 0); // On exclut les paiements à 0
+            .filter((p: Payment) => p.montant > 0 || p.montantUS > 0 || p.montantHTG > 0);
           setPayments(fetchedPayments);
         } else {
           setPayments(
@@ -334,6 +378,8 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
           const fetchedInvoices: Invoice[] = facturesData.map((f: any) => {
             const mntA = f.MntAPayer || 0;
             const mntP = f.MntPayeUS || f.MntPayeGd || 0;
+            const mntUS = f.MntPayeUS || 0;
+            const mntHTG = f.MntPayeGd || 0;
             return {
               id: String(f.Id),
               noFacture: f.NoFacture || `FCT-XXXX-${String(f.Id).padStart(4, "0")}`,
@@ -342,6 +388,9 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
               remarque: f.Remarque || "",
               montantAPayer: mntA,
               montantPaye: mntP,
+              devise: f.MntPayeGd ? "HTG" : "US",
+              montantUS: mntUS,
+              montantHTG: mntHTG,
               dateFacture: f.DateFacture ? f.DateFacture.split("T")[0] : "",
               datePaiement: f.DatePaiement ? f.DatePaiement.split("T")[0] : undefined,
               statut: mntP >= mntA ? "paid" : (mntP > 0 ? "pending" : "late"),
@@ -387,22 +436,72 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
           setEmployees(fallbackEmps);
           setStaff(fallbackEmps);
         }
+
+        if (alumniData && alumniData.length > 0) {
+          setAlumni(alumniData);
+        } else {
+          setAlumni(
+            parseStoredArray<Alumni>(
+              window.localStorage.getItem(STORAGE_KEYS.alumni),
+              []
+            )
+          );
+        }
+
+        if (evenementsData && evenementsData.length > 0) {
+          setEvents(evenementsData);
+        } else {
+          setEvents(
+            parseStoredArray<ClubEvent>(
+              window.localStorage.getItem(STORAGE_KEYS.events),
+              []
+            )
+          );
+        }
+        
+        if (payrollData && payrollData.length > 0) {
+          const fetchedPayroll: PayrollRecord[] = payrollData.map((p: any) => {
+            const empIdStr = String(p.EmployeId || p.employeid || p.employe_id);
+            // Si la base de données n'a que l'EmployeId (ex: lignes vides insérées manuellement),
+            // on récupère le nom et salaire depuis employesData.
+            const emp = employesData?.find((e: any) => String(e.EmployeId || e.employeid) === empIdStr);
+
+            const baseSalary = p.SalaireBase || p.salairebase || p.salaire_base || (emp ? emp.Salaire : 0) || 0;
+            const bonus = p.Bonus || p.bonus || 0;
+            const deductions = p.Deductions || p.deductions || 0;
+            const fallbackNet = baseSalary + bonus - deductions;
+
+            return {
+              id: String(p.Id || p.id),
+              employeId: empIdStr,
+              employeNom: p.EmployeNom || p.employenom || p.employe_nom || (emp ? emp.Nom : ""),
+              employePrenom: p.EmployePrenom || p.employeprenom || p.employe_prenom || (emp ? emp.Prenom : ""),
+              fonction: p.Fonction || p.fonction || (emp ? (emp.Fonction || emp.Profession) : ""),
+              mois: p.Mois || p.mois || "",
+              salaireBase: baseSalary,
+              bonus: bonus,
+              deductions: deductions,
+              netAPayer: p.NetAPayer || p.netapayer || p.net_a_payer || fallbackNet,
+              statut: p.Statut || p.statut || "en_attente",
+              datePaiement: p.DatePaiement || p.datepaiement || p.date_paiement ? (p.DatePaiement || p.datepaiement || p.date_paiement).split("T")[0] : undefined,
+              modePaiement: p.ModePaiement || p.modepaiement || p.mode_paiement || "especes",
+              notes: p.Notes || p.notes || "",
+              pieceJointe: p.PieceJointe || p.piecejointe || p.piece_jointe || "",
+            };
+          });
+          setPayrollRecords(fetchedPayroll);
+        } else {
+          setPayrollRecords(
+            parseStoredArray<PayrollRecord>(
+              window.localStorage.getItem(STORAGE_KEYS.payrollRecords),
+              []
+            )
+          );
+        }
       } catch (err) {
         console.error("Erreur lors de la récupération des données", err);
       }
 
-      setAlumni(
-        parseStoredArray<Alumni>(
-          window.localStorage.getItem(STORAGE_KEYS.alumni),
-          []
-        )
-      );
-      setEvents(
-        parseStoredArray<ClubEvent>(
-          window.localStorage.getItem(STORAGE_KEYS.events),
-          []
-        )
-      );
       setHydrated(true);
     };
 
@@ -459,6 +558,13 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
     window.localStorage.setItem(STORAGE_KEYS.invoices, JSON.stringify(invoices));
   }, [hydrated, invoices]);
 
+  useEffect(() => {
+    if (!hydrated || typeof window === "undefined") {
+      return;
+    }
+    window.localStorage.setItem(STORAGE_KEYS.payrollRecords, JSON.stringify(payrollRecords));
+  }, [hydrated, payrollRecords]);
+
   return (
     <ClubDataContext.Provider
       value={{
@@ -468,8 +574,8 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
         setParents,
         employees,
         setEmployees,
-        staff: employees,
-        setStaff: setEmployees,
+        staff,
+        setStaff,
         alumni,
         setAlumni,
         events,
@@ -478,6 +584,8 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
         setPayments,
         invoices,
         setInvoices,
+        payrollRecords,
+        setPayrollRecords,
         hydrated,
       }}
     >

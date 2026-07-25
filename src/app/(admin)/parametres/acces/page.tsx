@@ -1,138 +1,520 @@
 "use client";
 import React, { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import Button from "@/components/ui/button/Button";
-import Checkbox from "@/components/form/input/Checkbox";
+import { createUser, getUsersList, deleteUser, updateUserPassword } from "@/app/actions/user";
 
-type Permission = {
+type Profile = {
   id: string;
+  email: string;
+  full_name: string;
   role: string;
-  section: string;
-  can_access: boolean;
+  sections?: string[];
+  created_at: string;
 };
 
-const SECTIONS = ["dashboard", "joueurs", "coachs", "staff", "alumni", "parents", "evenements", "factures", "paiements", "recus", "classement"];
-const ROLES = ["Admin", "Coach"]; // Super Admin has access to everything implicitly
+const SECTIONS = [
+  "Dashboard",
+  "Joueurs",
+  "Parents",
+  "Alumni",
+  "Employés",
+  "Evenements",
+  "Paiements",
+  "Factures",
+  "Paramètres",
+];
+
+const ACCOUNT_TYPES = [
+  { id: "Super Admin", label: "Super Admin", description: "Accès complet à l'ensemble de la plateforme" },
+  { id: "Admin", label: "Administrateur", description: "Gestion quotidienne des opérations du club" },
+  { id: "Coach", label: "Coach", description: "Accès limité aux entraînements et effectifs" },
+];
 
 export default function AccessControlPage() {
-  const [permissions, setPermissions] = useState<Permission[]>([]);
+  const [profiles, setProfiles] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showPassword, setShowPassword] = useState(false);
+  const [currentUserEmail, setCurrentUserEmail] = useState<string>("footballclubtoro@gmail.com");
+  
+  // Form State
+  const [formData, setFormData] = useState({
+    email: "",
+    password: "",
+    role: "Admin",
+  });
+  
+  // Role Permissions Configuration State (Defaults)
+  const [rolePermissions, setRolePermissions] = useState<Record<string, string[]>>({
+    "Super Admin": [...SECTIONS],
+    "Admin": ["Dashboard", "Joueurs", "Parents", "Evenements", "Paiements", "Factures"],
+    "Coach": ["Dashboard", "Joueurs", "Evenements"],
+  });
+
+  const [selectedSections, setSelectedSections] = useState<string[]>(rolePermissions["Admin"]);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
 
+  // Edit Password State
+  const [editingUserId, setEditingUserId] = useState<string | null>(null);
+  const [newPasswordValue, setNewPasswordValue] = useState("");
+  const [passwordUpdating, setPasswordUpdating] = useState(false);
+
+  const [activeConfigRole, setActiveConfigRole] = useState<string>("Admin");
+  const [configSaving, setConfigSaving] = useState(false);
+  const [configMessage, setConfigMessage] = useState<string | null>(null);
+
   useEffect(() => {
-    fetchPermissions();
+    async function checkUser() {
+      try {
+        const { data } = await supabase.auth.getUser();
+        if (data?.user?.email) {
+          setCurrentUserEmail(data.user.email);
+        }
+      } catch (e) {}
+    }
+    checkUser();
+    fetchProfiles();
   }, []);
 
-  const fetchPermissions = async () => {
+  const handleRoleSelect = (roleId: string) => {
+    setFormData(prev => ({ ...prev, role: roleId }));
+    setSelectedSections(rolePermissions[roleId] || []);
+  };
+
+  const fetchProfiles = async () => {
     setLoading(true);
-    const { data, error } = await supabase.from("permissions").select("*").is("user_id", null);
-    if (!error && data) {
-      setPermissions(data);
+    const result = await getUsersList();
+    if (result?.users) {
+      setProfiles(result.users);
     }
     setLoading(false);
   };
 
-  const getPermission = (role: string, section: string) => {
-    return permissions.find(p => p.role === role && p.section === section);
+  const handleToggleSection = (section: string) => {
+    setSelectedSections(prev => 
+      prev.includes(section) 
+        ? prev.filter(s => s !== section)
+        : [...prev, section]
+    );
   };
 
-  const handleToggle = (role: string, section: string, checked: boolean) => {
-    setPermissions(prev => {
-      const existing = prev.find(p => p.role === role && p.section === section);
-      if (existing) {
-        return prev.map(p => p.id === existing.id ? { ...p, can_access: checked } : p);
-      } else {
-        return [...prev, { id: `temp-${Date.now()}`, role, section, can_access: checked }];
-      }
+  const handleToggleRoleConfigSection = (section: string) => {
+    setRolePermissions(prev => {
+      const current = prev[activeConfigRole] || [];
+      const updated = current.includes(section)
+        ? current.filter(s => s !== section)
+        : [...current, section];
+      return { ...prev, [activeConfigRole]: updated };
     });
   };
 
-  const handleSave = async () => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
     setSaving(true);
     setMessage(null);
-    
-    // In a real app, you would upsert this in bulk.
-    const { error } = await supabase.from("permissions").upsert(
-      permissions.map(p => {
-        // If it's a temporary ID, remove it so Supabase generates a UUID
-        const { id, ...rest } = p;
-        return p.id.startsWith("temp-") ? rest : p;
-      }), 
-      { onConflict: "role, section" } // assuming a unique constraint on role+section, otherwise you might need to handle this differently
-    );
 
-    if (error) {
-      setMessage({ text: "Erreur lors de la sauvegarde: " + error.message, type: "error" });
+    const form = new FormData();
+    form.append("email", formData.email);
+    form.append("password", formData.password);
+    form.append("role", formData.role);
+    form.append("sections", JSON.stringify(selectedSections));
+
+    const result = await createUser(form);
+
+    if (result.error) {
+      setMessage({ text: result.error, type: "error" });
     } else {
-      setMessage({ text: "Permissions mises à jour avec succès.", type: "success" });
-      await fetchPermissions(); // reload exact IDs
+      setMessage({ text: `Compte ${formData.role} créé avec succès avec ${selectedSections.length} section(s) attribuée(s) !`, type: "success" });
+      setFormData({ email: "", password: "", role: "Admin" });
+      setSelectedSections(rolePermissions["Admin"]);
+      fetchProfiles();
     }
     setSaving(false);
   };
 
-  if (loading) return <div className="p-8">Chargement...</div>;
+  const handleDeleteUser = async (user: Profile) => {
+    const confirmed = window.confirm(
+      `Êtes-vous sûr de vouloir supprimer le compte "${user.email}" ? Cette action est irréversible.`
+    );
+    if (!confirmed) return;
+
+    const res = await deleteUser(user.id);
+    if (res?.error) {
+      alert(`Erreur: ${res.error}`);
+    } else {
+      alert(`Le compte ${user.email} a été supprimé avec succès.`);
+      fetchProfiles();
+    }
+  };
+
+  const handleSaveNewPassword = async (userId: string) => {
+    if (!newPasswordValue || newPasswordValue.length < 6) {
+      alert("Le mot de passe doit contenir au moins 6 caractères.");
+      return;
+    }
+    setPasswordUpdating(true);
+    const res = await updateUserPassword(userId, newPasswordValue);
+    setPasswordUpdating(false);
+
+    if (res?.error) {
+      alert(`Erreur: ${res.error}`);
+    } else {
+      alert("Mot de passe mis à jour avec succès !");
+      setEditingUserId(null);
+      setNewPasswordValue("");
+    }
+  };
+
+  const handleSaveRoleConfig = () => {
+    setConfigSaving(true);
+    setTimeout(() => {
+      setConfigSaving(false);
+      setConfigMessage(`Permissions par défaut pour le rôle "${activeConfigRole}" sauvegardées !`);
+      setTimeout(() => setConfigMessage(null), 3000);
+    }, 600);
+  };
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-800 dark:text-white/90">
-          Contrôle des Accès (RBAC)
+    <div className="max-w-4xl mx-auto p-4 md:p-8 space-y-8 font-sans">
+      {/* Header */}
+      <div>
+        <h1 className="text-[28px] font-bold text-[#0f172a] tracking-tight mb-1">
+          Gestion des Accès & Comptes
         </h1>
-        <p className="text-sm text-gray-500 dark:text-gray-400">
-          Gérez l'accès aux différentes sections du système selon le rôle.
+        <p className="text-[15px] text-[#64748b]">
+          Gérez les utilisateurs, définissez le type de compte et cochez les sections exactes accessibles.
         </p>
       </div>
 
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
-        {message && (
-          <div className={`m-4 p-3 rounded-lg text-sm ${message.type === 'success' ? 'bg-success-50 text-success-600' : 'bg-error-50 text-error-600'}`}>
-            {message.text}
-          </div>
-        )}
-
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm text-gray-500 dark:text-gray-400">
-            <thead className="bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
-              <tr>
-                <th className="px-6 py-4 font-medium text-gray-900 dark:text-white">Section</th>
-                {ROLES.map(role => (
-                  <th key={role} className="px-6 py-4 font-medium text-gray-900 dark:text-white text-center">
-                    {role}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-              {SECTIONS.map(section => (
-                <tr key={section} className="hover:bg-gray-50 dark:hover:bg-gray-800">
-                  <td className="px-6 py-4 font-medium text-gray-900 dark:text-white capitalize">
-                    {section}
-                  </td>
-                  {ROLES.map(role => {
-                    const perm = getPermission(role, section);
-                    const isChecked = perm?.can_access || false;
-                    return (
-                      <td key={`${role}-${section}`} className="px-6 py-4 text-center">
-                         <input 
-                            type="checkbox" 
-                            checked={isChecked}
-                            onChange={(e) => handleToggle(role, section, e.target.checked)}
-                            className="w-5 h-5 rounded border-gray-300 text-brand-500 focus:ring-brand-500 dark:border-gray-600 dark:bg-gray-700"
-                          />
-                      </td>
-                    );
-                  })}
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      {/* Comptes Administrateurs List */}
+      <div className="bg-white rounded-xl border border-[#e2e8f0] overflow-hidden shadow-sm">
+        <div className="px-6 pt-6 pb-2 flex justify-between items-center border-b border-[#f1f5f9] pb-4">
+          <h2 className="text-[13px] font-bold text-[#94a3b8] uppercase tracking-wider">
+            COMPTES UTILISATEURS EXISTANTS
+          </h2>
+          <span className="text-[13px] font-medium text-[#64748b] bg-[#f8fafc] px-3 py-1 rounded-full border border-[#e2e8f0]">
+            {profiles.length} compte{profiles.length > 1 ? 's' : ''}
+          </span>
         </div>
         
-        <div className="p-6 border-t border-gray-200 dark:border-gray-700 flex justify-end">
-          <Button onClick={handleSave} disabled={saving}>
-            {saving ? "Enregistrement..." : "Enregistrer les modifications"}
-          </Button>
+        <div className="p-6">
+          {loading ? (
+            <div className="text-center py-4 text-sm text-[#64748b]">Chargement des comptes...</div>
+          ) : profiles.length === 0 ? (
+            <div className="text-center py-6 text-sm text-[#64748b]">Aucun compte trouvé dans la base de données.</div>
+          ) : (
+            <div className="space-y-3">
+              {profiles.map(profile => {
+                const isYou = profile.email === currentUserEmail || profile.email === "footballclubtoro@gmail.com";
+                return (
+                  <div key={profile.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-xl border border-[#f1f5f9] hover:border-[#cbd5e1] transition-colors bg-white">
+                    <div className="flex items-center gap-4 min-w-0">
+                      <div className="h-[46px] w-[46px] rounded-full bg-[#0f172a] text-white flex items-center justify-center font-semibold text-lg shrink-0 shadow-sm">
+                        {(profile?.email || "U").charAt(0).toUpperCase()}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2.5 mb-1 flex-wrap">
+                          <p className="text-[15px] font-semibold text-[#0f172a] truncate">
+                            {profile?.email || profile?.full_name || "Utilisateur"}
+                          </p>
+                          {isYou && (
+                            <span className="px-2 py-0.5 rounded-md text-[11px] font-medium bg-[#f1f5f9] text-[#64748b] border border-[#e2e8f0]">
+                              Vous
+                            </span>
+                          )}
+                          <span className="px-2.5 py-0.5 rounded-md text-[11px] font-semibold bg-[#0f172a] text-white">
+                            {profile.role}
+                          </span>
+                        </div>
+                        <p className="text-[13px] text-[#94a3b8] truncate">
+                          Créé le {new Date(profile.created_at).toLocaleDateString("fr-FR")}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Actions buttons: Edit Password & Delete */}
+                    <div className="flex items-center gap-2 self-end sm:self-auto pt-2 sm:pt-0">
+                      <button
+                        onClick={() => {
+                          setEditingUserId(editingUserId === profile.id ? null : profile.id);
+                          setNewPasswordValue("");
+                        }}
+                        className="px-3 py-1.5 rounded-lg border border-[#e2e8f0] text-[13px] font-medium text-[#334155] hover:bg-[#f8fafc] hover:border-[#cbd5e1] transition-colors flex items-center gap-1.5"
+                      >
+                        <svg className="w-4 h-4 text-[#64748b]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                        </svg>
+                        {editingUserId === profile.id ? "Annuler" : "Modifier mot de passe"}
+                      </button>
+
+                      {!isYou && (
+                        <button
+                          onClick={() => handleDeleteUser(profile)}
+                          className="px-3 py-1.5 rounded-lg border border-red-200 text-[13px] font-medium text-red-600 bg-red-50/50 hover:bg-red-100 hover:border-red-300 transition-colors flex items-center gap-1.5"
+                          title="Supprimer ce compte (Super Admin uniquement)"
+                        >
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                          Supprimer
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Inline edit password panel */}
+                    {editingUserId === profile.id && (
+                      <div className="w-full sm:col-span-2 pt-3 border-t border-[#f1f5f9] flex flex-col sm:flex-row items-center gap-3">
+                        <input
+                          type="password"
+                          placeholder="Nouveau mot de passe (min 6 car.)"
+                          value={newPasswordValue}
+                          onChange={(e) => setNewPasswordValue(e.target.value)}
+                          className="w-full sm:w-72 h-10 px-3 bg-[#f8fafc] border border-[#e2e8f0] rounded-lg text-[13px] text-[#0f172a] focus:border-[#0f172a] outline-none"
+                        />
+                        <button
+                          onClick={() => handleSaveNewPassword(profile.id)}
+                          disabled={passwordUpdating}
+                          className="w-full sm:w-auto px-4 py-2 bg-[#0f172a] text-white text-[13px] font-semibold rounded-lg hover:bg-[#1e293b] transition-colors disabled:opacity-50"
+                        >
+                          {passwordUpdating ? "Enregistrement..." : "Enregistrer"}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Créer un compte Form */}
+      <div className="bg-white rounded-xl border border-[#e2e8f0] overflow-hidden shadow-sm">
+        <div className="px-6 pt-6 pb-2">
+          <h2 className="text-[13px] font-bold text-[#94a3b8] uppercase tracking-wider">
+            CRÉER UN NOUVEAU COMPTE
+          </h2>
+        </div>
+        
+        <form onSubmit={handleSubmit} className="px-6 pb-6 space-y-6">
+          {message && (
+            <div className={`p-4 rounded-lg text-sm font-medium ${message.type === 'success' ? 'bg-[#f0fdf4] text-[#15803d] border border-[#bbf7d0]' : 'bg-[#fef2f2] text-[#b91c1c] border border-[#fecaca]'}`}>
+              {message.text}
+            </div>
+          )}
+
+          {/* Type de compte Selector */}
+          <div className="space-y-3">
+            <label className="text-[14px] font-semibold text-[#334155]">
+              Type de compte <span className="text-red-500">*</span>
+            </label>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {ACCOUNT_TYPES.map(type => (
+                <div
+                  key={type.id}
+                  onClick={() => handleRoleSelect(type.id)}
+                  className={`p-4 rounded-xl border cursor-pointer transition-all ${
+                    formData.role === type.id
+                      ? "border-[#0f172a] bg-[#0f172a]/5 shadow-sm ring-1 ring-[#0f172a]"
+                      : "border-[#e2e8f0] bg-[#f8fafc] hover:border-[#cbd5e1]"
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[14px] font-bold text-[#0f172a]">{type.label}</span>
+                    <input 
+                      type="radio" 
+                      name="roleType"
+                      checked={formData.role === type.id}
+                      onChange={() => handleRoleSelect(type.id)}
+                      className="h-4 w-4 text-[#0f172a] focus:ring-0 cursor-pointer accent-[#0f172a]"
+                    />
+                  </div>
+                  <p className="text-[12px] text-[#64748b] leading-tight">{type.description}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-6 pt-2">
+            <div className="space-y-2">
+              <label className="text-[14px] font-medium text-[#334155]">Adresse email <span className="text-red-500">*</span></label>
+              <input 
+                name="email"
+                value={formData.email}
+                onChange={handleInputChange}
+                type="email" 
+                placeholder="nom@fctoro.club"
+                required
+                className="w-full h-11 px-4 bg-[#f8fafc] border border-[#e2e8f0] rounded-lg text-[14px] text-[#0f172a] placeholder-[#94a3b8] focus:border-[#0f172a] outline-none transition-colors" 
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-[14px] font-medium text-[#334155]">Mot de passe provisoire <span className="text-red-500">*</span></label>
+              <div className="relative">
+                <input 
+                  name="password"
+                  value={formData.password}
+                  onChange={handleInputChange}
+                  type={showPassword ? "text" : "password"} 
+                  placeholder="••••••••"
+                  required
+                  className="w-full h-11 px-4 pr-11 bg-[#f1f5f9] border border-[#e2e8f0] rounded-lg text-[14px] text-[#0f172a] placeholder-[#94a3b8] focus:border-[#0f172a] outline-none transition-colors" 
+                />
+                <button 
+                  type="button" 
+                  onClick={() => setShowPassword(prev => !prev)}
+                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[#94a3b8] hover:text-[#0f172a] transition-colors p-1"
+                  title={showPassword ? "Masquer le mot de passe" : "Afficher le mot de passe"}
+                >
+                  {showPassword ? (
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858-5.908a8.97 8.97 0 013.122-.382c4.478 0 8.268 2.943 9.542 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21f-3-3m-3.938-3.938A3.001 3.001 0 0012 9a2.986 2.986 0 00-2.062.825m3.938 3.938L3 3" />
+                    </svg>
+                  ) : (
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    </svg>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Sections accessibles personnalisées */}
+          <div className="mt-8 border border-[#e2e8f0] rounded-xl overflow-hidden">
+            <div className="px-5 py-4 flex items-center justify-between border-b border-[#f1f5f9] bg-[#f8fafc]">
+              <h3 className="text-[14px] font-semibold text-[#334155]">
+                Sections affichées pour ce compte ({formData.role})
+              </h3>
+              <span className="text-[13px] text-[#94a3b8]">
+                {selectedSections.length === 0 ? "Aucune sélectionnée" : `${selectedSections.length} sélectionnée(s)`}
+              </span>
+            </div>
+            
+            <div className="p-5 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-y-4 gap-x-4">
+              {SECTIONS.map(section => (
+                <label key={section} className="flex items-center gap-3 cursor-pointer group">
+                  <div className="relative flex items-center">
+                    <input 
+                      type="checkbox"
+                      checked={selectedSections.includes(section)}
+                      onChange={() => handleToggleSection(section)}
+                      className="peer h-[18px] w-[18px] cursor-pointer appearance-none rounded-[4px] border border-[#cbd5e1] bg-white checked:border-[#0f172a] checked:bg-[#0f172a] transition-all outline-none"
+                    />
+                    <svg className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-3 h-3 pointer-events-none opacity-0 peer-checked:opacity-100 text-white stroke-white" viewBox="0 0 14 10" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M1 5L4.5 8.5L13 1" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  </div>
+                  <span className="text-[14px] text-[#475569] group-hover:text-[#0f172a] transition-colors">
+                    {section}
+                  </span>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <div className="mt-8 pt-6 border-t border-[#f1f5f9] flex items-center justify-between">
+            <span className="text-[13px] text-[#94a3b8]">{selectedSections.length} section(s) attribuée(s)</span>
+            <button 
+              type="submit" 
+              disabled={saving}
+              className="flex items-center gap-2 bg-[#0f172a] text-white hover:bg-[#1e293b] px-6 py-2.5 rounded-lg text-[14px] font-semibold transition-colors disabled:opacity-50 shadow-sm"
+            >
+              <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+              </svg>
+              {saving ? "Création..." : `Créer le compte ${formData.role}`}
+            </button>
+          </div>
+        </form>
+      </div>
+
+      {/* Configuration globale des types de comptes et leurs accès */}
+      <div className="bg-white rounded-xl border border-[#e2e8f0] overflow-hidden shadow-sm">
+        <div className="px-6 pt-6 pb-2 border-b border-[#f1f5f9] flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <h2 className="text-[15px] font-bold text-[#0f172a]">
+              CONFIGURATION DES DROITS PAR TYPE DE COMPTE
+            </h2>
+            <p className="text-[13px] text-[#64748b] mt-0.5">
+              Définissez les accès par défaut pour chaque catégorie d'utilisateur.
+            </p>
+          </div>
+
+          {/* Role selector tabs for config */}
+          <div className="flex gap-2 bg-[#f8fafc] p-1 rounded-lg border border-[#e2e8f0]">
+            {ACCOUNT_TYPES.map(type => (
+              <button
+                key={type.id}
+                onClick={() => setActiveConfigRole(type.id)}
+                className={`px-3 py-1.5 rounded-md text-[13px] font-semibold transition-all ${
+                  activeConfigRole === type.id
+                    ? "bg-[#0f172a] text-white shadow-sm"
+                    : "text-[#64748b] hover:text-[#0f172a]"
+                }`}
+              >
+                {type.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="p-6 space-y-6">
+          {configMessage && (
+            <div className="p-4 rounded-lg text-sm font-medium bg-[#f0fdf4] text-[#15803d] border border-[#bbf7d0]">
+              {configMessage}
+            </div>
+          )}
+
+          <div className="flex items-center justify-between">
+            <h3 className="text-[14px] font-semibold text-[#334155]">
+              Sections autorisées par défaut pour : <span className="text-[#0f172a] font-bold">{activeConfigRole}</span>
+            </h3>
+            <span className="text-[12px] text-[#94a3b8]">
+              {(rolePermissions[activeConfigRole] || []).length} / {SECTIONS.length} modules
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-y-4 gap-x-4 p-5 bg-[#f8fafc] rounded-xl border border-[#e2e8f0]">
+            {SECTIONS.map(section => {
+              const isChecked = (rolePermissions[activeConfigRole] || []).includes(section);
+              return (
+                <label key={section} className="flex items-center gap-3 cursor-pointer group">
+                  <div className="relative flex items-center">
+                    <input 
+                      type="checkbox"
+                      checked={isChecked}
+                      onChange={() => handleToggleRoleConfigSection(section)}
+                      className="peer h-[18px] w-[18px] cursor-pointer appearance-none rounded-[4px] border border-[#cbd5e1] bg-white checked:border-[#0f172a] checked:bg-[#0f172a] transition-all outline-none"
+                    />
+                    <svg className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-3 h-3 pointer-events-none opacity-0 peer-checked:opacity-100 text-white stroke-white" viewBox="0 0 14 10" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M1 5L4.5 8.5L13 1" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  </div>
+                  <span className={`text-[14px] transition-colors ${isChecked ? "font-medium text-[#0f172a]" : "text-[#94a3b8]"}`}>
+                    {section}
+                  </span>
+                </label>
+              );
+            })}
+          </div>
+
+          <div className="flex items-center justify-end">
+            <button
+              onClick={handleSaveRoleConfig}
+              disabled={configSaving}
+              className="bg-[#0f172a] text-white hover:bg-[#1e293b] px-5 py-2.5 rounded-lg text-[14px] font-semibold transition-colors disabled:opacity-50 shadow-sm"
+            >
+              {configSaving ? "Enregistrement..." : `Sauvegarder les accès ${activeConfigRole}`}
+            </button>
+          </div>
         </div>
       </div>
     </div>

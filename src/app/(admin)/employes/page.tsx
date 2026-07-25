@@ -5,12 +5,13 @@ import { useRouter } from "next/navigation";
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import EmployeeTable from "@/components/club/EmployeeTable";
 import { useClubData } from "@/context/ClubDataContext";
+import { softDeleteEmployeeInSupabase } from "@/lib/club/supabase-crud";
 
 export default function EmployesPage() {
   const router = useRouter();
   const { employees, setEmployees } = useClubData();
 
-  const handleDeleteEmployee = (employeeId: string) => {
+  const handleDeleteEmployee = async (employeeId: string) => {
     const target = employees.find((emp) => emp.id === employeeId);
     if (!target) {
       return;
@@ -19,7 +20,13 @@ export default function EmployesPage() {
     if (!window.confirm(`Supprimer l'employé ${target.prenom} ${target.nom} ?`)) {
       return;
     }
-    setEmployees((prev) => prev.filter((emp) => emp.id !== employeeId));
+    
+    try {
+      await softDeleteEmployeeInSupabase(employeeId);
+      setEmployees((prev) => prev.filter((emp) => emp.id !== employeeId));
+    } catch (error) {
+      alert("Erreur lors de la suppression. Veuillez réessayer.");
+    }
   };
 
   return (

@@ -7,13 +7,14 @@ import PlayerTable from "@/components/club/PlayerTable";
 import { useDashboardConfig } from "@/hooks/useDashboardConfig";
 import { useClubData } from "@/context/ClubDataContext";
 import { getPlayerFullName } from "@/lib/club/metrics";
+import { softDeletePlayerInSupabase } from "@/lib/club/supabase-crud";
 
 export default function PlayersPage() {
   const router = useRouter();
   const { players, setPlayers } = useClubData();
   const { enabledPlayerColumns } = useDashboardConfig();
 
-  const handleDeletePlayer = (playerId: string) => {
+  const handleDeletePlayer = async (playerId: string) => {
     const target = players.find((player) => player.id === playerId);
     if (!target) {
       return;
@@ -26,9 +27,14 @@ export default function PlayersPage() {
       return;
     }
 
-    setPlayers((prevPlayers) =>
-      prevPlayers.filter((player) => player.id !== playerId),
-    );
+    try {
+      await softDeletePlayerInSupabase(playerId);
+      setPlayers((prevPlayers) =>
+        prevPlayers.filter((player) => player.id !== playerId),
+      );
+    } catch (error) {
+      alert("Erreur lors de la suppression. Veuillez réessayer.");
+    }
   };
 
   const tableColumns =

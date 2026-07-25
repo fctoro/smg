@@ -4,6 +4,7 @@ import { useSidebar } from "@/context/SidebarContext";
 import AppHeader from "@/layout/AppHeader";
 import AppSidebar from "@/layout/AppSidebar";
 import Backdrop from "@/layout/Backdrop";
+import AutoLogoutListener from "@/components/auth/AutoLogoutListener";
 import React from "react";
 
 export default function AdminLayout({
@@ -22,12 +23,15 @@ export default function AdminLayout({
 
   return (
     <div className="min-h-screen xl:flex">
+      {/* Auto-logout after 30 minutes of inactivity */}
+      <AutoLogoutListener />
+      
       {/* Sidebar and Backdrop */}
       <AppSidebar />
       <Backdrop />
       {/* Main Content Area */}
       <div
-        className={`flex-1 transition-all  duration-300 ease-in-out ${mainContentMargin} print:ml-0 print:w-full`}
+        className={`flex-1 transition-all duration-300 ease-in-out ${mainContentMargin} print:ml-0 print:w-full`}
       >
         {/* Header */}
         <AppHeader />

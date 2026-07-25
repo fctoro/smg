@@ -4,6 +4,7 @@ import React, { useState, useMemo } from "react";
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import { useClubData } from "@/context/ClubDataContext";
 import { formatClubCurrency, formatClubDate, getPlayerFullName } from "@/lib/club/metrics";
+import { getParentLinkedPlayerIds } from "@/lib/club/parents";
 import { FC_TORO_LOGO } from "@/lib/club/pdfAssets";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -29,9 +30,9 @@ export default function RecusPage() {
           playerIds: new Set<string>()
         });
       }
-      if (p.playerId) {
-        map.get(key)!.playerIds.add(p.playerId);
-      }
+      getParentLinkedPlayerIds(p).forEach((playerId) => {
+        map.get(key)!.playerIds.add(playerId);
+      });
     });
 
     return Array.from(map.values()).map(p => {

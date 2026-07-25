@@ -12,6 +12,7 @@ import Pagination from "@/components/tables/Pagination";
 import { PencilIcon, TrashBinIcon } from "@/icons";
 import { Parent, Player } from "@/types/club";
 import { getPlayerFullName } from "@/lib/club/metrics";
+import { getParentLinkedPlayerIds } from "@/lib/club/parents";
 
 interface ParentTableProps {
   parents: Parent[];
@@ -42,15 +43,17 @@ export default function ParentTable({
         return true;
       }
 
-      const linkedPlayer = playerMap.get(parent.playerId);
+      const linkedPlayerIds = getParentLinkedPlayerIds(parent);
+      const linkedPlayerNames = linkedPlayerIds
+        .map((playerId) => playerMap.get(playerId))
+        .filter(Boolean)
+        .map((player) => getPlayerFullName(player as Player).toLowerCase())
+        .join(" ");
       const parentFullName = `${parent.prenom} ${parent.nom}`.toLowerCase();
-      const playerFullName = linkedPlayer
-        ? getPlayerFullName(linkedPlayer).toLowerCase()
-        : "";
 
       return (
         parentFullName.includes(query) ||
-        playerFullName.includes(query) ||
+        linkedPlayerNames.includes(query) ||
         parent.email.toLowerCase().includes(query)
       );
     });
@@ -105,7 +108,7 @@ export default function ParentTable({
                 isHeader
                 className="py-3 text-start text-theme-xs font-medium text-gray-500 dark:text-gray-400"
               >
-                Joueur associe
+                Enfants associes
               </TableCell>
               <TableCell
                 isHeader
@@ -139,7 +142,14 @@ export default function ParentTable({
               </TableRow>
             ) : (
               pagedParents.map((parent) => {
-                const linkedPlayer = playerMap.get(parent.playerId);
+                const linkedPlayerIds = getParentLinkedPlayerIds(parent);
+                const linkedPlayers = linkedPlayerIds
+                  .map((playerId) => playerMap.get(playerId))
+                  .filter(Boolean) as Player[];
+                const linkedPlayerNames = linkedPlayers.length
+                  ? linkedPlayers.map((player) => getPlayerFullName(player)).join(", ")
+                  : "-";
+
                 return (
                   <TableRow key={parent.id}>
                     <TableCell className="py-3 text-theme-sm text-gray-800 dark:text-white/90">
@@ -149,7 +159,12 @@ export default function ParentTable({
                       {parent.lien}
                     </TableCell>
                     <TableCell className="py-3 text-theme-sm text-gray-500 dark:text-gray-400">
-                      {linkedPlayer ? getPlayerFullName(linkedPlayer) : "-"}
+                      <div className="flex flex-col gap-1">
+                        <span>{linkedPlayerNames}</span>
+                        <span className="text-xs text-gray-400">
+                          {linkedPlayerIds.length} enfant(s)
+                        </span>
+                      </div>
                     </TableCell>
                     <TableCell className="py-3 text-theme-sm text-gray-500 dark:text-gray-400">
                       {parent.telephone}

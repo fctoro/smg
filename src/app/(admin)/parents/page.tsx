@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import ParentTable from "@/components/club/ParentTable";
 import { useClubData } from "@/context/ClubDataContext";
+import { getParentLinkedPlayerIds } from "@/lib/club/parents";
 import { deleteParentInSupabase } from "@/lib/club/supabase-crud";
 
 export default function ParentsPage() {
@@ -20,7 +21,7 @@ export default function ParentsPage() {
     }
     
     try {
-      await deleteParentInSupabase(target.playerId); // use playerId for deletion in tblEtudiants
+      await deleteParentInSupabase(getParentLinkedPlayerIds(target));
       setParents((prev) => prev.filter((p) => p.id !== parentId));
     } catch (error) {
       alert("Erreur lors de la suppression. Veuillez réessayer.");

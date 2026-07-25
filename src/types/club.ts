@@ -84,6 +84,7 @@ export interface Parent {
   email: string;
   lien: string;
   playerId: string;
+  playerIds?: string[];
 }
 
 export interface Employee {

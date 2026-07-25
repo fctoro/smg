@@ -43,6 +43,21 @@ export async function getUsersList() {
   }
 }
 
+async function upsertProfile(profile: Record<string, any>) {
+  const { error } = await supabaseAdmin.from("profiles").upsert([profile]);
+  if (!error) {
+    return { error: null };
+  }
+
+  if (error.code === "PGRST204" && error.message?.includes("sections")) {
+    const { sections, ...profileWithoutSections } = profile;
+    const { error: retryError } = await supabaseAdmin.from("profiles").upsert([profileWithoutSections]);
+    return { error: retryError };
+  }
+
+  return { error };
+}
+
 export async function createUser(formData: FormData) {
   try {
     const email = formData.get("email") as string;
@@ -70,16 +85,12 @@ export async function createUser(formData: FormData) {
     }
 
     if (authData.user) {
-      const { error: profileError } = await supabaseAdmin
-        .from("profiles")
-        .upsert([
-          {
-            id: authData.user.id,
-            full_name: fullName,
-            role: role,
-            sections: sections,
-          }
-        ]);
+      const { error: profileError } = await upsertProfile({
+        id: authData.user.id,
+        full_name: fullName,
+        role: role,
+        sections: sections,
+      });
 
       if (profileError) {
         console.error("Profile upsert error:", profileError);
@@ -91,6 +102,44 @@ export async function createUser(formData: FormData) {
     
   } catch (err: any) {
     return { error: err.message || "Une erreur inattendue est survenue." };
+  }
+}
+
+export async function updateUserAccess(userId: string, role: string, sections: string[]) {
+  try {
+    if (!userId || !role) return { error: "Données utilisateur manquantes." };
+
+    const { error: updateErr } = await supabaseAdmin.auth.admin.updateUserById(userId, {
+      user_metadata: { role, sections }
+    });
+
+    if (updateErr) {
+      return { error: updateErr.message };
+    }
+
+    const { data: profileData } = await supabaseAdmin.from("profiles").select("full_name").eq("id", userId).maybeSingle();
+    let fullName = profileData?.full_name;
+
+    if (!fullName) {
+      const { data: authUserData } = await supabaseAdmin.auth.admin.getUserById(userId);
+      fullName = authUserData?.user?.user_metadata?.full_name || authUserData?.user?.email || "Utilisateur";
+    }
+
+    const { error: profileError } = await upsertProfile({
+      id: userId,
+      full_name: fullName,
+      role,
+      sections,
+    });
+
+    if (profileError) {
+      return { error: profileError.message };
+    }
+
+    revalidatePath("/parametres/acces");
+    return { success: true };
+  } catch (err: any) {
+    return { error: err.message || "Impossible de mettre à jour les droits utilisateur." };
   }
 }
 

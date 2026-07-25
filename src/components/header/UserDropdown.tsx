@@ -5,7 +5,7 @@ import React, { useState, useEffect } from "react";
 import { Dropdown } from "../ui/dropdown/Dropdown";
 import { DropdownItem } from "../ui/dropdown/DropdownItem";
 import { useUserRole } from "@/context/UserRoleContext";
-import { createClient } from "@/lib/supabase/client";
+import { supabase } from "@/lib/supabaseClient";
 
 export default function UserDropdown() {
   const [isOpen, setIsOpen] = useState(false);
@@ -17,7 +17,6 @@ export default function UserDropdown() {
     setMounted(true);
     async function getUser() {
       try {
-        const supabase = createClient();
         const { data } = await supabase.auth.getUser();
         if (data?.user?.email) {
           setUserEmail(data.user.email);
@@ -43,7 +42,6 @@ export default function UserDropdown() {
     if (!confirmed) return;
 
     try {
-      const supabase = createClient();
       await supabase.auth.signOut();
     } catch (err) {
       console.error("SignOut error:", err);

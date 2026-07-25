@@ -3,7 +3,8 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   id UUID REFERENCES auth.users(id) ON DELETE CASCADE PRIMARY KEY,
   full_name TEXT NOT NULL,
   phone TEXT,
-  role TEXT CHECK (role IN ('Super Admin', 'Admin', 'Coach')) NOT NULL,
+  role TEXT CHECK (role IN ('Super Admin', 'Admin', 'Finance', 'Coach')) NOT NULL,
+  sections JSONB DEFAULT '[]'::jsonb,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
@@ -49,7 +50,7 @@ USING (auth.uid() = id);
 -- 2. Create the `permissions` table
 CREATE TABLE IF NOT EXISTS public.permissions (
   id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-  role TEXT CHECK (role IN ('Super Admin', 'Admin', 'Coach')),
+  role TEXT CHECK (role IN ('Super Admin', 'Admin', 'Finance', 'Coach')),
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
   section TEXT NOT NULL,
   can_access BOOLEAN DEFAULT false,

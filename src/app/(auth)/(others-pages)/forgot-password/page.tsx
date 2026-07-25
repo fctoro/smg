@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/client";
+import { supabase } from "@/lib/supabaseClient";
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
@@ -16,8 +16,6 @@ export default function ForgotPasswordPage() {
     setLoading(true);
 
     try {
-      const supabase = createClient();
-      // Use env var for production URL, fallback to current origin for dev
       const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || window.location.origin;
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: `${siteUrl}/reset-password`,

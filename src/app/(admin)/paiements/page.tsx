@@ -2,6 +2,8 @@
 
 import { useMemo, useState } from "react";
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
+import { Dropdown } from "@/components/ui/dropdown";
+import { DropdownItem } from "@/components/ui/dropdown/DropdownItem";
 import Pagination from "@/components/tables/Pagination";
 import Badge from "@/components/ui/badge/Badge";
 import {
@@ -18,6 +20,9 @@ import { formatClubCurrency, formatClubDate, getPlayerFullName } from "@/lib/clu
 export default function PaymentsPage() {
   const { payments, players } = useClubData();
   const [searchQuery, setSearchQuery] = useState("");
+  const [deviseFilter, setDeviseFilter] = useState("all");
+  const [selectedSeason, setSelectedSeason] = useState("all");
+  const [isExportOpen, setIsExportOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 12;
 
@@ -26,12 +31,22 @@ export default function PaymentsPage() {
     [players],
   );
 
+  const seasons = useMemo(
+    () =>
+      [...new Set(players.map((player) => player.saison).filter(Boolean))].sort(
+        (a, b) => (b || "").localeCompare(a || ""),
+      ),
+    [players],
+  );
+
   const filteredPayments = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
     return payments
       .filter((payment) => {
+        if (deviseFilter !== "all" && payment.devise !== deviseFilter) return false;
         const player = playerMap.get(payment.playerId);
         if (!player) return false;
+        if (selectedSeason !== "all" && player.saison !== selectedSeason) return false;
         const playerName = getPlayerFullName(player).toLowerCase();
         return !query || playerName.includes(query);
       })
@@ -40,7 +55,7 @@ export default function PaymentsPage() {
         const dateB = new Date(b.datePaiement || 0).getTime();
         return dateB - dateA;
       });
-  }, [payments, playerMap, searchQuery]);
+  }, [payments, playerMap, searchQuery, deviseFilter, selectedSeason]);
 
   const totalPages = Math.max(1, Math.ceil(filteredPayments.length / pageSize));
   const currentPageSafe = Math.min(currentPage, totalPages);
@@ -49,79 +64,139 @@ export default function PaymentsPage() {
     currentPageSafe * pageSize,
   );
 
-  const handleExport = () => {
-    const headers = [
-      "joueur",
-      "montant",
-      "date_paiement",
-      "informations"
-    ];
-
-    const rows = filteredPayments.map((payment) => {
+  const handleExportCSV = () => {
+    setIsExportOpen(false);
+    const headers = ["Joueur", "Montant", "Date Paiement", "Informations"];
+    let csvContent = headers.join(",") + "\n";
+    filteredPayments.forEach(payment => {
       const player = playerMap.get(payment.playerId)!;
       const playerName = getPlayerFullName(player);
-      return [
-        playerName,
-        String(payment.montant),
-        payment.datePaiement ?? "",
-        payment.remarque ?? "",
-      ];
+      const row = [playerName, String(payment.montant), payment.datePaiement || "", payment.remarque || ""];
+      const csvRow = row.map(field => `"${(field || "").toString().replace(/"/g, '""')}"`);
+      csvContent += csvRow.join(",") + "\n";
     });
-
-    const csv = [
-      headers.join(","),
-      ...rows.map((row) =>
-        row
-          .map((cell) => `"${cell.replaceAll('"', '""')}"`)
-          .join(","),
-      ),
-    ].join("\n");
-
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `paiements-${Date.now()}.csv`;
+    link.setAttribute("download", "paiements.csv");
     document.body.appendChild(link);
     link.click();
-    link.remove();
-    URL.revokeObjectURL(url);
+    document.body.removeChild(link);
+  };
+
+  const handleExportExcel = () => {
+    if (!window.confirm("Voulez-vous vraiment exporter la liste des paiements au format Excel ?")) return;
+    setIsExportOpen(false);
+    const headers = ["Joueur", "Montant", "Date Paiement", "Informations"];
+    let csvContent = "\uFEFF" + headers.join(";") + "\n";
+    filteredPayments.forEach(payment => {
+      const player = playerMap.get(payment.playerId)!;
+      const playerName = getPlayerFullName(player);
+      const row = [playerName, String(payment.montant), payment.datePaiement || "", payment.remarque || ""];
+      const csvRow = row.map(field => `"${(field || "").toString().replace(/"/g, '""')}"`);
+      csvContent += csvRow.join(";") + "\n";
+    });
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute("download", "paiements_excel.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   return (
-    <div>
+    <div className="space-y-4">
       <PageBreadcrumb pageTitle="Paiements" />
 
-      <div className="mb-6 grid gap-3 lg:grid-cols-3">
-        <input
-          value={searchQuery}
-          onChange={(event) => {
-            setSearchQuery(event.target.value);
-            setCurrentPage(1);
-          }}
-          placeholder="Rechercher un joueur"
-          className="h-11 w-full rounded-lg border border-gray-300 bg-transparent px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs placeholder:text-gray-400 focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
-        />
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="grid flex-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          <input
+            value={searchQuery}
+            onChange={(event) => {
+              setSearchQuery(event.target.value);
+              setCurrentPage(1);
+            }}
+            placeholder="Rechercher un joueur"
+            className="h-11 w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs placeholder:text-gray-400 focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
+          />
+          <select
+            value={deviseFilter}
+            onChange={(event) => {
+              setDeviseFilter(event.target.value);
+              setCurrentPage(1);
+            }}
+            className="h-11 w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
+          >
+            <option value="all">Toutes devises</option>
+            <option value="USD">USD</option>
+            <option value="HTG">HTG</option>
+          </select>
+          <select
+            value={selectedSeason}
+            onChange={(event) => {
+              setSelectedSeason(event.target.value);
+              setCurrentPage(1);
+            }}
+            className="h-11 w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
+          >
+            <option value="all">Toutes les saisons</option>
+            {seasons.map((season) => (
+              <option key={season} value={season}>
+                Saison {season}
+              </option>
+            ))}
+          </select>
+        </div>
 
-        <button
-          type="button"
-          onClick={handleExport}
-          className="rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-white/[0.03]"
-        >
-          Export CSV
-        </button>
-
-        <Link
-          href="/paiements/nouveau"
-          className="rounded-lg bg-brand-500 px-4 py-2.5 text-center text-sm font-medium text-white hover:bg-brand-600"
-        >
-          + Ajouter
-        </Link>
+        <div className="shrink-0">
+          <Link
+            href="/paiements/nouveau"
+            className="inline-flex h-11 items-center justify-center whitespace-nowrap rounded-lg bg-brand-500 px-4 text-sm font-medium text-white shadow-theme-xs hover:bg-brand-600"
+          >
+            + Ajouter
+          </Link>
+        </div>
       </div>
 
       <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white px-4 pb-3 pt-4 dark:border-gray-800 dark:bg-white/[0.03] sm:px-6">
-        <div className="mb-4 text-sm text-gray-500 dark:text-gray-400">
-          {filteredPayments.length} paiement(s)
+        <div className="mb-4 flex items-center justify-between">
+          <div>
+            <h3 className="text-lg font-semibold text-gray-800 dark:text-white/90">
+              Paiements
+            </h3>
+            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+              {filteredPayments.length} paiement(s)
+            </p>
+          </div>
+          <div className="relative shrink-0">
+            <button
+              onClick={() => setIsExportOpen(!isExportOpen)}
+              className="inline-flex h-9 items-center justify-center whitespace-nowrap rounded-lg bg-success-500 px-3 text-sm font-medium text-white shadow-theme-xs hover:bg-success-600"
+            >
+              Exporter
+            </button>
+            <Dropdown
+              isOpen={isExportOpen}
+              onClose={() => setIsExportOpen(false)}
+              className="absolute right-0 top-full mt-1 w-40"
+            >
+              <DropdownItem
+                onItemClick={handleExportExcel}
+                className="cursor-pointer"
+              >
+                Excel
+              </DropdownItem>
+              <DropdownItem
+                onItemClick={handleExportCSV}
+                className="cursor-pointer"
+              >
+                CSV
+              </DropdownItem>
+            </Dropdown>
+          </div>
         </div>
         <div className="max-w-full overflow-x-auto">
           <Table>

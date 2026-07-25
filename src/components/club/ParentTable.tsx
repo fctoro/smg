@@ -17,17 +17,27 @@ import { getParentLinkedPlayerIds } from "@/lib/club/parents";
 interface ParentTableProps {
   parents: Parent[];
   players: Player[];
+  title?: string;
+  showToolbar?: boolean;
   onEditParent?: (parent: Parent) => void;
   onDeleteParent?: (parent: Parent) => void;
+  actionButton?: React.ReactNode;
+  exportButton?: React.ReactNode;
 }
 
 export default function ParentTable({
   parents,
   players,
+  title = "Parents",
+  showToolbar = true,
   onEditParent,
   onDeleteParent,
+  actionButton,
+  exportButton,
 }: ParentTableProps) {
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedChildrenCount, setSelectedChildrenCount] = useState("all");
+  const [selectedSeason, setSelectedSeason] = useState("all");
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 7;
 
@@ -36,14 +46,37 @@ export default function ParentTable({
     [players],
   );
 
+  const seasons = useMemo(
+    () =>
+      [...new Set(players.map((player) => player.saison).filter(Boolean))].sort(
+        (a, b) => (b || "").localeCompare(a || ""),
+      ),
+    [players],
+  );
+
   const filteredParents = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
     return parents.filter((parent) => {
-      if (!query) {
-        return true;
-      }
-
       const linkedPlayerIds = getParentLinkedPlayerIds(parent);
+      const count = linkedPlayerIds.length;
+      
+      let countMatch = true;
+      if (selectedChildrenCount === "1") countMatch = count === 1;
+      else if (selectedChildrenCount === ">1") countMatch = count > 1;
+
+      if (!countMatch) return false;
+
+      let seasonMatch = true;
+      if (selectedSeason !== "all") {
+        seasonMatch = linkedPlayerIds.some((playerId) => {
+          const player = playerMap.get(playerId);
+          return player && player.saison === selectedSeason;
+        });
+      }
+      if (!seasonMatch) return false;
+
+      if (!query) return true;
+
       const linkedPlayerNames = linkedPlayerIds
         .map((playerId) => playerMap.get(playerId))
         .filter(Boolean)
@@ -57,7 +90,7 @@ export default function ParentTable({
         parent.email.toLowerCase().includes(query)
       );
     });
-  }, [parents, playerMap, searchQuery]);
+  }, [parents, playerMap, searchQuery, selectedChildrenCount, selectedSeason]);
 
   const totalPages = Math.max(1, Math.ceil(filteredParents.length / pageSize));
   const currentPageSafe = Math.min(currentPage, totalPages);
@@ -67,26 +100,70 @@ export default function ParentTable({
   );
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white px-4 pb-3 pt-4 dark:border-gray-800 dark:bg-white/[0.03] sm:px-6">
-      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h3 className="text-lg font-semibold text-gray-800 dark:text-white/90">
-            Parents
-          </h3>
-          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            {filteredParents.length} parent(s)
-          </p>
+    <div className="space-y-4">
+      {showToolbar || actionButton ? (
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          {showToolbar ? (
+            <div className="grid flex-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              <input
+                value={searchQuery}
+                onChange={(event) => {
+                  setSearchQuery(event.target.value);
+                  setCurrentPage(1);
+                }}
+                placeholder="Rechercher parent ou joueur"
+                className="h-11 w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs placeholder:text-gray-400 focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
+              />
+              <select
+                value={selectedChildrenCount}
+                onChange={(event) => {
+                  setSelectedChildrenCount(event.target.value);
+                  setCurrentPage(1);
+                }}
+                className="h-11 w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
+              >
+                <option value="all">Tous (nombre d'enfants)</option>
+                <option value="1">1 enfant</option>
+                <option value=">1">Plus d'1 enfant</option>
+              </select>
+              <select
+                value={selectedSeason}
+                onChange={(event) => {
+                  setSelectedSeason(event.target.value);
+                  setCurrentPage(1);
+                }}
+                className="h-11 w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
+              >
+                <option value="all">Toutes les saisons</option>
+                {seasons.map((season) => (
+                  <option key={season} value={season}>
+                    Saison {season}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : null}
+
+          {actionButton ? (
+            <div className="shrink-0">{actionButton}</div>
+          ) : null}
         </div>
-        <input
-          value={searchQuery}
-          onChange={(event) => {
-            setSearchQuery(event.target.value);
-            setCurrentPage(1);
-          }}
-          placeholder="Rechercher parent ou joueur"
-          className="h-11 w-full rounded-lg border border-gray-300 bg-transparent px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs placeholder:text-gray-400 focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 sm:max-w-sm dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
-        />
-      </div>
+      ) : null}
+
+      <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white px-4 pb-3 pt-4 dark:border-gray-800 dark:bg-white/[0.03] sm:px-6">
+        <div className="mb-4 flex items-center justify-between">
+          <div>
+            <h3 className="text-lg font-semibold text-gray-800 dark:text-white/90">
+              {title}
+            </h3>
+            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+              {filteredParents.length} parent(s)
+            </p>
+          </div>
+          {exportButton ? (
+            <div className="shrink-0">{exportButton}</div>
+          ) : null}
+        </div>
 
       <div className="max-w-full overflow-x-auto">
         <Table>
@@ -211,6 +288,7 @@ export default function ParentTable({
           />
         </div>
       ) : null}
+      </div>
     </div>
   );
 }

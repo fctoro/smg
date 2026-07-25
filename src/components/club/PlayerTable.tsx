@@ -49,6 +49,7 @@ interface PlayerTableProps {
   onEditPlayer?: (player: Player) => void;
   onDeletePlayer?: (player: Player) => void;
   actionButton?: React.ReactNode;
+  exportButton?: React.ReactNode;
 }
 
 export default function PlayerTable({
@@ -62,6 +63,7 @@ export default function PlayerTable({
   onEditPlayer,
   onDeletePlayer,
   actionButton,
+  exportButton,
 }: PlayerTableProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
@@ -211,6 +213,9 @@ export default function PlayerTable({
               {filteredPlayers.length} joueur(s)
             </p>
           </div>
+          {exportButton ? (
+            <div className="shrink-0">{exportButton}</div>
+          ) : null}
         </div>
 
       <div className="max-w-full overflow-x-auto">

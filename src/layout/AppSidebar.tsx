@@ -2,8 +2,9 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useSidebar } from "../context/SidebarContext";
+import { useUserRole } from "../context/UserRoleContext";
 import {
   BoxCubeIcon,
   CalenderIcon,
@@ -17,6 +18,7 @@ import {
   TaskIcon,
   TableIcon,
   UserCircleIcon,
+  UserIcon,
 } from "../icons/index";
 
 type NavItem = {
@@ -26,7 +28,8 @@ type NavItem = {
   subItems?: { name: string; path: string; pro?: boolean; new?: boolean }[];
 };
 
-const navItems: NavItem[] = [
+// Standard Admin items - Note: "Classement" and "Coach FIFA" removed per user request
+const adminNavItems: NavItem[] = [
   {
     icon: <GridIcon />,
     name: "Dashboard",
@@ -73,16 +76,6 @@ const navItems: NavItem[] = [
     ],
   },
   {
-    icon: <TableIcon />,
-    name: "Classement",
-    path: "/classement",
-  },
-  {
-    icon: <TaskIcon />,
-    name: "Coach FIFA",
-    path: "/coach",
-  },
-  {
     icon: <DollarLineIcon />,
     name: "Paiements",
     subItems: [
@@ -95,6 +88,35 @@ const navItems: NavItem[] = [
     icon: <DocsIcon />,
     name: "Factures",
     path: "/factures",
+  },
+];
+
+// Dedicated Coach Portal items - Reserved exclusively for Coach login/role
+const coachNavItems: NavItem[] = [
+  {
+    icon: <TaskIcon />,
+    name: "Espace Coach",
+    path: "/coach",
+  },
+  {
+    icon: <TableIcon />,
+    name: "Classement",
+    path: "/coach?tab=classement",
+  },
+  {
+    icon: <UserCircleIcon />,
+    name: "Tactiques & Terrain",
+    path: "/coach?tab=tactiques",
+  },
+  {
+    icon: <GroupIcon />,
+    name: "Effectif Joueurs",
+    path: "/coach?tab=effectif",
+  },
+  {
+    icon: <CalenderIcon />,
+    name: "Calendrier Matchs",
+    path: "/coach?tab=calendrier",
   },
 ];
 
@@ -111,7 +133,14 @@ const othersItems: NavItem[] = [
 
 const AppSidebar: React.FC = () => {
   const { isExpanded, isMobileOpen, isHovered, setIsHovered } = useSidebar();
+  const { role, setRole, isCoach } = useUserRole();
   const pathname = usePathname();
+  const router = useRouter();
+
+  // If path starts with /coach, display coach navigation
+  const inCoachArea = pathname.startsWith("/coach") || isCoach;
+  const currentNavItems = inCoachArea ? coachNavItems : adminNavItems;
+
   const isSubItemActive = useCallback(
     (path: string) => {
       if (pathname === path) {
@@ -128,12 +157,29 @@ const AppSidebar: React.FC = () => {
     [pathname],
   );
 
+  const isActive = useCallback(
+    (path: string) => {
+      if (path === "/") {
+        return pathname === "/";
+      }
+      if (path.includes("?tab=")) {
+        const [basePath, search] = path.split("?");
+        if (typeof window !== "undefined") {
+          const currentSearch = window.location.search;
+          return pathname === basePath && currentSearch.includes(search);
+        }
+      }
+      return pathname === path || (path !== "/dashboard" && pathname.startsWith(`${path}/`));
+    },
+    [pathname],
+  );
+
   const renderMenuItems = (
-    navItems: NavItem[],
+    items: NavItem[],
     menuType: "main" | "others"
   ) => (
     <ul className="flex flex-col gap-4">
-      {navItems.map((nav, index) => (
+      {items.map((nav, index) => (
         <li key={nav.name}>
           {nav.subItems ? (
             <button
@@ -263,21 +309,10 @@ const AppSidebar: React.FC = () => {
   );
   const subMenuRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
-  const isActive = useCallback(
-    (path: string) => {
-      if (path === "/") {
-        return pathname === "/";
-      }
-      return pathname === path || pathname.startsWith(`${path}/`);
-    },
-    [pathname],
-  );
-
   useEffect(() => {
-    // Check if the current path matches any submenu item
     let submenuMatched = false;
     ["main", "others"].forEach((menuType) => {
-      const items = menuType === "main" ? navItems : othersItems;
+      const items = menuType === "main" ? currentNavItems : othersItems;
       items.forEach((nav, index) => {
         if (nav.subItems) {
           nav.subItems.forEach((subItem) => {
@@ -293,14 +328,12 @@ const AppSidebar: React.FC = () => {
       });
     });
 
-    // If no submenu item matches, close the open submenu
     if (!submenuMatched) {
       setOpenSubmenu(null);
     }
-  }, [pathname,isActive]);
+  }, [pathname, isActive, currentNavItems]);
 
   useEffect(() => {
-    // Set the height of the submenu items when the submenu is opened
     if (openSubmenu !== null) {
       const key = `${openSubmenu.type}-${openSubmenu.index}`;
       if (subMenuRefs.current[key]) {
@@ -325,6 +358,16 @@ const AppSidebar: React.FC = () => {
     });
   };
 
+  const handleSwitchRole = () => {
+    if (inCoachArea) {
+      setRole("admin");
+      router.push("/dashboard");
+    } else {
+      setRole("coach");
+      router.push("/coach");
+    }
+  };
+
   return (
     <aside
       className={`fixed mt-16 flex flex-col lg:mt-0 top-0 px-5 left-0 bg-white dark:bg-gray-900 dark:border-gray-800 text-gray-900 h-screen transition-all duration-300 ease-in-out z-50 border-r border-gray-200 print:hidden
@@ -341,11 +384,11 @@ const AppSidebar: React.FC = () => {
       onMouseLeave={() => setIsHovered(false)}
     >
       <div
-        className={`py-8 flex  ${
+        className={`py-6 flex ${
           !isExpanded && !isHovered ? "lg:justify-center" : "justify-start"
         }`}
       >
-        <Link href="/dashboard">
+        <Link href={inCoachArea ? "/coach" : "/dashboard"}>
           {isExpanded || isHovered || isMobileOpen ? (
             <div className="flex items-center gap-3">
               <Image
@@ -359,8 +402,8 @@ const AppSidebar: React.FC = () => {
                 <p className="text-lg font-semibold leading-5 text-gray-900 dark:text-white">
                   FC Toro
                 </p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">
-                  Club Dashboard
+                <p className="text-xs font-medium text-brand-600 dark:text-brand-400">
+                  {inCoachArea ? "Espace Coach" : "Club Dashboard"}
                 </p>
               </div>
             </div>
@@ -375,7 +418,8 @@ const AppSidebar: React.FC = () => {
           )}
         </Link>
       </div>
-      <div className="flex flex-col overflow-y-auto duration-300 ease-linear no-scrollbar">
+
+      <div className="flex flex-col flex-1 overflow-y-auto duration-300 ease-linear no-scrollbar">
         <nav className="mb-6">
           <div className="flex flex-col gap-4">
             <div>
@@ -387,15 +431,15 @@ const AppSidebar: React.FC = () => {
                 }`}
               >
                 {isExpanded || isHovered || isMobileOpen ? (
-                  "Menu"
+                  inCoachArea ? "Menu Coach" : "Menu Principal"
                 ) : (
                   <HorizontaLDots />
                 )}
               </h2>
-              {renderMenuItems(navItems, "main")}
+              {renderMenuItems(currentNavItems, "main")}
             </div>
 
-            <div className="">
+            <div>
               <h2
                 className={`mb-4 text-xs uppercase flex leading-[20px] text-gray-400 ${
                   !isExpanded && !isHovered

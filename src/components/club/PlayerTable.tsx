@@ -47,6 +47,7 @@ interface PlayerTableProps {
   onViewPlayer?: (player: Player) => void;
   onEditPlayer?: (player: Player) => void;
   onDeletePlayer?: (player: Player) => void;
+  actionButton?: React.ReactNode;
 }
 
 export default function PlayerTable({
@@ -55,13 +56,15 @@ export default function PlayerTable({
   title = "Joueurs",
   showToolbar = true,
   pageSize = 8,
-  emptyMessage = "Aucun joueur trouve.",
+  emptyMessage = "Aucun joueur trouvé.",
   onViewPlayer,
   onEditPlayer,
   onDeletePlayer,
+  actionButton,
 }: PlayerTableProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
+  const [selectedSeason, setSelectedSeason] = useState("all");
   const [selectedStatus, setSelectedStatus] = useState("all");
   const [currentPage, setCurrentPage] = useState(1);
 
@@ -75,6 +78,14 @@ export default function PlayerTable({
     [players],
   );
 
+  const seasons = useMemo(
+    () =>
+      [...new Set(players.map((player) => player.saison).filter(Boolean))].sort(
+        (a, b) => (b || "").localeCompare(a || ""),
+      ),
+    [players],
+  );
+
   const filteredPlayers = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
     return players
@@ -83,22 +94,24 @@ export default function PlayerTable({
         const nameMatches = !query || fullName.includes(query);
         const categoryMatches =
           selectedCategory === "all" || player.categorie === selectedCategory;
+        const seasonMatches =
+          selectedSeason === "all" || player.saison === selectedSeason;
         const statusMatches =
           selectedStatus === "all" || player.statut === selectedStatus;
-        return nameMatches && categoryMatches && statusMatches;
+        return nameMatches && categoryMatches && seasonMatches && statusMatches;
       })
       .sort(
         (a, b) =>
           new Date(b.dateInscription).getTime() -
           new Date(a.dateInscription).getTime(),
       );
-  }, [players, searchQuery, selectedCategory, selectedStatus]);
+  }, [players, searchQuery, selectedCategory, selectedSeason, selectedStatus]);
 
   const totalPages = Math.max(1, Math.ceil(filteredPlayers.length / pageSize));
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, selectedCategory, selectedStatus]);
+  }, [searchQuery, selectedCategory, selectedSeason, selectedStatus]);
 
   useEffect(() => {
     if (currentPage > totalPages) {
@@ -122,50 +135,73 @@ export default function PlayerTable({
   };
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white px-4 pb-3 pt-4 dark:border-gray-800 dark:bg-white/[0.03] sm:px-6">
-      <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <div>
-          <h3 className="text-lg font-semibold text-gray-800 dark:text-white/90">
-            {title}
-          </h3>
-          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            {filteredPlayers.length} joueur(s)
-          </p>
-        </div>
+    <div className="space-y-4">
+      {/* Toolbar en dehors de la carte du tableau, sur la même ligne que Ajouter */}
+      {showToolbar || actionButton ? (
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          {showToolbar ? (
+            <div className="grid flex-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
+              <input
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                placeholder="Rechercher un joueur"
+                className="h-11 w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs placeholder:text-gray-400 focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
+              />
+              <select
+                value={selectedCategory}
+                onChange={(event) => setSelectedCategory(event.target.value)}
+                className="h-11 w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
+              >
+                <option value="all">Toutes catégories</option>
+                {categories.map((category) => (
+                  <option key={category} value={category}>
+                    {category}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={selectedSeason}
+                onChange={(event) => setSelectedSeason(event.target.value)}
+                className="h-11 w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
+              >
+                <option value="all">Toutes les saisons</option>
+                {seasons.map((season) => (
+                  <option key={season} value={season}>
+                    Saison {season}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={selectedStatus}
+                onChange={(event) => setSelectedStatus(event.target.value)}
+                className="h-11 w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
+              >
+                <option value="all">Tous statuts</option>
+                <option value="actif">Actif</option>
+                <option value="blesse">Blessé</option>
+                <option value="suspendu">Suspendu</option>
+                <option value="abandonne">Abandonné</option>
+              </select>
+            </div>
+          ) : null}
 
-        {showToolbar ? (
-          <div className="grid gap-2 sm:grid-cols-3 lg:min-w-[560px]">
-            <input
-              value={searchQuery}
-              onChange={(event) => setSearchQuery(event.target.value)}
-              placeholder="Rechercher un joueur"
-              className="h-11 w-full rounded-lg border border-gray-300 bg-transparent px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs placeholder:text-gray-400 focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
-            />
-            <select
-              value={selectedCategory}
-              onChange={(event) => setSelectedCategory(event.target.value)}
-              className="h-11 w-full rounded-lg border border-gray-300 bg-transparent px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
-            >
-              <option value="all">Toutes categories</option>
-              {categories.map((category) => (
-                <option key={category} value={category}>
-                  {category}
-                </option>
-              ))}
-            </select>
-            <select
-              value={selectedStatus}
-              onChange={(event) => setSelectedStatus(event.target.value)}
-              className="h-11 w-full rounded-lg border border-gray-300 bg-transparent px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
-            >
-              <option value="all">Tous statuts</option>
-              <option value="actif">Actif</option>
-              <option value="blesse">Blesse</option>
-              <option value="suspendu">Suspendu</option>
-            </select>
+          {actionButton ? (
+            <div className="shrink-0">{actionButton}</div>
+          ) : null}
+        </div>
+      ) : null}
+
+      <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white px-4 pb-3 pt-4 dark:border-gray-800 dark:bg-white/[0.03] sm:px-6">
+        <div className="mb-4 flex items-center justify-between">
+          <div>
+            <h3 className="text-lg font-semibold text-gray-800 dark:text-white/90">
+              {title}
+            </h3>
+            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+              {filteredPlayers.length} joueur(s)
+            </p>
           </div>
-        ) : null}
-      </div>
+        </div>
 
       <div className="max-w-full overflow-x-auto">
         <Table>
@@ -192,7 +228,7 @@ export default function PlayerTable({
                   isHeader
                   className="py-3 text-start text-theme-xs font-medium text-gray-500 dark:text-gray-400"
                 >
-                  Categorie
+                  Catégorie
                 </TableCell>
               ) : null}
               {visibleColumnSet.has("statut") ? (
@@ -260,6 +296,9 @@ export default function PlayerTable({
               pagedPlayers.map((player) => {
                 const fullName = getPlayerFullName(player);
                 const safeAvatarSrc = getSafeAvatarSrc(player.photoUrl, fullName);
+                const safeMatricule = player.matricule && !player.matricule.includes("XXXX")
+                  ? player.matricule
+                  : `FCT-2526-${String(player.id).padStart(4, "0")}`;
 
                 return (
                 <TableRow key={player.id}>
@@ -278,9 +317,9 @@ export default function PlayerTable({
                           <p className="text-theme-sm font-medium text-gray-800 dark:text-white/90">
                             {fullName}
                           </p>
-                          <p className="text-theme-xs font-semibold text-error-600 dark:text-error-500 mt-1 flex items-center gap-1.5">
-                            <span className="flex h-1.5 w-1.5 rounded-full bg-error-500"></span>
-                            {player.matricule || `FCT-XXXX-${String(player.id).padStart(4, "0")}`}
+                          <p className="text-theme-xs font-semibold text-brand-600 dark:text-brand-400 mt-1 flex items-center gap-1.5">
+                            <span className="flex h-1.5 w-1.5 rounded-full bg-brand-500"></span>
+                            {safeMatricule}
                           </p>
                         </div>
                       </div>
@@ -383,6 +422,7 @@ export default function PlayerTable({
           />
         </div>
       ) : null}
+      </div>
     </div>
   );
 }

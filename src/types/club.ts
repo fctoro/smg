@@ -1,4 +1,4 @@
-export type PlayerStatus = "actif" | "blesse" | "suspendu";
+export type PlayerStatus = "actif" | "blesse" | "suspendu" | "abandonne";
 
 export type PaymentStatus = "paid" | "pending" | "late";
 

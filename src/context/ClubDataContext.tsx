@@ -15,6 +15,7 @@ import {
   Parent,
   Payment,
   Player,
+  PlayerStatus,
   StaffMember,
   Invoice,
 } from "@/types/club";
@@ -174,7 +175,7 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
             const playerSaison = latestSessionId != null ? sessionsMap.get(latestSessionId) : "";
 
             // Génération de la nomenclature matricule (ex: FCT-1213-0001)
-            let sCode = "XXXX";
+            let sCode = "";
 
             if (playerSaison) {
               // On essaie d'extraire depuis le nom de la saison (ex: "2018-2019")
@@ -185,22 +186,52 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
             }
 
             // Fallback: Si pas de saison, on se base sur la date de création du joueur
-            if (sCode === "XXXX" && d.DtCreation) {
+            if (!sCode && d.DtCreation) {
               const dt = new Date(d.DtCreation);
-              const y = dt.getFullYear();
-              const m = dt.getMonth() + 1;
-              let startYear, endYear;
-              if (m >= 7) {
-                startYear = y;
-                endYear = y + 1;
-              } else {
-                startYear = y - 1;
-                endYear = y;
+              if (!isNaN(dt.getTime())) {
+                const y = dt.getFullYear();
+                const m = dt.getMonth() + 1;
+                let startYear, endYear;
+                if (m >= 7) {
+                  startYear = y;
+                  endYear = y + 1;
+                } else {
+                  startYear = y - 1;
+                  endYear = y;
+                }
+                sCode = `${String(startYear).substring(2, 4)}${String(endYear).substring(2, 4)}`;
               }
-              sCode = `${String(startYear).substring(2, 4)}${String(endYear).substring(2, 4)}`;
+            }
+
+            // Ultime secours si aucune date disponible : saison courante (ex: 2526)
+            if (!sCode) {
+              const curY = new Date().getFullYear();
+              sCode = `${String(curY - 1).substring(2, 4)}${String(curY).substring(2, 4)}`;
             }
 
             const matricule = `FCT-${sCode}-${String(d.EtudiantID).padStart(4, "0")}`;
+
+            // Détermination du statut réel du joueur
+            let playerStatus: PlayerStatus = "actif";
+            const allObjStr = (JSON.stringify(d) + JSON.stringify(studentInscriptions)).toLowerCase();
+            if (
+              allObjStr.includes("abandon") ||
+              allObjStr.includes("quitt") ||
+              allObjStr.includes("déménag") ||
+              allObjStr.includes("demenag") ||
+              allObjStr.includes("inactif") ||
+              d.Actif === false ||
+              d.Actif === 0 ||
+              d.Abandon === true ||
+              d.Abandon === 1 ||
+              d.Abandon === "1"
+            ) {
+              playerStatus = "abandonne";
+            } else if (allObjStr.includes("bless")) {
+              playerStatus = "blesse";
+            } else if (allObjStr.includes("suspend")) {
+              playerStatus = "suspendu";
+            }
 
             return {
               id: String(d.EtudiantID),
@@ -210,7 +241,7 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
               photoUrl: d.PhotoUrl || "/images/user/silhouette.svg",
               poste: "Joueur",
               categorie: d.Sexe === "F" ? "Féminine" : "Masculin", 
-              statut: "actif",
+              statut: playerStatus,
               telephone: d.Telephone || "",
               email: d.Email || "",
               dateInscription: d.DtCreation ? d.DtCreation.split("T")[0] : new Date().toISOString().split("T")[0],

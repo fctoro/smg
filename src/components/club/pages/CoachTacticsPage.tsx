@@ -526,11 +526,11 @@ export default function CoachTacticsPage() {
 
   return (
     <div className="space-y-6">
-      <PageBreadcrumb pageTitle="Coach FIFA" />
+      <PageBreadcrumb pageTitle="Espace Coach" />
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-4">
         <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03]">
-          <p className="text-sm text-gray-500 dark:text-gray-400">Formations FIFA</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400">Formations tactiques</p>
           <p className="mt-3 text-2xl font-semibold text-gray-800 dark:text-white/90">
             {fifaFormations.length}
           </p>

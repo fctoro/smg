@@ -78,14 +78,28 @@ export interface Parent {
   playerId: string;
 }
 
-export interface StaffMember {
+export interface Employee {
   id: string;
+  employeId?: number;
   nom: string;
-  role: StaffRole;
+  prenom: string;
+  sexe?: string;
+  fonction: string;
+  salaire?: number | null;
+  dateEmbauche?: string;
   telephone: string;
   email: string;
-  dateDebut: string;
+  adresse?: string;
+  niveauEtude?: string;
+  profession?: string;
+  photoUrl?: string;
+  desactive?: boolean | number;
+  // Legacy / standard aliases
+  role?: string;
+  dateDebut?: string;
 }
+
+export type StaffMember = Employee;
 
 export interface Alumni {
   id: string;
@@ -150,13 +164,24 @@ export interface ParentFormValues {
   playerId: string;
 }
 
-export interface StaffFormValues {
+export interface EmployeeFormValues {
   nom: string;
-  role: StaffRole;
+  prenom: string;
+  sexe?: string;
+  fonction: string;
+  salaire?: number | null;
+  dateEmbauche?: string;
   telephone: string;
   email: string;
-  dateDebut: string;
+  adresse?: string;
+  niveauEtude?: string;
+  profession?: string;
+  desactive?: boolean | number;
+  role?: string;
+  dateDebut?: string;
 }
+
+export type StaffFormValues = EmployeeFormValues;
 
 export interface AlumniFormValues {
   nom: string;
@@ -164,4 +189,21 @@ export interface AlumniFormValues {
   anneeSortie: number;
   poste: string;
   situationActuelle: string;
+}
+
+export interface PayrollRecord {
+  id: string;
+  employeId: string;
+  employeNom: string;
+  employePrenom: string;
+  fonction: string;
+  mois: string;
+  salaireBase: number;
+  bonus: number;
+  deductions: number;
+  netAPayer: number;
+  statut: "paye" | "en_attente" | "annule";
+  datePaiement?: string;
+  modePaiement: "virement" | "especes" | "chèque" | "mobile";
+  notes?: string;
 }

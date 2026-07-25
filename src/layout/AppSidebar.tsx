@@ -61,10 +61,11 @@ const adminNavItems: NavItem[] = [
   },
   {
     icon: <BoxCubeIcon />,
-    name: "Staff",
+    name: "Employés",
     subItems: [
-      { name: "Liste", path: "/staff" },
-      { name: "Ajouter", path: "/staff/nouveau" },
+      { name: "Liste", path: "/employes" },
+      { name: "Ajouter", path: "/employes/nouveau" },
+      { name: "Payroll", path: "/payroll" },
     ],
   },
   {
@@ -82,6 +83,7 @@ const adminNavItems: NavItem[] = [
       { name: "Liste", path: "/paiements" },
       { name: "Ajouter", path: "/paiements/nouveau" },
       { name: "Reçus PDF", path: "/recus", new: true },
+      { name: "Payroll", path: "/payroll" },
     ],
   },
   {

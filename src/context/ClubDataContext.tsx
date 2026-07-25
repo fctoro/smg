@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import {
   mockAlumni,
+  mockEmployees,
   mockEvents,
   mockParents,
   mockPayments,
@@ -12,6 +13,7 @@ import {
 import {
   Alumni,
   ClubEvent,
+  Employee,
   Parent,
   Payment,
   Player,
@@ -28,6 +30,8 @@ interface ClubDataContextValue {
   setPlayers: SetState<Player[]>;
   parents: Parent[];
   setParents: SetState<Parent[]>;
+  employees: Employee[];
+  setEmployees: SetState<Employee[]>;
   staff: StaffMember[];
   setStaff: SetState<StaffMember[]>;
   alumni: Alumni[];
@@ -46,6 +50,7 @@ const ClubDataContext = createContext<ClubDataContextValue | null>(null);
 const STORAGE_KEYS = {
   players: "club-data-players-v1",
   parents: "club-data-parents-v1",
+  employees: "club-data-employees-v1",
   staff: "club-data-staff-v1",
   alumni: "club-data-alumni-v1",
   events: "club-data-events-v1",
@@ -68,6 +73,7 @@ const parseStoredArray = <T,>(value: string | null, fallback: T[]): T[] => {
 export const ClubDataProvider = ({ children }: { children: React.ReactNode }) => {
   const [players, setPlayers] = useState<Player[]>([]);
   const [parents, setParents] = useState<Parent[]>([]);
+  const [employees, setEmployees] = useState<Employee[]>([]);
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [alumni, setAlumni] = useState<Alumni[]>([]);
   const [events, setEvents] = useState<ClubEvent[]>([]);
@@ -104,12 +110,13 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
           return allData;
         };
 
-        const [etudiantsData, paiementsData, inscriptionsData, sessionsData, facturesData] = await Promise.all([
+        const [etudiantsData, paiementsData, inscriptionsData, sessionsData, facturesData, employesData] = await Promise.all([
           fetchAll("tblEtudiants"),
           fetchAll("tblPaiements"),
           fetchAll("tblInscriptions"),
           fetchAll("tblSessions"),
-          fetchAll("tblFacture")
+          fetchAll("tblFacture"),
+          fetchAll("tblEmployes")
         ]);
 
         const sessionsMap = new Map();
@@ -349,16 +356,41 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
             )
           );
         }
+
+        if (employesData && employesData.length > 0) {
+          const fetchedEmployees: Employee[] = employesData.map((e: any) => ({
+            id: String(e.EmployeId),
+            employeId: e.EmployeId,
+            nom: e.Nom || "",
+            prenom: e.Prenom || "",
+            sexe: e.Sexe || "",
+            fonction: e.Fonction || e.Profession || "Employé",
+            role: e.Fonction || e.Profession || "Employé",
+            salaire: e.Salaire || null,
+            dateEmbauche: e.DateEmbauche ? e.DateEmbauche.split("T")[0] : "",
+            dateDebut: e.DateEmbauche ? e.DateEmbauche.split("T")[0] : "",
+            telephone: e.Telephone || "",
+            email: e.Email || "",
+            adresse: e.Adresse || "",
+            niveauEtude: e.NiveauEtude || "",
+            profession: e.Profession || "",
+            photoUrl: e.Photo || "/images/user/silhouette.svg",
+            desactive: e.Desactive === 1 || e.Desactive === true,
+          }));
+          setEmployees(fetchedEmployees);
+          setStaff(fetchedEmployees);
+        } else {
+          const fallbackEmps = parseStoredArray<Employee>(
+            window.localStorage.getItem(STORAGE_KEYS.employees),
+            mockEmployees
+          );
+          setEmployees(fallbackEmps);
+          setStaff(fallbackEmps);
+        }
       } catch (err) {
         console.error("Erreur lors de la récupération des données", err);
       }
 
-      setStaff(
-        parseStoredArray<StaffMember>(
-          window.localStorage.getItem(STORAGE_KEYS.staff),
-          []
-        )
-      );
       setAlumni(
         parseStoredArray<Alumni>(
           window.localStorage.getItem(STORAGE_KEYS.alumni),
@@ -395,8 +427,9 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
     if (!hydrated || typeof window === "undefined") {
       return;
     }
-    window.localStorage.setItem(STORAGE_KEYS.staff, JSON.stringify(staff));
-  }, [hydrated, staff]);
+    window.localStorage.setItem(STORAGE_KEYS.employees, JSON.stringify(employees));
+    window.localStorage.setItem(STORAGE_KEYS.staff, JSON.stringify(employees));
+  }, [hydrated, employees]);
 
   useEffect(() => {
     if (!hydrated || typeof window === "undefined") {
@@ -433,8 +466,10 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
         setPlayers,
         parents,
         setParents,
-        staff,
-        setStaff,
+        employees,
+        setEmployees,
+        staff: employees,
+        setStaff: setEmployees,
         alumni,
         setAlumni,
         events,

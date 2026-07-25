@@ -316,13 +316,15 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
               playerId: String(p.EtudiantId),
               montant: p.MntPayeUS || p.MntPayeGd || 0,
               devise: p.MntPayeGd ? "HTG" : "US",
+              montantUS: p.MntPayeUS || 0,
+              montantHTG: p.MntPayeGd || 0,
               statut: "paid" as any, // Historique des transactions = payé
               periode: p.DateTransact ? p.DateTransact.substring(0, 7) : new Date().toISOString().substring(0, 7),
               methode: (p.ModePaiement || "especes") as any,
               datePaiement: p.DateTransact ? p.DateTransact.split("T")[0] : undefined,
               remarque: p.Remarque || p.Description || "",
             }))
-            .filter((p: Payment) => p.montant > 0); // On exclut les paiements à 0
+            .filter((p: Payment) => p.montant > 0 || p.montantUS > 0 || p.montantHTG > 0);
           setPayments(fetchedPayments);
         } else {
           setPayments(
@@ -337,6 +339,8 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
           const fetchedInvoices: Invoice[] = facturesData.map((f: any) => {
             const mntA = f.MntAPayer || 0;
             const mntP = f.MntPayeUS || f.MntPayeGd || 0;
+            const mntUS = f.MntPayeUS || 0;
+            const mntHTG = f.MntPayeGd || 0;
             return {
               id: String(f.Id),
               noFacture: f.NoFacture || `FCT-XXXX-${String(f.Id).padStart(4, "0")}`,
@@ -346,6 +350,8 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
               montantAPayer: mntA,
               montantPaye: mntP,
               devise: f.MntPayeGd ? "HTG" : "US",
+              montantUS: mntUS,
+              montantHTG: mntHTG,
               dateFacture: f.DateFacture ? f.DateFacture.split("T")[0] : "",
               datePaiement: f.DatePaiement ? f.DatePaiement.split("T")[0] : undefined,
               statut: mntP >= mntA ? "paid" : (mntP > 0 ? "pending" : "late"),

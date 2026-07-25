@@ -36,9 +36,9 @@ export default function KpiCardClub({
         {icon}
       </div>
       <div className="mt-5 flex items-end justify-between gap-3">
-        <div>
-          <span className="text-sm text-gray-500 dark:text-gray-400">{title}</span>
-          <h4 className="mt-2 font-bold text-gray-800 dark:text-white/90 text-title-sm">
+        <div className="flex-1 overflow-hidden pr-2">
+          <span className="text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap">{title}</span>
+          <h4 className="mt-2 text-title-sm sm:text-title-md font-bold text-gray-800 dark:text-white/90 whitespace-nowrap tracking-tight truncate">
             {value}
           </h4>
         </div>

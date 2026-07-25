@@ -35,21 +35,19 @@ export const getActivePlayersCount = (players: Player[]) =>
 export const getLatePaymentsCount = (payments: Payment[]) =>
   payments.filter((payment) => payment.statut === "late").length;
 
-export const getMonthlyPaymentsTotal = (payments: Payment[], period: string) => {
-  return payments
-    .filter((payment) => payment.periode === period && payment.statut === "paid")
-    .reduce(
-      (acc, payment) => {
-        if (payment.devise === "HTG") {
-          acc.htg += payment.montant;
-        } else {
-          acc.usd += payment.montant;
-        }
-        return acc;
-      },
-      { usd: 0, htg: 0 }
-    );
-};
+export const getMonthlyPaymentsTotalUS = (payments: Payment[], period: string) =>
+  payments
+    .filter(
+      (payment) => payment.periode === period && payment.statut === "paid",
+    )
+    .reduce((total, payment) => total + (payment.montantUS || 0), 0);
+
+export const getMonthlyPaymentsTotalHTG = (payments: Payment[], period: string) =>
+  payments
+    .filter(
+      (payment) => payment.periode === period && payment.statut === "paid",
+    )
+    .reduce((total, payment) => total + (payment.montantHTG || 0), 0);
 
 export const getUpcomingEventsCount = (
   events: ClubEvent[],
@@ -81,21 +79,24 @@ export const getUpcomingEvents = (
     )
     .slice(0, limit);
 
-export const getMonthlyPaymentsSeries = (payments: Payment[], year: number) => {
-  const totalsUSD = Array.from({ length: 12 }, () => 0);
+export const getMonthlyPaymentsSeries = (payments: Payment[], year: number | "all") => {
+  const totalsUS = Array.from({ length: 12 }, () => 0);
   const totalsHTG = Array.from({ length: 12 }, () => 0);
 
   payments.forEach((payment) => {
     if (payment.statut !== "paid") return;
     const [paymentYear, paymentMonth] = payment.periode.split("-").map(Number);
-    if (paymentYear === year && paymentMonth >= 1 && paymentMonth <= 12) {
-      if (payment.devise === "HTG") {
-        totalsHTG[paymentMonth - 1] += payment.montant;
-      } else {
-        totalsUSD[paymentMonth - 1] += payment.montant;
-      }
+    
+    // Si year === "all", on cumule tout par mois (pour voir la saisonnalité globale)
+    // Sinon on filtre sur l'année spécifique
+    if (year === "all" || (paymentYear === year && paymentMonth >= 1 && paymentMonth <= 12)) {
+      totalsUS[paymentMonth - 1] += (payment.montantUS || 0);
+      totalsHTG[paymentMonth - 1] += (payment.montantHTG || 0);
     }
   });
 
-  return { usd: totalsUSD, htg: totalsHTG };
+  return {
+    dataUS: totalsUS,
+    dataHTG: totalsHTG
+  };
 };

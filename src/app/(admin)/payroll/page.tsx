@@ -95,8 +95,10 @@ export default function PayrollPage() {
   const { employees } = useClubData();
 
   // Filters
-  const [selectedYear, setSelectedYear] = useState<string>("all");
-  const [selectedMonth, setSelectedMonth] = useState<string>("all");
+  const currentMonthStr = String(new Date().getMonth() + 1).padStart(2, "0");
+  const currentYearStr = String(CURRENT_YEAR);
+  const [selectedYear, setSelectedYear] = useState<string>(currentYearStr);
+  const [selectedMonth, setSelectedMonth] = useState<string>(currentMonthStr);
   const [searchTerm, setSearchTerm] = useState<string>("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
 
@@ -297,7 +299,7 @@ export default function PayrollPage() {
             </div>
             <div>
               <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
-                Employés Payés
+                Bulletins Payés
               </p>
               <h3 className="text-2xl font-extrabold text-gray-900 dark:text-white">
                 {kpis.paidCount} / {kpis.totalCount}

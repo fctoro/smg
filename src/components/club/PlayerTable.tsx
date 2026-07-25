@@ -74,10 +74,18 @@ export default function PlayerTable({
     [columns],
   );
 
-  const categories = useMemo(
-    () => [...new Set([...DEFAULT_CATEGORIES, ...players.map((player) => player.categorie)])],
-    [players],
-  );
+  const categories = useMemo(() => {
+    const customCats = players.map((player) => player.categorie).filter(Boolean);
+    const combined = [...DEFAULT_CATEGORIES, ...customCats];
+    const uniqueMap = new Map<string, string>();
+    combined.forEach((cat) => {
+      const key = cat.trim().toLowerCase();
+      if (!uniqueMap.has(key)) {
+        uniqueMap.set(key, cat.trim());
+      }
+    });
+    return Array.from(uniqueMap.values());
+  }, [players]);
 
   const seasons = useMemo(
     () =>
@@ -94,7 +102,8 @@ export default function PlayerTable({
         const fullName = getPlayerFullName(player).toLowerCase();
         const nameMatches = !query || fullName.includes(query);
         const categoryMatches =
-          selectedCategory === "all" || player.categorie === selectedCategory;
+          selectedCategory === "all" ||
+          (player.categorie || "").trim().toLowerCase() === selectedCategory.trim().toLowerCase();
         const seasonMatches =
           selectedSeason === "all" || player.saison === selectedSeason;
         const statusMatches =

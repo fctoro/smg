@@ -248,7 +248,38 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
               photoUrl: d.PhotoUrl || "/images/user/silhouette.svg",
               poste: "Joueur",
               sexe: d.Sexe === "F" ? "Féminin" : "Masculin", 
-              categorie: d.Categorie || "ti toro",
+              categorie: (() => {
+                const rawCat = (d.Categorie || d.categorie || d.Category || d.category || "").toString().trim();
+                const lowerCat = rawCat.toLowerCase();
+
+                if (rawCat && lowerCat !== "ti toro" && lowerCat !== "titoro" && lowerCat !== "default") {
+                  if (/^u-?\d+$/i.test(lowerCat)) {
+                    const num = lowerCat.replace(/[^\d]/g, "");
+                    return `U${num}`;
+                  }
+                  return rawCat;
+                }
+
+                if (d.DateNaissance) {
+                  const dt = new Date(d.DateNaissance);
+                  if (!isNaN(dt.getTime())) {
+                    const birthYear = dt.getFullYear();
+                    const currentYear = new Date().getFullYear();
+                    const age = currentYear - birthYear;
+
+                    if (age <= 6) return "ti toro";
+                    if (age <= 8) return "U8";
+                    if (age <= 10) return "U10";
+                    if (age <= 12) return "U12";
+                    if (age <= 14) return "U14";
+                    if (age <= 16) return "U16";
+                    if (age <= 18) return "U18";
+                    return "Senior";
+                  }
+                }
+
+                return rawCat || "ti toro";
+              })(),
               statut: playerStatus,
               cotisationDevise: d.CotisationDevise || "US",
               telephone: d.Telephone || "",

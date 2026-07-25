@@ -4,6 +4,7 @@ import "flatpickr/dist/flatpickr.css";
 import { SidebarProvider } from '@/context/SidebarContext';
 import { ThemeProvider } from '@/context/ThemeContext';
 import { ClubDataProvider } from '@/context/ClubDataContext';
+import { UserRoleProvider } from '@/context/UserRoleContext';
 
 const outfit = Outfit({
   subsets: ["latin"],
@@ -19,7 +20,9 @@ export default function RootLayout({
       <body className={`${outfit.className} dark:bg-gray-900`}>
         <ThemeProvider>
           <ClubDataProvider>
-            <SidebarProvider>{children}</SidebarProvider>
+            <UserRoleProvider>
+              <SidebarProvider>{children}</SidebarProvider>
+            </UserRoleProvider>
           </ClubDataProvider>
         </ThemeProvider>
       </body>

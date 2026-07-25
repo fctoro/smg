@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import CoachTacticsPage from "@/components/club/pages/CoachTacticsPage";
 
 export const metadata: Metadata = {
-  title: "Coach FIFA | TailAdmin",
-  description: "Preparation terrain FIFA, gestion d'equipe et compositions",
+  title: "Espace Coach | FC Toro",
+  description: "Tactiques, compositions, classement et gestion d'equipe",
 };
 
 export default function CoachPage() {

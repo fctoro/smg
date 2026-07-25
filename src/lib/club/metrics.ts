@@ -14,12 +14,20 @@ export const formatClubDate = (date: string) => {
   }).format(parsed);
 };
 
-export const formatClubCurrency = (amount: number) =>
-  new Intl.NumberFormat("fr-FR", {
+export const formatClubCurrency = (amount: number, devise: "US" | "HTG" = "US") => {
+  if (devise === "HTG") {
+    return new Intl.NumberFormat("fr-FR", {
+      style: "currency",
+      currency: "HTG",
+      maximumFractionDigits: 0,
+    }).format(amount).replace("HTG", "Gourdes");
+  }
+  return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: "USD",
     maximumFractionDigits: 0,
-  }).format(amount);
+  }).format(amount).replace("$", "US$");
+};
 
 export const getActivePlayersCount = (players: Player[]) =>
   players.filter((player) => player.statut === "actif").length;
@@ -27,12 +35,21 @@ export const getActivePlayersCount = (players: Player[]) =>
 export const getLatePaymentsCount = (payments: Payment[]) =>
   payments.filter((payment) => payment.statut === "late").length;
 
-export const getMonthlyPaymentsTotal = (payments: Payment[], period: string) =>
-  payments
-    .filter(
-      (payment) => payment.periode === period && payment.statut === "paid",
-    )
-    .reduce((total, payment) => total + payment.montant, 0);
+export const getMonthlyPaymentsTotal = (payments: Payment[], period: string) => {
+  return payments
+    .filter((payment) => payment.periode === period && payment.statut === "paid")
+    .reduce(
+      (acc, payment) => {
+        if (payment.devise === "HTG") {
+          acc.htg += payment.montant;
+        } else {
+          acc.usd += payment.montant;
+        }
+        return acc;
+      },
+      { usd: 0, htg: 0 }
+    );
+};
 
 export const getUpcomingEventsCount = (
   events: ClubEvent[],
@@ -65,17 +82,20 @@ export const getUpcomingEvents = (
     .slice(0, limit);
 
 export const getMonthlyPaymentsSeries = (payments: Payment[], year: number) => {
-  const totals = Array.from({ length: 12 }, () => 0);
+  const totalsUSD = Array.from({ length: 12 }, () => 0);
+  const totalsHTG = Array.from({ length: 12 }, () => 0);
 
   payments.forEach((payment) => {
-    if (payment.statut !== "paid") {
-      return;
-    }
+    if (payment.statut !== "paid") return;
     const [paymentYear, paymentMonth] = payment.periode.split("-").map(Number);
     if (paymentYear === year && paymentMonth >= 1 && paymentMonth <= 12) {
-      totals[paymentMonth - 1] += payment.montant;
+      if (payment.devise === "HTG") {
+        totalsHTG[paymentMonth - 1] += payment.montant;
+      } else {
+        totalsUSD[paymentMonth - 1] += payment.montant;
+      }
     }
   });
 
-  return totals;
+  return { usd: totalsUSD, htg: totalsHTG };
 };

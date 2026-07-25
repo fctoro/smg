@@ -48,10 +48,13 @@ export default function ClubDashboardPage() {
   const upcomingEvents = getUpcomingEvents(events, 4, now);
 
   const revenueTrend = useMemo(() => {
-    if (previousRevenue === 0) {
+    const curr = currentRevenue.usd > 0 || currentRevenue.htg === 0 ? currentRevenue.usd : currentRevenue.htg;
+    const prev = previousRevenue.usd > 0 || previousRevenue.htg === 0 ? previousRevenue.usd : previousRevenue.htg;
+    
+    if (prev === 0) {
       return { value: "Nouveau", direction: "up" as const };
     }
-    const variation = ((currentRevenue - previousRevenue) / previousRevenue) * 100;
+    const variation = ((curr - prev) / prev) * 100;
     return {
       value: `${Math.abs(variation).toFixed(1)}%`,
       direction: variation >= 0 ? ("up" as const) : ("down" as const),
@@ -94,50 +97,46 @@ export default function ClubDashboardPage() {
         </div>
       </div>
 
-      {enabledWidgetKeys.includes("kpiMembers") ? (
-        <div className="col-span-12 sm:col-span-6 xl:col-span-3">
+      <div className="col-span-12 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 md:gap-6">
+        {enabledWidgetKeys.includes("kpiMembers") ? (
           <KpiCardClub
             title="Joueurs actifs"
             value={activePlayers}
             icon={<GroupIcon className="size-6 text-gray-800 dark:text-white/90" />}
           />
-        </div>
-      ) : null}
+        ) : null}
 
-      {enabledWidgetKeys.includes("kpiRevenue") ? (
-        <div className="col-span-12 sm:col-span-6 xl:col-span-3">
-          <KpiCardClub
-            title="Paiements recus ce mois"
-            value={formatClubCurrency(currentRevenue)}
-            trend={revenueTrend}
-            icon={
-              <DollarLineIcon className="size-6 text-gray-800 dark:text-white/90" />
-            }
-          />
-        </div>
-      ) : null}
+        {enabledWidgetKeys.includes("kpiRevenue") ? (
+          <>
+            <KpiCardClub
+              title="Paiements recus (US$)"
+              value={formatClubCurrency(currentRevenue.usd, "US")}
+              icon={<DollarLineIcon className="size-6 text-gray-800 dark:text-white/90" />}
+            />
+            <KpiCardClub
+              title="Paiements recus (HTG)"
+              value={formatClubCurrency(currentRevenue.htg, "HTG")}
+              icon={<DollarLineIcon className="size-6 text-gray-800 dark:text-white/90" />}
+            />
+          </>
+        ) : null}
 
-      {enabledWidgetKeys.includes("kpiLatePayments") ? (
-        <div className="col-span-12 sm:col-span-6 xl:col-span-3">
+        {enabledWidgetKeys.includes("kpiLatePayments") ? (
           <KpiCardClub
             title="Paiements en retard"
             value={lateCurrentMonth}
             icon={<AlertIcon className="size-6 text-gray-800 dark:text-white/90" />}
           />
-        </div>
-      ) : null}
+        ) : null}
 
-      {enabledWidgetKeys.includes("kpiUpcomingEvents") ? (
-        <div className="col-span-12 sm:col-span-6 xl:col-span-3">
+        {enabledWidgetKeys.includes("kpiUpcomingEvents") ? (
           <KpiCardClub
             title="Evenements a venir"
             value={upcomingCount}
-            icon={
-              <CalenderIcon className="size-6 text-gray-800 dark:text-white/90" />
-            }
+            icon={<CalenderIcon className="size-6 text-gray-800 dark:text-white/90" />}
           />
-        </div>
-      ) : null}
+        ) : null}
+      </div>
 
       {enabledWidgetKeys.includes("chartPayments") ? (
         <div className="col-span-12 xl:col-span-8">

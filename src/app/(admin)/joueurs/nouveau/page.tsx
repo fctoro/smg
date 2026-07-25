@@ -8,13 +8,14 @@ import PlayerForm from "@/components/club/forms/PlayerForm";
 import { useClubData } from "@/context/ClubDataContext";
 import { PlayerFormValues } from "@/types/club";
 import { createPlayerFromForm } from "@/lib/club/player-form";
+import { DEFAULT_CATEGORIES } from "@/config/dashboard.config";
 
 export default function NewPlayerPage() {
   const router = useRouter();
   const { players, setPlayers } = useClubData();
 
   const categories = useMemo(
-    () => [...new Set(players.map((player) => player.categorie))],
+    () => [...new Set([...DEFAULT_CATEGORIES, ...players.map((player) => player.categorie)])],
     [players],
   );
 

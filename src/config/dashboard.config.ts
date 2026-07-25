@@ -10,13 +10,24 @@ export type DashboardWidgetKey =
 export type PlayerColumnKey =
   | "avatarNom"
   | "poste"
-  | "categorie"
+  | "sexe"
   | "statut"
+  | "categorie"
   | "cotisation"
   | "montant"
   | "dernierPaiement"
   | "saison"
   | "actions";
+
+export const DEFAULT_CATEGORIES = [
+  "ti toro",
+  "U8",
+  "U10",
+  "U12",
+  "U14",
+  "U16",
+  "U18",
+];
 
 export interface DashboardWidgetConfig {
   key: DashboardWidgetKey;
@@ -54,8 +65,9 @@ const defaultWidgets: DashboardWidgetConfig[] = [
 const defaultPlayerColumns: PlayerColumnConfig[] = [
   { key: "avatarNom", label: "Avatar + Nom", enabled: true },
   { key: "poste", label: "Poste", enabled: true },
-  { key: "categorie", label: "Categorie", enabled: true },
+  { key: "sexe", label: "Sexe", enabled: true },
   { key: "statut", label: "Statut", enabled: true },
+  { key: "categorie", label: "Categorie", enabled: true },
   { key: "cotisation", label: "Cotisation", enabled: true },
   { key: "montant", label: "Montant", enabled: true },
   { key: "dernierPaiement", label: "Dernier paiement", enabled: true },

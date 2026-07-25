@@ -35,10 +35,10 @@ export default function KpiCardClub({
       <div className="flex items-center justify-center h-12 w-12 rounded-xl bg-gray-100 dark:bg-gray-800">
         {icon}
       </div>
-      <div className="mt-5 flex items-end justify-between">
+      <div className="mt-5 flex items-end justify-between gap-3">
         <div>
           <span className="text-sm text-gray-500 dark:text-gray-400">{title}</span>
-          <h4 className="mt-2 text-title-sm font-bold text-gray-800 dark:text-white/90">
+          <h4 className="mt-2 font-bold text-gray-800 dark:text-white/90 text-title-sm">
             {value}
           </h4>
         </div>

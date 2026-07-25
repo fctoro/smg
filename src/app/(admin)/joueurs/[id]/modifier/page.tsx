@@ -8,6 +8,7 @@ import PlayerForm from "@/components/club/forms/PlayerForm";
 import { useClubData } from "@/context/ClubDataContext";
 import { PlayerFormValues } from "@/types/club";
 import { normalizePlayerFormValues, toPlayerFormValues } from "@/lib/club/player-form";
+import { DEFAULT_CATEGORIES } from "@/config/dashboard.config";
 
 export default function EditPlayerPage() {
   const router = useRouter();
@@ -17,7 +18,7 @@ export default function EditPlayerPage() {
 
   const targetPlayer = players.find((player) => player.id === playerId);
   const categories = useMemo(
-    () => [...new Set(players.map((player) => player.categorie))],
+    () => [...new Set([...DEFAULT_CATEGORIES, ...players.map((player) => player.categorie)])],
     [players],
   );
 

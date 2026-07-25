@@ -36,9 +36,13 @@ export default function RecusPage() {
 
     return Array.from(map.values()).map(p => {
       const pIds = Array.from(p.playerIds);
-      // Calculer le total payé pour ce parent
       const parentPayments = payments.filter((pay) => pIds.includes(pay.playerId));
-      const totalPaye = parentPayments.reduce((sum, pay) => sum + (pay.montant || 0), 0);
+      const totalPayeUSD = parentPayments.filter(p => p.devise !== "HTG").reduce((sum, pay) => sum + (pay.montant || 0), 0);
+      const totalPayeHTG = parentPayments.filter(p => p.devise === "HTG").reduce((sum, pay) => sum + (pay.montant || 0), 0);
+      const totalPayeLabel = [
+        totalPayeUSD > 0 ? formatClubCurrency(totalPayeUSD, "US") : null,
+        totalPayeHTG > 0 ? formatClubCurrency(totalPayeHTG, "HTG") : null
+      ].filter(Boolean).join(" / ") || formatClubCurrency(0, "US");
       
       return {
         key: p.email ? p.email.toLowerCase().trim() : `${p.nom} ${p.prenom}`.toLowerCase().trim(),
@@ -52,7 +56,7 @@ export default function RecusPage() {
           const dateB = b.datePaiement ? new Date(b.datePaiement).getTime() : 0;
           return dateB - dateA;
         }),
-        totalPaye
+        totalPaye: totalPayeLabel,
       };
     });
   }, [parents, payments]);
@@ -76,9 +80,9 @@ export default function RecusPage() {
     const randomDigits = Math.floor(Math.random() * 90000) + 10000;
     const receiptNo = `RP-FCTORO-${initials}-${randomDigits}`;
     
-    // Fonction sécurisée pour la devise dans le PDF (sans espaces insécables)
-    const formatCurrencyPDF = (amount: number) => {
-      return `${amount.toLocaleString('en-US')} USD`;
+    // Fonction sécurisée pour la devise dans le PDF
+    const formatCurrencyPDF = (amountStr: string) => {
+      return amountStr;
     };
 
     // ==========================================
@@ -325,7 +329,7 @@ export default function RecusPage() {
                         </span>
                       </td>
                       <td className="px-4 py-3 text-right font-medium text-gray-800 dark:text-white/90">
-                        {formatClubCurrency(parentData.totalPaye)}
+                        {parentData.totalPaye}
                       </td>
                       <td className="px-4 py-3 text-center">
                         <button

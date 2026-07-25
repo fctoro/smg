@@ -194,10 +194,10 @@ export default function InvoicesPage() {
                         {getPlayerFullName(player)}
                       </TableCell>
                       <TableCell className="py-3 text-theme-sm font-medium text-gray-800 dark:text-white/90">
-                        {formatClubCurrency(invoice.montantAPayer)}
+                        {formatClubCurrency(invoice.montantAPayer, invoice.devise)}
                       </TableCell>
                       <TableCell className="py-3 text-theme-sm text-gray-500 dark:text-gray-400">
-                        {formatClubCurrency(invoice.montantPaye)}
+                        {formatClubCurrency(invoice.montantPaye, invoice.devise)}
                       </TableCell>
                       <TableCell className="py-3 text-theme-sm text-gray-500 dark:text-gray-400">
                         <Badge size="sm" color={colorFromPaymentStatus(invoice.statut)}>

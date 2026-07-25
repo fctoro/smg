@@ -24,18 +24,20 @@ const defaultValues: PlayerFormValues = {
   prenom: "",
   dateNaissance: "",
   poste: "",
-  categorie: "U15",
+  sexe: "Masculin",
+  categorie: "ti toro",
   telephone: "",
   email: "",
   adresse: "",
   statut: "actif",
   cotisationMontant: 180,
+  cotisationDevise: "US",
   cotisationStatut: "pending",
 };
 
 export default function PlayerForm({
   initialValues,
-  categories = ["U15", "U17", "Senior"],
+  categories = ["ti toro", "U8", "U10", "U12", "U14", "U16", "U18"],
   onSubmit,
   onCancel,
   submitLabel = "Enregistrer",
@@ -275,6 +277,20 @@ export default function PlayerForm({
 
         <div>
           <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
+            Sexe
+          </label>
+          <select
+            value={formValues.sexe}
+            onChange={(event) => updateField("sexe", event.target.value as "Féminin" | "Masculin")}
+            className={selectClassName}
+          >
+            <option value="Masculin">Masculin</option>
+            <option value="Féminin">Féminin</option>
+          </select>
+        </div>
+
+        <div>
+          <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
             Categorie
           </label>
           <select
@@ -345,7 +361,23 @@ export default function PlayerForm({
 
         <div>
           <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
-            Montant cotisation (EUR)
+            Devise
+          </label>
+          <select
+            value={formValues.cotisationDevise}
+            onChange={(event) =>
+              updateField("cotisationDevise", event.target.value as "US" | "HTG")
+            }
+            className={selectClassName}
+          >
+            <option value="US">US</option>
+            <option value="HTG">GOURDES</option>
+          </select>
+        </div>
+
+        <div>
+          <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
+            Montant cotisation
           </label>
           <input
             type="number"

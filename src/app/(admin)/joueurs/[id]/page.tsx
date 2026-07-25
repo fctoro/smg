@@ -120,7 +120,7 @@ export default function PlayerDetailsPage() {
               Cotisation Globale
             </p>
             <p className="mt-2 text-sm text-gray-700 dark:text-gray-300">
-              Montant Total Paye: {formatClubCurrency(player.cotisationMontant)}
+              Montant Total Paye: {formatClubCurrency(player.cotisationMontant, player.cotisationDevise)}
             </p>
             <p className="mt-1 text-sm text-gray-700 dark:text-gray-300">
               Dernier paiement: {formatClubDate(player.dernierPaiement)}
@@ -156,7 +156,7 @@ export default function PlayerDetailsPage() {
                       <tr key={p.id} className="hover:bg-gray-50 dark:hover:bg-white/[0.02]">
                         <td className="px-4 py-3">{formatClubDate(p.datePaiement ?? "")}</td>
                         <td className="px-4 py-3 font-medium text-gray-800 dark:text-white/90">
-                          {formatClubCurrency(p.montant)}
+                          {formatClubCurrency(p.montant, p.devise)}
                         </td>
                         <td className="px-4 py-3">{p.methode}</td>
                         <td className="px-4 py-3">

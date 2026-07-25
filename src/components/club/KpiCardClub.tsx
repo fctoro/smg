@@ -32,13 +32,13 @@ export default function KpiCardClub({
 }: KpiCardClubProps) {
   return (
     <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03] md:p-6">
-      <div className="flex items-center justify-center h-12 w-12 rounded-xl bg-gray-100 dark:bg-gray-800">
+      <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gray-100 dark:bg-gray-800">
         {icon}
       </div>
       <div className="mt-5 flex items-end justify-between gap-3">
         <div className="flex-1 overflow-hidden pr-2">
-          <span className="text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap">{title}</span>
-          <h4 className="mt-2 text-title-sm sm:text-title-md font-bold text-gray-800 dark:text-white/90 whitespace-nowrap tracking-tight truncate">
+          <span className="whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{title}</span>
+          <h4 className="mt-2 truncate whitespace-nowrap text-title-sm font-bold tracking-tight text-gray-800 dark:text-white/90 sm:text-title-md">
             {value}
           </h4>
         </div>

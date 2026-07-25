@@ -1,11 +1,12 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Badge from "@/components/ui/badge/Badge";
 import KpiCardClub from "@/components/club/KpiCardClub";
 import PlayerTable from "@/components/club/PlayerTable";
+import { getUsersList } from "@/app/actions/user";
 import { useDashboardConfig } from "@/hooks/useDashboardConfig";
 import { useClubData } from "@/context/ClubDataContext";
 import {
@@ -13,14 +14,18 @@ import {
   formatClubDate,
   getActivePlayersCount,
   getMonthlyPaymentsSeries,
-  getMonthlyPaymentsTotalUS,
-  getMonthlyPaymentsTotalHTG,
   getRecentPlayers,
   getUpcomingEvents,
-  getUpcomingEventsCount,
 } from "@/lib/club/metrics";
-import { eventTypeLabel, paymentStatusLabel } from "@/lib/club/status";
-import { AlertIcon, CalenderIcon, DollarLineIcon, GroupIcon } from "@/icons";
+import { eventTypeLabel } from "@/lib/club/status";
+import {
+  AlertIcon,
+  CheckCircleIcon,
+  DollarLineIcon,
+  GroupIcon,
+  UserCircleIcon,
+  UserIcon,
+} from "@/icons";
 
 // New Charts
 import RevenueChart from "@/components/club/dashboard/RevenueChart";
@@ -32,7 +37,7 @@ const buildPeriod = (date: Date) =>
 
 export default function ClubDashboardPage() {
   const router = useRouter();
-  const { players, payments, events } = useClubData();
+  const { players, parents, employees, alumni, payments, events } = useClubData();
   const { enabledWidgetKeys, enabledPlayerColumns } = useDashboardConfig();
 
   const now = new Date();
@@ -40,68 +45,80 @@ export default function ClubDashboardPage() {
   const [selectedYear, setSelectedYear] = useState<string>("all");
 
   const isAllTime = selectedYear === "all";
-  const displayYear = isAllTime ? currentYearActual : parseInt(selectedYear);
-
-  const currentPeriod = buildPeriod(now); // Used as reference for 'ce mois' if looking at current year
-  const previousDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-  const previousPeriod = buildPeriod(previousDate);
+  const displayYear = isAllTime ? currentYearActual : parseInt(selectedYear, 10);
 
   const activePlayers = getActivePlayersCount(players);
-  
-  // Si on est sur une année spécifique, on montre "Revenus de l'année" au lieu de "ce mois"?
-  // La requête disait : "je dois recupeer tout les data par moi anne des la creations"
-  // Je vais ajuster pour que si "all", on montre le total cumulé, sinon le total de l'année
+  const employeeCount = employees.length;
+  const alumniCount = alumni.length;
+  const paymentCount = payments.length;
+  const parentFamilies = parents.length;
+  const [userCount, setUserCount] = useState(0);
+
   const currentRevenueUS = payments
-    .filter(p => p.statut === "paid" && (isAllTime || p.periode.startsWith(selectedYear)))
+    .filter((p) => p.statut === "paid" && (isAllTime || p.periode.startsWith(selectedYear)))
     .reduce((sum, p) => sum + (p.montantUS || 0), 0);
-    
-  const previousRevenueUS = 0; // Pas de variation si on montre l'année ou tout
-  
+
   const currentRevenueHTG = payments
-    .filter(p => p.statut === "paid" && (isAllTime || p.periode.startsWith(selectedYear)))
+    .filter((p) => p.statut === "paid" && (isAllTime || p.periode.startsWith(selectedYear)))
     .reduce((sum, p) => sum + (p.montantHTG || 0), 0);
-    
-  const previousRevenueHTG = 0;
-  
+
   const lateCurrentMonth = payments.filter(
     (payment) => payment.statut === "late" && (isAllTime || payment.periode.startsWith(selectedYear))
   ).length;
-  const upcomingCount = getUpcomingEventsCount(events, now);
-  
-  // Chart Series Data (now passing selectedYear)
+
   const paymentSeries = getMonthlyPaymentsSeries(payments, isAllTime ? "all" : displayYear);
-  
   const recentPlayers = getRecentPlayers(players, 6);
   const upcomingEvents = getUpcomingEvents(events, 4, now);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const loadUsers = async () => {
+      try {
+        const result = await getUsersList();
+        if (mounted) {
+          setUserCount(result?.users?.length || 0);
+        }
+      } catch {
+        if (mounted) {
+          setUserCount(0);
+        }
+      }
+    };
+
+    loadUsers();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const revenueTrendUS = { value: "", direction: "up" as const };
   const revenueTrendHTG = { value: "", direction: "up" as const };
 
-  // Player Categories Data
   const categoriesData = useMemo(() => {
     const cats: Record<string, number> = {};
-    players.forEach(p => {
+    players.forEach((p) => {
       if (p.statut === "actif") {
         cats[p.categorie] = (cats[p.categorie] || 0) + 1;
       }
     });
-    return Object.keys(cats).map(cat => ({ label: cat || "Autre", count: cats[cat] }));
+    return Object.keys(cats).map((cat) => ({ label: cat || "Autre", count: cats[cat] }));
   }, [players]);
 
-  // Payment Methods Data
   const methodData = useMemo(() => {
     const methods: Record<string, { totalUS: number; totalHTG: number }> = {};
-    payments.forEach(p => {
+    payments.forEach((p) => {
       if (p.statut === "paid" && (isAllTime || p.periode.startsWith(selectedYear))) {
         if (!methods[p.methode]) methods[p.methode] = { totalUS: 0, totalHTG: 0 };
-        methods[p.methode].totalUS += (p.montantUS || 0);
-        methods[p.methode].totalHTG += (p.montantHTG || 0);
+        methods[p.methode].totalUS += p.montantUS || 0;
+        methods[p.methode].totalHTG += p.montantHTG || 0;
       }
     });
-    return Object.keys(methods).map(m => ({
+    return Object.keys(methods).map((m) => ({
       method: m,
       totalUS: methods[m].totalUS,
-      totalHTG: methods[m].totalHTG
+      totalHTG: methods[m].totalHTG,
     }));
   }, [payments, selectedYear, isAllTime]);
 
@@ -118,8 +135,10 @@ export default function ClubDashboardPage() {
     ] as const;
   }, [enabledPlayerColumns]);
 
-  // Generate years for filter (2012 to current)
-  const yearsList = Array.from({ length: currentYearActual - 2012 + 1 }, (_, i) => currentYearActual - i);
+  const yearsList = Array.from(
+    { length: currentYearActual - 2012 + 1 },
+    (_, i) => currentYearActual - i
+  );
 
   return (
     <div className="grid grid-cols-12 gap-4 md:gap-6">
@@ -156,43 +175,60 @@ export default function ClubDashboardPage() {
         </div>
       </div>
 
-      <div className="col-span-12 grid grid-cols-1 gap-4 sm:grid-cols-3 md:gap-6">
-        {enabledWidgetKeys.includes("kpiMembers") ? (
-          <KpiCardClub
-            title="Joueurs actifs"
-            value={activePlayers}
-            icon={<GroupIcon className="size-6 text-gray-800 dark:text-white/90" />}
-          />
-        ) : null}
+      <div className="col-span-12 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4 md:gap-6">
+        <KpiCardClub
+          title="Joueurs actifs"
+          value={activePlayers}
+          icon={<GroupIcon className="size-6 text-gray-800 dark:text-white/90" />}
+        />
+        <KpiCardClub
+          title="Parents"
+          value={parentFamilies}
+          icon={<GroupIcon className="size-6 text-brand-600 dark:text-brand-400" />}
+        />
+        <KpiCardClub
+          title="Employés"
+          value={employeeCount}
+          icon={<GroupIcon className="size-6 text-amber-600 dark:text-amber-400" />}
+        />
+        <KpiCardClub
+          title="Alumni"
+          value={alumniCount}
+          icon={<UserIcon className="size-6 text-violet-600 dark:text-violet-400" />}
+        />
+      </div>
 
-        {enabledWidgetKeys.includes("kpiRevenue") ? (
-          <>
-            <KpiCardClub
-              title={isAllTime ? "Revenus Globaux (USD)" : `Revenus (USD) ${displayYear}`}
-              value={formatClubCurrency(currentRevenueUS)}
-              trend={isAllTime ? undefined : revenueTrendUS}
-              icon={
-                <DollarLineIcon className="size-6 text-emerald-500" />
-              }
-            />
-            <KpiCardClub
-              title={isAllTime ? "Revenus Globaux (HTG)" : `Revenus (HTG) ${displayYear}`}
-              value={`${currentRevenueHTG.toLocaleString('fr-FR')} HTG`}
-              trend={isAllTime ? undefined : revenueTrendHTG}
-              icon={
-                <DollarLineIcon className="size-6 text-blue-500" />
-              }
-            />
-          </>
-        ) : null}
+      <div className="col-span-12 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4 md:gap-6">
+        <KpiCardClub
+          title={isAllTime ? "Revenus Globaux (USD)" : `Revenus (USD) ${displayYear}`}
+          value={formatClubCurrency(currentRevenueUS)}
+          trend={isAllTime ? undefined : revenueTrendUS}
+          icon={<DollarLineIcon className="size-6 text-emerald-500" />}
+        />
+        <KpiCardClub
+          title={isAllTime ? "Revenus Globaux (HTG)" : `Revenus (HTG) ${displayYear}`}
+          value={`${currentRevenueHTG.toLocaleString("fr-FR")} HTG`}
+          trend={isAllTime ? undefined : revenueTrendHTG}
+          icon={<DollarLineIcon className="size-6 text-blue-500" />}
+        />
+        <KpiCardClub
+          title="Utilisateurs"
+          value={userCount}
+          icon={<UserCircleIcon className="size-6 text-sky-600 dark:text-sky-400" />}
+        />
+        <KpiCardClub
+          title="Paiements"
+          value={paymentCount}
+          icon={<CheckCircleIcon className="size-6 text-emerald-600 dark:text-emerald-400" />}
+        />
       </div>
 
       {/* Main Charts */}
       {enabledWidgetKeys.includes("chartPayments") ? (
         <div className="col-span-12 lg:col-span-8">
-          <RevenueChart 
-            seriesDataUS={paymentSeries.dataUS} 
-            seriesDataHTG={paymentSeries.dataHTG} 
+          <RevenueChart
+            seriesDataUS={paymentSeries.dataUS}
+            seriesDataHTG={paymentSeries.dataHTG}
           />
         </div>
       ) : null}
@@ -207,7 +243,7 @@ export default function ClubDashboardPage() {
 
       {enabledWidgetKeys.includes("alerts") ? (
         <div className="col-span-12 lg:col-span-4">
-          <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03] md:p-6 h-full">
+          <div className="h-full rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03] md:p-6">
             <h3 className="text-lg font-semibold text-gray-800 dark:text-white/90">
               Alertes & Agenda
             </h3>

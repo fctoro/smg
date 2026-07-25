@@ -16,11 +16,32 @@ export default function PlayersCategoryChart({
 }: PlayersCategoryChartProps) {
   const series = categoriesData.map(d => d.count);
   const labels = categoriesData.map(d => d.label);
+  const totalPlayers = series.reduce((sum, value) => sum + value, 0);
+
+  if (totalPlayers === 0) {
+    return (
+      <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03] md:p-6">
+        <div className="mb-6">
+          <h3 className="text-lg font-semibold text-gray-800 dark:text-white/90">
+            Répartition des Joueurs
+          </h3>
+          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+            Par catégorie
+          </p>
+        </div>
+        <div className="flex min-h-[280px] items-center justify-center rounded-xl border border-dashed border-gray-200 bg-gray-50 text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-900/40 dark:text-gray-400">
+          Aucune catégorie disponible pour afficher le graphique.
+        </div>
+      </div>
+    );
+  }
 
   const options: ApexOptions = {
     chart: {
       type: "donut",
       fontFamily: "Outfit, sans-serif",
+      parentHeightOffset: 0,
+      toolbar: { show: false },
     },
     colors: ["#3b82f6", "#10b981", "#f59e0b", "#6366f1", "#ec4899", "#8b5cf6"],
     labels: labels,
@@ -59,6 +80,16 @@ export default function PlayersCategoryChart({
     legend: {
       position: "bottom",
     },
+    responsive: [
+      {
+        breakpoint: 640,
+        options: {
+          legend: {
+            position: "bottom",
+          },
+        },
+      },
+    ],
     tooltip: {
       y: {
         formatter: (val) => `${val} Joueurs`,
@@ -79,12 +110,13 @@ export default function PlayersCategoryChart({
         </div>
       </div>
       
-      <div className="flex items-center justify-center">
+      <div className="flex min-h-[320px] w-full items-center justify-center">
         <ReactApexChart
           options={options}
           series={series}
           type="donut"
           height={320}
+          width="100%"
         />
       </div>
     </div>

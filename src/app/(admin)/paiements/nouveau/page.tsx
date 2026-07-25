@@ -42,6 +42,7 @@ export default function NewPaymentPage() {
         montant,
         montantUS: montant, // Par défaut, on considère que c'est du USD dans l'ajout manuel
         montantHTG: 0,
+        devise: "US" as const,
         statut,
         periode,
         methode,

@@ -421,7 +421,7 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
               const montantUS = p.MntPayeUS || 0;
               const montantHTG = p.MntPayeGd || 0;
               const montant = montantUS || montantHTG || 0;
-              const devise: "USD" | "HTG" = montantHTG > 0 ? "HTG" : "USD";
+              const devise: "US" | "HTG" = montantHTG > 0 ? "HTG" : "US";
 
               return {
                 id: String(p.Id),

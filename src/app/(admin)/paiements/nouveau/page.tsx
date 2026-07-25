@@ -40,6 +40,8 @@ export default function NewPaymentPage() {
       const dataToInsert = {
         playerId,
         montant,
+        montantUS: montant, // Par défaut, on considère que c'est du USD dans l'ajout manuel
+        montantHTG: 0,
         statut,
         periode,
         methode,

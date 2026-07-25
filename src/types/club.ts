@@ -49,7 +49,9 @@ export interface ClubEvent {
 export interface Payment {
   id: string;
   playerId: string;
-  montant: number;
+  montant: number; // Keep for backward compatibility if needed, or total in one currency
+  montantUS: number;
+  montantHTG: number;
   statut: PaymentStatus;
   periode: string;
   methode: PaymentMethod;
@@ -66,6 +68,8 @@ export interface Invoice {
   remarque: string;
   montantAPayer: number;
   montantPaye: number;
+  montantUS: number;
+  montantHTG: number;
   dateFacture: string;
   datePaiement?: string;
   statut: PaymentStatus;

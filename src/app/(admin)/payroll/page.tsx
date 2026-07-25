@@ -96,7 +96,7 @@ export default function PayrollPage() {
   const { employees } = useClubData();
 
   // Filters
-  const [selectedYear, setSelectedYear] = useState<string>("2026");
+  const [selectedYear, setSelectedYear] = useState<string>("all");
   const [selectedMonth, setSelectedMonth] = useState<string>("all");
   const [searchTerm, setSearchTerm] = useState<string>("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -107,8 +107,8 @@ export default function PayrollPage() {
   // Generate initial historical payroll records (2012 - 2026)
   const [payrollRecords, setPayrollRecords] = useState<PayrollRecord[]>(() => {
     const records: PayrollRecord[] = [];
-    const sampleYears = ["2026", "2025", "2024", "2023", "2022"];
-    const sampleMonths = ["07", "06", "05", "04", "03", "02", "01"];
+    const sampleYears = YEARS_LIST.map(y => y.toString());
+    const sampleMonths = ["07", "06", "05", "04", "03", "02", "01", "12", "11", "10", "09", "08"];
 
     sampleYears.forEach((year) => {
       sampleMonths.forEach((month, mIdx) => {

@@ -222,3 +222,17 @@ export interface PayrollRecord {
   notes?: string;
   pieceJointe?: string;
 }
+
+export interface SiteMessage {
+  id: string;
+  type_message: "inscription_joueur" | "devenir_fan" | "stagiaire" | "contact_general";
+  statut: "nouveau" | "lu" | "archive";
+  contact_nom: string;
+  contact_email: string;
+  contact_telephone?: string;
+  sujet?: string;
+  contenu?: string;
+  reference_id?: string; // ID from specific tables
+  created_at: string;
+  metadata?: any;
+}

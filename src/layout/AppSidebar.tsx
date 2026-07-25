@@ -5,6 +5,7 @@ import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useSidebar } from "../context/SidebarContext";
 import { useUserRole } from "../context/UserRoleContext";
+import { supabase } from "@/lib/supabaseClient";
 import {
   BoxCubeIcon,
   CalenderIcon,
@@ -39,6 +40,13 @@ const adminNavItems: NavItem[] = [
     icon: <PieChartIcon />,
     name: "Statistiques",
     path: "/statistiques",
+  },
+  {
+    name: "Demandes",
+    icon: <DocsIcon />,
+    subItems: [
+      { name: "Boîte de réception", path: "/demandes/inscriptions", new: true }
+    ],
   },
   {
     icon: <UserCircleIcon />,
@@ -144,9 +152,35 @@ const AppSidebar: React.FC = () => {
   const { role, isCoach, isAdmin, isSuperAdmin, userSections } = useUserRole();
   const pathname = usePathname();
   const [mounted, setMounted] = useState(false);
+  const [unreadCount, setUnreadCount] = useState<number>(0);
 
   useEffect(() => {
     setMounted(true);
+
+    const fetchUnread = async () => {
+      const { count } = await supabase
+        .from("site_messages")
+        .select("*", { count: "exact", head: true })
+        .eq("is_read", false);
+      if (count !== null) setUnreadCount(count);
+    };
+
+    fetchUnread();
+
+    const channel = supabase
+      .channel("sidebar_unread_msgs")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "site_messages" },
+        () => {
+          fetchUnread();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const inCoachArea = pathname.startsWith("/coach");
@@ -306,13 +340,18 @@ const AppSidebar: React.FC = () => {
                   <li key={subItem.name}>
                     <Link
                       href={subItem.path}
-                      className={`menu-dropdown-item ${
+                      className={`menu-dropdown-item flex items-center justify-between pr-4 ${
                         isSubItemActive(subItem.path)
                           ? "menu-dropdown-item-active"
                           : "menu-dropdown-item-inactive"
                       }`}
                     >
-                      {subItem.name}
+                      <span>{subItem.name}</span>
+                      {subItem.new && (subItem.name !== "Boîte de réception" || unreadCount > 0) && (
+                        <span className="inline-flex items-center justify-center rounded-full bg-error-50 px-2 py-0.5 text-[10px] font-medium text-error-500">
+                          {subItem.name === "Boîte de réception" ? unreadCount : "NEW"}
+                        </span>
+                      )}
                     </Link>
                   </li>
                 ))}

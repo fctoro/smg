@@ -20,6 +20,7 @@ import {
   PlayerStatus,
   StaffMember,
   Invoice,
+  PayrollRecord,
 } from "@/types/club";
 import { supabase } from "@/lib/supabaseClient";
 
@@ -42,6 +43,8 @@ interface ClubDataContextValue {
   setPayments: SetState<Payment[]>;
   invoices: Invoice[];
   setInvoices: SetState<Invoice[]>;
+  payrollRecords: PayrollRecord[];
+  setPayrollRecords: SetState<PayrollRecord[]>;
   hydrated: boolean;
 }
 
@@ -56,6 +59,7 @@ const STORAGE_KEYS = {
   events: "club-data-events-v1",
   payments: "club-data-payments-v1",
   invoices: "club-data-invoices-v1",
+  payrollRecords: "club-data-payroll-v2",
 };
 
 const parseStoredArray = <T,>(value: string | null, fallback: T[]): T[] => {
@@ -79,6 +83,7 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
   const [events, setEvents] = useState<ClubEvent[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [payrollRecords, setPayrollRecords] = useState<PayrollRecord[]>([]);
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
@@ -96,7 +101,7 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
           while (true) {
             const { data, error } = await supabase.from(table).select("*").range(from, from + step - 1);
             if (error) {
-              console.error(`Erreur ${table}:`, error);
+              console.warn(`Information ${table}:`, error.message || error);
               break;
             }
             if (data && data.length > 0) {
@@ -110,7 +115,7 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
           return allData;
         };
 
-        const [etudiantsData, paiementsData, inscriptionsData, sessionsData, facturesData, employesData, alumniData, evenementsData] = await Promise.all([
+        const [etudiantsData, paiementsData, inscriptionsData, sessionsData, facturesData, employesData, alumniData, evenementsData, payrollData] = await Promise.all([
           fetchAll("tblEtudiants"),
           fetchAll("tblPaiements"),
           fetchAll("tblInscriptions"),
@@ -118,7 +123,8 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
           fetchAll("tblFacture"),
           fetchAll("tblEmployes"),
           fetchAll("tblAlumni").catch(() => []),
-          fetchAll("tblEvenements").catch(() => [])
+          fetchAll("tblEvenements").catch(() => []),
+          fetchAll("tblPayroll").catch(() => [])
         ]);
 
         const sessionsMap = new Map();
@@ -399,31 +405,72 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
           setEmployees(fallbackEmps);
           setStaff(fallbackEmps);
         }
+
+        if (alumniData && alumniData.length > 0) {
+          setAlumni(alumniData);
+        } else {
+          setAlumni(
+            parseStoredArray<Alumni>(
+              window.localStorage.getItem(STORAGE_KEYS.alumni),
+              []
+            )
+          );
+        }
+
+        if (evenementsData && evenementsData.length > 0) {
+          setEvents(evenementsData);
+        } else {
+          setEvents(
+            parseStoredArray<ClubEvent>(
+              window.localStorage.getItem(STORAGE_KEYS.events),
+              []
+            )
+          );
+        }
+        
+        if (payrollData && payrollData.length > 0) {
+          const fetchedPayroll: PayrollRecord[] = payrollData.map((p: any) => {
+            const empIdStr = String(p.EmployeId || p.employeid || p.employe_id);
+            // Si la base de données n'a que l'EmployeId (ex: lignes vides insérées manuellement),
+            // on récupère le nom et salaire depuis employesData.
+            const emp = employesData?.find((e: any) => String(e.EmployeId || e.employeid) === empIdStr);
+
+            const baseSalary = p.SalaireBase || p.salairebase || p.salaire_base || (emp ? emp.Salaire : 0) || 0;
+            const bonus = p.Bonus || p.bonus || 0;
+            const deductions = p.Deductions || p.deductions || 0;
+            const fallbackNet = baseSalary + bonus - deductions;
+
+            return {
+              id: String(p.Id || p.id),
+              employeId: empIdStr,
+              employeNom: p.EmployeNom || p.employenom || p.employe_nom || (emp ? emp.Nom : ""),
+              employePrenom: p.EmployePrenom || p.employeprenom || p.employe_prenom || (emp ? emp.Prenom : ""),
+              fonction: p.Fonction || p.fonction || (emp ? (emp.Fonction || emp.Profession) : ""),
+              mois: p.Mois || p.mois || "",
+              salaireBase: baseSalary,
+              bonus: bonus,
+              deductions: deductions,
+              netAPayer: p.NetAPayer || p.netapayer || p.net_a_payer || fallbackNet,
+              statut: p.Statut || p.statut || "en_attente",
+              datePaiement: p.DatePaiement || p.datepaiement || p.date_paiement ? (p.DatePaiement || p.datepaiement || p.date_paiement).split("T")[0] : undefined,
+              modePaiement: p.ModePaiement || p.modepaiement || p.mode_paiement || "especes",
+              notes: p.Notes || p.notes || "",
+              pieceJointe: p.PieceJointe || p.piecejointe || p.piece_jointe || "",
+            };
+          });
+          setPayrollRecords(fetchedPayroll);
+        } else {
+          setPayrollRecords(
+            parseStoredArray<PayrollRecord>(
+              window.localStorage.getItem(STORAGE_KEYS.payrollRecords),
+              []
+            )
+          );
+        }
       } catch (err) {
         console.error("Erreur lors de la récupération des données", err);
       }
 
-      if (alumniData && alumniData.length > 0) {
-        setAlumni(alumniData);
-      } else {
-        setAlumni(
-          parseStoredArray<Alumni>(
-            window.localStorage.getItem(STORAGE_KEYS.alumni),
-            []
-          )
-        );
-      }
-
-      if (evenementsData && evenementsData.length > 0) {
-        setEvents(evenementsData);
-      } else {
-        setEvents(
-          parseStoredArray<ClubEvent>(
-            window.localStorage.getItem(STORAGE_KEYS.events),
-            []
-          )
-        );
-      }
       setHydrated(true);
     };
 
@@ -480,6 +527,13 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
     window.localStorage.setItem(STORAGE_KEYS.invoices, JSON.stringify(invoices));
   }, [hydrated, invoices]);
 
+  useEffect(() => {
+    if (!hydrated || typeof window === "undefined") {
+      return;
+    }
+    window.localStorage.setItem(STORAGE_KEYS.payrollRecords, JSON.stringify(payrollRecords));
+  }, [hydrated, payrollRecords]);
+
   return (
     <ClubDataContext.Provider
       value={{
@@ -489,8 +543,8 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
         setParents,
         employees,
         setEmployees,
-        staff: employees,
-        setStaff: setEmployees,
+        staff,
+        setStaff,
         alumni,
         setAlumni,
         events,
@@ -499,6 +553,8 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
         setPayments,
         invoices,
         setInvoices,
+        payrollRecords,
+        setPayrollRecords,
         hydrated,
       }}
     >

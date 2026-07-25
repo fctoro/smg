@@ -93,7 +93,7 @@ const formatMonthYearDisplay = (monthStr: string) => {
 };
 
 export default function PayrollPage() {
-  const { employees } = useClubData();
+  const { employees, payrollRecords, setPayrollRecords } = useClubData();
 
   // Filters
   const [selectedYear, setSelectedYear] = useState<string>("all");
@@ -103,45 +103,6 @@ export default function PayrollPage() {
 
   const [showModal, setShowModal] = useState<boolean>(false);
   const [selectedSlip, setSelectedSlip] = useState<PayrollRecord | null>(null);
-
-  // Generate initial historical payroll records (2012 - 2026)
-  const [payrollRecords, setPayrollRecords] = useState<PayrollRecord[]>(() => {
-    const records: PayrollRecord[] = [];
-    const sampleYears = YEARS_LIST.map(y => y.toString());
-    const sampleMonths = ["07", "06", "05", "04", "03", "02", "01", "12", "11", "10", "09", "08"];
-
-    sampleYears.forEach((year) => {
-      sampleMonths.forEach((month, mIdx) => {
-        (employees || []).forEach((emp, index) => {
-          // Generate realistic sample salaries across years
-          const baseSalary = emp.salaire || 400 + (index % 5) * 120;
-          const bonus = (index + mIdx) % 3 === 0 ? 50 : 0;
-          const deductions = 25;
-          const net = baseSalary + bonus - deductions;
-          const mKey = `${year}-${month}`;
-
-          records.push({
-            id: `pay-${emp.id}-${mKey}`,
-            employeId: emp.id,
-            employeNom: emp.nom || "Nom",
-            employePrenom: emp.prenom || "Prénom",
-            fonction: emp.fonction || emp.role || "Employé FC Toro",
-            mois: mKey,
-            salaireBase: baseSalary,
-            bonus: bonus,
-            deductions: deductions,
-            netAPayer: net,
-            statut: year === "2026" && month === "07" && index % 4 === 0 ? "en_attente" : "paye",
-            datePaiement: year === "2026" && month === "07" && index % 4 === 0 ? undefined : `${mKey}-25`,
-            modePaiement: index % 2 === 0 ? "virement" : "especes",
-            notes: `Salaire mensuel (${formatMonthYearDisplay(mKey)})`,
-          });
-        });
-      });
-    });
-
-    return records;
-  });
 
   // Modal form state
   const [formData, setFormData] = useState<{

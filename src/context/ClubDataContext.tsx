@@ -23,6 +23,7 @@ import {
   PayrollRecord,
 } from "@/types/club";
 import { supabase } from "@/lib/supabaseClient";
+import { groupParentsByFamily } from "@/lib/club/parents";
 
 type SetState<T> = React.Dispatch<React.SetStateAction<T>>;
 
@@ -395,7 +396,7 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
             });
 
           setPlayers(fetchedPlayers);
-          setParents(fetchedParents);
+          setParents(groupParentsByFamily(fetchedParents));
         } else {
           // Fallback sur le storage local si pas de données
           setPlayers(
@@ -405,9 +406,11 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
             )
           );
           setParents(
-            parseStoredArray<Parent>(
-              window.localStorage.getItem(STORAGE_KEYS.parents),
-              []
+            groupParentsByFamily(
+              parseStoredArray<Parent>(
+                window.localStorage.getItem(STORAGE_KEYS.parents),
+                []
+              )
             )
           );
         }

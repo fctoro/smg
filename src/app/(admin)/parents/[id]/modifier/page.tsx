@@ -6,6 +6,7 @@ import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import ParentForm from "@/components/club/forms/ParentForm";
 import { useClubData } from "@/context/ClubDataContext";
 import { ParentFormValues } from "@/types/club";
+import { groupParentsByFamily, getParentLinkedPlayerIds } from "@/lib/club/parents";
 import { updateParentInSupabase } from "@/lib/club/supabase-crud";
 
 export default function EditParentPage() {
@@ -35,10 +36,15 @@ export default function EditParentPage() {
 
   const handleSubmit = async (values: ParentFormValues) => {
     try {
-      await updateParentInSupabase(values.playerId, values);
+      const linkedPlayerIds = getParentLinkedPlayerIds(targetParent);
+      await updateParentInSupabase(linkedPlayerIds, values);
       setParents((prevParents) =>
-        prevParents.map((parent) =>
-          parent.id === parentId ? { ...parent, ...values } : parent,
+        groupParentsByFamily(
+          prevParents.map((parent) =>
+            parent.id === parentId
+              ? { ...parent, ...values, playerIds: linkedPlayerIds }
+              : parent,
+          ),
         ),
       );
       router.push("/parents");

@@ -1,6 +1,12 @@
 import { supabase } from "@/lib/supabaseClient";
 import { Player, Employee } from "@/types/club";
 
+const resolveEtudiantId = (playerId: string) => {
+  const trimmed = String(playerId).trim();
+  const numericPart = trimmed.match(/\d+/)?.[0];
+  return numericPart ? Number(numericPart) : trimmed;
+};
+
 // --- PLAYERS (tblEtudiants) ---
 
 export const updatePlayerInSupabase = async (playerId: string, data: Partial<Player>) => {
@@ -19,7 +25,7 @@ export const updatePlayerInSupabase = async (playerId: string, data: Partial<Pla
   const { error } = await supabase
     .from("tblEtudiants")
     .update(updatePayload)
-    .eq("EtudiantID", parseInt(playerId, 10));
+    .eq("EtudiantID", resolveEtudiantId(playerId));
 
   if (error) {
     console.error("Erreur lors de la mise à jour du joueur :", error);
@@ -32,7 +38,7 @@ export const softDeletePlayerInSupabase = async (playerId: string) => {
   const { error } = await supabase
     .from("tblEtudiants")
     .update({ Actif: false, Abandon: true })
-    .eq("EtudiantID", parseInt(playerId, 10));
+    .eq("EtudiantID", resolveEtudiantId(playerId));
 
   if (error) {
     console.error("Erreur lors de la suppression du joueur :", error);
@@ -143,7 +149,10 @@ export const addEmployeeToSupabase = async (data: Omit<Employee, "id" | "employe
 
 // --- PARENTS (tblEtudiants - champs parents) ---
 
-export const updateParentInSupabase = async (playerId: string, data: Partial<import("@/types/club").Parent>) => {
+export const updateParentInSupabase = async (
+  playerId: string | string[],
+  data: Partial<import("@/types/club").Parent>,
+) => {
   const updatePayload: any = {};
   if (data.nom !== undefined) updatePayload.NomParent = data.nom;
   if (data.prenom !== undefined) updatePayload.PrenomParent = data.prenom;
@@ -151,18 +160,22 @@ export const updateParentInSupabase = async (playerId: string, data: Partial<imp
   if (data.email !== undefined) updatePayload.EmailParent = data.email;
   if (data.lien !== undefined) updatePayload.LienParente = data.lien;
 
-  const { error } = await supabase
-    .from("tblEtudiants")
-    .update(updatePayload)
-    .eq("EtudiantID", parseInt(playerId, 10));
+  const playerIds = Array.isArray(playerId) ? playerId : [playerId];
 
-  if (error) {
-    console.error("Erreur lors de la mise à jour du parent :", error);
-    throw error;
+  for (const id of playerIds) {
+    const { error } = await supabase
+      .from("tblEtudiants")
+      .update(updatePayload)
+      .eq("EtudiantID", resolveEtudiantId(id));
+
+    if (error) {
+      console.error("Erreur lors de la mise à jour du parent :", error);
+      throw error;
+    }
   }
 };
 
-export const deleteParentInSupabase = async (playerId: string) => {
+export const deleteParentInSupabase = async (playerId: string | string[]) => {
   const updatePayload = {
     NomParent: null,
     PrenomParent: null,
@@ -170,14 +183,19 @@ export const deleteParentInSupabase = async (playerId: string) => {
     EmailParent: null,
     LienParente: null,
   };
-  const { error } = await supabase
-    .from("tblEtudiants")
-    .update(updatePayload)
-    .eq("EtudiantID", parseInt(playerId, 10));
 
-  if (error) {
-    console.error("Erreur lors de la suppression du parent :", error);
-    throw error;
+  const playerIds = Array.isArray(playerId) ? playerId : [playerId];
+
+  for (const id of playerIds) {
+    const { error } = await supabase
+      .from("tblEtudiants")
+      .update(updatePayload)
+      .eq("EtudiantID", resolveEtudiantId(id));
+
+    if (error) {
+      console.error("Erreur lors de la suppression du parent :", error);
+      throw error;
+    }
   }
 };
 
@@ -202,7 +220,7 @@ export const updatePaymentInSupabase = async (paymentId: string, data: Partial<i
   const { error } = await supabase
     .from("tblPaiements")
     .update(updatePayload)
-    .eq("Id", parseInt(paymentId, 10));
+    .eq("Id", resolveEtudiantId(paymentId));
 
   if (error) throw error;
 };
@@ -211,7 +229,7 @@ export const deletePaymentInSupabase = async (paymentId: string) => {
   const { error } = await supabase
     .from("tblPaiements")
     .delete()
-    .eq("Id", parseInt(paymentId, 10));
+    .eq("Id", resolveEtudiantId(paymentId));
   if (error) throw error;
 };
 

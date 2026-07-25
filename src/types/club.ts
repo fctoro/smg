@@ -49,15 +49,15 @@ export interface ClubEvent {
 export interface Payment {
   id: string;
   playerId: string;
-  montant: number; // Keep for backward compatibility if needed, or total in one currency
+  montant: number;
   montantUS: number;
   montantHTG: number;
+  devise: "USD" | "HTG";
   statut: PaymentStatus;
   periode: string;
   methode: PaymentMethod;
   datePaiement?: string;
   remarque?: string;
-  devise?: "US" | "HTG";
 }
 
 export interface Invoice {

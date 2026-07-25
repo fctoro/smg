@@ -414,19 +414,26 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
 
         if (paiementsData && paiementsData.length > 0) {
           const fetchedPayments: Payment[] = paiementsData
-            .map((p: any): Payment => ({
-              id: String(p.Id),
-              playerId: String(p.EtudiantId),
-              montant: p.MntPayeUS || p.MntPayeGd || 0,
-              devise: p.MntPayeGd ? "HTG" : "US",
-              montantUS: p.MntPayeUS || 0,
-              montantHTG: p.MntPayeGd || 0,
-              statut: "paid" as any, // Historique des transactions = payé
-              periode: p.DateTransact ? p.DateTransact.substring(0, 7) : new Date().toISOString().substring(0, 7),
-              methode: (p.ModePaiement || "especes") as any,
-              datePaiement: p.DateTransact ? p.DateTransact.split("T")[0] : undefined,
-              remarque: p.Remarque || p.Description || "",
-            }))
+            .map((p: any): Payment => {
+              const montantUS = p.MntPayeUS || 0;
+              const montantHTG = p.MntPayeGd || 0;
+              const montant = montantUS || montantHTG || 0;
+              const devise: "USD" | "HTG" = montantHTG > 0 ? "HTG" : "USD";
+
+              return {
+                id: String(p.Id),
+                playerId: String(p.EtudiantId),
+                montant,
+                montantUS,
+                montantHTG,
+                devise,
+                statut: "paid" as any, // Historique des transactions = payé
+                periode: p.DateTransact ? p.DateTransact.substring(0, 7) : new Date().toISOString().substring(0, 7),
+                methode: (p.ModePaiement || "especes") as any,
+                datePaiement: p.DateTransact ? p.DateTransact.split("T")[0] : undefined,
+                remarque: p.Remarque || p.Description || "",
+              };
+            })
             .filter((p: Payment) => p.montant > 0 || p.montantUS > 0 || p.montantHTG > 0);
           setPayments(fetchedPayments);
         } else {

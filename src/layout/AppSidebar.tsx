@@ -14,6 +14,7 @@ import {
   GroupIcon,
   GridIcon,
   HorizontaLDots,
+  PieChartIcon,
   PlugInIcon,
   TaskIcon,
   TableIcon,
@@ -33,6 +34,11 @@ const adminNavItems: NavItem[] = [
     icon: <GridIcon />,
     name: "Dashboard",
     path: "/dashboard",
+  },
+  {
+    icon: <PieChartIcon />,
+    name: "Statistiques",
+    path: "/statistiques",
   },
   {
     icon: <UserCircleIcon />,

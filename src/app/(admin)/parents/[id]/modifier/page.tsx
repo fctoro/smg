@@ -6,6 +6,7 @@ import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import ParentForm from "@/components/club/forms/ParentForm";
 import { useClubData } from "@/context/ClubDataContext";
 import { ParentFormValues } from "@/types/club";
+import { updateParentInSupabase } from "@/lib/club/supabase-crud";
 
 export default function EditParentPage() {
   const router = useRouter();
@@ -32,13 +33,18 @@ export default function EditParentPage() {
     );
   }
 
-  const handleSubmit = (values: ParentFormValues) => {
-    setParents((prevParents) =>
-      prevParents.map((parent) =>
-        parent.id === parentId ? { ...parent, ...values } : parent,
-      ),
-    );
-    router.push("/parents");
+  const handleSubmit = async (values: ParentFormValues) => {
+    try {
+      await updateParentInSupabase(values.playerId, values);
+      setParents((prevParents) =>
+        prevParents.map((parent) =>
+          parent.id === parentId ? { ...parent, ...values } : parent,
+        ),
+      );
+      router.push("/parents");
+    } catch (error) {
+      alert("Erreur lors de la modification. Veuillez réessayer.");
+    }
   };
 
   return (

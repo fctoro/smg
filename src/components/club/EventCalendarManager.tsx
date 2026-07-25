@@ -24,6 +24,7 @@ import {
   calendarColorToType,
   eventTypeToCalendarColor,
 } from "@/lib/club/event-calendar";
+import { addEventToSupabase, updateEventInSupabase, deleteEventInSupabase } from "@/lib/club/supabase-crud";
 
 interface EventCalendarManagerProps {
   events: ClubEvent[];
@@ -131,7 +132,7 @@ const resetForm = () => {
     }
   };
 
-  const handleSaveEvent = () => {
+  const handleSaveEvent = async () => {
     if (!formState.titre || !formState.startDate) {
       return;
     }
@@ -139,42 +140,61 @@ const resetForm = () => {
     const eventDate = `${formState.startDate}T18:00:00`;
     const eventType = calendarColorToType[formState.calendarColor];
 
-    if (formState.id) {
-      setEvents((prevEvents) =>
-        prevEvents.map((event) =>
-          event.id === formState.id
-            ? {
-                ...event,
-                titre: formState.titre,
-                date: eventDate,
-                lieu: formState.lieu || "Stade FC Toro",
-                type: eventType,
-                calendarColor: formState.calendarColor,
-              }
-            : event,
-        ),
-      );
-    } else {
-      setEvents((prevEvents) => [
-        ...prevEvents,
-        {
-          id: `event-${Date.now()}`,
+    try {
+      if (formState.id) {
+        const dataToUpdate = {
+          titre: formState.titre,
+          date: eventDate,
+          lieu: formState.lieu || "Stade FC Toro",
+          type: eventType,
+          calendarColor: formState.calendarColor,
+        };
+        await updateEventInSupabase(formState.id, dataToUpdate);
+
+        setEvents((prevEvents) =>
+          prevEvents.map((event) =>
+            event.id === formState.id
+              ? {
+                  ...event,
+                  ...dataToUpdate,
+                }
+              : event,
+          ),
+        );
+      } else {
+        const dataToInsert = {
           titre: formState.titre,
           date: eventDate,
           lieu: formState.lieu || "Stade FC Toro",
           type: eventType,
           calendarColor: formState.calendarColor,
           participants: [],
-        },
-      ]);
-    }
+        };
+        const insertedData = await addEventToSupabase(dataToInsert);
 
-    closeModal();
-    resetForm();
+        setEvents((prevEvents) => [
+          ...prevEvents,
+          {
+            id: insertedData.id,
+            ...dataToInsert,
+          },
+        ]);
+      }
+
+      closeModal();
+      resetForm();
+    } catch (error) {
+      alert("Erreur lors de l'enregistrement de l'événement.");
+    }
   };
 
-  const handleDeleteEvent = (eventId: string) => {
-    setEvents((prevEvents) => prevEvents.filter((event) => event.id !== eventId));
+  const handleDeleteEvent = async (eventId: string) => {
+    try {
+      await deleteEventInSupabase(eventId);
+      setEvents((prevEvents) => prevEvents.filter((event) => event.id !== eventId));
+    } catch (error) {
+      alert("Erreur lors de la suppression de l'événement.");
+    }
   };
 
   const closeAndReset = () => {

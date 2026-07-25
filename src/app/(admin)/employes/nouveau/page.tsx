@@ -5,20 +5,30 @@ import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import EmployeeForm from "@/components/club/forms/EmployeeForm";
 import { useClubData } from "@/context/ClubDataContext";
 import { Employee, EmployeeFormValues } from "@/types/club";
+import { addEmployeeToSupabase } from "@/lib/club/supabase-crud";
 
 export default function NewEmployeePage() {
   const router = useRouter();
   const { setEmployees } = useClubData();
 
-  const handleSubmit = (values: EmployeeFormValues) => {
-    const newEmployee: Employee = {
-      id: `emp-${Date.now()}`,
+  const handleSubmit = async (values: EmployeeFormValues) => {
+    const newEmployeeLocal: Employee = {
+      id: `emp-temp-${Date.now()}`,
       employeId: Date.now(),
       ...values,
       photoUrl: "/images/user/silhouette.svg",
     };
-    setEmployees((prev) => [newEmployee, ...prev]);
-    router.push("/employes");
+    
+    try {
+      const inserted = await addEmployeeToSupabase(newEmployeeLocal);
+      if (inserted && inserted.EmployeId) {
+        const newEmployee = { ...newEmployeeLocal, id: String(inserted.EmployeId), employeId: inserted.EmployeId };
+        setEmployees((prev) => [newEmployee, ...prev]);
+        router.push("/employes");
+      }
+    } catch (error) {
+      alert("Erreur lors de l'ajout. Veuillez réessayer.");
+    }
   };
 
   return (

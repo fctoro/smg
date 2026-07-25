@@ -9,6 +9,7 @@ import { useClubData } from "@/context/ClubDataContext";
 import { PlayerFormValues } from "@/types/club";
 import { createPlayerFromForm } from "@/lib/club/player-form";
 import { DEFAULT_CATEGORIES } from "@/config/dashboard.config";
+import { addPlayerToSupabase } from "@/lib/club/supabase-crud";
 
 export default function NewPlayerPage() {
   const router = useRouter();
@@ -19,11 +20,20 @@ export default function NewPlayerPage() {
     [players],
   );
 
-  const handleSubmit = (values: PlayerFormValues) => {
+  const handleSubmit = async (values: PlayerFormValues) => {
     const today = new Date().toISOString().slice(0, 10);
-    const newPlayer = createPlayerFromForm(`p-${Date.now()}`, values, today);
-    setPlayers((prevPlayers) => [newPlayer, ...prevPlayers]);
-    router.push("/joueurs");
+    const newPlayerLocal = createPlayerFromForm(`temp-${Date.now()}`, values, today);
+    
+    try {
+      const inserted = await addPlayerToSupabase(newPlayerLocal);
+      if (inserted && inserted.EtudiantID) {
+        const newPlayer = { ...newPlayerLocal, id: String(inserted.EtudiantID) };
+        setPlayers((prevPlayers) => [newPlayer, ...prevPlayers]);
+        router.push("/joueurs");
+      }
+    } catch (error) {
+      alert("Erreur lors de la création. Veuillez réessayer.");
+    }
   };
 
   return (

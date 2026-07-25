@@ -6,6 +6,7 @@ import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import AlumniForm from "@/components/club/forms/AlumniForm";
 import { useClubData } from "@/context/ClubDataContext";
 import { AlumniFormValues } from "@/types/club";
+import { updateAlumniInSupabase } from "@/lib/club/supabase-crud";
 
 export default function EditAlumniPage() {
   const router = useRouter();
@@ -32,13 +33,18 @@ export default function EditAlumniPage() {
     );
   }
 
-  const handleSubmit = (values: AlumniFormValues) => {
-    setAlumni((prevEntries) =>
-      prevEntries.map((entry) =>
-        entry.id === alumniId ? { ...entry, ...values } : entry,
-      ),
-    );
-    router.push("/alumni");
+  const handleSubmit = async (values: AlumniFormValues) => {
+    try {
+      await updateAlumniInSupabase(alumniId, values);
+      setAlumni((prevEntries) =>
+        prevEntries.map((entry) =>
+          entry.id === alumniId ? { ...entry, ...values } : entry,
+        ),
+      );
+      router.push("/alumni");
+    } catch (error) {
+      alert("Erreur lors de la modification.");
+    }
   };
 
   return (

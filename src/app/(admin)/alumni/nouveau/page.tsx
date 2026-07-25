@@ -5,18 +5,24 @@ import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import AlumniForm from "@/components/club/forms/AlumniForm";
 import { useClubData } from "@/context/ClubDataContext";
 import { Alumni, AlumniFormValues } from "@/types/club";
+import { addAlumniToSupabase } from "@/lib/club/supabase-crud";
 
 export default function NewAlumniPage() {
   const router = useRouter();
   const { setAlumni } = useClubData();
 
-  const handleSubmit = (values: AlumniFormValues) => {
-    const newEntry: Alumni = {
-      id: `alumni-${Date.now()}`,
-      ...values,
-    };
-    setAlumni((prevEntries) => [newEntry, ...prevEntries]);
-    router.push("/alumni");
+  const handleSubmit = async (values: AlumniFormValues) => {
+    try {
+      const insertedData = await addAlumniToSupabase(values);
+      const newEntry: Alumni = {
+        id: insertedData.id,
+        ...values,
+      };
+      setAlumni((prevEntries) => [newEntry, ...prevEntries]);
+      router.push("/alumni");
+    } catch (error) {
+      alert("Erreur lors de l'ajout.");
+    }
   };
 
   return (

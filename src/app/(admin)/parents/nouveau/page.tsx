@@ -5,18 +5,24 @@ import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import ParentForm from "@/components/club/forms/ParentForm";
 import { useClubData } from "@/context/ClubDataContext";
 import { Parent, ParentFormValues } from "@/types/club";
+import { updateParentInSupabase } from "@/lib/club/supabase-crud";
 
 export default function NewParentPage() {
   const router = useRouter();
   const { players, setParents } = useClubData();
 
-  const handleSubmit = (values: ParentFormValues) => {
-    const newParent: Parent = {
-      id: `parent-${Date.now()}`,
-      ...values,
-    };
-    setParents((prevParents) => [newParent, ...prevParents]);
-    router.push("/parents");
+  const handleSubmit = async (values: ParentFormValues) => {
+    try {
+      await updateParentInSupabase(values.playerId, values);
+      const newParent: Parent = {
+        id: `pa-${values.playerId}`,
+        ...values,
+      };
+      setParents((prevParents) => [newParent, ...prevParents]);
+      router.push("/parents");
+    } catch (error) {
+      alert("Erreur lors de l'ajout. Veuillez réessayer.");
+    }
   };
 
   return (

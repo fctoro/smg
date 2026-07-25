@@ -212,4 +212,5 @@ export interface PayrollRecord {
   datePaiement?: string;
   modePaiement: "virement" | "especes" | "chèque" | "mobile";
   notes?: string;
+  pieceJointe?: string;
 }

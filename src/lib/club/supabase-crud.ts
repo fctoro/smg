@@ -1,0 +1,399 @@
+import { supabase } from "@/lib/supabaseClient";
+import { Player, Employee } from "@/types/club";
+
+// --- PLAYERS (tblEtudiants) ---
+
+export const updatePlayerInSupabase = async (playerId: string, data: Partial<Player>) => {
+  const updatePayload: any = {};
+  
+  if (data.nom !== undefined) updatePayload.Nom = data.nom;
+  if (data.prenom !== undefined) updatePayload.Prenom = data.prenom;
+  if (data.sexe !== undefined) updatePayload.Sexe = data.sexe === "Féminin" ? "F" : "M";
+  if (data.categorie !== undefined) updatePayload.Categorie = data.categorie;
+  if (data.cotisationDevise !== undefined) updatePayload.CotisationDevise = data.cotisationDevise;
+  if (data.telephone !== undefined) updatePayload.Telephone = data.telephone;
+  if (data.email !== undefined) updatePayload.Email = data.email;
+  if (data.dateNaissance !== undefined) updatePayload.DateNaissance = data.dateNaissance;
+  if (data.photoUrl !== undefined && data.photoUrl !== "/images/user/silhouette.svg") updatePayload.PhotoUrl = data.photoUrl;
+
+  const { error } = await supabase
+    .from("tblEtudiants")
+    .update(updatePayload)
+    .eq("EtudiantID", parseInt(playerId, 10));
+
+  if (error) {
+    console.error("Erreur lors de la mise à jour du joueur :", error);
+    throw error;
+  }
+};
+
+export const softDeletePlayerInSupabase = async (playerId: string) => {
+  // Soft delete: set Actif = false, Abandon = true
+  const { error } = await supabase
+    .from("tblEtudiants")
+    .update({ Actif: false, Abandon: true })
+    .eq("EtudiantID", parseInt(playerId, 10));
+
+  if (error) {
+    console.error("Erreur lors de la suppression du joueur :", error);
+    throw error;
+  }
+};
+
+export const addPlayerToSupabase = async (data: Omit<Player, "id" | "matricule">) => {
+  const insertPayload = {
+    Nom: data.nom,
+    Prenom: data.prenom,
+    Sexe: data.sexe === "Féminin" ? "F" : "M",
+    Categorie: data.categorie,
+    CotisationDevise: data.cotisationDevise,
+    Telephone: data.telephone,
+    Email: data.email,
+    DateNaissance: data.dateNaissance || null,
+    DtCreation: new Date().toISOString(),
+    Actif: true,
+    Abandon: false,
+    PhotoUrl: data.photoUrl && data.photoUrl !== "/images/user/silhouette.svg" ? data.photoUrl : null,
+  };
+
+  const { data: insertedData, error } = await supabase
+    .from("tblEtudiants")
+    .insert(insertPayload)
+    .select("EtudiantID")
+    .single();
+
+  if (error) {
+    console.error("Erreur lors de l'ajout du joueur :", error);
+    throw error;
+  }
+
+  return insertedData;
+};
+
+// --- EMPLOYEES (tblEmployes) ---
+
+export const updateEmployeeInSupabase = async (employeeId: string, data: Partial<Employee>) => {
+  const updatePayload: any = {};
+  
+  if (data.nom !== undefined) updatePayload.Nom = data.nom;
+  if (data.prenom !== undefined) updatePayload.Prenom = data.prenom;
+  if (data.sexe !== undefined) updatePayload.Sexe = data.sexe === "Féminin" ? "F" : "M";
+  if (data.telephone !== undefined) updatePayload.Telephone = data.telephone;
+  if (data.email !== undefined) updatePayload.Email = data.email;
+  if (data.adresse !== undefined) updatePayload.Adresse = data.adresse;
+  if (data.fonction !== undefined) updatePayload.Fonction = data.fonction;
+  if (data.salaire !== undefined) updatePayload.Salaire = data.salaire;
+  if (data.dateEmbauche !== undefined) updatePayload.DateEmbauche = data.dateEmbauche;
+  if (data.niveauEtude !== undefined) updatePayload.NiveauEtude = data.niveauEtude;
+  if (data.profession !== undefined) updatePayload.Profession = data.profession;
+
+  const { error } = await supabase
+    .from("tblEmployes")
+    .update(updatePayload)
+    .eq("EmployeId", parseInt(employeeId, 10));
+
+  if (error) {
+    console.error("Erreur lors de la mise à jour de l'employé :", error);
+    throw error;
+  }
+};
+
+export const softDeleteEmployeeInSupabase = async (employeeId: string) => {
+  // Soft delete: set Desactive = true
+  const { error } = await supabase
+    .from("tblEmployes")
+    .update({ Desactive: true })
+    .eq("EmployeId", parseInt(employeeId, 10));
+
+  if (error) {
+    console.error("Erreur lors de la suppression de l'employé :", error);
+    throw error;
+  }
+};
+
+export const addEmployeeToSupabase = async (data: Omit<Employee, "id" | "employeId">) => {
+  const insertPayload = {
+    Nom: data.nom,
+    Prenom: data.prenom,
+    Sexe: data.sexe === "Féminin" ? "F" : "M",
+    Telephone: data.telephone,
+    Email: data.email,
+    Adresse: data.adresse,
+    Fonction: data.fonction,
+    Salaire: data.salaire,
+    DateEmbauche: data.dateEmbauche || null,
+    NiveauEtude: data.niveauEtude,
+    Profession: data.profession,
+    Desactive: false,
+  };
+
+  const { data: insertedData, error } = await supabase
+    .from("tblEmployes")
+    .insert(insertPayload)
+    .select("EmployeId")
+    .single();
+
+  if (error) {
+    console.error("Erreur lors de l'ajout de l'employé :", error);
+    throw error;
+  }
+
+  return insertedData;
+};
+
+// --- PARENTS (tblEtudiants - champs parents) ---
+
+export const updateParentInSupabase = async (playerId: string, data: Partial<import("@/types/club").Parent>) => {
+  const updatePayload: any = {};
+  if (data.nom !== undefined) updatePayload.NomParent = data.nom;
+  if (data.prenom !== undefined) updatePayload.PrenomParent = data.prenom;
+  if (data.telephone !== undefined) updatePayload.TelephoneParent = data.telephone;
+  if (data.email !== undefined) updatePayload.EmailParent = data.email;
+  if (data.lien !== undefined) updatePayload.LienParente = data.lien;
+
+  const { error } = await supabase
+    .from("tblEtudiants")
+    .update(updatePayload)
+    .eq("EtudiantID", parseInt(playerId, 10));
+
+  if (error) {
+    console.error("Erreur lors de la mise à jour du parent :", error);
+    throw error;
+  }
+};
+
+export const deleteParentInSupabase = async (playerId: string) => {
+  const updatePayload = {
+    NomParent: null,
+    PrenomParent: null,
+    TelephoneParent: null,
+    EmailParent: null,
+    LienParente: null,
+  };
+  const { error } = await supabase
+    .from("tblEtudiants")
+    .update(updatePayload)
+    .eq("EtudiantID", parseInt(playerId, 10));
+
+  if (error) {
+    console.error("Erreur lors de la suppression du parent :", error);
+    throw error;
+  }
+};
+
+// --- PAIEMENTS (tblPaiements) ---
+
+export const updatePaymentInSupabase = async (paymentId: string, data: Partial<import("@/types/club").Payment>) => {
+  const updatePayload: any = {};
+  if (data.playerId !== undefined) updatePayload.EtudiantId = parseInt(data.playerId, 10);
+  if (data.montant !== undefined) {
+    if (data.devise === "HTG") {
+      updatePayload.MntPayeGd = data.montant;
+      updatePayload.MntPayeUS = null;
+    } else {
+      updatePayload.MntPayeUS = data.montant;
+      updatePayload.MntPayeGd = null;
+    }
+  }
+  if (data.datePaiement !== undefined) updatePayload.DateTransact = data.datePaiement;
+  if (data.methode !== undefined) updatePayload.ModePaiement = data.methode;
+  if (data.remarque !== undefined) updatePayload.Remarque = data.remarque;
+
+  const { error } = await supabase
+    .from("tblPaiements")
+    .update(updatePayload)
+    .eq("Id", parseInt(paymentId, 10));
+
+  if (error) throw error;
+};
+
+export const deletePaymentInSupabase = async (paymentId: string) => {
+  const { error } = await supabase
+    .from("tblPaiements")
+    .delete()
+    .eq("Id", parseInt(paymentId, 10));
+  if (error) throw error;
+};
+
+export const addPaymentToSupabase = async (data: Omit<import("@/types/club").Payment, "id">) => {
+  const insertPayload: any = {
+    EtudiantId: parseInt(data.playerId, 10),
+    DateTransact: data.datePaiement || new Date().toISOString(),
+    ModePaiement: data.methode,
+    Remarque: data.remarque || "",
+  };
+  
+  if (data.devise === "HTG") {
+    insertPayload.MntPayeGd = data.montant;
+    insertPayload.MntPayeUS = 0;
+  } else {
+    insertPayload.MntPayeUS = data.montant;
+    insertPayload.MntPayeGd = 0;
+  }
+
+  const { data: insertedData, error } = await supabase
+    .from("tblPaiements")
+    .insert(insertPayload)
+    .select("Id")
+    .single();
+
+  if (error) throw error;
+  return insertedData;
+};
+
+// --- FACTURES (tblFacture) ---
+
+export const updateInvoiceInSupabase = async (invoiceId: string, data: Partial<import("@/types/club").Invoice>) => {
+  const updatePayload: any = {};
+  if (data.noFacture !== undefined) updatePayload.NoFacture = data.noFacture;
+  if (data.playerId !== undefined) updatePayload.EtudiantId = parseInt(data.playerId, 10);
+  if (data.sessionId !== undefined) updatePayload.SessionId = parseInt(data.sessionId, 10);
+  if (data.remarque !== undefined) updatePayload.Remarque = data.remarque;
+  if (data.montantAPayer !== undefined) updatePayload.MntAPayer = data.montantAPayer;
+  if (data.montantPaye !== undefined) {
+    if (data.devise === "HTG") {
+      updatePayload.MntPayeGd = data.montantPaye;
+      updatePayload.MntPayeUS = 0;
+    } else {
+      updatePayload.MntPayeUS = data.montantPaye;
+      updatePayload.MntPayeGd = 0;
+    }
+  }
+  if (data.dateFacture !== undefined) updatePayload.DateFacture = data.dateFacture;
+  if (data.datePaiement !== undefined) updatePayload.DatePaiement = data.datePaiement;
+
+  const { error } = await supabase
+    .from("tblFacture")
+    .update(updatePayload)
+    .eq("Id", parseInt(invoiceId, 10));
+
+  if (error) throw error;
+};
+
+export const deleteInvoiceInSupabase = async (invoiceId: string) => {
+  const { error } = await supabase
+    .from("tblFacture")
+    .delete()
+    .eq("Id", parseInt(invoiceId, 10));
+  if (error) throw error;
+};
+
+export const addInvoiceToSupabase = async (data: Omit<import("@/types/club").Invoice, "id">) => {
+  const insertPayload: any = {
+    NoFacture: data.noFacture,
+    EtudiantId: parseInt(data.playerId, 10),
+    SessionId: parseInt(data.sessionId, 10),
+    Remarque: data.remarque || "",
+    MntAPayer: data.montantAPayer,
+    DateFacture: data.dateFacture || new Date().toISOString(),
+    DatePaiement: data.datePaiement || null,
+  };
+
+  if (data.devise === "HTG") {
+    insertPayload.MntPayeGd = data.montantPaye || 0;
+    insertPayload.MntPayeUS = 0;
+  } else {
+    insertPayload.MntPayeUS = data.montantPaye || 0;
+    insertPayload.MntPayeGd = 0;
+  }
+
+  const { data: insertedData, error } = await supabase
+    .from("tblFacture")
+    .insert(insertPayload)
+    .select("Id")
+    .single();
+
+  if (error) throw error;
+  return insertedData;
+};
+
+// --- ALUMNI (tblAlumni) ---
+
+export const updateAlumniInSupabase = async (alumniId: string, data: Partial<import("@/types/club").Alumni>) => {
+  const { error } = await supabase.from("tblAlumni").update(data).eq("id", alumniId);
+  if (error) throw error;
+};
+
+export const deleteAlumniInSupabase = async (alumniId: string) => {
+  const { error } = await supabase.from("tblAlumni").delete().eq("id", alumniId);
+  if (error) throw error;
+};
+
+export const addAlumniToSupabase = async (data: Omit<import("@/types/club").Alumni, "id">) => {
+  const { data: insertedData, error } = await supabase.from("tblAlumni").insert(data).select("id").single();
+  if (error) throw error;
+  return insertedData;
+};
+
+// --- EVENEMENTS (tblEvenements) ---
+
+export const updateEventInSupabase = async (eventId: string, data: Partial<import("@/types/club").ClubEvent>) => {
+  const { error } = await supabase.from("tblEvenements").update(data).eq("id", eventId);
+  if (error) throw error;
+};
+
+export const deleteEventInSupabase = async (eventId: string) => {
+  const { error } = await supabase.from("tblEvenements").delete().eq("id", eventId);
+  if (error) throw error;
+};
+
+export const addEventToSupabase = async (data: Omit<import("@/types/club").ClubEvent, "id">) => {
+  const { data: insertedData, error } = await supabase.from("tblEvenements").insert(data).select("id").single();
+  if (error) throw error;
+  return insertedData;
+};
+
+// --- PAYROLL (tblPayroll) ---
+
+export const addPayrollToSupabase = async (data: Omit<import("@/types/club").PayrollRecord, "id">, file?: File) => {
+  let pieceJointeUrl = data.pieceJointe || null;
+
+  // 1. Upload file to Supabase Storage if a file is provided
+  if (file) {
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+    const filePath = `receipts/${fileName}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from("payroll-attachments")
+      .upload(filePath, file);
+
+    if (uploadError) {
+      console.error("Error uploading file:", uploadError);
+      throw new Error("Erreur lors du téléversement du fichier.");
+    }
+
+    const { data: publicUrlData } = supabase.storage
+      .from("payroll-attachments")
+      .getPublicUrl(filePath);
+
+    pieceJointeUrl = publicUrlData.publicUrl;
+  }
+
+  // 2. Insert into tblPayroll
+  const insertPayload = {
+    EmployeId: parseInt(data.employeId, 10),
+    EmployeNom: data.employeNom,
+    EmployePrenom: data.employePrenom,
+    Fonction: data.fonction,
+    Mois: data.mois,
+    SalaireBase: data.salaireBase,
+    Bonus: data.bonus,
+    Deductions: data.deductions,
+    NetAPayer: data.netAPayer,
+    Statut: data.statut,
+    DatePaiement: data.datePaiement || new Date().toISOString(),
+    ModePaiement: data.modePaiement,
+    Notes: data.notes || "",
+    PieceJointe: pieceJointeUrl,
+  };
+
+  const { data: insertedData, error } = await supabase
+    .from("tblPayroll")
+    .insert(insertPayload)
+    .select("Id")
+    .single();
+
+  if (error) throw error;
+  return { ...insertedData, PieceJointe: pieceJointeUrl };
+};

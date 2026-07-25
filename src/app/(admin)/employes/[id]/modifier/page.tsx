@@ -6,6 +6,7 @@ import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import EmployeeForm from "@/components/club/forms/EmployeeForm";
 import { useClubData } from "@/context/ClubDataContext";
 import { EmployeeFormValues } from "@/types/club";
+import { updateEmployeeInSupabase } from "@/lib/club/supabase-crud";
 
 export default function EditEmployeePage() {
   const router = useRouter();
@@ -32,13 +33,18 @@ export default function EditEmployeePage() {
     );
   }
 
-  const handleSubmit = (values: EmployeeFormValues) => {
-    setEmployees((prev) =>
-      prev.map((emp) =>
-        emp.id === empId ? { ...emp, ...values } : emp,
-      ),
-    );
-    router.push("/employes");
+  const handleSubmit = async (values: EmployeeFormValues) => {
+    try {
+      await updateEmployeeInSupabase(empId, values);
+      setEmployees((prev) =>
+        prev.map((emp) =>
+          emp.id === empId ? { ...emp, ...values } : emp,
+        ),
+      );
+      router.push("/employes");
+    } catch (error) {
+      alert("Erreur lors de la modification. Veuillez réessayer.");
+    }
   };
 
   return (

@@ -110,13 +110,15 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
           return allData;
         };
 
-        const [etudiantsData, paiementsData, inscriptionsData, sessionsData, facturesData, employesData] = await Promise.all([
+        const [etudiantsData, paiementsData, inscriptionsData, sessionsData, facturesData, employesData, alumniData, evenementsData] = await Promise.all([
           fetchAll("tblEtudiants"),
           fetchAll("tblPaiements"),
           fetchAll("tblInscriptions"),
           fetchAll("tblSessions"),
           fetchAll("tblFacture"),
-          fetchAll("tblEmployes")
+          fetchAll("tblEmployes"),
+          fetchAll("tblAlumni").catch(() => []),
+          fetchAll("tblEvenements").catch(() => [])
         ]);
 
         const sessionsMap = new Map();
@@ -395,18 +397,27 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
         console.error("Erreur lors de la récupération des données", err);
       }
 
-      setAlumni(
-        parseStoredArray<Alumni>(
-          window.localStorage.getItem(STORAGE_KEYS.alumni),
-          []
-        )
-      );
-      setEvents(
-        parseStoredArray<ClubEvent>(
-          window.localStorage.getItem(STORAGE_KEYS.events),
-          []
-        )
-      );
+      if (alumniData && alumniData.length > 0) {
+        setAlumni(alumniData);
+      } else {
+        setAlumni(
+          parseStoredArray<Alumni>(
+            window.localStorage.getItem(STORAGE_KEYS.alumni),
+            []
+          )
+        );
+      }
+
+      if (evenementsData && evenementsData.length > 0) {
+        setEvents(evenementsData);
+      } else {
+        setEvents(
+          parseStoredArray<ClubEvent>(
+            window.localStorage.getItem(STORAGE_KEYS.events),
+            []
+          )
+        );
+      }
       setHydrated(true);
     };
 

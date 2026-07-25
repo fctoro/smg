@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/table";
 import { PencilIcon, TrashBinIcon } from "@/icons";
 import { useClubData } from "@/context/ClubDataContext";
+import { deleteAlumniInSupabase } from "@/lib/club/supabase-crud";
 
 export default function AlumniPage() {
   const router = useRouter();
@@ -33,7 +34,7 @@ export default function AlumniPage() {
     });
   }, [alumni, searchQuery]);
 
-  const handleDelete = (alumniId: string) => {
+  const handleDelete = async (alumniId: string) => {
     const target = alumni.find((entry) => entry.id === alumniId);
     if (!target) {
       return;
@@ -41,9 +42,14 @@ export default function AlumniPage() {
     if (!window.confirm(`Supprimer ${target.nom} ?`)) {
       return;
     }
-    setAlumni((prevEntries) =>
-      prevEntries.filter((entry) => entry.id !== alumniId),
-    );
+    try {
+      await deleteAlumniInSupabase(alumniId);
+      setAlumni((prevEntries) =>
+        prevEntries.filter((entry) => entry.id !== alumniId),
+      );
+    } catch (error) {
+      alert("Erreur lors de la suppression.");
+    }
   };
 
   return (

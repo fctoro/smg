@@ -9,6 +9,7 @@ import { useClubData } from "@/context/ClubDataContext";
 import { PlayerFormValues } from "@/types/club";
 import { normalizePlayerFormValues, toPlayerFormValues } from "@/lib/club/player-form";
 import { DEFAULT_CATEGORIES } from "@/config/dashboard.config";
+import { updatePlayerInSupabase } from "@/lib/club/supabase-crud";
 
 export default function EditPlayerPage() {
   const router = useRouter();
@@ -39,24 +40,31 @@ export default function EditPlayerPage() {
     );
   }
 
-  const handleSubmit = (values: PlayerFormValues) => {
+  const handleSubmit = async (values: PlayerFormValues) => {
     const normalized = normalizePlayerFormValues(values);
     const today = new Date().toISOString().slice(0, 10);
-    setPlayers((prevPlayers) =>
-      prevPlayers.map((player) =>
-        player.id === playerId
-          ? {
-              ...player,
-              ...normalized,
-              dernierPaiement:
-                normalized.cotisationStatut === "paid"
-                  ? today
-                  : player.dernierPaiement,
-            }
-          : player,
-      ),
-    );
-    router.push("/joueurs");
+    
+    try {
+      await updatePlayerInSupabase(playerId, normalized);
+      
+      setPlayers((prevPlayers) =>
+        prevPlayers.map((player) =>
+          player.id === playerId
+            ? {
+                ...player,
+                ...normalized,
+                dernierPaiement:
+                  normalized.cotisationStatut === "paid"
+                    ? today
+                    : player.dernierPaiement,
+              }
+            : player,
+        ),
+      );
+      router.push("/joueurs");
+    } catch (error) {
+      alert("Erreur lors de la modification. Veuillez réessayer.");
+    }
   };
 
   return (

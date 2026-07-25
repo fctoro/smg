@@ -5,23 +5,26 @@ import { useRouter } from "next/navigation";
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import ParentTable from "@/components/club/ParentTable";
 import { useClubData } from "@/context/ClubDataContext";
+import { deleteParentInSupabase } from "@/lib/club/supabase-crud";
 
 export default function ParentsPage() {
   const router = useRouter();
   const { parents, setParents, players } = useClubData();
 
-  const handleDeleteParent = (parentId: string) => {
-    const target = parents.find((parent) => parent.id === parentId);
-    if (!target) {
-      return;
-    }
+  const handleDeleteParent = async (parentId: string) => {
+    const target = parents.find((p) => p.id === parentId);
+    if (!target) return;
 
-    if (!window.confirm(`Supprimer ${target.prenom} ${target.nom} ?`)) {
+    if (!window.confirm(`Supprimer le parent ${target.prenom} ${target.nom} ?`)) {
       return;
     }
-    setParents((prevParents) =>
-      prevParents.filter((parent) => parent.id !== parentId),
-    );
+    
+    try {
+      await deleteParentInSupabase(target.playerId); // use playerId for deletion in tblEtudiants
+      setParents((prev) => prev.filter((p) => p.id !== parentId));
+    } catch (error) {
+      alert("Erreur lors de la suppression. Veuillez réessayer.");
+    }
   };
 
   return (

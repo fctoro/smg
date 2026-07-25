@@ -6,6 +6,7 @@ import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import { useClubData } from "@/context/ClubDataContext";
 import { PaymentMethod, PaymentStatus } from "@/types/club";
 import { getPlayerFullName } from "@/lib/club/metrics";
+import { addPaymentToSupabase } from "@/lib/club/supabase-crud";
 
 const inputClassName =
   "h-11 w-full rounded-lg border border-gray-300 bg-transparent px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs placeholder:text-gray-400 focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90";
@@ -30,24 +31,34 @@ export default function NewPaymentPage() {
 
   const playerOptions = useMemo(() => players, [players]);
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!playerId || !periode || montant <= 0) {
       return;
     }
 
-    setPayments((prevPayments) => [
-      {
-        id: `pay-${Date.now()}`,
+    try {
+      const dataToInsert = {
         playerId,
         montant,
         statut,
         periode,
         methode,
         datePaiement: statut === "paid" ? datePaiement || undefined : undefined,
-      },
-      ...prevPayments,
-    ]);
-    router.push("/paiements");
+      };
+      
+      const inserted = await addPaymentToSupabase(dataToInsert);
+
+      setPayments((prevPayments) => [
+        {
+          id: inserted.Id.toString(),
+          ...dataToInsert,
+        },
+        ...prevPayments,
+      ]);
+      router.push("/paiements");
+    } catch (error) {
+      alert("Erreur lors de l'ajout du paiement. Veuillez réessayer.");
+    }
   };
 
   return (

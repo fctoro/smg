@@ -211,6 +211,7 @@ export default function PayrollPage() {
     try {
       const insertedData = await addPayrollToSupabase(recordData, formData.file || undefined);
       
+      const normalizedDatePaiement = typeof recordData.datePaiement === 'string' ? recordData.datePaiement : undefined;
       const newRecord: PayrollRecord = {
         id: insertedData.Id || `pay-${Date.now()}`,
         employeId: recordData.employeId,
@@ -223,7 +224,7 @@ export default function PayrollPage() {
         deductions: recordData.deductions,
         netAPayer: recordData.netAPayer,
         statut: recordData.statut,
-        datePaiement: typeof recordData.datePaiement === 'string' ? recordData.datePaiement : undefined,
+        datePaiement: normalizedDatePaiement as string | undefined,
         modePaiement: recordData.modePaiement,
         notes: recordData.notes,
         pieceJointe: insertedData.PieceJointe || undefined,

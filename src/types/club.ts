@@ -216,7 +216,7 @@ export interface PayrollRecord {
   netAPayer: number;
   devise?: "US" | "HTG";
   statut: "paye" | "en_attente" | "annule";
-  datePaiement?: string | null;
+  datePaiement?: string;
   modePaiement: "virement" | "especes" | "chèque" | "mobile";
   notes?: string;
   pieceJointe?: string;

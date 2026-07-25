@@ -48,7 +48,7 @@ export const UserRoleProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [role, setRoleState] = useState<UserRole>(() => {
     if (typeof window !== "undefined") {
       const saved = localStorage.getItem("fctoro_user_role");
-      if (saved === "coach" || saved === "admin" || saved === "super admin") {
+      if (saved === "coach" || saved === "admin" || saved === "super admin" || saved === "finance") {
         return saved as UserRole;
       }
     }

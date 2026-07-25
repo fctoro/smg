@@ -6,6 +6,17 @@ import { EyeCloseIcon, EyeIcon } from "@/icons";
 import React, { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 
+const getDefaultSectionsForRole = (normalizedRole: string): string[] => {
+  switch (normalizedRole) {
+    case "coach":
+      return ["Dashboard", "Joueurs", "Evenements"];
+    case "finance":
+      return ["Dashboard", "Paiements", "Factures"];
+    default:
+      return ["Dashboard", "Joueurs", "Parents", "Evenements", "Paiements", "Factures"];
+  }
+};
+
 export default function SignInForm() {
   const [showPassword, setShowPassword] = useState(false);
   const [isChecked, setIsChecked] = useState(false);
@@ -38,7 +49,7 @@ export default function SignInForm() {
 
         // Fetch DB profile if metadata is empty
         let userRole = uMetaRole || (uEmail === "footballclubtoro@gmail.com" ? "Super Admin" : "Admin");
-        let userSections = uMetaSections || [];
+        let userSections = Array.isArray(uMetaSections) && uMetaSections.length > 0 ? uMetaSections : [];
 
         if (!uMetaRole && uEmail !== "footballclubtoro@gmail.com") {
           const { data: prof } = await supabase
@@ -47,10 +58,15 @@ export default function SignInForm() {
             .eq("id", u.id)
             .single();
           if (prof?.role) userRole = prof.role;
-          if (prof?.sections) userSections = prof.sections;
+          if (Array.isArray(prof?.sections) && prof.sections.length > 0) {
+            userSections = prof.sections;
+          }
         }
 
         const normalizedRole = userRole.toLowerCase();
+        if (userSections.length === 0) {
+          userSections = getDefaultSectionsForRole(normalizedRole);
+        }
         localStorage.setItem("fctoro_user_email", uEmail);
         localStorage.setItem("fctoro_user_role", normalizedRole);
         localStorage.setItem("fctoro_user_sections", JSON.stringify(userSections));

@@ -94,6 +94,7 @@ export interface Employee {
   sexe?: string;
   fonction: string;
   salaire?: number | null;
+  devise?: "US" | "HTG";
   dateEmbauche?: string;
   telephone: string;
   email: string;
@@ -180,6 +181,7 @@ export interface EmployeeFormValues {
   sexe?: string;
   fonction: string;
   salaire?: number | null;
+  devise?: "US" | "HTG";
   dateEmbauche?: string;
   telephone: string;
   email: string;
@@ -212,6 +214,7 @@ export interface PayrollRecord {
   bonus: number;
   deductions: number;
   netAPayer: number;
+  devise?: "US" | "HTG";
   statut: "paye" | "en_attente" | "annule";
   datePaiement?: string | null;
   modePaiement: "virement" | "especes" | "chèque" | "mobile";

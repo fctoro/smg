@@ -381,6 +381,7 @@ export const addPayrollToSupabase = async (data: Omit<import("@/types/club").Pay
     Bonus: data.bonus,
     Deductions: data.deductions,
     NetAPayer: data.netAPayer,
+    Devise: data.devise || "HTG",
     Statut: data.statut,
     DatePaiement: data.datePaiement || new Date().toISOString(),
     ModePaiement: data.modePaiement,
@@ -396,4 +397,38 @@ export const addPayrollToSupabase = async (data: Omit<import("@/types/club").Pay
 
   if (error) throw error;
   return { ...insertedData, PieceJointe: pieceJointeUrl };
+};
+
+export const updatePayrollInSupabase = async (id: string, data: Partial<import("@/types/club").PayrollRecord>) => {
+  const updatePayload: any = {};
+  if (data.statut !== undefined) updatePayload.Statut = data.statut;
+  if (data.datePaiement !== undefined) updatePayload.DatePaiement = data.datePaiement;
+  if (data.modePaiement !== undefined) updatePayload.ModePaiement = data.modePaiement;
+  if (data.salaireBase !== undefined) updatePayload.SalaireBase = data.salaireBase;
+  if (data.bonus !== undefined) updatePayload.Bonus = data.bonus;
+  if (data.deductions !== undefined) updatePayload.Deductions = data.deductions;
+  if (data.netAPayer !== undefined) updatePayload.NetAPayer = data.netAPayer;
+  if (data.notes !== undefined) updatePayload.Notes = data.notes;
+
+  const { error } = await supabase
+    .from("tblPayroll")
+    .update(updatePayload)
+    .eq("Id", parseInt(id, 10));
+
+  if (error) {
+    console.error("Erreur mise à jour paie :", error);
+    throw error;
+  }
+};
+
+export const deletePayrollInSupabase = async (id: string) => {
+  const { error } = await supabase
+    .from("tblPayroll")
+    .delete()
+    .eq("Id", parseInt(id, 10));
+
+  if (error) {
+    console.error("Erreur suppression paie :", error);
+    throw error;
+  }
 };

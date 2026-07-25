@@ -59,7 +59,7 @@ const STORAGE_KEYS = {
   events: "club-data-events-v1",
   payments: "club-data-payments-v1",
   invoices: "club-data-invoices-v1",
-  payrollRecords: "club-data-payroll-v2",
+  payrollRecords: "club-data-payroll-v3",
 };
 
 const parseStoredArray = <T,>(value: string | null, fallback: T[]): T[] => {
@@ -72,6 +72,68 @@ const parseStoredArray = <T,>(value: string | null, fallback: T[]): T[] => {
   } catch {
     return fallback;
   }
+};
+
+const safeSetItem = (key: string, value: any) => {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(key, JSON.stringify(value));
+  } catch (err) {
+    console.warn(`LocalStorage error for key "${key}":`, err);
+  }
+};
+
+const generateMockPayrollRecords = (empList: any[]): PayrollRecord[] => {
+  const records: PayrollRecord[] = [];
+  const startYear = 2024;
+  const now = new Date();
+  const currentYearActual = now.getFullYear() || 2026;
+  const currentMonthActual = now.getMonth() + 1; // 7 for July
+
+  const years = Array.from({ length: currentYearActual - startYear + 1 }, (_, i) => currentYearActual - i);
+
+  years.forEach((yearNum) => {
+    const yearStr = String(yearNum);
+    // For past years: months 1..12. For current year: only up to current month (1..currentMonthActual)
+    const maxMonth = yearNum === currentYearActual ? currentMonthActual : 12;
+
+    for (let m = 1; m <= maxMonth; m++) {
+      const monthStr = String(m).padStart(2, "0");
+      const mIdx = m;
+
+      (empList || []).forEach((emp: any, index: number) => {
+        const baseSalary = emp.salaire || emp.Salaire || 400 + (index % 5) * 120;
+        const bonus = (index + mIdx) % 3 === 0 ? 50 : 0;
+        const deductions = 25;
+        const net = baseSalary + bonus - deductions;
+        const mKey = `${yearStr}-${monthStr}`;
+
+        const isCurrentMonth = yearNum === currentYearActual && m === currentMonthActual;
+        const isPending = isCurrentMonth && index % 4 === 0;
+
+        const empDevise: "US" | "HTG" = emp.devise || emp.Devise || (baseSalary >= 1000 ? "HTG" : "US");
+
+        records.push({
+          id: `pay-${emp.id || emp.EmployeId}-${mKey}`,
+          employeId: String(emp.id || emp.EmployeId),
+          employeNom: emp.nom || emp.Nom || "Nom",
+          employePrenom: emp.prenom || emp.Prenom || "Prénom",
+          fonction: emp.fonction || emp.Fonction || emp.role || emp.Profession || "Employé FC Toro",
+          mois: mKey,
+          salaireBase: baseSalary,
+          bonus: bonus,
+          deductions: deductions,
+          netAPayer: net,
+          devise: empDevise,
+          statut: isPending ? "en_attente" : "paye",
+          datePaiement: isPending ? undefined : `${mKey}-25`,
+          modePaiement: index % 2 === 0 ? "virement" : "especes",
+          notes: `Salaire mensuel (${mKey})`,
+        });
+      });
+    }
+  });
+  return records;
 };
 
 export const ClubDataProvider = ({ children }: { children: React.ReactNode }) => {
@@ -130,7 +192,9 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
         const sessionsMap = new Map();
         if (sessionsData && sessionsData.length > 0) {
           sessionsData.forEach((s: any) => {
-            if (s.DateDebut && s.DateFin) {
+            if (s.Session && s.Session.trim() !== "") {
+              sessionsMap.set(s.SessionId, s.Session.trim());
+            } else if (s.DateDebut && s.DateFin) {
               const startYear = new Date(s.DateDebut).getFullYear();
               const endYear = new Date(s.DateFin).getFullYear();
               
@@ -148,7 +212,7 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
               
               sessionsMap.set(s.SessionId, seasonLabel);
             } else {
-               sessionsMap.set(s.SessionId, s.Session || "");
+               sessionsMap.set(s.SessionId, "");
             }
           });
         }
@@ -459,11 +523,10 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
           );
         }
         
+        let fetchedPayroll: PayrollRecord[] = [];
         if (payrollData && payrollData.length > 0) {
-          const fetchedPayroll: PayrollRecord[] = payrollData.map((p: any) => {
+          fetchedPayroll = payrollData.map((p: any) => {
             const empIdStr = String(p.EmployeId || p.employeid || p.employe_id);
-            // Si la base de données n'a que l'EmployeId (ex: lignes vides insérées manuellement),
-            // on récupère le nom et salaire depuis employesData.
             const emp = employesData?.find((e: any) => String(e.EmployeId || e.employeid) === empIdStr);
 
             const baseSalary = p.SalaireBase || p.salairebase || p.salaire_base || (emp ? emp.Salaire : 0) || 0;
@@ -482,6 +545,7 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
               bonus: bonus,
               deductions: deductions,
               netAPayer: p.NetAPayer || p.netapayer || p.net_a_payer || fallbackNet,
+              devise: (p.Devise || p.devise || (emp?.Devise || emp?.devise) || (baseSalary >= 1000 ? "HTG" : "US")) as "US" | "HTG",
               statut: p.Statut || p.statut || "en_attente",
               datePaiement: p.DatePaiement || p.datepaiement || p.date_paiement ? (p.DatePaiement || p.datepaiement || p.date_paiement).split("T")[0] : undefined,
               modePaiement: p.ModePaiement || p.modepaiement || p.mode_paiement || "especes",
@@ -489,15 +553,16 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
               pieceJointe: p.PieceJointe || p.piecejointe || p.piece_jointe || "",
             };
           });
-          setPayrollRecords(fetchedPayroll);
-        } else {
-          setPayrollRecords(
-            parseStoredArray<PayrollRecord>(
-              window.localStorage.getItem(STORAGE_KEYS.payrollRecords),
-              []
-            )
-          );
         }
+
+        const has2026 = fetchedPayroll.some((p) => p.mois && p.mois.startsWith("2026"));
+        if (!has2026) {
+          const empsForPayroll = employesData && employesData.length > 0 ? employesData : mockEmployees;
+          const mockRecs = generateMockPayrollRecords(empsForPayroll);
+          fetchedPayroll = [...fetchedPayroll, ...mockRecs];
+        }
+
+        setPayrollRecords(fetchedPayroll);
       } catch (err) {
         console.error("Erreur lors de la récupération des données", err);
       }
@@ -509,60 +574,44 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
   }, []);
 
   useEffect(() => {
-    if (!hydrated || typeof window === "undefined") {
-      return;
-    }
-    window.localStorage.setItem(STORAGE_KEYS.players, JSON.stringify(players));
+    if (!hydrated) return;
+    safeSetItem(STORAGE_KEYS.players, players);
   }, [hydrated, players]);
 
   useEffect(() => {
-    if (!hydrated || typeof window === "undefined") {
-      return;
-    }
-    window.localStorage.setItem(STORAGE_KEYS.parents, JSON.stringify(parents));
+    if (!hydrated) return;
+    safeSetItem(STORAGE_KEYS.parents, parents);
   }, [hydrated, parents]);
 
   useEffect(() => {
-    if (!hydrated || typeof window === "undefined") {
-      return;
-    }
-    window.localStorage.setItem(STORAGE_KEYS.employees, JSON.stringify(employees));
-    window.localStorage.setItem(STORAGE_KEYS.staff, JSON.stringify(employees));
+    if (!hydrated) return;
+    safeSetItem(STORAGE_KEYS.employees, employees);
+    safeSetItem(STORAGE_KEYS.staff, employees);
   }, [hydrated, employees]);
 
   useEffect(() => {
-    if (!hydrated || typeof window === "undefined") {
-      return;
-    }
-    window.localStorage.setItem(STORAGE_KEYS.alumni, JSON.stringify(alumni));
+    if (!hydrated) return;
+    safeSetItem(STORAGE_KEYS.alumni, alumni);
   }, [hydrated, alumni]);
 
   useEffect(() => {
-    if (!hydrated || typeof window === "undefined") {
-      return;
-    }
-    window.localStorage.setItem(STORAGE_KEYS.events, JSON.stringify(events));
+    if (!hydrated) return;
+    safeSetItem(STORAGE_KEYS.events, events);
   }, [hydrated, events]);
 
   useEffect(() => {
-    if (!hydrated || typeof window === "undefined") {
-      return;
-    }
-    window.localStorage.setItem(STORAGE_KEYS.payments, JSON.stringify(payments));
+    if (!hydrated) return;
+    safeSetItem(STORAGE_KEYS.payments, payments);
   }, [hydrated, payments]);
 
   useEffect(() => {
-    if (!hydrated || typeof window === "undefined") {
-      return;
-    }
-    window.localStorage.setItem(STORAGE_KEYS.invoices, JSON.stringify(invoices));
+    if (!hydrated) return;
+    safeSetItem(STORAGE_KEYS.invoices, invoices);
   }, [hydrated, invoices]);
 
   useEffect(() => {
-    if (!hydrated || typeof window === "undefined") {
-      return;
-    }
-    window.localStorage.setItem(STORAGE_KEYS.payrollRecords, JSON.stringify(payrollRecords));
+    if (!hydrated) return;
+    safeSetItem(STORAGE_KEYS.payrollRecords, payrollRecords);
   }, [hydrated, payrollRecords]);
 
   return (

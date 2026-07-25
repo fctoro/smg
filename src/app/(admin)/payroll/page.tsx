@@ -4,7 +4,11 @@ import React, { useState, useMemo } from "react";
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import { useClubData } from "@/context/ClubDataContext";
 import { PayrollRecord } from "@/types/club";
-import { addPayrollToSupabase } from "@/lib/club/supabase-crud";
+import {
+  addPayrollToSupabase,
+  updatePayrollInSupabase,
+  deletePayrollInSupabase,
+} from "@/lib/club/supabase-crud";
 
 // Professional SVG Icons
 const Icons = {
@@ -92,14 +96,20 @@ const formatMonthYearDisplay = (monthStr: string) => {
   return monthObj ? `${monthObj.label} ${year}` : monthStr;
 };
 
+const formatAmountWithDevise = (amount: number, devise?: "US" | "HTG") => {
+  if (devise === "HTG") {
+    return `${amount.toLocaleString("fr-FR")} Gdes`;
+  }
+  return `$${amount.toLocaleString("en-US")}`;
+};
+
 export default function PayrollPage() {
   const { employees, payrollRecords, setPayrollRecords } = useClubData();
 
   // Filters
-  const currentMonthStr = String(new Date().getMonth() + 1).padStart(2, "0");
   const currentYearStr = String(CURRENT_YEAR);
   const [selectedYear, setSelectedYear] = useState<string>(currentYearStr);
-  const [selectedMonth, setSelectedMonth] = useState<string>(currentMonthStr);
+  const [selectedMonth, setSelectedMonth] = useState<string>("all");
   const [searchTerm, setSearchTerm] = useState<string>("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
 
@@ -114,6 +124,7 @@ export default function PayrollPage() {
     salaireBase: number;
     bonus: number;
     deductions: number;
+    devise: "US" | "HTG";
     statut: "paye" | "en_attente";
     modePaiement: "virement" | "especes" | "chèque" | "mobile";
     notes: string;
@@ -125,6 +136,7 @@ export default function PayrollPage() {
     salaireBase: 500,
     bonus: 0,
     deductions: 0,
+    devise: "HTG",
     statut: "paye",
     modePaiement: "virement",
     notes: "",
@@ -147,18 +159,24 @@ export default function PayrollPage() {
     });
   }, [payrollRecords, selectedYear, selectedMonth, searchTerm, statusFilter]);
 
-  // KPI Calculations based on active filters
+  // KPI Calculations based on active filters (separate by currency)
   const kpis = useMemo(() => {
-    const totalPayroll = filteredRecords.reduce((sum, r) => sum + r.netAPayer, 0);
+    const totalPayrollUS = filteredRecords
+      .filter((r) => r.devise !== "HTG")
+      .reduce((sum, r) => sum + r.netAPayer, 0);
+
+    const totalPayrollHTG = filteredRecords
+      .filter((r) => r.devise === "HTG")
+      .reduce((sum, r) => sum + r.netAPayer, 0);
+
     const paidCount = filteredRecords.filter((r) => r.statut === "paye").length;
     const pendingCount = filteredRecords.filter((r) => r.statut === "en_attente").length;
-    const avgSalary = filteredRecords.length > 0 ? totalPayroll / filteredRecords.length : 0;
 
     return {
-      totalPayroll,
+      totalPayrollUS,
+      totalPayrollHTG,
       paidCount,
       pendingCount,
-      avgSalary,
       totalCount: filteredRecords.length,
     };
   }, [filteredRecords]);
@@ -183,6 +201,7 @@ export default function PayrollPage() {
       bonus: formData.bonus,
       deductions: formData.deductions,
       netAPayer: net,
+      devise: formData.devise,
       statut: formData.statut,
       datePaiement: formData.statut === "paye" ? new Date().toISOString().split("T")[0] : undefined,
       modePaiement: formData.modePaiement,
@@ -207,7 +226,7 @@ export default function PayrollPage() {
         datePaiement: typeof recordData.datePaiement === 'string' ? recordData.datePaiement : undefined,
         modePaiement: recordData.modePaiement,
         notes: recordData.notes,
-        pieceJointe: insertedData.PieceJointe,
+        pieceJointe: insertedData.PieceJointe || undefined,
       };
 
       setPayrollRecords((prev) => [newRecord, ...prev]);
@@ -219,6 +238,7 @@ export default function PayrollPage() {
         salaireBase: 500,
         bonus: 0,
         deductions: 0,
+        devise: "HTG",
         statut: "paye",
         modePaiement: "virement",
         notes: "",
@@ -229,25 +249,49 @@ export default function PayrollPage() {
     }
   };
 
-  const handleToggleStatus = (id: string) => {
+  const handleToggleStatus = async (id: string) => {
+    const target = payrollRecords.find((r) => r.id === id);
+    if (!target) return;
+
+    const nextStatut = target.statut === "paye" ? "en_attente" : "paye";
+    const nextDatePaiement = nextStatut === "paye" ? new Date().toISOString().split("T")[0] : undefined;
+
     setPayrollRecords((prev) =>
       prev.map((rec) => {
         if (rec.id === id) {
-          const nextStatut = rec.statut === "paye" ? "en_attente" : "paye";
           return {
             ...rec,
             statut: nextStatut,
-            datePaiement: nextStatut === "paye" ? new Date().toISOString().split("T")[0] : undefined,
+            datePaiement: nextDatePaiement,
           };
         }
         return rec;
       })
     );
+
+    if (!id.startsWith("pay-")) {
+      try {
+        await updatePayrollInSupabase(id, {
+          statut: nextStatut,
+          datePaiement: nextDatePaiement,
+        });
+      } catch (err) {
+        console.error("Erreur mise à jour statut paie :", err);
+      }
+    }
   };
 
-  const handleDeleteRecord = (id: string) => {
+  const handleDeleteRecord = async (id: string) => {
     if (window.confirm("Voulez-vous vraiment supprimer cette fiche de paie ?")) {
       setPayrollRecords((prev) => prev.filter((r) => r.id !== id));
+
+      if (!id.startsWith("pay-")) {
+        try {
+          await deletePayrollInSupabase(id);
+        } catch (err) {
+          console.error("Erreur suppression paie :", err);
+        }
+      }
     }
   };
 
@@ -273,8 +317,11 @@ export default function PayrollPage() {
               <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
                 Masse Salariale
               </p>
-              <h3 className="text-2xl font-extrabold text-gray-900 dark:text-white">
-                ${kpis.totalPayroll.toLocaleString()}
+              <h3 className="text-xl font-extrabold text-gray-900 dark:text-white">
+                {kpis.totalPayrollHTG > 0 && `${kpis.totalPayrollHTG.toLocaleString("fr-FR")} Gdes`}
+                {kpis.totalPayrollHTG > 0 && kpis.totalPayrollUS > 0 && " / "}
+                {kpis.totalPayrollUS > 0 && `$${kpis.totalPayrollUS.toLocaleString("en-US")}`}
+                {kpis.totalPayrollHTG === 0 && kpis.totalPayrollUS === 0 && "$0"}
               </h3>
             </div>
           </div>
@@ -317,10 +364,10 @@ export default function PayrollPage() {
             </div>
             <div>
               <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
-                Salaire Moyen
+                Total Fiches
               </p>
               <h3 className="text-2xl font-extrabold text-gray-900 dark:text-white">
-                ${Math.round(kpis.avgSalary).toLocaleString()}
+                {kpis.totalCount}
               </h3>
             </div>
           </div>
@@ -443,16 +490,16 @@ export default function PayrollPage() {
                       </span>
                     </td>
                     <td className="px-6 py-4 font-medium text-gray-700 dark:text-gray-300">
-                      ${record.salaireBase.toLocaleString()}
+                      {formatAmountWithDevise(record.salaireBase, record.devise)}
                     </td>
                     <td className="px-6 py-4 font-semibold text-emerald-600 dark:text-emerald-400">
-                      +${record.bonus.toLocaleString()}
+                      +{formatAmountWithDevise(record.bonus, record.devise)}
                     </td>
                     <td className="px-6 py-4 font-semibold text-rose-600 dark:text-rose-400">
-                      -${record.deductions.toLocaleString()}
+                      -{formatAmountWithDevise(record.deductions, record.devise)}
                     </td>
                     <td className="px-6 py-4 font-extrabold text-gray-900 dark:text-white">
-                      ${record.netAPayer.toLocaleString()}
+                      {formatAmountWithDevise(record.netAPayer, record.devise)}
                     </td>
                     <td className="px-6 py-4">
                       <button
@@ -561,10 +608,13 @@ export default function PayrollPage() {
                   onChange={(e) => {
                     const empId = e.target.value;
                     const emp = employees.find((x) => x.id === empId);
+                    const empSal = emp?.salaire || 500;
+                    const empDev: "US" | "HTG" = emp?.devise || (empSal >= 1000 ? "HTG" : "US");
                     setFormData((prev) => ({
                       ...prev,
                       employeId: empId,
-                      salaireBase: emp?.salaire || 500,
+                      salaireBase: empSal,
+                      devise: empDev,
                     }));
                   }}
                   className="w-full rounded-xl border border-gray-300 bg-white p-2.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
@@ -575,6 +625,21 @@ export default function PayrollPage() {
                       {emp.prenom} {emp.nom} ({emp.fonction || "Employé"})
                     </option>
                   ))}
+                </select>
+              </div>
+
+              {/* Currency Selector */}
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-gray-700 dark:text-gray-300">
+                  Devise du Salaire
+                </label>
+                <select
+                  value={formData.devise}
+                  onChange={(e) => setFormData({ ...formData, devise: e.target.value as "US" | "HTG" })}
+                  className="w-full rounded-xl border border-gray-300 bg-white p-2.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                >
+                  <option value="HTG">Gourdes Haïtiennes (HTG / Gdes)</option>
+                  <option value="US">Dollars Américains (USD / $)</option>
                 </select>
               </div>
 
@@ -747,25 +812,35 @@ export default function PayrollPage() {
               <thead>
                 <tr className="border-b bg-gray-100">
                   <th className="p-2.5 font-bold">Description</th>
-                  <th className="p-2.5 text-right font-bold">Montant ($)</th>
+                  <th className="p-2.5 text-right font-bold">
+                    Montant ({selectedSlip.devise === "HTG" ? "Gdes" : "$"})
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y">
                 <tr>
                   <td className="p-2.5">Salaire de Base</td>
-                  <td className="p-2.5 text-right font-medium">${selectedSlip.salaireBase.toFixed(2)}</td>
+                  <td className="p-2.5 text-right font-medium">
+                    {formatAmountWithDevise(selectedSlip.salaireBase, selectedSlip.devise)}
+                  </td>
                 </tr>
                 <tr>
                   <td className="p-2.5">Primes / Extra</td>
-                  <td className="p-2.5 text-right font-medium text-emerald-600">+${selectedSlip.bonus.toFixed(2)}</td>
+                  <td className="p-2.5 text-right font-medium text-emerald-600">
+                    +{formatAmountWithDevise(selectedSlip.bonus, selectedSlip.devise)}
+                  </td>
                 </tr>
                 <tr>
                   <td className="p-2.5">Déductions / Retenues</td>
-                  <td className="p-2.5 text-right font-medium text-rose-600">-${selectedSlip.deductions.toFixed(2)}</td>
+                  <td className="p-2.5 text-right font-medium text-rose-600">
+                    -{formatAmountWithDevise(selectedSlip.deductions, selectedSlip.devise)}
+                  </td>
                 </tr>
                 <tr className="border-t bg-gray-50 font-bold">
                   <td className="p-2.5 text-sm">NET À PAYER</td>
-                  <td className="p-2.5 text-right text-sm font-extrabold">${selectedSlip.netAPayer.toFixed(2)}</td>
+                  <td className="p-2.5 text-right text-sm font-extrabold">
+                    {formatAmountWithDevise(selectedSlip.netAPayer, selectedSlip.devise)}
+                  </td>
                 </tr>
               </tbody>
             </table>

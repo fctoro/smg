@@ -16,8 +16,10 @@ import { formatClubDate } from "@/lib/club/metrics";
 
 interface EmployeeTableProps {
   employees: Employee[];
-  onEditEmployee?: (employee: Employee) => void;
-  onDeleteEmployee?: (employee: Employee) => void;
+  title?: string;
+  showToolbar?: boolean;
+  actionButton?: React.ReactNode;
+  exportButton?: React.ReactNode;
 }
 
 const fonctionBadgeColor = (fonction: string) => {
@@ -38,17 +40,32 @@ export default function EmployeeTable({
   employees,
   onEditEmployee,
   onDeleteEmployee,
+  title = "Employés",
+  showToolbar = true,
+  actionButton,
+  exportButton,
 }: EmployeeTableProps) {
   const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [fonctionFilter, setFonctionFilter] = useState("all");
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 10;
+
+  const fonctions = useMemo(() => {
+    return Array.from(new Set(employees.map(e => e.fonction || e.role || "Non spécifié"))).filter(Boolean);
+  }, [employees]);
 
   const filteredEmployees = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
     return employees.filter((emp) => {
-      if (!query) {
-        return true;
-      }
+      const isInactive = Boolean(emp.desactive);
+      const empStatus = isInactive ? "inactif" : "actif";
+      if (statusFilter !== "all" && empStatus !== statusFilter) return false;
+
+      const empFunc = emp.fonction || emp.role || "Non spécifié";
+      if (fonctionFilter !== "all" && empFunc !== fonctionFilter) return false;
+
+      if (!query) return true;
       const fullName = `${emp.prenom} ${emp.nom}`.toLowerCase();
       const reversedName = `${emp.nom} ${emp.prenom}`.toLowerCase();
       const func = (emp.fonction || emp.role || "").toLowerCase();
@@ -65,7 +82,7 @@ export default function EmployeeTable({
         addr.includes(query)
       );
     });
-  }, [searchQuery, employees]);
+  }, [searchQuery, employees, statusFilter, fonctionFilter]);
 
   const totalPages = Math.max(1, Math.ceil(filteredEmployees.length / pageSize));
   const currentPageSafe = Math.min(currentPage, totalPages);
@@ -75,26 +92,68 @@ export default function EmployeeTable({
   );
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white px-4 pb-3 pt-4 dark:border-gray-800 dark:bg-white/[0.03] sm:px-6">
-      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h3 className="text-lg font-semibold text-gray-800 dark:text-white/90">
-            Employés
-          </h3>
-          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            {filteredEmployees.length} employé(s)
-          </p>
+    <div className="space-y-4">
+      {showToolbar || actionButton ? (
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          {showToolbar ? (
+            <div className="grid flex-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              <input
+                value={searchQuery}
+                onChange={(event) => {
+                  setSearchQuery(event.target.value);
+                  setCurrentPage(1);
+                }}
+                placeholder="Rechercher par nom, fonction, email, téléphone..."
+                className="h-11 w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs placeholder:text-gray-400 focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
+              />
+              <select
+                value={fonctionFilter}
+                onChange={(event) => {
+                  setFonctionFilter(event.target.value);
+                  setCurrentPage(1);
+                }}
+                className="h-11 w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
+              >
+                <option value="all">Toutes fonctions</option>
+                {fonctions.map((f, idx) => (
+                  <option key={idx} value={f}>{f}</option>
+                ))}
+              </select>
+              <select
+                value={statusFilter}
+                onChange={(event) => {
+                  setStatusFilter(event.target.value);
+                  setCurrentPage(1);
+                }}
+                className="h-11 w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
+              >
+                <option value="all">Tous statuts</option>
+                <option value="actif">Actif</option>
+                <option value="inactif">Inactif</option>
+              </select>
+            </div>
+          ) : null}
+
+          {actionButton ? (
+            <div className="shrink-0">{actionButton}</div>
+          ) : null}
         </div>
-        <input
-          value={searchQuery}
-          onChange={(event) => {
-            setSearchQuery(event.target.value);
-            setCurrentPage(1);
-          }}
-          placeholder="Rechercher par nom, fonction, email, téléphone..."
-          className="h-11 w-full rounded-lg border border-gray-300 bg-transparent px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs placeholder:text-gray-400 focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 sm:max-w-md dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
-        />
-      </div>
+      ) : null}
+
+      <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white px-4 pb-3 pt-4 dark:border-gray-800 dark:bg-white/[0.03] sm:px-6">
+        <div className="mb-4 flex items-center justify-between">
+          <div>
+            <h3 className="text-lg font-semibold text-gray-800 dark:text-white/90">
+              {title}
+            </h3>
+            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+              {filteredEmployees.length} employé(s)
+            </p>
+          </div>
+          {exportButton ? (
+            <div className="shrink-0">{exportButton}</div>
+          ) : null}
+        </div>
 
       <div className="max-w-full overflow-x-auto">
         <Table>
@@ -229,6 +288,7 @@ export default function EmployeeTable({
           />
         </div>
       ) : null}
+      </div>
     </div>
   );
 }

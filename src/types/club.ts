@@ -52,7 +52,7 @@ export interface Payment {
   montant: number;
   montantUS: number;
   montantHTG: number;
-  devise: "USD" | "HTG";
+  devise: "US" | "HTG";
   statut: PaymentStatus;
   periode: string;
   methode: PaymentMethod;

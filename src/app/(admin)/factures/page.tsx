@@ -24,7 +24,7 @@ export default function InvoicesPage() {
   const [selectedSeason, setSelectedSeason] = useState("all");
   const [isExportOpen, setIsExportOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
-  const pageSize = 12;
+  const [currentPageSize, setCurrentPageSize] = useState(12);
 
   const playerMap = useMemo(
     () => new Map(players.map((player) => [player.id, player])),
@@ -63,11 +63,11 @@ export default function InvoicesPage() {
       });
   }, [invoices, playerMap, searchQuery, selectedStatus, selectedSeason]);
 
-  const totalPages = Math.max(1, Math.ceil(filteredInvoices.length / pageSize));
+  const totalPages = Math.max(1, Math.ceil(filteredInvoices.length / currentPageSize));
   const currentPageSafe = Math.min(currentPage, totalPages);
   const pagedInvoices = filteredInvoices.slice(
-    (currentPageSafe - 1) * pageSize,
-    currentPageSafe * pageSize,
+    (currentPageSafe - 1) * currentPageSize,
+    currentPageSafe * currentPageSize,
   );
 
   const handleExportCSV = () => {
@@ -279,15 +279,18 @@ export default function InvoicesPage() {
         </div>
       </div>
 
-      {totalPages > 1 ? (
-        <div className="mt-4 flex justify-end">
-          <Pagination
-            currentPage={currentPageSafe}
-            totalPages={totalPages}
-            onPageChange={setCurrentPage}
-          />
-        </div>
-      ) : null}
+      <div className="mt-4 flex justify-end">
+        <Pagination
+          currentPage={currentPageSafe}
+          totalPages={totalPages}
+          onPageChange={setCurrentPage}
+          pageSize={currentPageSize}
+          onPageSizeChange={(size) => {
+            setCurrentPageSize(size);
+            setCurrentPage(1);
+          }}
+        />
+      </div>
     </div>
   );
 }

@@ -24,7 +24,7 @@ export default function PaymentsPage() {
   const [selectedSeason, setSelectedSeason] = useState("all");
   const [isExportOpen, setIsExportOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
-  const pageSize = 12;
+  const [currentPageSize, setCurrentPageSize] = useState(12);
 
   const playerMap = useMemo(
     () => new Map(players.map((player) => [player.id, player])),
@@ -57,11 +57,11 @@ export default function PaymentsPage() {
       });
   }, [payments, playerMap, searchQuery, deviseFilter, selectedSeason]);
 
-  const totalPages = Math.max(1, Math.ceil(filteredPayments.length / pageSize));
+  const totalPages = Math.max(1, Math.ceil(filteredPayments.length / currentPageSize));
   const currentPageSafe = Math.min(currentPage, totalPages);
   const pagedPayments = filteredPayments.slice(
-    (currentPageSafe - 1) * pageSize,
-    currentPageSafe * pageSize,
+    (currentPageSafe - 1) * currentPageSize,
+    currentPageSafe * currentPageSize,
   );
 
   const handleExportCSV = () => {
@@ -262,15 +262,18 @@ export default function PaymentsPage() {
         </div>
       </div>
 
-      {totalPages > 1 ? (
-        <div className="mt-4 flex justify-end print:hidden">
-          <Pagination
-            currentPage={currentPageSafe}
-            totalPages={totalPages}
-            onPageChange={setCurrentPage}
-          />
-        </div>
-      ) : null}
+      <div className="mt-4 flex justify-end print:hidden">
+        <Pagination
+          currentPage={currentPageSafe}
+          totalPages={totalPages}
+          onPageChange={setCurrentPage}
+          pageSize={currentPageSize}
+          onPageSizeChange={(size) => {
+            setCurrentPageSize(size);
+            setCurrentPage(1);
+          }}
+        />
+      </div>
     </div>
   );
 }

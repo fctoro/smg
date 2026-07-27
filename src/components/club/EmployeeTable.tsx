@@ -49,7 +49,7 @@ export default function EmployeeTable({
   const [statusFilter, setStatusFilter] = useState("all");
   const [fonctionFilter, setFonctionFilter] = useState("all");
   const [currentPage, setCurrentPage] = useState(1);
-  const pageSize = 10;
+  const [currentPageSize, setCurrentPageSize] = useState(10);
 
   const fonctions = useMemo(() => {
     return Array.from(new Set(employees.map(e => e.fonction || e.role || "Non spécifié"))).filter(Boolean);
@@ -84,11 +84,11 @@ export default function EmployeeTable({
     });
   }, [searchQuery, employees, statusFilter, fonctionFilter]);
 
-  const totalPages = Math.max(1, Math.ceil(filteredEmployees.length / pageSize));
+  const totalPages = Math.max(1, Math.ceil(filteredEmployees.length / currentPageSize));
   const currentPageSafe = Math.min(currentPage, totalPages);
   const pagedEmployees = filteredEmployees.slice(
-    (currentPageSafe - 1) * pageSize,
-    currentPageSafe * pageSize,
+    (currentPageSafe - 1) * currentPageSize,
+    currentPageSafe * currentPageSize,
   );
 
   return (
@@ -279,15 +279,18 @@ export default function EmployeeTable({
         </Table>
       </div>
 
-      {totalPages > 1 ? (
-        <div className="mt-4 flex justify-end">
-          <Pagination
-            currentPage={currentPageSafe}
-            totalPages={totalPages}
-            onPageChange={setCurrentPage}
-          />
-        </div>
-      ) : null}
+      <div className="mt-4 flex justify-end">
+        <Pagination
+          currentPage={currentPageSafe}
+          totalPages={totalPages}
+          onPageChange={setCurrentPage}
+          pageSize={currentPageSize}
+          onPageSizeChange={(size) => {
+            setCurrentPageSize(size);
+            setCurrentPage(1);
+          }}
+        />
+      </div>
       </div>
     </div>
   );

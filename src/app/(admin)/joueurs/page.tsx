@@ -11,83 +11,91 @@ import { getPlayerFullName } from "@/lib/club/metrics";
 import { softDeletePlayerInSupabase } from "@/lib/club/supabase-crud";
 import { Dropdown } from "@/components/ui/dropdown/Dropdown";
 import { DropdownItem } from "@/components/ui/dropdown/DropdownItem";
+import { useConfirm } from "@/hooks/useConfirm";
 
 export default function PlayersPage() {
   const router = useRouter();
   const { players, setPlayers } = useClubData();
   const [isExportOpen, setIsExportOpen] = useState(false);
   const { enabledPlayerColumns } = useDashboardConfig();
+  const { confirm, ConfirmComponent } = useConfirm();
 
-  const handleDeletePlayer = async (playerId: string) => {
+  const handleDeletePlayer = (playerId: string) => {
     const target = players.find((player) => player.id === playerId);
-    if (!target) {
-      return;
-    }
+    if (!target) return;
 
-    const shouldDelete = window.confirm(
-      `Supprimer le joueur ${getPlayerFullName(target)} ?`,
-    );
-    if (!shouldDelete) {
-      return;
-    }
-
-    try {
-      await softDeletePlayerInSupabase(playerId);
-      setPlayers((prevPlayers) =>
-        prevPlayers.filter((player) => player.id !== playerId),
-      );
-    } catch (error) {
-      alert("Erreur lors de la suppression. Veuillez réessayer.");
-    }
+    confirm({
+      title: "Supprimer le joueur",
+      message: `Voulez-vous vraiment supprimer le joueur ${getPlayerFullName(target)} ?`,
+      isDestructive: true,
+      onConfirm: async () => {
+        try {
+          await softDeletePlayerInSupabase(playerId);
+          setPlayers((prevPlayers) =>
+            prevPlayers.filter((player) => player.id !== playerId),
+          );
+        } catch (error) {
+          alert("Erreur lors de la suppression. Veuillez réessayer.");
+        }
+      }
+    });
   };
 
   const tableColumns =
     enabledPlayerColumns.length > 0 ? enabledPlayerColumns : undefined;
 
   const handleExportExcel = () => {
-    if (!window.confirm("Voulez-vous vraiment exporter la liste des joueurs au format Excel ?")) return;
     setIsExportOpen(false);
-    
-    const headers = ["Matricule", "Nom", "Prénom", "Poste", "Sexe", "Catégorie", "Statut", "Téléphone", "Email", "Date Inscription"];
-    let csvContent = "\uFEFF" + headers.join(";") + "\n";
-    
-    players.forEach(p => {
-      const row = [p.matricule, p.nom, p.prenom, p.poste, p.sexe, p.categorie, p.statut, p.telephone, p.email, p.dateInscription];
-      const csvRow = row.map(field => `"${(field || "").toString().replace(/"/g, '""')}"`);
-      csvContent += csvRow.join(";") + "\n";
-    });
+    confirm({
+      title: "Exporter la liste",
+      message: "Voulez-vous vraiment exporter la liste des joueurs au format Excel ?",
+      onConfirm: () => {
+        const headers = ["Matricule", "Nom", "Prénom", "Poste", "Sexe", "Catégorie", "Statut", "Téléphone", "Email", "Date Inscription"];
+        let csvContent = "\uFEFF" + headers.join(";") + "\n";
+        
+        players.forEach(p => {
+          const row = [p.matricule, p.nom, p.prenom, p.poste, p.sexe, p.categorie, p.statut, p.telephone, p.email, p.dateInscription];
+          const csvRow = row.map(field => `"${(field || "").toString().replace(/"/g, '""')}"`);
+          csvContent += csvRow.join(";") + "\n";
+        });
 
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.setAttribute("download", "joueurs_excel.csv");
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+        const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.setAttribute("download", "joueurs_excel.csv");
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      }
+    });
   };
 
   const handleExportCSV = () => {
-    if (!window.confirm("Voulez-vous vraiment exporter la liste des joueurs au format CSV ?")) return;
     setIsExportOpen(false);
-    
-    const headers = ["Matricule", "Nom", "Prénom", "Poste", "Sexe", "Catégorie", "Statut", "Téléphone", "Email", "Date Inscription"];
-    let csvContent = "\uFEFF" + headers.join(",") + "\n";
-    
-    players.forEach(p => {
-      const row = [p.matricule, p.nom, p.prenom, p.poste, p.sexe, p.categorie, p.statut, p.telephone, p.email, p.dateInscription];
-      const csvRow = row.map(field => `"${(field || "").toString().replace(/"/g, '""')}"`);
-      csvContent += csvRow.join(",") + "\n";
-    });
+    confirm({
+      title: "Exporter la liste",
+      message: "Voulez-vous vraiment exporter la liste des joueurs au format CSV ?",
+      onConfirm: () => {
+        const headers = ["Matricule", "Nom", "Prénom", "Poste", "Sexe", "Catégorie", "Statut", "Téléphone", "Email", "Date Inscription"];
+        let csvContent = "\uFEFF" + headers.join(",") + "\n";
+        
+        players.forEach(p => {
+          const row = [p.matricule, p.nom, p.prenom, p.poste, p.sexe, p.categorie, p.statut, p.telephone, p.email, p.dateInscription];
+          const csvRow = row.map(field => `"${(field || "").toString().replace(/"/g, '""')}"`);
+          csvContent += csvRow.join(",") + "\n";
+        });
 
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.setAttribute("download", "joueurs.csv");
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+        const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.setAttribute("download", "joueurs.csv");
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      }
+    });
   };
 
   return (
@@ -143,6 +151,7 @@ export default function PlayersPage() {
           </div>
         }
       />
+      <ConfirmComponent />
     </div>
   );
 }

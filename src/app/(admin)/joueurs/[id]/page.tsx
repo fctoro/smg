@@ -4,7 +4,9 @@ import Image from "next/image";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
+import Pagination from "@/components/tables/Pagination";
 import { useClubData } from "@/context/ClubDataContext";
+import { useState } from "react";
 import {
   formatClubCurrency,
   formatClubDate,
@@ -22,9 +24,18 @@ export default function PlayerDetailsPage() {
   const params = useParams<{ id: string }>();
   const playerId = params.id;
   const { players, payments } = useClubData();
+  const [currentPage, setCurrentPage] = useState(1);
+  const [currentPageSize, setCurrentPageSize] = useState(5);
 
   const player = players.find((item) => item.id === playerId);
   const playerPayments = payments.filter((p) => p.playerId === playerId);
+
+  const totalPages = Math.max(1, Math.ceil(playerPayments.length / currentPageSize));
+  const currentPageSafe = Math.min(currentPage, totalPages);
+  const pagedPayments = playerPayments.slice(
+    (currentPageSafe - 1) * currentPageSize,
+    currentPageSafe * currentPageSize,
+  );
 
   if (!player) {
     return (
@@ -145,14 +156,14 @@ export default function PlayerDetailsPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
-                  {playerPayments.length === 0 ? (
+                  {pagedPayments.length === 0 ? (
                     <tr>
                       <td colSpan={4} className="px-4 py-4 text-center">
                         Aucun paiement enregistré pour ce joueur.
                       </td>
                     </tr>
                   ) : (
-                    playerPayments.map((p) => (
+                    pagedPayments.map((p) => (
                       <tr key={p.id} className="hover:bg-gray-50 dark:hover:bg-white/[0.02]">
                         <td className="px-4 py-3">{formatClubDate(p.datePaiement ?? "")}</td>
                         <td className="px-4 py-3 font-medium text-gray-800 dark:text-white/90">
@@ -170,6 +181,18 @@ export default function PlayerDetailsPage() {
                 </tbody>
               </table>
             </div>
+          </div>
+          <div className="mt-4 flex justify-end">
+            <Pagination
+              currentPage={currentPageSafe}
+              totalPages={totalPages}
+              onPageChange={setCurrentPage}
+              pageSize={currentPageSize}
+              onPageSizeChange={(size) => {
+                setCurrentPageSize(size);
+                setCurrentPage(1);
+              }}
+            />
           </div>
         </div>
       </div>

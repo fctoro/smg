@@ -39,7 +39,7 @@ export default function ParentTable({
   const [selectedChildrenCount, setSelectedChildrenCount] = useState("all");
   const [selectedSeason, setSelectedSeason] = useState("all");
   const [currentPage, setCurrentPage] = useState(1);
-  const pageSize = 7;
+  const [currentPageSize, setCurrentPageSize] = useState(7);
 
   const playerMap = useMemo(
     () => new Map(players.map((player) => [player.id, player])),
@@ -92,11 +92,11 @@ export default function ParentTable({
     });
   }, [parents, playerMap, searchQuery, selectedChildrenCount, selectedSeason]);
 
-  const totalPages = Math.max(1, Math.ceil(filteredParents.length / pageSize));
+  const totalPages = Math.max(1, Math.ceil(filteredParents.length / currentPageSize));
   const currentPageSafe = Math.min(currentPage, totalPages);
   const pagedParents = filteredParents.slice(
-    (currentPageSafe - 1) * pageSize,
-    currentPageSafe * pageSize,
+    (currentPageSafe - 1) * currentPageSize,
+    currentPageSafe * currentPageSize,
   );
 
   return (
@@ -279,15 +279,18 @@ export default function ParentTable({
         </Table>
       </div>
 
-      {totalPages > 1 ? (
-        <div className="mt-4 flex justify-end">
-          <Pagination
-            currentPage={currentPageSafe}
-            totalPages={totalPages}
-            onPageChange={setCurrentPage}
-          />
-        </div>
-      ) : null}
+      <div className="mt-4 flex justify-end">
+        <Pagination
+          currentPage={currentPageSafe}
+          totalPages={totalPages}
+          onPageChange={setCurrentPage}
+          pageSize={currentPageSize}
+          onPageSizeChange={(size) => {
+            setCurrentPageSize(size);
+            setCurrentPage(1);
+          }}
+        />
+      </div>
       </div>
     </div>
   );

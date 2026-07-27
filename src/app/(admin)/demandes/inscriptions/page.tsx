@@ -18,7 +18,9 @@ export default function BoiteDeReception() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"contact_general" | "inscription_joueur" | "devenir_fan" | "stagiaire">("inscription_joueur");
   const [yearFilter, setYearFilter] = useState("all");
-  
+  const [monthFilter, setMonthFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
+
   // Modal states
   const [selectedMessage, setSelectedMessage] = useState<SiteMessage | null>(null);
   const [modalMode, setModalMode] = useState<"details" | "documents">("details");
@@ -48,9 +50,16 @@ export default function BoiteDeReception() {
         const year = new Date(m.created_at).getFullYear().toString();
         if (year !== yearFilter) return false;
       }
+      if (monthFilter !== "all") {
+        const month = (new Date(m.created_at).getMonth() + 1).toString();
+        if (month !== monthFilter) return false;
+      }
+      if (statusFilter !== "all") {
+        if (m.statut !== statusFilter) return false;
+      }
       return true;
     });
-  }, [messages, activeTab, yearFilter]);
+  }, [messages, activeTab, yearFilter, monthFilter, statusFilter]);
 
   const toggleStatus = async (id: string, currentStatus: string, metadata?: any) => {
     const newStatus = currentStatus === "nouveau" ? "lu" : "nouveau";
@@ -108,8 +117,52 @@ export default function BoiteDeReception() {
   const getCount = (type: string) => messages.filter(m => m.type_message === type && m.statut === "nouveau").length;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <PageBreadcrumb pageTitle="Boîte de réception" />
+
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between mb-4">
+        <div className="grid flex-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          <select
+            className="h-11 w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
+            value={yearFilter}
+            onChange={(e) => setYearFilter(e.target.value)}
+          >
+            <option value="all">Toutes les années</option>
+            <option value="2026">2026</option>
+            <option value="2025">2025</option>
+          </select>
+          
+          <select
+            className="h-11 w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
+            value={monthFilter}
+            onChange={(e) => setMonthFilter(e.target.value)}
+          >
+            <option value="all">Tous les mois</option>
+            <option value="1">Janvier</option>
+            <option value="2">Février</option>
+            <option value="3">Mars</option>
+            <option value="4">Avril</option>
+            <option value="5">Mai</option>
+            <option value="6">Juin</option>
+            <option value="7">Juillet</option>
+            <option value="8">Août</option>
+            <option value="9">Septembre</option>
+            <option value="10">Octobre</option>
+            <option value="11">Novembre</option>
+            <option value="12">Décembre</option>
+          </select>
+
+          <select
+            className="h-11 w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+          >
+            <option value="all">Tous les statuts</option>
+            <option value="nouveau">Nouveau</option>
+            <option value="lu">Lu</option>
+          </select>
+        </div>
+      </div>
 
       <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-white/[0.03]">
         {/* TABS REMOVED */}
@@ -122,18 +175,16 @@ export default function BoiteDeReception() {
           </div>
           
           <div className="flex items-center gap-3 w-full md:w-auto">
-            <select
-              className="w-full md:w-auto rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm dark:border-gray-700 dark:bg-gray-900 dark:text-white"
-              value={yearFilter}
-              onChange={(e) => setYearFilter(e.target.value)}
-            >
-              <option value="all">Toutes les années</option>
-              <option value="2026">2026</option>
-              <option value="2025">2025</option>
-            </select>
-            <button className="flex items-center gap-2 rounded-lg bg-success-500 px-4 py-2 text-sm font-medium text-white hover:bg-success-600">
-              <DownloadIcon />
-              Exporter Excel
+            <button className="inline-flex h-10 items-center justify-center gap-2 whitespace-nowrap rounded-lg bg-[#107C41] px-4 text-sm font-medium text-white shadow-theme-xs hover:bg-[#0c5e31] transition-colors">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                <path d="M14 2v6h6"></path>
+                <path d="M8 13h2"></path>
+                <path d="M14 13h2"></path>
+                <path d="M8 17h2"></path>
+                <path d="M14 17h2"></path>
+              </svg>
+              Exporter Excel / CSV
             </button>
           </div>
         </div>

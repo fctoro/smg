@@ -34,6 +34,9 @@ export interface Player {
   cotisationStatut: PaymentStatus;
   dernierPaiement: string;
   saison?: string;
+  photoIdentiteUrl?: string;
+  acteNaissanceUrl?: string;
+  carteIdentiteParentUrl?: string;
 }
 
 export interface ClubEvent {
@@ -165,6 +168,9 @@ export interface PlayerFormValues {
   cotisationMontant: number;
   cotisationDevise: "US" | "HTG";
   cotisationStatut: PaymentStatus;
+  photoIdentiteUrl?: string;
+  acteNaissanceUrl?: string;
+  carteIdentiteParentUrl?: string;
 }
 
 export interface ParentFormValues {
@@ -226,7 +232,7 @@ export interface PayrollRecord {
 export interface SiteMessage {
   id: string;
   type_message: "inscription_joueur" | "devenir_fan" | "stagiaire" | "contact_general";
-  statut: "nouveau" | "lu" | "archive";
+  statut: "nouveau" | "lu" | "archive" | "inscrit";
   contact_nom: string;
   contact_email: string;
   contact_telephone?: string;

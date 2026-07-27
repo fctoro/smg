@@ -30,7 +30,7 @@ const defaultValues: PlayerFormValues = {
   email: "",
   adresse: "",
   statut: "actif",
-  cotisationMontant: 180,
+  cotisationMontant: 0,
   cotisationDevise: "US",
   cotisationStatut: "pending",
 };
@@ -76,154 +76,106 @@ export default function PlayerForm({
     onSubmit(normalizePlayerFormValues(formValues));
   };
 
-  const assignGeneratedAvatar = (provider: "dicebear" | "ui-avatars") => {
-    if (provider === "dicebear") {
-      updateField(
-        "photoUrl",
-        `https://api.dicebear.com/9.x/adventurer/svg?seed=${encodeURIComponent(
-          fullNameSeed,
-        )}`,
-      );
-      setSelectedFileName("");
-      setPhotoError(null);
-      return;
-    }
-
-    updateField(
-      "photoUrl",
-      `https://ui-avatars.com/api/?name=${encodeURIComponent(
-        fullNameSeed,
-      )}&background=0D8ABC&color=fff`,
-    );
-    setSelectedFileName("");
-    setPhotoError(null);
-  };
-
-  const openFileDialog = () => {
-    fileInputRef.current?.click();
-  };
-
-  const handlePhotoFileChange = (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) {
-      return;
-    }
-
-    if (!file.type.startsWith("image/")) {
-      setPhotoError("Selectionnez un fichier image valide.");
-      return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result !== "string") {
-        setPhotoError("Impossible de charger l'image.");
-        return;
-      }
-      updateField("photoUrl", reader.result);
-      setSelectedFileName(file.name);
-      setPhotoError(null);
-    };
-    reader.onerror = () => {
-      setPhotoError("Impossible de lire ce fichier.");
-    };
-    reader.readAsDataURL(file);
-  };
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-        <div className="md:col-span-2 xl:col-span-3">
-          <div className="flex flex-col gap-4 md:flex-row md:items-start">
-            <button
-              type="button"
-              onClick={openFileDialog}
-              className="group relative flex h-28 w-28 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-dashed border-gray-300 bg-gray-50 hover:border-brand-400 hover:bg-brand-50/40 dark:border-gray-700 dark:bg-gray-800/40 dark:hover:border-brand-500/60"
-            >
-              {formValues.photoUrl ? (
-                <img
-                  src={formValues.photoUrl}
-                  alt="Apercu joueur"
-                  className="h-full w-full object-cover"
-                />
-              ) : (
-                <div className="flex flex-col items-center gap-1 text-gray-500 dark:text-gray-400">
-                  <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white text-brand-500 shadow-theme-xs dark:bg-gray-900">
-                    <svg
-                      width="16"
-                      height="16"
-                      viewBox="0 0 16 16"
-                      fill="none"
-                      xmlns="http://www.w3.org/2000/svg"
-                    >
-                      <path
-                        d="M8 3.333v9.334M3.333 8h9.334"
-                        stroke="currentColor"
-                        strokeWidth="1.5"
-                        strokeLinecap="round"
-                      />
-                    </svg>
-                  </span>
-                  <span className="text-[11px] font-medium">Ajouter</span>
-                </div>
-              )}
-              <span className="pointer-events-none absolute inset-0 border border-white/40" />
-            </button>
-
-            <div className="min-w-0 flex-1">
-              <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
-                Photo (URL)
-              </label>
-              <input
-                value={formValues.photoUrl}
-                onChange={(event) => {
-                  updateField("photoUrl", event.target.value);
-                  setSelectedFileName("");
-                  setPhotoError(null);
-                }}
-                placeholder="https://..."
-                className={inputClassName}
-              />
-              <div className="mt-3 flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300"
-                  onClick={() => assignGeneratedAvatar("dicebear")}
-                >
-                  Avatar DiceBear
-                </button>
-                <button
-                  type="button"
-                  className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300"
-                  onClick={() => assignGeneratedAvatar("ui-avatars")}
-                >
-                  Avatar Initiales
-                </button>
-                <button
-                  type="button"
-                  onClick={openFileDialog}
-                  className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300"
-                >
-                  Choose File
-                </button>
+        <div className="md:col-span-2 xl:col-span-3 grid grid-cols-1 md:grid-cols-3 gap-4 border-b border-gray-100 dark:border-gray-800 pb-6 mb-2">
+          {/* Photo d'identité */}
+          <div className="flex flex-col">
+            <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-400">
+              Photo d'identité
+            </label>
+            <div className="flex items-center gap-4">
+              <label className="group relative flex h-24 w-24 shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-xl border border-dashed border-gray-300 bg-gray-50 hover:border-brand-400 hover:bg-brand-50/40 dark:border-gray-700 dark:bg-gray-800/40 dark:hover:border-brand-500/60">
+                {formValues.photoIdentiteUrl && formValues.photoIdentiteUrl.startsWith('data:image') ? (
+                  <img
+                    src={formValues.photoIdentiteUrl}
+                    alt="Photo"
+                    className="h-full w-full object-cover"
+                  />
+                ) : formValues.photoIdentiteUrl && !formValues.photoIdentiteUrl.startsWith('data:application/pdf') ? (
+                  <img
+                    src={formValues.photoIdentiteUrl}
+                    alt="Photo"
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <div className="flex flex-col items-center gap-1 text-gray-500 dark:text-gray-400">
+                    <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white text-brand-500 shadow-theme-xs dark:bg-gray-900">
+                      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M8 3.333v9.334M3.333 8h9.334" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                      </svg>
+                    </span>
+                    <span className="text-[11px] font-medium">Ajouter</span>
+                  </div>
+                )}
                 <input
-                  ref={fileInputRef}
                   type="file"
                   accept="image/*"
-                  onChange={handlePhotoFileChange}
-                  className="sr-only"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      const reader = new FileReader();
+                      reader.onloadend = () => {
+                        updateField("photoIdentiteUrl", reader.result as string);
+                      };
+                      reader.readAsDataURL(file);
+                    }
+                  }}
+                  className="hidden"
                 />
-                <span className="text-xs text-gray-500 dark:text-gray-400">
-                  {selectedFileName || "No file chosen"}
-                </span>
+              </label>
+              <div className="text-xs text-gray-500">
+                <p>Format JPG, PNG</p>
+                <p>Taille max: 5MB</p>
               </div>
             </div>
           </div>
-          {photoError ? (
-            <p className="mt-2 text-xs text-error-600 dark:text-error-400">
-              {photoError}
-            </p>
-          ) : null}
+          
+          {/* Acte de naissance */}
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
+              Acte de naissance
+            </label>
+            <input
+              type="file"
+              accept="image/*,application/pdf"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) {
+                  const reader = new FileReader();
+                  reader.onloadend = () => {
+                    updateField("acteNaissanceUrl", reader.result as string);
+                  };
+                  reader.readAsDataURL(file);
+                }
+              }}
+              className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-brand-50 file:text-brand-700 hover:file:bg-brand-100 dark:file:bg-gray-800 dark:file:text-gray-300"
+            />
+          </div>
+
+          {/* Carte d'identité du parent */}
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
+              Carte d'identité du parent
+            </label>
+            <input
+              type="file"
+              accept="image/*,application/pdf"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) {
+                  const reader = new FileReader();
+                  reader.onloadend = () => {
+                    updateField("carteIdentiteParentUrl", reader.result as string);
+                  };
+                  reader.readAsDataURL(file);
+                }
+              }}
+              className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-brand-50 file:text-brand-700 hover:file:bg-brand-100 dark:file:bg-gray-800 dark:file:text-gray-300"
+            />
+          </div>
         </div>
 
         <div>

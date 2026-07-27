@@ -20,7 +20,7 @@ export const fetchSiteMessages = async (): Promise<SiteMessage[]> => {
       return {
         id: m.id,
         type_message: m.type === 'joueur' ? 'inscription_joueur' : m.type || "contact_general",
-        statut: m.is_read ? 'lu' : 'nouveau',
+        statut: m.status === 'enrolled' ? 'inscrit' : m.status === 'archived' ? 'archive' : m.is_read ? 'lu' : 'nouveau',
         contact_nom: m.name || "",
         contact_email: m.email || "",
         contact_telephone: m.phone || "",

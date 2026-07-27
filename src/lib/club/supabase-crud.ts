@@ -9,7 +9,7 @@ const resolveEtudiantId = (playerId: string) => {
 
 // --- PLAYERS (tblEtudiants) ---
 
-export const updatePlayerInSupabase = async (playerId: string, data: Partial<Player>) => {
+export const updatePlayerInSupabase = async (playerId: string, data: Partial<Player & { photoIdentiteUrl?: string; acteNaissanceUrl?: string; carteIdentiteParentUrl?: string }>) => {
   const updatePayload: any = {};
   
   if (data.nom !== undefined) updatePayload.Nom = data.nom;
@@ -21,6 +21,48 @@ export const updatePlayerInSupabase = async (playerId: string, data: Partial<Pla
   if (data.email !== undefined) updatePayload.Email = data.email;
   if (data.dateNaissance !== undefined) updatePayload.DateNaissance = data.dateNaissance;
   if (data.photoUrl !== undefined && data.photoUrl !== "/images/user/silhouette.svg") updatePayload.PhotoUrl = data.photoUrl;
+
+  // Handle new document uploads
+  const handleDocUpload = async (base64Str: string, docType: string) => {
+    if (!base64Str.startsWith("data:")) return base64Str; // Already a URL
+    try {
+      const isPdf = base64Str.startsWith("data:application/pdf");
+      const ext = isPdf ? "pdf" : "jpg";
+      const base64Data = base64Str.split(",")[1];
+      const byteCharacters = atob(base64Data);
+      const byteNumbers = new Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      }
+      const byteArray = new Uint8Array(byteNumbers);
+      const fileBlob = new Blob([byteArray], { type: isPdf ? "application/pdf" : "image/jpeg" });
+      
+      const fileName = `${docType}_${Date.now()}_${Math.random().toString(36).substring(7)}.${ext}`;
+      const bucket = process.env.SUPABASE_STORAGE_BUCKET || "videos";
+      const { error: uploadError } = await supabase.storage.from(bucket).upload(fileName, fileBlob);
+      
+      if (!uploadError) {
+        const { data: publicUrlData } = supabase.storage.from(bucket).getPublicUrl(fileName);
+        return publicUrlData.publicUrl;
+      }
+    } catch (e) {
+      console.error(`Error uploading ${docType}:`, e);
+    }
+    return null;
+  };
+
+  if (data.photoIdentiteUrl) {
+    const url = await handleDocUpload(data.photoIdentiteUrl, "photo_identite");
+    if (url) updatePayload.PhotoIdentiteUrl = url;
+  }
+  if (data.acteNaissanceUrl) {
+    const url = await handleDocUpload(data.acteNaissanceUrl, "acte_naissance");
+    if (url) updatePayload.ActeNaissanceUrl = url;
+  }
+  if (data.carteIdentiteParentUrl) {
+    const url = await handleDocUpload(data.carteIdentiteParentUrl, "carte_identite_parent");
+    if (url) updatePayload.CarteIdentiteParentUrl = url;
+  }
 
   const { error } = await supabase
     .from("tblEtudiants")
@@ -46,8 +88,8 @@ export const softDeletePlayerInSupabase = async (playerId: string) => {
   }
 };
 
-export const addPlayerToSupabase = async (data: Omit<Player, "id" | "matricule">) => {
-  const insertPayload = {
+export const addPlayerToSupabase = async (data: Omit<Player & { photoIdentiteUrl?: string; acteNaissanceUrl?: string; carteIdentiteParentUrl?: string }, "id" | "matricule">) => {
+  const insertPayload: any = {
     Nom: data.nom,
     Prenom: data.prenom,
     Sexe: data.sexe === "Féminin" ? "F" : "M",
@@ -61,6 +103,44 @@ export const addPlayerToSupabase = async (data: Omit<Player, "id" | "matricule">
     Abandon: false,
     PhotoUrl: data.photoUrl && data.photoUrl !== "/images/user/silhouette.svg" ? data.photoUrl : null,
   };
+
+  const handleDocUpload = async (base64Str: string, docType: string) => {
+    if (!base64Str || !base64Str.startsWith("data:")) return null;
+    try {
+      const isPdf = base64Str.startsWith("data:application/pdf");
+      const ext = isPdf ? "pdf" : "jpg";
+      const base64Data = base64Str.split(",")[1];
+      const byteCharacters = atob(base64Data);
+      const byteNumbers = new Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      }
+      const byteArray = new Uint8Array(byteNumbers);
+      const fileBlob = new Blob([byteArray], { type: isPdf ? "application/pdf" : "image/jpeg" });
+      
+      const fileName = `${docType}_${Date.now()}_${Math.random().toString(36).substring(7)}.${ext}`;
+      const bucket = process.env.SUPABASE_STORAGE_BUCKET || "videos";
+      const { error: uploadError } = await supabase.storage.from(bucket).upload(fileName, fileBlob);
+      
+      if (!uploadError) {
+        const { data: publicUrlData } = supabase.storage.from(bucket).getPublicUrl(fileName);
+        return publicUrlData.publicUrl;
+      }
+    } catch (e) {
+      console.error(`Error uploading ${docType}:`, e);
+    }
+    return null;
+  };
+
+  if (data.photoIdentiteUrl) {
+    insertPayload.PhotoIdentiteUrl = await handleDocUpload(data.photoIdentiteUrl, "photo_identite");
+  }
+  if (data.acteNaissanceUrl) {
+    insertPayload.ActeNaissanceUrl = await handleDocUpload(data.acteNaissanceUrl, "acte_naissance");
+  }
+  if (data.carteIdentiteParentUrl) {
+    insertPayload.CarteIdentiteParentUrl = await handleDocUpload(data.carteIdentiteParentUrl, "carte_identite_parent");
+  }
 
   const { data: insertedData, error } = await supabase
     .from("tblEtudiants")

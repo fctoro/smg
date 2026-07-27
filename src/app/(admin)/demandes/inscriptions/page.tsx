@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useMemo, useEffect as useReactEffect } from "react";
 import { createPortal } from "react-dom";
+import { useRouter } from "next/navigation";
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import { fetchSiteMessages, updateMessageStatus, deleteMessage } from "@/lib/club/supabase-demandes";
 import { SiteMessage } from "@/types/club";
@@ -18,6 +19,7 @@ const DocumentIcon = () => (
 );
 
 export default function BoiteDeReception() {
+  const router = useRouter();
   const [messages, setMessages] = useState<SiteMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"contact_general" | "inscription_joueur" | "devenir_fan" | "stagiaire">("inscription_joueur");
@@ -284,13 +286,16 @@ export default function BoiteDeReception() {
                   <tr key={msg.id} className="hover:bg-gray-50 dark:hover:bg-white/[0.02]">
                     <td className="px-4 py-4 align-top">
                       <button 
+                        disabled={msg.statut === "inscrit"}
                         onClick={() => toggleStatus(msg.id, msg.statut, msg.metadata)}
                         className={`inline-flex rounded-full border px-2.5 py-0.5 text-xs font-medium uppercase ${
                         msg.statut === "nouveau"
-                          ? "border-warning-500 text-warning-500"
-                          : "border-success-500 text-success-500"
+                          ? "border-warning-500 text-warning-500 hover:bg-warning-50"
+                          : msg.statut === "inscrit"
+                          ? "border-brand-500 bg-brand-50 text-brand-600 dark:bg-brand-500/20 dark:text-brand-400 cursor-default"
+                          : "border-success-500 text-success-500 hover:bg-success-50"
                       }`}>
-                        {msg.statut}
+                        {msg.statut === "inscrit" ? "Joueur Inscrit !" : msg.statut}
                       </button>
                     </td>
                     <td className="px-4 py-4 align-top">
@@ -432,9 +437,24 @@ export default function BoiteDeReception() {
                 </div>
               </div>
 
-              <div className="mt-4 flex justify-end gap-2">
-                <button onClick={() => toggleStatus(selectedMessage.id, selectedMessage.statut, selectedMessage.metadata)} className="rounded-lg bg-primary-500 px-4 py-2 text-white hover:bg-primary-600">
-                  Basculer le statut ({selectedMessage.statut === "nouveau" ? "Marquer Lu" : "Marquer Nouveau"})
+              <div className="mt-6 flex justify-end gap-3">
+                <button
+                  onClick={async () => {
+                    await updateMessageStatus(selectedMessage.id, "archive");
+                    setSelectedMessage(null);
+                  }}
+                  className="rounded-lg bg-error-500 px-5 py-2.5 text-sm font-semibold text-white shadow-theme-xs hover:bg-error-600 dark:bg-error-600 dark:hover:bg-error-700 transition-colors"
+                >
+                  Refuser
+                </button>
+                <button
+                  onClick={() => {
+                    router.push(`/joueurs/nouveau?demandeId=${selectedMessage.id}`);
+                    setSelectedMessage(null);
+                  }}
+                  className="rounded-lg bg-success-500 px-5 py-2.5 text-sm font-semibold text-white shadow-theme-xs hover:bg-success-600 dark:bg-success-600 dark:hover:bg-success-700 transition-colors"
+                >
+                  Accepter
                 </button>
               </div>
             </div>
@@ -458,25 +478,31 @@ export default function BoiteDeReception() {
             <div className="p-6 space-y-4 bg-gray-50/30 dark:bg-white/[0.01]">
                <button 
                   onClick={() => window.open(downloadTarget.type_message === "stagiaire" ? `/api/stages/pdf?id=${downloadTarget.id}` : `/api/demandes/pdf?id=${downloadTarget.id}`, "_blank")}
-                  className="w-full group p-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl hover:border-brand-500 transition-all flex items-center gap-4 text-left shadow-sm hover:shadow-md"
+                  className="w-full group relative overflow-hidden p-5 bg-gradient-to-br from-brand-500 to-brand-600 dark:from-brand-600 dark:to-brand-800 rounded-2xl transition-all flex items-center gap-4 text-left shadow-lg hover:shadow-brand-500/25 hover:-translate-y-0.5"
                >
-                  <div className="h-12 w-12 rounded-xl bg-gray-50 dark:bg-gray-700 text-gray-500 flex items-center justify-center group-hover:scale-110 group-hover:bg-gray-100 dark:group-hover:bg-gray-600 transition-all">
-                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                  <div className="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 bg-white opacity-10 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-500"></div>
+                  <div className="h-14 w-14 shrink-0 rounded-xl bg-white/20 backdrop-blur-sm text-white flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                     <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                   </div>
-                  <div>
-                     <div className="text-sm font-bold text-gray-900 dark:text-white">Dossier d'inscription complet (PDF)</div>
-                     <div className="text-[11px] text-gray-500 mt-0.5">Fiche auto-générée avec les réponses du formulaire</div>
+                  <div className="flex-1 relative z-10">
+                     <div className="text-base font-bold text-white mb-0.5">Dossier d'inscription (PDF)</div>
+                     <div className="text-xs text-brand-100 font-medium">Fiche auto-générée avec toutes les réponses</div>
                   </div>
                </button>
 
                {isLoadingDocs ? (
-                  <div className="flex items-center justify-center p-8 space-x-3 text-gray-400">
-                     <div className="h-5 w-5 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                     <span className="text-xs font-bold uppercase tracking-widest">Recherche des pièces jointes...</span>
+                  <div className="flex flex-col items-center justify-center p-10 space-y-4 text-gray-400">
+                     <div className="h-8 w-8 border-3 border-brand-200 border-t-brand-500 rounded-full animate-spin" />
+                     <span className="text-xs font-bold uppercase tracking-widest text-brand-500">Chargement des pièces jointes...</span>
                   </div>
                ) : downloadDocs.length > 0 ? (
-                  <div className="space-y-3 pt-2">
-                     <div className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-2">Pièces jointes originales</div>
+                  <div className="space-y-3 pt-4 border-t border-gray-100 dark:border-gray-800">
+                     <div className="flex items-center gap-2 mb-4">
+                       <span className="h-px flex-1 bg-gray-200 dark:bg-gray-700"></span>
+                       <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Pièces jointes originales</span>
+                       <span className="h-px flex-1 bg-gray-200 dark:bg-gray-700"></span>
+                     </div>
+                     <div className="grid gap-3">
                      {downloadDocs.map((doc) => {
                         const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://uivlcmvofzoyzhtjntlp.supabase.co";
                         const bucket = process.env.SUPABASE_STORAGE_BUCKET || "videos";
@@ -486,20 +512,21 @@ export default function BoiteDeReception() {
                           <button 
                              key={doc.id}
                              onClick={() => window.open(publicUrl, "_blank")}
-                             className="w-full group p-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl hover:border-brand-500 transition-all flex items-center gap-4 text-left shadow-sm hover:shadow-md"
+                             className="w-full group p-4 bg-white dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700/50 rounded-xl hover:border-brand-400 hover:bg-brand-50/50 dark:hover:bg-brand-500/10 transition-all flex items-center gap-4 text-left shadow-xs hover:shadow-sm"
                           >
-                             <div className="h-12 w-12 rounded-xl bg-gray-50 dark:bg-gray-700 text-gray-500 flex items-center justify-center group-hover:scale-110 group-hover:bg-gray-100 dark:group-hover:bg-gray-600 transition-all">
-                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                             <div className="h-10 w-10 shrink-0 rounded-lg bg-brand-50 dark:bg-gray-800 text-brand-600 dark:text-brand-400 flex items-center justify-center group-hover:bg-brand-500 group-hover:text-white transition-colors duration-300">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                              </div>
                              <div className="flex-1 overflow-hidden">
-                                <div className="text-sm font-bold text-gray-900 dark:text-white truncate">
+                                <div className="text-sm font-bold text-gray-900 dark:text-white truncate group-hover:text-brand-600 dark:group-hover:text-brand-400 transition-colors">
                                    {doc.doc_key === "document_photo_id" ? "PHOTO D'IDENTITÉ" : doc.doc_key?.replace(/_/g, " ").toUpperCase() || "DOCUMENT"}
                                 </div>
-                                <div className="text-[11px] text-gray-500 mt-0.5 truncate">{doc.path?.split('/').pop() || "Fichier joint"}</div>
+                                <div className="text-[11px] font-medium text-gray-500 mt-0.5 truncate">{doc.path?.split('/').pop() || "Fichier joint"}</div>
                              </div>
                           </button>
                         );
                      })}
+                     </div>
                   </div>
                ) : (
                   <div className="text-center p-6 bg-gray-100 dark:bg-gray-800/50 rounded-2xl text-xs text-gray-500 italic">

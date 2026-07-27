@@ -1,0 +1,31 @@
+const { Client } = require('pg');
+
+const client = new Client({
+  connectionString: 'postgresql://postgres.xsfmhqdgqowgfoppohan:Fulmounproduction@2012!@aws-1-us-west-2.pooler.supabase.com:6543/postgres',
+});
+
+async function check() {
+  try {
+    await client.connect();
+    let res = await client.query(`
+      SELECT column_name, data_type 
+      FROM information_schema.columns 
+      WHERE table_name = 'tblEtudiants'
+    `);
+    console.log('Columns in tblEtudiants:');
+    res.rows.forEach(r => console.log(`${r.column_name}: ${r.data_type}`));
+    
+    res = await client.query(`
+      SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'
+    `);
+    console.log('\nAll tables:');
+    res.rows.forEach(r => console.log(r.table_name));
+    
+  } catch(e) {
+    console.error(e);
+  } finally {
+    await client.end();
+  }
+}
+
+check();

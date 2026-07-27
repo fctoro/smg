@@ -480,7 +480,7 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
           );
         }
 
-        if (employesData && employesData.length > 0) {
+        if (employesData) {
           const fetchedEmployees: Employee[] = employesData.map((e: any) => ({
             id: String(e.EmployeId),
             employeId: e.EmployeId,
@@ -505,7 +505,7 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
         } else {
           const fallbackEmps = parseStoredArray<Employee>(
             window.localStorage.getItem(STORAGE_KEYS.employees),
-            mockEmployees
+            []
           );
           setEmployees(fallbackEmps);
           setStaff(fallbackEmps);
@@ -567,7 +567,7 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
 
         const has2026 = fetchedPayroll.some((p) => p.mois && p.mois.startsWith("2026"));
         if (!has2026) {
-          const empsForPayroll = employesData && employesData.length > 0 ? employesData : mockEmployees;
+          const empsForPayroll = employesData || [];
           const mockRecs = generateMockPayrollRecords(empsForPayroll);
           fetchedPayroll = [...fetchedPayroll, ...mockRecs];
         }

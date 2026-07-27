@@ -417,7 +417,30 @@ export const addPayrollToSupabase = async (data: Omit<import("@/types/club").Pay
   return { ...insertedData, PieceJointe: pieceJointeUrl };
 };
 
-export const updatePayrollInSupabase = async (id: string, data: Partial<import("@/types/club").PayrollRecord>) => {
+export const updatePayrollInSupabase = async (id: string, data: Partial<import("@/types/club").PayrollRecord>, file?: File) => {
+  let pieceJointeUrl = data.pieceJointe;
+
+  if (file) {
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+    const filePath = `receipts/${fileName}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from("payroll-attachments")
+      .upload(filePath, file);
+
+    if (uploadError) {
+      console.error("Error uploading file:", uploadError);
+      throw new Error("Erreur lors du téléversement du fichier.");
+    }
+
+    const { data: publicUrlData } = supabase.storage
+      .from("payroll-attachments")
+      .getPublicUrl(filePath);
+
+    pieceJointeUrl = publicUrlData.publicUrl;
+  }
+
   const updatePayload: any = {};
   if (data.statut !== undefined) updatePayload.Statut = data.statut;
   if (data.datePaiement !== undefined) updatePayload.DatePaiement = data.datePaiement;
@@ -427,6 +450,7 @@ export const updatePayrollInSupabase = async (id: string, data: Partial<import("
   if (data.deductions !== undefined) updatePayload.Deductions = data.deductions;
   if (data.netAPayer !== undefined) updatePayload.NetAPayer = data.netAPayer;
   if (data.notes !== undefined) updatePayload.Notes = data.notes;
+  if (pieceJointeUrl !== undefined) updatePayload.PieceJointe = pieceJointeUrl;
 
   const { error } = await supabase
     .from("tblPayroll")
@@ -437,6 +461,8 @@ export const updatePayrollInSupabase = async (id: string, data: Partial<import("
     console.error("Erreur mise à jour paie :", error);
     throw error;
   }
+  
+  return { PieceJointe: pieceJointeUrl };
 };
 
 export const deletePayrollInSupabase = async (id: string) => {

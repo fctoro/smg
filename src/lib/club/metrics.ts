@@ -11,6 +11,7 @@ export const formatClubDate = (date: string) => {
     day: "2-digit",
     month: "short",
     year: "numeric",
+    timeZone: "UTC",
   }).format(parsed);
 };
 

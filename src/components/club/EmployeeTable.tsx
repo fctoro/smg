@@ -20,6 +20,8 @@ interface EmployeeTableProps {
   showToolbar?: boolean;
   actionButton?: React.ReactNode;
   exportButton?: React.ReactNode;
+  onEditEmployee?: (employee: Employee) => void;
+  onDeleteEmployee?: (employee: Employee) => void;
 }
 
 const fonctionBadgeColor = (fonction: string) => {

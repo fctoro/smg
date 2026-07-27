@@ -19,16 +19,13 @@ import {
   GroupIcon,
   DollarLineIcon,
   CheckCircleIcon,
-  CalenderIcon,
-  PieChartIcon,
-  BoxIconLine,
   DownloadIcon,
 } from "@/icons";
 
 export default function StatistiquesPage() {
   const { players, payments } = useClubData();
   const [selectedYear, setSelectedYear] = useState<string>("all");
-  const [periodType, setPeriodType] = useState<'yearly' | 'monthly' | 'weekly'>("monthly");
+  const [periodType, setPeriodType] = useState<'yearly' | 'monthly' | 'weekly'>("yearly");
   const [dateFrom, setDateFrom] = useState<string>("");
   const [dateTo, setDateTo] = useState<string>("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -37,6 +34,10 @@ export default function StatistiquesPage() {
   const currentYearActual = now.getFullYear();
   const isAllTime = selectedYear === "all";
   const displayYear = isAllTime ? currentYearActual : parseInt(selectedYear || String(currentYearActual), 10);
+
+  const isUSDDevise = (devise?: "US" | "HTG"): boolean => {
+    return String(devise || "").toUpperCase() === "US";
+  };
 
   // apply filters to payments/players
   const filteredPayments = useMemo(() => {
@@ -70,18 +71,24 @@ export default function StatistiquesPage() {
   }, [players, dateFrom, dateTo]);
 
   // quick aggregations
+  const availableYears = useMemo(() => getAvailableYears(filteredPlayers, filteredPayments), [filteredPlayers, filteredPayments]);
+
   const totalRevenueHTG = useMemo(
-    () => filteredPayments.filter((p) => p.statut === "paid" && (p.devise === "HTG" || p.devise === "HTG")).reduce((sum, p) => sum + (p.montantHTG || (p.devise === 'HTG' ? p.montant : 0) || 0), 0),
+    () => filteredPayments
+      .filter((p) => p.statut === "paid" && p.devise === "HTG")
+      .reduce((sum, p) => sum + (p.montantHTG || (p.devise === "HTG" ? p.montant : 0) || 0), 0),
     [filteredPayments]
   );
   const totalRevenueUSD = useMemo(
-    () => filteredPayments.filter((p) => p.statut === "paid" && (p.devise === "USD" || p.devise === "USD")).reduce((sum, p) => sum + (p.montantUS || (p.devise === 'USD' ? p.montant : 0) || 0), 0),
+    () => filteredPayments
+      .filter((p) => p.statut === "paid" && isUSDDevise(p.devise))
+      .reduce((sum, p) => sum + (p.montantUS || (isUSDDevise(p.devise) ? p.montant : 0) || 0), 0),
     [filteredPayments]
   );
-  const totalRegistrations = players.length;
-  const totalPayments = payments.length;
+  const totalRegistrations = filteredPlayers.length;
+  const totalPayments = filteredPayments.length;
 
-  const yearsList = Array.from({ length: currentYearActual - 2012 + 1 }, (_, i) => currentYearActual - i);
+  const yearsList = availableYears.length > 0 ? availableYears : Array.from({ length: currentYearActual - 2012 + 1 }, (_, i) => currentYearActual - i);
 
   // CSV export helper
   const exportPaymentsCSV = (rows: typeof payments) => {
@@ -101,10 +108,10 @@ export default function StatistiquesPage() {
 
   // statistics data
   const yearlyData = useMemo(() => {
-    const revenue = getYearlyRevenue(payments);
-    const registrations = getYearlyRegistrations(players);
+    const revenue = getYearlyRevenue(filteredPayments);
+    const registrations = getYearlyRegistrations(filteredPlayers);
     return combineYearlyData(revenue, registrations);
-  }, [payments, players]);
+  }, [filteredPayments, filteredPlayers]);
 
   const monthlyRevenueData = useMemo(() => getMonthlyRevenue(filteredPayments, displayYear), [filteredPayments, displayYear]);
   const monthlyRegistrationsData = useMemo(() => getMonthlyRegistrations(filteredPlayers, displayYear), [filteredPlayers, displayYear]);
@@ -112,15 +119,14 @@ export default function StatistiquesPage() {
   const weeklyRevenueData = useMemo(() => getWeeklyRevenue(filteredPayments, displayYear), [filteredPayments, displayYear]);
   const weeklyRegistrationsData = useMemo(() => getWeeklyRegistrations(filteredPlayers, displayYear), [filteredPlayers, displayYear]);
 
-  const availableYears = useMemo(() => getAvailableYears(filteredPlayers, filteredPayments), [filteredPlayers, filteredPayments]);
-
-  const hasMonthlyRevenue = monthlyRevenueData.some((d) => (d.revenueUSD || d.revenueHTG) > 0);
-  const hasWeeklyRevenue = weeklyRevenueData.some((d) => (d.revenueUSD || d.revenueHTG) > 0);
-  const hasRegistrations = (periodType === 'monthly'
+  const hasYearlyRevenue = yearlyData.some((d) => d.revenueUSD > 0 || d.revenueHTG > 0);
+  const hasMonthlyRevenue = monthlyRevenueData.some((d) => d.revenueUSD > 0 || d.revenueHTG > 0);
+  const hasWeeklyRevenue = weeklyRevenueData.some((d) => d.revenueUSD > 0 || d.revenueHTG > 0);
+  const hasRegistrations = periodType === 'monthly'
     ? monthlyRegistrationsData.some((d) => d.registrations > 0)
     : periodType === 'weekly'
     ? weeklyRegistrationsData.some((d) => d.registrations > 0)
-    : yearlyData.some((d) => d.registrations > 0));
+    : yearlyData.some((d) => d.registrations > 0);
 
   return (
     <div className="space-y-6">
@@ -179,11 +185,30 @@ export default function StatistiquesPage() {
       <div className="grid grid-cols-12 gap-4">
           <div className="col-span-12 lg:col-span-8">
           <div className="rounded-2xl border border-gray-100 bg-white p-4">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-gray-700">Ventes journalières</h3>
-              <div className="flex items-center gap-2 text-sm text-gray-500">
-                <button className="px-3 py-1 rounded-md border">USD</button>
-                <button className="px-3 py-1 rounded-md border">HTG</button>
+            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-4">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-700">Revenus</h3>
+                <p className="text-sm text-gray-500">Montants réels en USD et HTG selon les paiements validés</p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2 text-sm text-gray-500">
+                <button
+                  onClick={() => setPeriodType('yearly')}
+                  className={`px-3 py-1 rounded-md border ${periodType === 'yearly' ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-gray-600'}`}
+                >
+                  Annuel
+                </button>
+                <button
+                  onClick={() => setPeriodType('monthly')}
+                  className={`px-3 py-1 rounded-md border ${periodType === 'monthly' ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-gray-600'}`}
+                >
+                  Mensuel
+                </button>
+                <button
+                  onClick={() => setPeriodType('weekly')}
+                  className={`px-3 py-1 rounded-md border ${periodType === 'weekly' ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-gray-600'}`}
+                >
+                  Hebdomadaire
+                </button>
               </div>
             </div>
             <CombinedRevenueChart
@@ -196,7 +221,7 @@ export default function StatistiquesPage() {
                   ? `Revenus mensuels — ${displayYear}`
                   : periodType === 'weekly'
                   ? `Revenus hebdomadaires — ${displayYear}`
-                  : 'Revenus par année'
+                  : 'Revenus annuels'
               }
             />
           </div>
@@ -207,8 +232,8 @@ export default function StatistiquesPage() {
             <div className="flex items-center justify-between">
               <div>
                 <div className="text-xs text-gray-400">Revenu Total (USD)</div>
-                <div className="text-2xl font-bold text-gray-800">{formatClubCurrency(totalRevenueUSD)}</div>
-                <div className="text-sm text-gray-500 mt-1">{totalRevenueHTG.toLocaleString('fr-FR')} HTG</div>
+                <div className="text-2xl font-bold text-gray-800">{formatClubCurrency(totalRevenueUSD, "US")}</div>
+                <div className="text-sm text-gray-500 mt-1">{formatClubCurrency(totalRevenueHTG, "HTG")}</div>
               </div>
               <div className="h-12 w-12 flex items-center justify-center rounded-md bg-blue-50">
                 <DollarLineIcon className="size-5 text-blue-600" />
@@ -231,7 +256,7 @@ export default function StatistiquesPage() {
           <div className="rounded-2xl border border-gray-100 bg-white p-4">
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-xs text-gray-400">Paiements</div>
+                <div className="text-xs text-gray-400">Paiements filtrés</div>
                 <div className="text-2xl font-bold text-gray-800">{totalPayments}</div>
               </div>
               <div className="h-12 w-12 flex items-center justify-center rounded-md bg-amber-50">
@@ -244,18 +269,16 @@ export default function StatistiquesPage() {
 
       {/* Secondary widgets grid */}
       <div className="grid grid-cols-12 gap-4">
-        {hasMonthlyRevenue && (
+        {hasYearlyRevenue && (
           <div className="col-span-12 lg:col-span-6">
             <div className="rounded-2xl border border-gray-100 bg-white p-4">
-              <h4 className="text-sm font-semibold mb-3">Revenus mensuels</h4>
-              <div className="h-48">
-                <CombinedRevenueChart data={monthlyRevenueData} type="monthly" title={`Revenus mensuels — ${displayYear}`} />
-              </div>
+              <h4 className="text-sm font-semibold mb-3">Revenus annuels</h4>
+              <CombinedRevenueChart data={yearlyData} type="yearly" title="Revenus annuels" />
             </div>
           </div>
         )}
 
-        <div className="col-span-12 lg:col-span-6 space-y-4">
+        <div className="col-span-12 lg:col-span-6">
           <div className="rounded-2xl border border-gray-100 bg-white p-4">
             <h4 className="text-sm font-semibold mb-3">Inscriptions</h4>
             <RegistrationsChart
@@ -270,32 +293,7 @@ export default function StatistiquesPage() {
               color="#10b981"
             />
           </div>
-
-          {filteredPayments.length > 0 && (
-            <div className="rounded-2xl border border-gray-100 bg-white p-4">
-              <h4 className="text-sm font-semibold mb-3">Heures de Pointe</h4>
-              <div className="h-28 flex items-center justify-center text-gray-400">Aucune donnée</div>
-            </div>
-          )}
         </div>
-
-        {hasWeeklyRevenue && (
-          <div className="col-span-12 lg:col-span-4">
-            <div className="rounded-2xl border border-gray-100 bg-white p-4">
-              <h4 className="text-sm font-semibold mb-3">Top 10 Revenus</h4>
-              <div className="h-48 flex items-center justify-center text-gray-400">Aucune donnée</div>
-            </div>
-          </div>
-        )}
-
-        {filteredPayments.length > 0 && (
-          <div className="col-span-12 lg:col-span-8">
-            <div className="rounded-2xl border border-gray-100 bg-white p-4">
-              <h4 className="text-sm font-semibold mb-3">Activité Récente</h4>
-              <div className="h-48 flex items-center justify-center text-gray-400">Tableau d'activités / transactions</div>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );

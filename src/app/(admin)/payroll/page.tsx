@@ -58,6 +58,11 @@ const Icons = {
       <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
     </svg>
   ),
+  Edit: () => (
+    <svg className="w-4 h-4 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 3.487a2.117 2.117 0 013 3L7.5 19.85 3 21l1.15-4.5L16.862 3.487z" />
+    </svg>
+  ),
   Filter: () => (
     <svg className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
@@ -115,6 +120,8 @@ export default function PayrollPage() {
 
   const [showModal, setShowModal] = useState<boolean>(false);
   const [selectedSlip, setSelectedSlip] = useState<PayrollRecord | null>(null);
+  const [editingPayrollId, setEditingPayrollId] = useState<string | null>(null);
+  const [fileError, setFileError] = useState<string | null>(null);
 
   // Modal form state
   const [formData, setFormData] = useState<{
@@ -185,6 +192,11 @@ export default function PayrollPage() {
     e.preventDefault();
     if (!formData.employeId) return;
 
+    if (formData.file && formData.file.size > 5 * 1024 * 1024) {
+      setFileError("La photo justificative doit faire au maximum 5 MB.");
+      return;
+    }
+
     const targetEmp = employees.find((emp) => emp.id === formData.employeId);
     if (!targetEmp) return;
 
@@ -209,29 +221,46 @@ export default function PayrollPage() {
     };
 
     try {
-      const insertedData = await addPayrollToSupabase(recordData, formData.file || undefined);
-      
-      const normalizedDatePaiement = typeof recordData.datePaiement === 'string' ? recordData.datePaiement : undefined;
-      const newRecord: PayrollRecord = {
-        id: insertedData.Id || `pay-${Date.now()}`,
-        employeId: recordData.employeId,
-        employeNom: recordData.employeNom,
-        employePrenom: recordData.employePrenom,
-        fonction: recordData.fonction,
-        mois: recordData.mois,
-        salaireBase: recordData.salaireBase,
-        bonus: recordData.bonus,
-        deductions: recordData.deductions,
-        netAPayer: recordData.netAPayer,
-        statut: recordData.statut,
-        datePaiement: normalizedDatePaiement as string | undefined,
-        modePaiement: recordData.modePaiement,
-        notes: recordData.notes,
-        pieceJointe: insertedData.PieceJointe || undefined,
-      };
+      if (editingPayrollId) {
+        const updatedData = await updatePayrollInSupabase(editingPayrollId, recordData, formData.file || undefined);
+        setPayrollRecords((prev) =>
+          prev.map((rec) =>
+            rec.id === editingPayrollId
+              ? {
+                  ...rec,
+                  ...recordData,
+                  pieceJointe: updatedData.PieceJointe || rec.pieceJointe,
+                }
+              : rec
+          )
+        );
+      } else {
+        const insertedData = await addPayrollToSupabase(recordData, formData.file || undefined);
+        const normalizedDatePaiement = typeof recordData.datePaiement === "string" ? recordData.datePaiement : undefined;
+        const newRecord: PayrollRecord = {
+          id: insertedData.Id || `pay-${Date.now()}`,
+          employeId: recordData.employeId,
+          employeNom: recordData.employeNom,
+          employePrenom: recordData.employePrenom,
+          fonction: recordData.fonction,
+          mois: recordData.mois,
+          salaireBase: recordData.salaireBase,
+          bonus: recordData.bonus,
+          deductions: recordData.deductions,
+          netAPayer: recordData.netAPayer,
+          statut: recordData.statut,
+          datePaiement: normalizedDatePaiement as string | undefined,
+          modePaiement: recordData.modePaiement,
+          notes: recordData.notes,
+          devise: recordData.devise,
+          pieceJointe: insertedData.PieceJointe || undefined,
+        };
+        setPayrollRecords((prev) => [newRecord, ...prev]);
+      }
 
-      setPayrollRecords((prev) => [newRecord, ...prev]);
       setShowModal(false);
+      setEditingPayrollId(null);
+      setFileError(null);
       setFormData({
         employeId: "",
         annee: "2026",
@@ -301,6 +330,26 @@ export default function PayrollPage() {
     setTimeout(() => {
       window.print();
     }, 200);
+  };
+
+  const handleEditPayroll = (record: PayrollRecord) => {
+    const [year, month] = record.mois.split("-");
+    setEditingPayrollId(record.id);
+    setFileError(null);
+    setFormData({
+      employeId: record.employeId,
+      annee: year || currentYearStr,
+      mois: month || "01",
+      salaireBase: record.salaireBase,
+      bonus: record.bonus,
+      deductions: record.deductions,
+      devise: record.devise || "HTG",
+      statut: record.statut === "paye" ? "paye" : "en_attente",
+      modePaiement: record.modePaiement,
+      notes: record.notes || "",
+      file: null,
+    });
+    setShowModal(true);
   };
 
   return (
@@ -522,6 +571,13 @@ export default function PayrollPage() {
                     <td className="px-6 py-4 text-right">
                       <div className="flex items-center justify-end gap-1">
                         <button
+                          onClick={() => handleEditPayroll(record)}
+                          title="Modifier"
+                          className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-brand-600 dark:text-gray-400 dark:hover:bg-gray-800"
+                        >
+                          <Icons.Edit />
+                        </button>
+                        <button
                           onClick={() => handlePrintSlip(record)}
                           title="Imprimer Bulletin de Paie"
                           className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 hover:text-brand-600 dark:text-gray-400 dark:hover:bg-gray-800"
@@ -740,19 +796,44 @@ export default function PayrollPage() {
 
               <div>
                 <label className="mb-1 block text-xs font-semibold text-gray-700 dark:text-gray-300">
-                  Pièce Jointe (PDF, JPG, PNG)
+                  Photo justificative (JPG, PNG) — Max 5 MB
                 </label>
                 <input
                   type="file"
-                  accept=".pdf, .jpg, .jpeg, .png"
+                  accept=".jpg, .jpeg, .png"
                   onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) {
-                      setFormData({ ...formData, file });
+                    const file = e.target.files?.[0] ?? null;
+                    if (!file) {
+                      setFormData({ ...formData, file: null });
+                      setFileError(null);
+                      return;
                     }
+
+                    if (file.size > 5 * 1024 * 1024) {
+                      setFileError("La photo justificative doit faire au maximum 5 MB.");
+                      setFormData({ ...formData, file: null });
+                      return;
+                    }
+
+                    setFileError(null);
+                    setFormData({ ...formData, file });
                   }}
                   className="w-full rounded-xl border border-gray-300 p-2 text-sm text-gray-600 dark:border-gray-700 dark:text-gray-300 dark:bg-gray-800 file:mr-4 file:rounded-full file:border-0 file:bg-brand-50 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-brand-700 hover:file:bg-brand-100 dark:file:bg-brand-900/20 dark:file:text-brand-400"
                 />
+                {editingPayrollId && payrollRecords.find((rec) => rec.id === editingPayrollId)?.pieceJointe && (
+                  <p className="mt-2 text-xs text-slate-500">
+                    Justificatif actuel : 
+                    <a
+                      href={payrollRecords.find((rec) => rec.id === editingPayrollId)?.pieceJointe}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="font-semibold text-brand-600 hover:underline"
+                    >
+                      Voir le document
+                    </a>
+                  </p>
+                )}
+                {fileError && <p className="mt-2 text-xs text-rose-500">{fileError}</p>}
               </div>
 
               <div className="flex items-center justify-end gap-3 pt-3">

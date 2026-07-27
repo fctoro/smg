@@ -30,6 +30,12 @@ export interface WeeklyData {
 }
 
 // Grouper les revenus par année
+const isUSDDevise = (devise?: string | null): boolean => {
+  if (!devise) return false;
+  const normalized = String(devise).trim().toUpperCase();
+  return normalized === "US" || normalized === "USD";
+};
+
 export const getYearlyRevenue = (payments: Payment[]): YearlyData[] => {
   const yearMap = new Map<number, { usd: number; htg: number }>();
 
@@ -39,7 +45,7 @@ export const getYearlyRevenue = (payments: Payment[]): YearlyData[] => {
     const year = date.getFullYear();
     const current = yearMap.get(year) || { usd: 0, htg: 0 };
     
-    if (payment.devise === "USD") {
+    if (isUSDDevise(payment.devise)) {
       current.usd += payment.montant;
     } else {
       current.htg += payment.montant;
@@ -84,7 +90,7 @@ export const getMonthlyRevenue = (payments: Payment[], year: number): MonthlyDat
     const date = parseDateLocal(payment.datePaiement || payment.periode) || new Date();
     if (date.getFullYear() === year) {
       const month = date.getMonth();
-      if (payment.devise === "USD") {
+      if (isUSDDevise(payment.devise)) {
         totalsUSD[month] += payment.montant;
       } else {
         totalsHTG[month] += payment.montant;
@@ -139,7 +145,7 @@ export const getWeeklyRevenue = (payments: Payment[], year: number): WeeklyData[
       const weekKey = `${year}-W${String(weekNumber).padStart(2, "0")}`;
       const current = weekMap.get(weekKey) || { usd: 0, htg: 0 };
       
-      if (payment.devise === "USD") {
+      if (isUSDDevise(payment.devise)) {
         current.usd += payment.montant;
       } else {
         current.htg += payment.montant;

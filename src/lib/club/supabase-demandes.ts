@@ -66,3 +66,10 @@ export const deleteMessage = async (id: string, metadata?: any) => {
     throw error;
   }
 };
+
+export const fetchDocumentsForMessage = async (id: string, email: string) => {
+  const { data: allRegs } = await supabase.from('player_registrations').select('id, created_at').eq('guardian_email', email);
+  if (!allRegs || allRegs.length === 0) return [];
+  const { data: docs } = await supabase.from('player_registration_documents').select('*').eq('registration_id', allRegs[0].id);
+  return docs || [];
+};

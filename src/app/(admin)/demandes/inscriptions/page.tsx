@@ -1,12 +1,14 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useEffect as useReactEffect } from "react";
+import { createPortal } from "react-dom";
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import { fetchSiteMessages, updateMessageStatus, deleteMessage } from "@/lib/club/supabase-demandes";
 import { SiteMessage } from "@/types/club";
 import Pagination from "@/components/tables/Pagination";
 import { DownloadIcon, EyeIcon, TrashBinIcon } from "@/icons";
 import { useConfirm } from "@/hooks/useConfirm";
+import { fetchDocumentsForMessage } from "@/lib/club/supabase-demandes";
 
 // Placeholder icon for document
 const DocumentIcon = () => (
@@ -29,6 +31,43 @@ export default function BoiteDeReception() {
   // Modal states
   const [selectedMessage, setSelectedMessage] = useState<SiteMessage | null>(null);
   const [modalMode, setModalMode] = useState<"details" | "documents">("details");
+  const [duplicateCheck, setDuplicateCheck] = useState<{ isDuplicate: boolean; source?: string; player?: any } | null>(null);
+  
+  // Download states
+  const [downloadTarget, setDownloadTarget] = useState<SiteMessage | null>(null);
+  const [downloadDocs, setDownloadDocs] = useState<any[]>([]);
+  const [isLoadingDocs, setIsLoadingDocs] = useState(false);
+
+  useEffect(() => {
+    if (selectedMessage && selectedMessage.type_message === "inscription_joueur") {
+      fetch(`/api/demandes/${selectedMessage.id}/check-duplicate`)
+        .then(res => res.json())
+        .then(data => {
+          if (!data.error && data.isDuplicate) {
+            setDuplicateCheck(data);
+          } else {
+            setDuplicateCheck(null);
+          }
+        })
+        .catch(err => console.error(err));
+    } else {
+      setDuplicateCheck(null);
+    }
+  }, [selectedMessage?.id]);
+
+  const handleDownloadClick = async (msg: SiteMessage) => {
+    setDownloadTarget(msg);
+    setIsLoadingDocs(true);
+    try {
+      const docs = await fetchDocumentsForMessage(msg.id, msg.contact_email);
+      setDownloadDocs(docs || []);
+    } catch (e) {
+      console.error(e);
+      setDownloadDocs([]);
+    } finally {
+      setIsLoadingDocs(false);
+    }
+  };
 
   useEffect(() => {
     loadMessages();
@@ -284,15 +323,10 @@ export default function BoiteDeReception() {
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              window.open(
-                                msg.type_message === "stagiaire"
-                                  ? `/api/stages/pdf?id=${msg.id}`
-                                  : `/api/demandes/pdf?id=${msg.id}`,
-                                "_blank"
-                              );
+                              handleDownloadClick(msg);
                             }}
                             className="hover:text-primary-500 transition-colors"
-                            title="Télécharger Dossier PDF"
+                            title="Télécharger Dossier & Documents"
                           >
                             <svg
                               width="18"
@@ -359,8 +393,8 @@ export default function BoiteDeReception() {
       })()}
 
       {/* MODAL */}
-      {selectedMessage && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      {selectedMessage && typeof document !== "undefined" && createPortal(
+        <div className="fixed inset-0 z-[999999] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
           <div className="relative w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl dark:bg-gray-900">
             <button 
               onClick={() => setSelectedMessage(null)}
@@ -369,46 +403,113 @@ export default function BoiteDeReception() {
               ✕
             </button>
             <h3 className="mb-4 text-xl font-bold text-gray-900 dark:text-white">
-              {modalMode === "details" ? "Détails de l'inscription" : "Documents attachés"}
+              Détails de l'inscription
             </h3>
             
-            {modalMode === "details" && (
-              <div className="space-y-4 text-sm text-gray-700 dark:text-gray-300">
-                <div className="rounded-lg bg-gray-50 p-4 dark:bg-white/[0.02]">
-                  <h4 className="mb-2 font-semibold text-gray-900 dark:text-white">Contact (Parent/Tuteur)</h4>
-                  <p><strong>Nom :</strong> {selectedMessage.contact_nom}</p>
-                  <p><strong>Email :</strong> {selectedMessage.contact_email}</p>
-                  <p><strong>Téléphone :</strong> {selectedMessage.contact_telephone || "Non renseigné"}</p>
-                </div>
-
-                <div className="rounded-lg bg-gray-50 p-4 dark:bg-white/[0.02]">
-                  <h4 className="mb-2 font-semibold text-gray-900 dark:text-white">Informations Joueur</h4>
-                  <p><strong>Nom de l'enfant :</strong> {selectedMessage.metadata?.enfant_nom || "N/A"}</p>
-                  <div className="mt-2 text-gray-600 dark:text-gray-400">
-                    {selectedMessage.contenu}
-                  </div>
-                </div>
-
-                <div className="mt-4 flex justify-end gap-2">
-                  <button onClick={() => toggleStatus(selectedMessage.id, selectedMessage.statut, selectedMessage.metadata)} className="rounded-lg bg-primary-500 px-4 py-2 text-white hover:bg-primary-600">
-                    Basculer le statut ({selectedMessage.statut === "nouveau" ? "Marquer Lu" : "Marquer Nouveau"})
-                  </button>
+            {duplicateCheck?.isDuplicate && (
+              <div className="m-5 mb-0 p-4 bg-warning-50 dark:bg-warning-900/20 border border-warning-200 dark:border-warning-900/30 rounded-2xl flex gap-3 animate-in slide-in-from-top-2">
+                <span className="text-warning-600 dark:text-warning-400 text-lg">⚠️</span>
+                <div className="text-xs text-warning-800 dark:text-warning-200">
+                  <strong className="block mb-1 text-sm">Attention : Doublon potentiel !</strong>
+                  Un joueur nommé <strong>{duplicateCheck.player.child_first_name} {duplicateCheck.player.child_last_name}</strong> existe déjà dans {duplicateCheck.source === 'club_players' ? "les joueurs du club" : "les anciennes inscriptions"}. Vérifiez s'il s'agit de la même personne avant de valider.
                 </div>
               </div>
             )}
 
-            {modalMode === "documents" && (
-              <div className="space-y-4 text-sm text-gray-700 dark:text-gray-300">
-                <p className="mb-4">Récupération des documents depuis <code>player_registration_documents</code> pour l'ID: {selectedMessage.id}...</p>
-                {/* We can fetch and display documents here in the future */}
-                <div className="flex flex-col items-center justify-center py-8 text-gray-500">
-                  <DocumentIcon />
-                  <p className="mt-2">Aucun document disponible pour le moment.</p>
+            <div className="space-y-4 text-sm text-gray-700 dark:text-gray-300 mt-4">
+              <div className="rounded-lg bg-gray-50 p-4 dark:bg-white/[0.02]">
+                <h4 className="mb-2 font-semibold text-gray-900 dark:text-white">Contact (Parent/Tuteur)</h4>
+                <p><strong>Nom :</strong> {selectedMessage.contact_nom}</p>
+                <p><strong>Email :</strong> {selectedMessage.contact_email}</p>
+                <p><strong>Téléphone :</strong> {selectedMessage.contact_telephone || "Non renseigné"}</p>
+              </div>
+
+              <div className="rounded-lg bg-gray-50 p-4 dark:bg-white/[0.02]">
+                <h4 className="mb-2 font-semibold text-gray-900 dark:text-white">Informations Joueur</h4>
+                <p><strong>Nom de l'enfant :</strong> {selectedMessage.metadata?.enfant_nom || "N/A"}</p>
+                <div className="mt-2 text-gray-600 dark:text-gray-400">
+                  {selectedMessage.contenu}
                 </div>
               </div>
-            )}
+
+              <div className="mt-4 flex justify-end gap-2">
+                <button onClick={() => toggleStatus(selectedMessage.id, selectedMessage.statut, selectedMessage.metadata)} className="rounded-lg bg-primary-500 px-4 py-2 text-white hover:bg-primary-600">
+                  Basculer le statut ({selectedMessage.statut === "nouveau" ? "Marquer Lu" : "Marquer Nouveau"})
+                </button>
+              </div>
+            </div>
           </div>
-        </div>
+        </div>,
+        document.body
+      )}
+
+      {/* DOWNLOAD MODAL */}
+      {downloadTarget && typeof document !== "undefined" && createPortal(
+        <div className="fixed inset-0 z-[999999] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="w-full max-w-lg rounded-3xl bg-white shadow-2xl dark:bg-gray-900 border border-gray-100 dark:border-gray-800 overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
+            <div className="p-5 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between bg-white dark:bg-gray-900">
+               <div>
+                  <h3 className="text-lg font-black text-gray-900 dark:text-white">Téléchargements</h3>
+                  <p className="text-xs text-gray-500 mt-1 font-medium">Sélectionnez le document à télécharger</p>
+               </div>
+               <button onClick={() => setDownloadTarget(null)} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl transition-colors text-gray-400">✕</button>
+            </div>
+            
+            <div className="p-6 space-y-4 bg-gray-50/30 dark:bg-white/[0.01]">
+               <button 
+                  onClick={() => window.open(downloadTarget.type_message === "stagiaire" ? `/api/stages/pdf?id=${downloadTarget.id}` : `/api/demandes/pdf?id=${downloadTarget.id}`, "_blank")}
+                  className="w-full group p-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl hover:border-brand-500 transition-all flex items-center gap-4 text-left shadow-sm hover:shadow-md"
+               >
+                  <div className="h-12 w-12 rounded-xl bg-gray-50 dark:bg-gray-700 text-gray-500 flex items-center justify-center group-hover:scale-110 group-hover:bg-gray-100 dark:group-hover:bg-gray-600 transition-all">
+                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                  </div>
+                  <div>
+                     <div className="text-sm font-bold text-gray-900 dark:text-white">Dossier d'inscription complet (PDF)</div>
+                     <div className="text-[11px] text-gray-500 mt-0.5">Fiche auto-générée avec les réponses du formulaire</div>
+                  </div>
+               </button>
+
+               {isLoadingDocs ? (
+                  <div className="flex items-center justify-center p-8 space-x-3 text-gray-400">
+                     <div className="h-5 w-5 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                     <span className="text-xs font-bold uppercase tracking-widest">Recherche des pièces jointes...</span>
+                  </div>
+               ) : downloadDocs.length > 0 ? (
+                  <div className="space-y-3 pt-2">
+                     <div className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-2">Pièces jointes originales</div>
+                     {downloadDocs.map((doc) => {
+                        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://uivlcmvofzoyzhtjntlp.supabase.co";
+                        const bucket = process.env.SUPABASE_STORAGE_BUCKET || "videos";
+                        const publicUrl = doc.path?.startsWith("http") ? doc.path : `${supabaseUrl}/storage/v1/object/public/${bucket}/${doc.path}`;
+                        
+                        return (
+                          <button 
+                             key={doc.id}
+                             onClick={() => window.open(publicUrl, "_blank")}
+                             className="w-full group p-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl hover:border-brand-500 transition-all flex items-center gap-4 text-left shadow-sm hover:shadow-md"
+                          >
+                             <div className="h-12 w-12 rounded-xl bg-gray-50 dark:bg-gray-700 text-gray-500 flex items-center justify-center group-hover:scale-110 group-hover:bg-gray-100 dark:group-hover:bg-gray-600 transition-all">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                             </div>
+                             <div className="flex-1 overflow-hidden">
+                                <div className="text-sm font-bold text-gray-900 dark:text-white truncate">
+                                   {doc.doc_key === "document_photo_id" ? "PHOTO D'IDENTITÉ" : doc.doc_key?.replace(/_/g, " ").toUpperCase() || "DOCUMENT"}
+                                </div>
+                                <div className="text-[11px] text-gray-500 mt-0.5 truncate">{doc.path?.split('/').pop() || "Fichier joint"}</div>
+                             </div>
+                          </button>
+                        );
+                     })}
+                  </div>
+               ) : (
+                  <div className="text-center p-6 bg-gray-100 dark:bg-gray-800/50 rounded-2xl text-xs text-gray-500 italic">
+                     Aucune pièce jointe supplémentaire
+                  </div>
+               )}
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
       <ConfirmComponent />
     </div>

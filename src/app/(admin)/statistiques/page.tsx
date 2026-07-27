@@ -6,6 +6,16 @@ import CombinedRevenueChart from "@/components/club/charts/CombinedRevenueChart"
 import RegistrationsChart from "@/components/club/charts/RegistrationsChart";
 import { formatClubCurrency } from "@/lib/club/metrics";
 import {
+  getYearlyRevenue,
+  getYearlyRegistrations,
+  getMonthlyRevenue,
+  getMonthlyRegistrations,
+  getWeeklyRevenue,
+  getWeeklyRegistrations,
+  getAvailableYears,
+  combineYearlyData,
+} from "@/lib/club/statistics";
+import {
   GroupIcon,
   DollarLineIcon,
   CheckCircleIcon,
@@ -38,6 +48,21 @@ export default function StatistiquesPage() {
   const totalPayments = payments.length;
 
   const yearsList = Array.from({ length: currentYearActual - 2012 + 1 }, (_, i) => currentYearActual - i);
+
+  // statistics data
+  const yearlyData = useMemo(() => {
+    const revenue = getYearlyRevenue(payments);
+    const registrations = getYearlyRegistrations(players);
+    return combineYearlyData(revenue, registrations);
+  }, [payments, players]);
+
+  const monthlyRevenueData = useMemo(() => getMonthlyRevenue(payments, displayYear), [payments, displayYear]);
+  const monthlyRegistrationsData = useMemo(() => getMonthlyRegistrations(players, displayYear), [players, displayYear]);
+
+  const weeklyRevenueData = useMemo(() => getWeeklyRevenue(payments, displayYear), [payments, displayYear]);
+  const weeklyRegistrationsData = useMemo(() => getWeeklyRegistrations(players, displayYear), [players, displayYear]);
+
+  const availableYears = useMemo(() => getAvailableYears(players, payments), [players, payments]);
 
   return (
     <div className="space-y-6">
@@ -103,7 +128,19 @@ export default function StatistiquesPage() {
                 <button className="px-3 py-1 rounded-md border">HTG</button>
               </div>
             </div>
-            <CombinedRevenueChart data={[]} type={periodType === 'monthly' ? 'monthly' : periodType === 'weekly' ? 'weekly' : 'yearly'} />
+            <CombinedRevenueChart
+              data={
+                periodType === 'monthly' ? monthlyRevenueData : periodType === 'weekly' ? weeklyRevenueData : yearlyData
+              }
+              type={periodType === 'monthly' ? 'monthly' : periodType === 'weekly' ? 'weekly' : 'yearly'}
+              title={
+                periodType === 'monthly'
+                  ? `Revenus mensuels — ${displayYear}`
+                  : periodType === 'weekly'
+                  ? `Revenus hebdomadaires — ${displayYear}`
+                  : 'Revenus par année'
+              }
+            />
           </div>
         </div>
 
@@ -152,15 +189,25 @@ export default function StatistiquesPage() {
           <div className="rounded-2xl border border-gray-100 bg-white p-4">
             <h4 className="text-sm font-semibold mb-3">Ventes par Jour</h4>
             <div className="h-48">
-              <CombinedRevenueChart data={[]} type="monthly" />
+              <CombinedRevenueChart data={monthlyRevenueData} type="monthly" title={`Revenus mensuels — ${displayYear}`} />
             </div>
           </div>
         </div>
 
         <div className="col-span-12 lg:col-span-6 space-y-4">
           <div className="rounded-2xl border border-gray-100 bg-white p-4">
-            <h4 className="text-sm font-semibold mb-3">Top 5 Produits</h4>
-            <div className="h-36 flex items-center justify-center text-gray-400">Aucune donnée</div>
+            <h4 className="text-sm font-semibold mb-3">Inscriptions</h4>
+            <RegistrationsChart
+              data={
+                periodType === 'monthly'
+                  ? monthlyRegistrationsData.map((it) => ({ label: it.monthLabel, value: it.registrations }))
+                  : periodType === 'weekly'
+                  ? weeklyRegistrationsData.map((it) => ({ label: it.weekLabel, value: it.registrations }))
+                  : yearlyData.map((it) => ({ label: it.year.toString(), value: it.registrations }))
+              }
+              title={periodType === 'monthly' ? `Inscriptions — ${displayYear}` : periodType === 'weekly' ? `Inscriptions — ${displayYear}` : 'Inscriptions par année'}
+              color="#10b981"
+            />
           </div>
 
           <div className="rounded-2xl border border-gray-100 bg-white p-4">

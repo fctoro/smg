@@ -114,72 +114,56 @@ export default function StatistiquesPage() {
 
       {/* KPI Cards - Style Dashboard */}
       <div className="col-span-12 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 md:gap-6">
-        <div className="rounded-2xl overflow-hidden shadow-md">
-          <div className="p-5 bg-gradient-to-r from-blue-500 to-indigo-600 text-white">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <div className="h-12 w-12 flex items-center justify-center rounded-lg bg-white/20">
-                  <DollarLineIcon className="size-6 text-white" />
-                </div>
-                <div>
-                  <div className="text-xs opacity-90">Revenu Total (HTG)</div>
-                  <div className="mt-1 text-lg font-bold">{totalRevenueHTG.toLocaleString('fr-FR')} HTG</div>
-                </div>
-              </div>
-              <div className="text-xs text-white/80">Depuis création</div>
+        <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+          <div className="flex items-center gap-4">
+            <div className="h-12 w-12 flex items-center justify-center rounded-md bg-blue-50">
+              <DollarLineIcon className="size-5 text-blue-600" />
+            </div>
+            <div>
+              <div className="text-xs text-gray-400">Revenus (HTG)</div>
+              <div className="mt-1 text-2xl font-extrabold text-gray-800">{totalRevenueHTG.toLocaleString('fr-FR')}</div>
             </div>
           </div>
+          <div className="mt-3 text-xs text-gray-500">Total encaissé</div>
         </div>
 
-        <div className="rounded-2xl overflow-hidden shadow-md">
-          <div className="p-5 bg-gradient-to-r from-purple-500 to-pink-500 text-white">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <div className="h-12 w-12 flex items-center justify-center rounded-lg bg-white/20">
-                  <GroupIcon className="size-6 text-white" />
-                </div>
-                <div>
-                  <div className="text-xs opacity-90">Total Inscriptions</div>
-                  <div className="mt-1 text-lg font-bold">{totalRegistrations}</div>
-                </div>
-              </div>
-              <div className="text-xs text-white/80">Toutes années</div>
+        <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+          <div className="flex items-center gap-4">
+            <div className="h-12 w-12 flex items-center justify-center rounded-md bg-purple-50">
+              <GroupIcon className="size-5 text-purple-600" />
+            </div>
+            <div>
+              <div className="text-xs text-gray-400">Inscriptions</div>
+              <div className="mt-1 text-2xl font-extrabold text-gray-800">{totalRegistrations}</div>
             </div>
           </div>
+          <div className="mt-3 text-xs text-gray-500">Depuis la création</div>
         </div>
 
-        <div className="rounded-2xl overflow-hidden shadow-md">
-          <div className="p-5 bg-gradient-to-r from-orange-400 to-red-500 text-white">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <div className="h-12 w-12 flex items-center justify-center rounded-lg bg-white/20">
-                  <CheckCircleIcon className="size-6 text-white" />
-                </div>
-                <div>
-                  <div className="text-xs opacity-90">Aujourd'hui</div>
-                  <div className="mt-1 text-lg font-bold">0</div>
-                </div>
-              </div>
-              <div className="text-xs text-white/80">Transactions</div>
+        <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+          <div className="flex items-center gap-4">
+            <div className="h-12 w-12 flex items-center justify-center rounded-md bg-amber-50">
+              <CheckCircleIcon className="size-5 text-amber-600" />
+            </div>
+            <div>
+              <div className="text-xs text-gray-400">Paiements</div>
+              <div className="mt-1 text-2xl font-extrabold text-gray-800">{payments.length}</div>
             </div>
           </div>
+          <div className="mt-3 text-xs text-gray-500">Total transactions</div>
         </div>
 
-        <div className="rounded-2xl overflow-hidden shadow-md">
-          <div className="p-5 bg-gradient-to-r from-green-400 to-emerald-500 text-white">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <div className="h-12 w-12 flex items-center justify-center rounded-lg bg-white/20">
-                  <DollarLineIcon className="size-6 text-white" />
-                </div>
-                <div>
-                  <div className="text-xs opacity-90">Panier Moyen</div>
-                  <div className="mt-1 text-lg font-bold">0 HTG</div>
-                </div>
-              </div>
-              <div className="text-xs text-white/80">Moyenne</div>
+        <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+          <div className="flex items-center gap-4">
+            <div className="h-12 w-12 flex items-center justify-center rounded-md bg-emerald-50">
+              <BoxIconLine className="size-5 text-emerald-600" />
+            </div>
+            <div>
+              <div className="text-xs text-gray-400">Panier moyen</div>
+              <div className="mt-1 text-2xl font-extrabold text-gray-800">0 HTG</div>
             </div>
           </div>
+          <div className="mt-3 text-xs text-gray-500">Sur la période</div>
         </div>
       </div>
 
@@ -229,7 +213,7 @@ export default function StatistiquesPage() {
           <CombinedRevenueChart
             data={yearlyData}
             type="yearly"
-            title="📈 Revenus par Année"
+            title="Revenus par année"
           />
         </div>
       )}
@@ -239,7 +223,7 @@ export default function StatistiquesPage() {
           <CombinedRevenueChart
             data={monthlyRevenueData}
             type="monthly"
-            title={`📈 Revenus Mensuels - ${displayYear}`}
+            title={`Revenus mensuels — ${displayYear}`}
           />
         </div>
       )}
@@ -249,7 +233,7 @@ export default function StatistiquesPage() {
           <CombinedRevenueChart
             data={weeklyRevenueData}
             type="weekly"
-            title={`📈 Revenus Hebdomadaires - ${displayYear}`}
+            title={`Revenus hebdomadaires — ${displayYear}`}
           />
         </div>
       )}
@@ -262,7 +246,7 @@ export default function StatistiquesPage() {
               label: item.year.toString(),
               value: item.registrations,
             }))}
-            title="👥 Inscriptions par Année"
+            title="Inscriptions par année"
             color="#10b981"
           />
         </div>
@@ -275,7 +259,7 @@ export default function StatistiquesPage() {
               label: item.monthLabel,
               value: item.registrations,
             }))}
-            title={`👥 Inscriptions - ${displayYear}`}
+            title={`Inscriptions — ${displayYear}`}
             color="#10b981"
           />
         </div>
@@ -288,7 +272,7 @@ export default function StatistiquesPage() {
               label: item.weekLabel,
               value: item.registrations,
             }))}
-            title={`👥 Inscriptions - ${displayYear}`}
+            title={`Inscriptions — ${displayYear}`}
             color="#10b981"
           />
         </div>

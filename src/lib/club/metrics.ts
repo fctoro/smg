@@ -58,13 +58,15 @@ export const getUpcomingEventsCount = (
     .length;
 };
 
+import { parseDateLocal } from "./date";
+
 export const getRecentPlayers = (players: Player[], limit = 6) =>
   [...players]
-    .sort(
-      (a, b) =>
-        new Date(b.dateInscription).getTime() -
-        new Date(a.dateInscription).getTime(),
-    )
+    .sort((a, b) => {
+      const da = parseDateLocal(a.dateInscription) || new Date(0);
+      const db = parseDateLocal(b.dateInscription) || new Date(0);
+      return db.getTime() - da.getTime();
+    })
     .slice(0, limit);
 
 export const getUpcomingEvents = (

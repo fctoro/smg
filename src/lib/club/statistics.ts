@@ -1,4 +1,5 @@
 import { Payment, Player } from "@/types/club";
+import { parseDateLocal, parseDateLocalOrNow } from "./date";
 
 export interface PeriodData {
   label: string;
@@ -34,7 +35,8 @@ export const getYearlyRevenue = (payments: Payment[]): YearlyData[] => {
 
   payments.forEach((payment) => {
     if (payment.statut !== "paid") return;
-    const year = new Date(payment.datePaiement || payment.periode).getFullYear();
+    const date = parseDateLocal(payment.datePaiement || payment.periode) || new Date();
+    const year = date.getFullYear();
     const current = yearMap.get(year) || { usd: 0, htg: 0 };
     
     if (payment.devise === "USD") {
@@ -56,7 +58,8 @@ export const getYearlyRegistrations = (players: Player[]): YearlyData[] => {
   const yearMap = new Map<number, number>();
 
   players.forEach((player) => {
-    const year = new Date(player.dateInscription).getFullYear();
+    const date = parseDateLocal(player.dateInscription) || new Date();
+    const year = date.getFullYear();
     if (!isNaN(year)) {
       yearMap.set(year, (yearMap.get(year) || 0) + 1);
     }
@@ -78,7 +81,7 @@ export const getMonthlyRevenue = (payments: Payment[], year: number): MonthlyDat
 
   payments.forEach((payment) => {
     if (payment.statut !== "paid") return;
-    const date = new Date(payment.datePaiement || payment.periode);
+    const date = parseDateLocal(payment.datePaiement || payment.periode) || new Date();
     if (date.getFullYear() === year) {
       const month = date.getMonth();
       if (payment.devise === "USD") {
@@ -107,7 +110,7 @@ export const getMonthlyRegistrations = (players: Player[], year: number): Monthl
   const counts = Array.from({ length: 12 }, () => 0);
 
   players.forEach((player) => {
-    const date = new Date(player.dateInscription);
+    const date = parseDateLocal(player.dateInscription) || new Date();
     if (date.getFullYear() === year) {
       const month = date.getMonth();
       counts[month] += 1;
@@ -130,7 +133,7 @@ export const getWeeklyRevenue = (payments: Payment[], year: number): WeeklyData[
 
   payments.forEach((payment) => {
     if (payment.statut !== "paid") return;
-    const date = new Date(payment.datePaiement || payment.periode);
+    const date = parseDateLocal(payment.datePaiement || payment.periode) || new Date();
     if (date.getFullYear() === year) {
       const weekNumber = getWeekNumber(date);
       const weekKey = `${year}-W${String(weekNumber).padStart(2, "0")}`;
@@ -165,7 +168,7 @@ export const getWeeklyRegistrations = (players: Player[], year: number): WeeklyD
   const weekMap = new Map<string, number>();
 
   players.forEach((player) => {
-    const date = new Date(player.dateInscription);
+    const date = parseDateLocal(player.dateInscription) || new Date();
     if (date.getFullYear() === year) {
       const weekNumber = getWeekNumber(date);
       const weekKey = `${year}-W${String(weekNumber).padStart(2, "0")}`;
@@ -233,12 +236,13 @@ export const getAvailableYears = (players: Player[], payments: Payment[]): numbe
   const years = new Set<number>();
 
   players.forEach((player) => {
-    const year = new Date(player.dateInscription).getFullYear();
+    const date = parseDateLocal(player.dateInscription) || new Date();
+    const year = date.getFullYear();
     if (!isNaN(year)) years.add(year);
   });
 
   payments.forEach((payment) => {
-    const date = new Date(payment.datePaiement || payment.periode);
+    const date = parseDateLocal(payment.datePaiement || payment.periode) || new Date();
     const year = date.getFullYear();
     if (!isNaN(year)) years.add(year);
   });

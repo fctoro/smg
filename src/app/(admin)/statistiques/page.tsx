@@ -16,6 +16,7 @@ import CombinedRevenueChart from "@/components/club/charts/CombinedRevenueChart"
 import RegistrationsChart from "@/components/club/charts/RegistrationsChart";
 import { formatClubCurrency } from "@/lib/club/metrics";
 import { GroupIcon, DollarLineIcon } from "@/icons";
+// ensure KPI visual parity with dashboard
 
 type PeriodType = "yearly" | "monthly" | "weekly";
 

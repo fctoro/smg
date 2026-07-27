@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
+import fontkit from "@pdf-lib/fontkit";
 import fs from "fs";
 import path from "path";
 import { createClient } from "@supabase/supabase-js";
@@ -153,8 +154,21 @@ export async function GET(request) {
       .eq("registration_id", reg.id);
 
     const pdfDoc = await PDFDocument.create();
+    pdfDoc.registerFontkit(fontkit);
+
     const timesRomanFont = await pdfDoc.embedFont(StandardFonts.TimesRoman);
     const timesBoldFont = await pdfDoc.embedFont(StandardFonts.TimesRomanBold);
+    let signatureFont = await pdfDoc.embedFont(StandardFonts.TimesRomanItalic);
+
+    try {
+      const fontPath = path.join(process.cwd(), "public/fonts/signature.ttf");
+      if (fs.existsSync(fontPath)) {
+        const fontBytes = fs.readFileSync(fontPath);
+        signatureFont = await pdfDoc.embedFont(fontBytes);
+      }
+    } catch (e) {
+      console.warn("Could not load custom signature font:", e.message);
+    }
 
     let page = pdfDoc.addPage([595.28, 841.89]);
     const { width, height } = page.getSize();
@@ -198,7 +212,7 @@ export async function GET(request) {
       color: rgb(0.4, 0.4, 0.4),
     });
 
-    page.drawText("Port-au-Prince, Haiti | contact@fctoro.com", {
+    page.drawText("7, Rue Rigaud Pétion-Ville,Haïti | footballclubtoro@gmail.com", {
       x: 105,
       y: height - 90,
       size: 9,
@@ -309,7 +323,7 @@ export async function GET(request) {
 
     drawSectionHeader("1. IDENTITE DU JOUEUR");
     drawFields([
-      ["Nom Complet:", `${reg.child_first_name} ${reg.child_last_name}`],
+      ["Nom Complet:", `${reg.child_first_name || ""} ${reg.child_last_name || ""}`.trim()],
       ["Date de Naissance:", formatDate(reg.child_birth_date)],
       ["Genre:", reg.child_gender],
       ["Ecole:", reg.child_school],
@@ -332,14 +346,231 @@ export async function GET(request) {
 
     currentY -= 15;
     drawSectionHeader("3. LOGISTIQUE ET PAIEMENT");
-    drawFields([
+    
+    const logisticsFields = [
       ["Taille Maillot:", reg.uniform_top_size],
       ["Taille Short:", reg.uniform_short_size],
       ["Numero Prefere:", reg.preferred_numbers],
       ["Plan de Paiement:", reg.payment_plan],
       ["Methode:", reg.payment_method],
-      ["Signature (Nom):", reg.signature_name],
+    ];
+
+    const uniformMap = {
+      uniforme_jeux1: "Jeux 1 (Entrainement)",
+      uniforme_jeux2: "Jeux 2 (Match 1)",
+      uniforme_jeux3: "Jeux 3 (Match 2)",
+      tracksuit: "Tracksuit",
+      backpack: "Backpack"
+    };
+
+    if (Array.isArray(reg.ordered_uniforms) && reg.ordered_uniforms.length > 0) {
+      const items = reg.ordered_uniforms.map(k => uniformMap[k] || k).join(", ");
+      logisticsFields.push(["Articles Commandes:", items]);
+    }
+    
+    drawFields(logisticsFields);
+
+    currentY -= 15;
+    drawSectionHeader("4. ENGAGEMENT FINANCIER");
+
+    if (currentY < 200) {
+      page = pdfDoc.addPage([595.28, 841.89]);
+      currentY = 800;
+      drawFooter(page, pdfDoc.getPageCount());
+    }
+
+    const engagementText = "Je soussigne(e), parent/personne responsable du joueur inscrit, reconnais avoir pris connaissance de la tarification de la saison 2026-2027 et du plan de paiement choisi. Je reconnais devoir a FC TORO/Fulmoun Production les montants indiques ci-dessus et m'engage a les regler selon l'echeancier convenu. Tout mois engage est du dans son integralite, meme en cas d'absence, de suspension temporaire ou d'arret de participation non notifie par ecrit avant le debut du mois concerne. Tout retard ou defaut de paiement peut entrainer la suspension de la participation du joueur aux activites, sans annuler les sommes dues. En cas de non-reglement apres relances, le dossier pourra etre transmis au service de recouvrement, conformement aux procedures applicables. Aucun versement deja effectue n'est remboursable, sauf decision exceptionnelle de l'administration.";
+
+    page.drawText(engagementText, {
+      x: 50,
+      y: currentY,
+      size: 9,
+      font: timesRomanFont,
+      color: rgb(0.3, 0.3, 0.3),
+      maxWidth: 495,
+      lineHeight: 13,
+    });
+    
+    currentY -= 110;
+
+    drawFields([
+      ["Nom du responsable:", reg.financial_commitment_name],
+      ["Date:", formatDate(reg.financial_commitment_date)],
+      ["Telephone:", reg.financial_commitment_phone],
     ]);
+
+    currentY -= 20;
+    
+    let consentItems = [];
+    if (reg.consents?.consent_media) {
+      consentItems.push("J'autorise l'utilisation des photos et vidéos de mon enfant sur les réseaux sociaux et sur tout support de communication relatif à FC TORO.");
+    }
+    if (reg.consents?.consent_health) {
+      consentItems.push("Je certifie que mon enfant ne présente aucune contre-indication médicale à la pratique du football.");
+    }
+    if (reg.consents?.consent_emergency) {
+      consentItems.push("Je soussigné(e) autorise les responsables de FC TORO à prendre toutes les dispositions nécessaires en cas d'urgence médicale concernant mon enfant.");
+    }
+
+    if (consentItems.length > 0) {
+      if (currentY < 180) {
+        page = pdfDoc.addPage([595.28, 841.89]);
+        currentY = 800;
+        drawFooter(page, pdfDoc.getPageCount());
+      }
+      drawSectionHeader("5. AUTORISATIONS & ENGAGEMENT");
+      
+      for (const item of consentItems) {
+        page.drawRectangle({
+          x: 50,
+          y: currentY + 3,
+          width: 8,
+          height: 8,
+          borderColor: rgb(0.5, 0.5, 0.5),
+          borderWidth: 1,
+        });
+        
+        // cross
+        page.drawLine({ start: { x: 50, y: currentY + 3 }, end: { x: 58, y: currentY + 11 }, thickness: 1, color: rgb(0,0,0) });
+        page.drawLine({ start: { x: 58, y: currentY + 3 }, end: { x: 50, y: currentY + 11 }, thickness: 1, color: rgb(0,0,0) });
+
+        page.drawText(item, {
+          x: 65,
+          y: currentY,
+          size: 9,
+          font: timesRomanFont,
+          color: rgb(0.3, 0.3, 0.3),
+          maxWidth: 480,
+          lineHeight: 13,
+        });
+        
+        const linesCount = Math.ceil(item.length / 85);
+        currentY -= (linesCount * 13) + 10;
+      }
+    }
+
+    currentY -= 20;
+    const drawSignatureBox = (label, name, x, y, width = 240) => {
+      page.drawText(label, {
+        x: x,
+        y: y,
+        size: 10,
+        font: timesBoldFont,
+        color: rgb(0.1, 0.1, 0.3),
+      });
+
+      page.drawRectangle({
+        x: x,
+        y: y - 55,
+        width: width,
+        height: 45,
+        color: rgb(0.93, 0.96, 1.0),
+        borderColor: rgb(0.85, 0.9, 0.95),
+        borderWidth: 1,
+      });
+
+      page.drawText(name || "Non signee", {
+        x: x + 10,
+        y: y - 40,
+        size: 20,
+        font: signatureFont,
+        color: rgb(0.1, 0.1, 0.1),
+      });
+
+      page.drawLine({
+        start: { x: x + 5, y: y - 43 },
+        end: { x: x + width - 5, y: y - 43 },
+        thickness: 1,
+        color: rgb(0.85, 0.88, 0.92),
+      });
+    };
+
+    if (reg.financial_commitment_signature) {
+      if (currentY - 60 < 120) {
+        page = pdfDoc.addPage([595.28, 841.89]);
+        currentY = 800;
+        drawFooter(page, pdfDoc.getPageCount());
+      }
+      drawSignatureBox("Signature Engagement Financier :", reg.financial_commitment_signature, 45, currentY, 450);
+      currentY -= 75;
+    }
+    
+    if (currentY - 80 < 120) {
+      page = pdfDoc.addPage([595.28, 841.89]);
+      currentY = 800;
+      drawFooter(page, pdfDoc.getPageCount());
+    }
+
+    currentY -= 20;
+    drawSignatureBox("Signature du Parent / Tuteur :", reg.signature_name, 45, currentY, 450);
+
+    page.drawText(`Fait le : ${formatDate(reg.created_at)}`, {
+      x: 45,
+      y: currentY - 75,
+      size: 10,
+      font: timesRomanFont,
+    });
+
+
+    currentY = 160;
+
+    page.drawText("Réservé à l'administration", {
+      x: 45,
+      y: currentY,
+      size: 12,
+      font: timesBoldFont,
+      color: rgb(0, 0, 0),
+    });
+
+    currentY -= 15;
+    
+    const tableX = 45;
+    const tableY = currentY;
+    const colWidths = [100, 120, 130, 150];
+    const rowHeight = 25;
+    
+    // Grey backgrounds
+    page.drawRectangle({ x: tableX, y: tableY - rowHeight, width: colWidths[0], height: rowHeight, color: rgb(0.92, 0.92, 0.92) });
+    page.drawRectangle({ x: tableX + colWidths[0] + colWidths[1], y: tableY - rowHeight, width: colWidths[2], height: rowHeight, color: rgb(0.92, 0.92, 0.92) });
+    page.drawRectangle({ x: tableX, y: tableY - 2 * rowHeight, width: colWidths[0], height: rowHeight, color: rgb(0.92, 0.92, 0.92) });
+    page.drawRectangle({ x: tableX + colWidths[0] + colWidths[1], y: tableY - 2 * rowHeight, width: colWidths[2], height: rowHeight, color: rgb(0.92, 0.92, 0.92) });
+
+    // Grid lines
+    for (let i = 0; i <= 2; i++) { // horizontal
+      page.drawLine({ start: { x: tableX, y: tableY - i * rowHeight }, end: { x: tableX + 500, y: tableY - i * rowHeight }, thickness: 1, color: rgb(0, 0, 0) });
+    }
+    let currentX = tableX;
+    for (let i = 0; i <= 4; i++) { // vertical
+      page.drawLine({ start: { x: currentX, y: tableY }, end: { x: currentX, y: tableY - 2 * rowHeight }, thickness: 1, color: rgb(0, 0, 0) });
+      if (i < 4) currentX += colWidths[i];
+    }
+
+    const textOpts = { size: 8, font: timesBoldFont, color: rgb(0, 0, 0) };
+    const valOpts = { size: 8, font: timesRomanFont, color: rgb(0, 0, 0) };
+    
+    const drawCheckbox = (x, y, text) => {
+      page.drawRectangle({ x: x, y: y - 4, width: 6, height: 6, borderColor: rgb(0, 0, 0), borderWidth: 1 });
+      page.drawText(text, { x: x + 10, y: y - 4, ...valOpts });
+    };
+    
+    page.drawText("Catégorie retenue", { x: tableX + 5, y: tableY - 15, ...textOpts });
+    drawCheckbox(tableX + colWidths[0] + 5, tableY - 12, "FC TORO");
+    drawCheckbox(tableX + colWidths[0] + 65, tableY - 12, "TI TORO");
+    
+    page.drawText("Plan retenu", { x: tableX + colWidths[0] + colWidths[1] + 5, y: tableY - 15, ...textOpts });
+    drawCheckbox(tableX + colWidths[0] + colWidths[1] + colWidths[2] + 5, tableY - 12, "Annuel");
+    drawCheckbox(tableX + colWidths[0] + colWidths[1] + colWidths[2] + 45, tableY - 12, "Semestriel");
+    drawCheckbox(tableX + colWidths[0] + colWidths[1] + colWidths[2] + 95, tableY - 12, "Mensuel");
+    
+    page.drawText("Montant total dû", { x: tableX + 5, y: tableY - rowHeight - 15, ...textOpts });
+    page.drawText("$", { x: tableX + colWidths[0] + 5, y: tableY - rowHeight - 15, ...valOpts });
+    page.drawText("Montant versé à l'inscription", { x: tableX + colWidths[0] + colWidths[1] + 5, y: tableY - rowHeight - 15, ...textOpts });
+    page.drawText("$", { x: tableX + colWidths[0] + colWidths[1] + colWidths[2] + 5, y: tableY - rowHeight - 15, ...valOpts });
+
+    currentY -= (2 * rowHeight + 40);
+
+    page.drawLine({ start: { x: 345, y: currentY }, end: { x: 545, y: currentY }, thickness: 1, color: rgb(0, 0, 0) });
+    page.drawText("Signature du Responsable", { x: 380, y: currentY - 15, size: 10, font: timesBoldFont, color: rgb(0, 0, 0) });
 
     drawFooter(page, 1);
 
@@ -393,7 +624,7 @@ export async function GET(request) {
     return new Response(pdfBytes, {
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": `attachment; filename=Dossier_FC_TORO_${reg.child_last_name}.pdf`,
+        "Content-Disposition": `attachment; filename=Dossier_FC_TORO_${reg.child_last_name || "Inscription"}.pdf`,
       },
     });
   } catch (error) {

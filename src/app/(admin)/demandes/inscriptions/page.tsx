@@ -4,7 +4,9 @@ import React, { useState, useEffect, useMemo } from "react";
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import { fetchSiteMessages, updateMessageStatus, deleteMessage } from "@/lib/club/supabase-demandes";
 import { SiteMessage } from "@/types/club";
+import Pagination from "@/components/tables/Pagination";
 import { DownloadIcon, EyeIcon, TrashBinIcon } from "@/icons";
+import { useConfirm } from "@/hooks/useConfirm";
 
 // Placeholder icon for document
 const DocumentIcon = () => (
@@ -20,6 +22,9 @@ export default function BoiteDeReception() {
   const [yearFilter, setYearFilter] = useState("all");
   const [monthFilter, setMonthFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [currentPageSize, setCurrentPageSize] = useState(10);
+  const { confirm, ConfirmComponent } = useConfirm();
 
   // Modal states
   const [selectedMessage, setSelectedMessage] = useState<SiteMessage | null>(null);
@@ -73,14 +78,20 @@ export default function BoiteDeReception() {
     }
   };
 
-  const handleDelete = async (id: string, metadata?: any) => {
-    if (!confirm("Voulez-vous vraiment supprimer cette demande ?")) return;
-    try {
-      setMessages(prev => prev.filter(m => m.id !== id));
-      await deleteMessage(id, metadata);
-    } catch (err) {
-      loadMessages();
-    }
+  const handleDelete = (id: string, metadata?: any) => {
+    confirm({
+      title: "Supprimer la demande",
+      message: "Voulez-vous vraiment supprimer cette demande ?",
+      isDestructive: true,
+      onConfirm: async () => {
+        try {
+          setMessages(prev => prev.filter(m => m.id !== id));
+          await deleteMessage(id, metadata);
+        } catch (err) {
+          loadMessages();
+        }
+      }
+    });
   };
 
   const getTabTitle = (tab: string) => {
@@ -125,7 +136,10 @@ export default function BoiteDeReception() {
           <select
             className="h-11 w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
             value={yearFilter}
-            onChange={(e) => setYearFilter(e.target.value)}
+            onChange={(e) => {
+              setYearFilter(e.target.value);
+              setCurrentPage(1);
+            }}
           >
             <option value="all">Toutes les années</option>
             <option value="2026">2026</option>
@@ -135,7 +149,10 @@ export default function BoiteDeReception() {
           <select
             className="h-11 w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
             value={monthFilter}
-            onChange={(e) => setMonthFilter(e.target.value)}
+            onChange={(e) => {
+              setMonthFilter(e.target.value);
+              setCurrentPage(1);
+            }}
           >
             <option value="all">Tous les mois</option>
             <option value="1">Janvier</option>
@@ -155,7 +172,10 @@ export default function BoiteDeReception() {
           <select
             className="h-11 w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
             value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
+            onChange={(e) => {
+              setStatusFilter(e.target.value);
+              setCurrentPage(1);
+            }}
           >
             <option value="all">Tous les statuts</option>
             <option value="nouveau">Nouveau</option>
@@ -164,6 +184,16 @@ export default function BoiteDeReception() {
         </div>
       </div>
 
+      {(() => {
+        const totalPages = Math.max(1, Math.ceil(filteredMessages.length / currentPageSize));
+        const currentPageSafe = Math.min(currentPage, totalPages);
+        const pagedMessages = filteredMessages.slice(
+          (currentPageSafe - 1) * currentPageSize,
+          currentPageSafe * currentPageSize,
+        );
+
+        return (
+          <>
       <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-white/[0.03]">
         {/* TABS REMOVED */}
 
@@ -206,12 +236,12 @@ export default function BoiteDeReception() {
                 <tr>
                   <td colSpan={5} className="py-8 text-center text-gray-500">Chargement des données...</td>
                 </tr>
-              ) : filteredMessages.length === 0 ? (
+              ) : pagedMessages.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="py-8 text-center text-gray-500">Aucune demande trouvée pour cette catégorie.</td>
                 </tr>
               ) : (
-                filteredMessages.map((msg) => (
+                pagedMessages.map((msg) => (
                   <tr key={msg.id} className="hover:bg-gray-50 dark:hover:bg-white/[0.02]">
                     <td className="px-4 py-4 align-top">
                       <button 
@@ -310,7 +340,23 @@ export default function BoiteDeReception() {
             </tbody>
           </table>
         </div>
+
+      <div className="mt-4 flex justify-end">
+        <Pagination
+          currentPage={currentPageSafe}
+          totalPages={totalPages}
+          onPageChange={setCurrentPage}
+          pageSize={currentPageSize}
+          onPageSizeChange={(size) => {
+            setCurrentPageSize(size);
+            setCurrentPage(1);
+          }}
+        />
       </div>
+      </div>
+      </>
+        );
+      })()}
 
       {/* MODAL */}
       {selectedMessage && (
@@ -364,6 +410,7 @@ export default function BoiteDeReception() {
           </div>
         </div>
       )}
+      <ConfirmComponent />
     </div>
   );
 }

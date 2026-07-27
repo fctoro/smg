@@ -70,6 +70,7 @@ export default function PlayerTable({
   const [selectedSeason, setSelectedSeason] = useState("all");
   const [selectedStatus, setSelectedStatus] = useState("all");
   const [currentPage, setCurrentPage] = useState(1);
+  const [currentPageSize, setCurrentPageSize] = useState(pageSize);
 
   const visibleColumnSet = useMemo(
     () => new Set(columns.length > 0 ? columns : defaultColumns),
@@ -119,11 +120,11 @@ export default function PlayerTable({
       );
   }, [players, searchQuery, selectedCategory, selectedSeason, selectedStatus]);
 
-  const totalPages = Math.max(1, Math.ceil(filteredPlayers.length / pageSize));
+  const totalPages = Math.max(1, Math.ceil(filteredPlayers.length / currentPageSize));
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, selectedCategory, selectedSeason, selectedStatus]);
+  }, [searchQuery, selectedCategory, selectedSeason, selectedStatus, currentPageSize]);
 
   useEffect(() => {
     if (currentPage > totalPages) {
@@ -132,9 +133,9 @@ export default function PlayerTable({
   }, [currentPage, totalPages]);
 
   const pagedPlayers = useMemo(() => {
-    const start = (currentPage - 1) * pageSize;
-    return filteredPlayers.slice(start, start + pageSize);
-  }, [currentPage, filteredPlayers, pageSize]);
+    const start = (currentPage - 1) * currentPageSize;
+    return filteredPlayers.slice(start, start + currentPageSize);
+  }, [currentPage, filteredPlayers, currentPageSize]);
 
   const visibleColumnsCount = Math.max(1, visibleColumnSet.size);
 
@@ -441,15 +442,15 @@ export default function PlayerTable({
         </Table>
       </div>
 
-      {totalPages > 1 ? (
-        <div className="mt-4 flex justify-end">
-          <Pagination
-            currentPage={currentPage}
-            totalPages={totalPages}
-            onPageChange={setCurrentPage}
-          />
-        </div>
-      ) : null}
+      <div className="mt-4 flex justify-end">
+        <Pagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          onPageChange={setCurrentPage}
+          pageSize={currentPageSize}
+          onPageSizeChange={setCurrentPageSize}
+        />
+      </div>
       </div>
     </div>
   );

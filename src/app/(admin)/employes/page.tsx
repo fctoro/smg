@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Dropdown } from "@/components/ui/dropdown";
 import { DropdownItem } from "@/components/ui/dropdown/DropdownItem";
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
+import { useConfirm } from "@/hooks/useConfirm";
 import EmployeeTable from "@/components/club/EmployeeTable";
 import { useClubData } from "@/context/ClubDataContext";
 import { softDeleteEmployeeInSupabase } from "@/lib/club/supabase-crud";
@@ -14,62 +15,75 @@ export default function EmployesPage() {
   const router = useRouter();
   const { employees, setEmployees } = useClubData();
   const [isExportOpen, setIsExportOpen] = useState(false);
+  const { confirm, ConfirmComponent } = useConfirm();
 
   const handleExportCSV = () => {
     setIsExportOpen(false);
-    const headers = ["Nom", "Prénom", "Fonction", "Sexe", "Téléphone", "Email", "Statut"];
-    let csvContent = headers.join(",") + "\n";
-    employees.forEach(emp => {
-      const row = [emp.nom, emp.prenom, emp.fonction || emp.role, emp.sexe, emp.telephone, emp.email, emp.desactive ? "Inactif" : "Actif"];
-      const csvRow = row.map(field => `"${(field || "").toString().replace(/"/g, '""')}"`);
-      csvContent += csvRow.join(",") + "\n";
+    confirm({
+      title: "Exporter la liste",
+      message: "Voulez-vous vraiment exporter la liste des employés au format CSV ?",
+      onConfirm: () => {
+        const headers = ["Nom", "Prénom", "Fonction", "Sexe", "Téléphone", "Email", "Statut"];
+        let csvContent = headers.join(",") + "\n";
+        employees.forEach(emp => {
+          const row = [emp.nom, emp.prenom, emp.fonction || emp.role, emp.sexe, emp.telephone, emp.email, emp.desactive ? "Inactif" : "Actif"];
+          const csvRow = row.map(field => `"${(field || "").toString().replace(/"/g, '""')}"`);
+          csvContent += csvRow.join(",") + "\n";
+        });
+        const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.setAttribute("download", "employes.csv");
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      }
     });
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.setAttribute("download", "employes.csv");
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
   };
 
   const handleExportExcel = () => {
-    if (!window.confirm("Voulez-vous vraiment exporter la liste des employés au format Excel ?")) return;
     setIsExportOpen(false);
-    const headers = ["Nom", "Prénom", "Fonction", "Sexe", "Téléphone", "Email", "Statut"];
-    let csvContent = "\uFEFF" + headers.join(";") + "\n";
-    employees.forEach(emp => {
-      const row = [emp.nom, emp.prenom, emp.fonction || emp.role, emp.sexe, emp.telephone, emp.email, emp.desactive ? "Inactif" : "Actif"];
-      const csvRow = row.map(field => `"${(field || "").toString().replace(/"/g, '""')}"`);
-      csvContent += csvRow.join(";") + "\n";
+    confirm({
+      title: "Exporter la liste",
+      message: "Voulez-vous vraiment exporter la liste des employés au format Excel ?",
+      onConfirm: () => {
+        const headers = ["Nom", "Prénom", "Fonction", "Sexe", "Téléphone", "Email", "Statut"];
+        let csvContent = "\uFEFF" + headers.join(";") + "\n";
+        employees.forEach(emp => {
+          const row = [emp.nom, emp.prenom, emp.fonction || emp.role, emp.sexe, emp.telephone, emp.email, emp.desactive ? "Inactif" : "Actif"];
+          const csvRow = row.map(field => `"${(field || "").toString().replace(/"/g, '""')}"`);
+          csvContent += csvRow.join(";") + "\n";
+        });
+        const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.setAttribute("download", "employes_excel.csv");
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      }
     });
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.setAttribute("download", "employes_excel.csv");
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
   };
 
-  const handleDeleteEmployee = async (employeeId: string) => {
+  const handleDeleteEmployee = (employeeId: string) => {
     const target = employees.find((emp) => emp.id === employeeId);
-    if (!target) {
-      return;
-    }
+    if (!target) return;
 
-    if (!window.confirm(`Supprimer l'employé ${target.prenom} ${target.nom} ?`)) {
-      return;
-    }
-    
-    try {
-      await softDeleteEmployeeInSupabase(employeeId);
-      setEmployees((prev) => prev.filter((emp) => emp.id !== employeeId));
-    } catch (error) {
-      alert("Erreur lors de la suppression. Veuillez réessayer.");
-    }
+    confirm({
+      title: "Supprimer l'employé",
+      message: `Voulez-vous vraiment supprimer l'employé ${target.prenom} ${target.nom} ?`,
+      isDestructive: true,
+      onConfirm: async () => {
+        try {
+          await softDeleteEmployeeInSupabase(employeeId);
+          setEmployees((prev) => prev.filter((emp) => emp.id !== employeeId));
+        } catch (error) {
+          alert("Erreur lors de la suppression. Veuillez réessayer.");
+        }
+      }
+    });
   };
 
   return (
@@ -125,6 +139,7 @@ export default function EmployesPage() {
           </div>
         }
       />
+      <ConfirmComponent />
     </div>
   );
 }

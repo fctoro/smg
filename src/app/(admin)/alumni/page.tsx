@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Dropdown } from "@/components/ui/dropdown";
 import { DropdownItem } from "@/components/ui/dropdown/DropdownItem";
+import Pagination from "@/components/tables/Pagination";
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import {
   Table,
@@ -16,6 +17,7 @@ import {
 import { PencilIcon, TrashBinIcon } from "@/icons";
 import { useClubData } from "@/context/ClubDataContext";
 import { deleteAlumniInSupabase } from "@/lib/club/supabase-crud";
+import { useConfirm } from "@/hooks/useConfirm";
 
 export default function AlumniPage() {
   const router = useRouter();
@@ -23,6 +25,9 @@ export default function AlumniPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [situationFilter, setSituationFilter] = useState("all");
   const [isExportOpen, setIsExportOpen] = useState(false);
+  const { confirm, ConfirmComponent } = useConfirm();
+  const [currentPage, setCurrentPage] = useState(1);
+  const [currentPageSize, setCurrentPageSize] = useState(10);
 
   const situations = useMemo(() => {
     return Array.from(new Set(alumni.map(a => a.situationActuelle).filter(Boolean)));
@@ -47,59 +52,73 @@ export default function AlumniPage() {
 
   const handleExportCSV = () => {
     setIsExportOpen(false);
-    const headers = ["Nom", "Période", "Poste", "Situation Actuelle"];
-    let csvContent = headers.join(",") + "\n";
-    filteredAlumni.forEach(entry => {
-      const row = [entry.nom, `${entry.anneeEntree} - ${entry.anneeSortie}`, entry.poste, entry.situationActuelle];
-      const csvRow = row.map(field => `"${(field || "").toString().replace(/"/g, '""')}"`);
-      csvContent += csvRow.join(",") + "\n";
+    confirm({
+      title: "Exporter la liste",
+      message: "Voulez-vous vraiment exporter la liste des alumni au format CSV ?",
+      onConfirm: () => {
+        const headers = ["Nom", "Période", "Poste", "Situation Actuelle"];
+        let csvContent = headers.join(",") + "\n";
+        filteredAlumni.forEach(entry => {
+          const row = [entry.nom, `${entry.anneeEntree} - ${entry.anneeSortie}`, entry.poste, entry.situationActuelle];
+          const csvRow = row.map(field => `"${(field || "").toString().replace(/"/g, '""')}"`);
+          csvContent += csvRow.join(",") + "\n";
+        });
+        const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.setAttribute("download", "alumni.csv");
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      }
     });
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.setAttribute("download", "alumni.csv");
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
   };
 
   const handleExportExcel = () => {
-    if (!window.confirm("Voulez-vous vraiment exporter la liste au format Excel ?")) return;
     setIsExportOpen(false);
-    const headers = ["Nom", "Période", "Poste", "Situation Actuelle"];
-    let csvContent = "\uFEFF" + headers.join(";") + "\n";
-    filteredAlumni.forEach(entry => {
-      const row = [entry.nom, `${entry.anneeEntree} - ${entry.anneeSortie}`, entry.poste, entry.situationActuelle];
-      const csvRow = row.map(field => `"${(field || "").toString().replace(/"/g, '""')}"`);
-      csvContent += csvRow.join(";") + "\n";
+    confirm({
+      title: "Exporter la liste",
+      message: "Voulez-vous vraiment exporter la liste des alumni au format Excel ?",
+      onConfirm: () => {
+        const headers = ["Nom", "Période", "Poste", "Situation Actuelle"];
+        let csvContent = "\uFEFF" + headers.join(";") + "\n";
+        filteredAlumni.forEach(entry => {
+          const row = [entry.nom, `${entry.anneeEntree} - ${entry.anneeSortie}`, entry.poste, entry.situationActuelle];
+          const csvRow = row.map(field => `"${(field || "").toString().replace(/"/g, '""')}"`);
+          csvContent += csvRow.join(";") + "\n";
+        });
+        const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.setAttribute("download", "alumni_excel.csv");
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      }
     });
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.setAttribute("download", "alumni_excel.csv");
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
   };
 
-  const handleDelete = async (alumniId: string) => {
+  const handleDelete = (alumniId: string) => {
     const target = alumni.find((entry) => entry.id === alumniId);
-    if (!target) {
-      return;
-    }
-    if (!window.confirm(`Supprimer ${target.nom} ?`)) {
-      return;
-    }
-    try {
-      await deleteAlumniInSupabase(alumniId);
-      setAlumni((prevEntries) =>
-        prevEntries.filter((entry) => entry.id !== alumniId),
-      );
-    } catch (error) {
-      alert("Erreur lors de la suppression.");
-    }
+    if (!target) return;
+    
+    confirm({
+      title: "Supprimer l'alumni",
+      message: `Voulez-vous vraiment supprimer ${target.nom} ?`,
+      isDestructive: true,
+      onConfirm: async () => {
+        try {
+          await deleteAlumniInSupabase(alumniId);
+          setAlumni((prevEntries) =>
+            prevEntries.filter((entry) => entry.id !== alumniId),
+          );
+        } catch (error) {
+          alert("Erreur lors de la suppression.");
+        }
+      }
+    });
   };
 
   return (
@@ -110,13 +129,19 @@ export default function AlumniPage() {
         <div className="grid flex-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
           <input
             value={searchQuery}
-            onChange={(event) => setSearchQuery(event.target.value)}
+            onChange={(event) => {
+              setSearchQuery(event.target.value);
+              setCurrentPage(1);
+            }}
             placeholder="Rechercher un alumni"
             className="h-11 w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs placeholder:text-gray-400 focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
           />
           <select
             value={situationFilter}
-            onChange={(e) => setSituationFilter(e.target.value)}
+            onChange={(e) => {
+              setSituationFilter(e.target.value);
+              setCurrentPage(1);
+            }}
             className="h-11 w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
           >
             <option value="all">Toutes situations</option>
@@ -138,7 +163,17 @@ export default function AlumniPage() {
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white px-4 pb-3 pt-4 dark:border-gray-800 dark:bg-white/[0.03] sm:px-6">
+      {(() => {
+        const totalPages = Math.max(1, Math.ceil(filteredAlumni.length / currentPageSize));
+        const currentPageSafe = Math.min(currentPage, totalPages);
+        const pagedAlumni = filteredAlumni.slice(
+          (currentPageSafe - 1) * currentPageSize,
+          currentPageSafe * currentPageSize,
+        );
+
+        return (
+          <>
+            <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white px-4 pb-3 pt-4 dark:border-gray-800 dark:bg-white/[0.03] sm:px-6">
         <div className="mb-4 flex items-center justify-between">
           <div>
             <h3 className="text-lg font-semibold text-gray-800 dark:text-white/90">
@@ -221,7 +256,7 @@ export default function AlumniPage() {
               </TableRow>
             </TableHeader>
             <TableBody className="divide-y divide-gray-100 dark:divide-gray-800">
-              {filteredAlumni.length === 0 ? (
+              {pagedAlumni.length === 0 ? (
                 <TableRow>
                   <TableCell
                     colSpan={5}
@@ -231,7 +266,7 @@ export default function AlumniPage() {
                   </TableCell>
                 </TableRow>
               ) : (
-                filteredAlumni.map((entry) => (
+                pagedAlumni.map((entry) => (
                   <TableRow key={entry.id}>
                     <TableCell className="py-3 text-theme-sm text-gray-800 dark:text-white/90">
                       {entry.nom}
@@ -273,7 +308,23 @@ export default function AlumniPage() {
             </TableBody>
           </Table>
         </div>
+      <div className="mt-4 flex justify-end">
+        <Pagination
+          currentPage={currentPageSafe}
+          totalPages={totalPages}
+          onPageChange={setCurrentPage}
+          pageSize={currentPageSize}
+          onPageSizeChange={(size) => {
+            setCurrentPageSize(size);
+            setCurrentPage(1);
+          }}
+        />
       </div>
+      <ConfirmComponent />
+      </div>
+      </>
+        );
+      })()}
     </div>
   );
 }

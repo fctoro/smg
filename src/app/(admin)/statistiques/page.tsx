@@ -15,8 +15,14 @@ import {
 import CombinedRevenueChart from "@/components/club/charts/CombinedRevenueChart";
 import RegistrationsChart from "@/components/club/charts/RegistrationsChart";
 import { formatClubCurrency } from "@/lib/club/metrics";
-import { GroupIcon, DollarLineIcon } from "@/icons";
-// ensure KPI visual parity with dashboard
+import {
+  GroupIcon,
+  DollarLineIcon,
+  CheckCircleIcon,
+  CalenderIcon,
+  PieChartIcon,
+  BoxIconLine,
+} from "@/icons";
 
 type PeriodType = "yearly" | "monthly" | "weekly";
 
@@ -82,90 +88,96 @@ export default function StatistiquesPage() {
     <div className="grid grid-cols-12 gap-4 md:gap-6">
       {/* En-tête */}
       <div className="col-span-12">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h2 className="text-2xl font-semibold text-gray-800 dark:text-white/90">
-              📊 Statistiques du Club
-            </h2>
-            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-              Analyse complète des revenus et inscriptions depuis la création du club
-            </p>
-          </div>
-          <div className="flex items-center gap-3">
-            <select
-              value={selectedYear}
-              onChange={(e) => setSelectedYear(e.target.value)}
-              className="rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 shadow-theme-xs focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300"
-            >
-              <option value="all">Historique Global (Depuis création)</option>
-              {yearsList.map((y) => (
-                <option key={y} value={y.toString()}>
-                  Année {y}
-                </option>
-              ))}
-            </select>
+        <div className="rounded-2xl bg-gradient-to-r from-slate-900 to-slate-800 p-6 text-white">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-2xl font-semibold">Dashboard Analytique</h2>
+              <p className="mt-1 text-sm text-white/80">Aperçu complet des données et performances</p>
+            </div>
+            <div className="flex items-center gap-3">
+              <select
+                value={selectedYear}
+                onChange={(e) => setSelectedYear(e.target.value)}
+                className="rounded-lg border border-transparent bg-white/10 px-4 py-2.5 text-sm font-medium text-white shadow-none backdrop-blur-sm"
+              >
+                <option value="all">Historique Global (Depuis création)</option>
+                {yearsList.map((y) => (
+                  <option key={y} value={y.toString()}>
+                    Année {y}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
         </div>
       </div>
 
       {/* KPI Cards - Style Dashboard */}
       <div className="col-span-12 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 md:gap-6">
-        <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03] md:p-6">
-          <div className="flex items-center justify-center h-12 w-12 rounded-xl bg-gray-100 dark:bg-gray-800">
-            <GroupIcon className="size-6 text-gray-800 dark:text-white/90" />
-          </div>
-          <div className="mt-5 flex items-end justify-between gap-3">
-            <div className="flex-1 overflow-hidden pr-2">
-              <span className="text-sm text-gray-500 dark:text-gray-400">Joueurs Actifs</span>
-              <h4 className="mt-2 text-title-sm sm:text-title-md font-bold text-gray-800 dark:text-white/90">
-                {activePlayers}
-              </h4>
+        <div className="rounded-2xl overflow-hidden shadow-md">
+          <div className="p-5 bg-gradient-to-r from-blue-500 to-indigo-600 text-white">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="h-12 w-12 flex items-center justify-center rounded-lg bg-white/20">
+                  <DollarLineIcon className="size-6 text-white" />
+                </div>
+                <div>
+                  <div className="text-xs opacity-90">Revenu Total (HTG)</div>
+                  <div className="mt-1 text-lg font-bold">{totalRevenueHTG.toLocaleString('fr-FR')} HTG</div>
+                </div>
+              </div>
+              <div className="text-xs text-white/80">Depuis création</div>
             </div>
           </div>
         </div>
 
-        <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03] md:p-6">
-          <div className="flex items-center justify-center h-12 w-12 rounded-xl bg-gray-100 dark:bg-gray-800">
-            <DollarLineIcon className="size-6 text-emerald-500" />
-          </div>
-          <div className="mt-5 flex items-end justify-between gap-3">
-            <div className="flex-1 overflow-hidden pr-2">
-              <span className="text-sm text-gray-500 dark:text-gray-400">
-                {isAllTime ? "Revenus Globaux (USD)" : `Revenus (USD) ${displayYear}`}
-              </span>
-              <h4 className="mt-2 text-title-sm sm:text-title-md font-bold text-gray-800 dark:text-white/90">
-                {formatClubCurrency(totalRevenueUSD)}
-              </h4>
+        <div className="rounded-2xl overflow-hidden shadow-md">
+          <div className="p-5 bg-gradient-to-r from-purple-500 to-pink-500 text-white">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="h-12 w-12 flex items-center justify-center rounded-lg bg-white/20">
+                  <GroupIcon className="size-6 text-white" />
+                </div>
+                <div>
+                  <div className="text-xs opacity-90">Total Inscriptions</div>
+                  <div className="mt-1 text-lg font-bold">{totalRegistrations}</div>
+                </div>
+              </div>
+              <div className="text-xs text-white/80">Toutes années</div>
             </div>
           </div>
         </div>
 
-        <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03] md:p-6">
-          <div className="flex items-center justify-center h-12 w-12 rounded-xl bg-gray-100 dark:bg-gray-800">
-            <DollarLineIcon className="size-6 text-blue-500" />
-          </div>
-          <div className="mt-5 flex items-end justify-between gap-3">
-            <div className="flex-1 overflow-hidden pr-2">
-              <span className="text-sm text-gray-500 dark:text-gray-400">
-                {isAllTime ? "Revenus Globaux (HTG)" : `Revenus (HTG) ${displayYear}`}
-              </span>
-              <h4 className="mt-2 text-title-sm sm:text-title-md font-bold text-gray-800 dark:text-white/90">
-                {totalRevenueHTG.toLocaleString('fr-FR')} HTG
-              </h4>
+        <div className="rounded-2xl overflow-hidden shadow-md">
+          <div className="p-5 bg-gradient-to-r from-orange-400 to-red-500 text-white">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="h-12 w-12 flex items-center justify-center rounded-lg bg-white/20">
+                  <CheckCircleIcon className="size-6 text-white" />
+                </div>
+                <div>
+                  <div className="text-xs opacity-90">Aujourd'hui</div>
+                  <div className="mt-1 text-lg font-bold">0</div>
+                </div>
+              </div>
+              <div className="text-xs text-white/80">Transactions</div>
             </div>
           </div>
         </div>
 
-        <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03] md:p-6">
-          <div className="flex items-center justify-center h-12 w-12 rounded-xl bg-gray-100 dark:bg-gray-800">
-            <GroupIcon className="size-6 text-gray-800 dark:text-white/90" />
-          </div>
-          <div className="mt-5 flex items-end justify-between gap-3">
-            <div className="flex-1 overflow-hidden pr-2">
-              <span className="text-sm text-gray-500 dark:text-gray-400">Inscriptions Totales</span>
-              <h4 className="mt-2 text-title-sm sm:text-title-md font-bold text-gray-800 dark:text-white/90">
-                {totalRegistrations}
-              </h4>
+        <div className="rounded-2xl overflow-hidden shadow-md">
+          <div className="p-5 bg-gradient-to-r from-green-400 to-emerald-500 text-white">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="h-12 w-12 flex items-center justify-center rounded-lg bg-white/20">
+                  <DollarLineIcon className="size-6 text-white" />
+                </div>
+                <div>
+                  <div className="text-xs opacity-90">Panier Moyen</div>
+                  <div className="mt-1 text-lg font-bold">0 HTG</div>
+                </div>
+              </div>
+              <div className="text-xs text-white/80">Moyenne</div>
             </div>
           </div>
         </div>
@@ -184,7 +196,7 @@ export default function StatistiquesPage() {
                     : "bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300"
                 }`}
               >
-                📅 Annuel
+                <div className="flex items-center gap-2"><CalenderIcon className="size-4"/> Annuel</div>
               </button>
               <button
                 onClick={() => setPeriodType("monthly")}
@@ -194,7 +206,7 @@ export default function StatistiquesPage() {
                     : "bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300"
                 }`}
               >
-                📆 Mensuel
+                <div className="flex items-center gap-2"><CalenderIcon className="size-4"/> Mensuel</div>
               </button>
               <button
                 onClick={() => setPeriodType("weekly")}
@@ -204,7 +216,7 @@ export default function StatistiquesPage() {
                     : "bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300"
                 }`}
               >
-                📊 Hebdomadaire
+                <div className="flex items-center gap-2"><PieChartIcon className="size-4"/> Hebdomadaire</div>
               </button>
             </div>
           </div>

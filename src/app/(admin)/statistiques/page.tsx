@@ -114,6 +114,14 @@ export default function StatistiquesPage() {
 
   const availableYears = useMemo(() => getAvailableYears(filteredPlayers, filteredPayments), [filteredPlayers, filteredPayments]);
 
+  const hasMonthlyRevenue = monthlyRevenueData.some((d) => (d.revenueUSD || d.revenueHTG) > 0);
+  const hasWeeklyRevenue = weeklyRevenueData.some((d) => (d.revenueUSD || d.revenueHTG) > 0);
+  const hasRegistrations = (periodType === 'monthly'
+    ? monthlyRegistrationsData.some((d) => d.registrations > 0)
+    : periodType === 'weekly'
+    ? weeklyRegistrationsData.some((d) => d.registrations > 0)
+    : yearlyData.some((d) => d.registrations > 0));
+
   return (
     <div className="space-y-6">
       {/* Top header */}
@@ -236,10 +244,10 @@ export default function StatistiquesPage() {
 
       {/* Secondary widgets grid */}
       <div className="grid grid-cols-12 gap-4">
-        {monthlyRevenueData.some((d) => (d.revenueUSD || d.revenueHTG) > 0) && (
+        {hasMonthlyRevenue && (
           <div className="col-span-12 lg:col-span-6">
             <div className="rounded-2xl border border-gray-100 bg-white p-4">
-              <h4 className="text-sm font-semibold mb-3">Ventes journalières</h4>
+              <h4 className="text-sm font-semibold mb-3">Revenus mensuels</h4>
               <div className="h-48">
                 <CombinedRevenueChart data={monthlyRevenueData} type="monthly" title={`Revenus mensuels — ${displayYear}`} />
               </div>
@@ -271,7 +279,7 @@ export default function StatistiquesPage() {
           )}
         </div>
 
-        {weeklyRevenueData.length > 0 && (
+        {hasWeeklyRevenue && (
           <div className="col-span-12 lg:col-span-4">
             <div className="rounded-2xl border border-gray-100 bg-white p-4">
               <h4 className="text-sm font-semibold mb-3">Top 10 Revenus</h4>

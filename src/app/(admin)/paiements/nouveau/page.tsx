@@ -24,6 +24,9 @@ export default function NewPaymentPage() {
   const { players, setPayments } = useClubData();
   const [playerId, setPlayerId] = useState(players[0]?.id ?? "");
   const [montant, setMontant] = useState(180);
+  const [devise, setDevise] = useState<"US" | "HTG">("US");
+  const [taux, setTaux] = useState(0);
+  const [description, setDescription] = useState("");
   const [periode, setPeriode] = useState(currentPeriod());
   const [statut, setStatut] = useState<PaymentStatus>("pending");
   const [methode, setMethode] = useState<PaymentMethod>("virement");
@@ -32,24 +35,31 @@ export default function NewPaymentPage() {
   const playerOptions = useMemo(() => players, [players]);
 
   const handleSubmit = async () => {
-    if (!playerId || !periode || montant <= 0) {
+    if (!playerId || !periode || montant <= 0 || (devise === "HTG" && taux <= 0)) {
       return;
     }
 
     try {
+      const montantUS = devise === "US" ? montant : 0;
+      const montantHTG = devise === "HTG" ? montant : 0;
       const dataToInsert = {
         playerId,
         montant,
-        montantUS: montant, // Par défaut, on considère que c'est du USD dans l'ajout manuel
-        montantHTG: 0,
-        devise: "US" as const,
+        montantUS,
+        montantHTG,
+        devise,
+        taux: devise === "HTG" ? taux : undefined,
         statut,
         periode,
         methode,
+        remarque: description.trim(),
         datePaiement: statut === "paid" ? datePaiement || undefined : undefined,
       };
-      
+
       const inserted = await addPaymentToSupabase(dataToInsert);
+      if (!inserted) {
+        throw new Error("Paiement non cree.");
+      }
 
       setPayments((prevPayments) => [
         {
@@ -60,7 +70,7 @@ export default function NewPaymentPage() {
       ]);
       router.push("/paiements");
     } catch (error) {
-      alert("Erreur lors de l'ajout du paiement. Veuillez réessayer.");
+      alert("Erreur lors de l'ajout du paiement. Veuillez reessayer.");
     }
   };
 
@@ -87,13 +97,52 @@ export default function NewPaymentPage() {
           </div>
           <div>
             <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
-              Montant (EUR)
+              Montant
             </label>
             <input
               type="number"
               min={0}
               value={montant}
               onChange={(event) => setMontant(Number(event.target.value))}
+              className={inputClassName}
+            />
+          </div>
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
+              Devise
+            </label>
+            <select
+              value={devise}
+              onChange={(event) => setDevise(event.target.value as "US" | "HTG")}
+              className={selectClassName}
+            >
+              <option value="US">Dollar US</option>
+              <option value="HTG">Gourde HTG</option>
+            </select>
+          </div>
+          {devise === "HTG" ? (
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
+                Taux
+              </label>
+              <input
+                type="number"
+                min={0}
+                step="0.01"
+                value={taux}
+                onChange={(event) => setTaux(Number(event.target.value))}
+                className={inputClassName}
+              />
+            </div>
+          ) : null}
+          <div className="md:col-span-2 xl:col-span-3">
+            <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
+              Description
+            </label>
+            <input
+              value={description}
+              onChange={(event) => setDescription(event.target.value)}
+              placeholder="Statut joueur: boursier, demi-bourse, special..."
               className={inputClassName}
             />
           </div>

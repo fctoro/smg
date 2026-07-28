@@ -7,6 +7,10 @@ const resolveEtudiantId = (playerId: string) => {
   return numericPart ? Number(numericPart) : trimmed;
 };
 
+const isMissingTauxColumnError = (error: any) =>
+  error?.code === "PGRST204" ||
+  String(error?.message || "").toLowerCase().includes("taux");
+
 // --- PLAYERS (tblEtudiants) ---
 
 export const updatePlayerInSupabase = async (playerId: string, data: Partial<Player & { photoIdentiteUrl?: string; acteNaissanceUrl?: string; carteIdentiteParentUrl?: string }>) => {
@@ -296,11 +300,20 @@ export const updatePaymentInSupabase = async (paymentId: string, data: Partial<i
   if (data.datePaiement !== undefined) updatePayload.DateTransact = data.datePaiement;
   if (data.methode !== undefined) updatePayload.ModePaiement = data.methode;
   if (data.remarque !== undefined) updatePayload.Remarque = data.remarque;
+  if (data.taux !== undefined) updatePayload.Taux = data.taux;
 
-  const { error } = await supabase
+  let { error } = await supabase
     .from("tblPaiements")
     .update(updatePayload)
     .eq("Id", resolveEtudiantId(paymentId));
+
+  if (error && updatePayload.Taux !== undefined && isMissingTauxColumnError(error)) {
+    delete updatePayload.Taux;
+    ({ error } = await supabase
+      .from("tblPaiements")
+      .update(updatePayload)
+      .eq("Id", resolveEtudiantId(paymentId)));
+  }
 
   if (error) throw error;
 };
@@ -320,6 +333,7 @@ export const addPaymentToSupabase = async (data: Omit<import("@/types/club").Pay
     ModePaiement: data.methode,
     Remarque: data.remarque || "",
   };
+  if (data.taux !== undefined) insertPayload.Taux = data.taux;
   
   if (data.devise === "HTG") {
     insertPayload.MntPayeGd = data.montant;
@@ -329,11 +343,20 @@ export const addPaymentToSupabase = async (data: Omit<import("@/types/club").Pay
     insertPayload.MntPayeGd = 0;
   }
 
-  const { data: insertedData, error } = await supabase
+  let { data: insertedData, error } = await supabase
     .from("tblPaiements")
     .insert(insertPayload)
     .select("Id")
     .single();
+
+  if (error && insertPayload.Taux !== undefined && isMissingTauxColumnError(error)) {
+    delete insertPayload.Taux;
+    ({ data: insertedData, error } = await supabase
+      .from("tblPaiements")
+      .insert(insertPayload)
+      .select("Id")
+      .single());
+  }
 
   if (error) throw error;
   return insertedData;

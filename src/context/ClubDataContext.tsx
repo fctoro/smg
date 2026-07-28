@@ -430,6 +430,7 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
                 montantUS,
                 montantHTG,
                 devise,
+                taux: p.Taux || p.taux || undefined,
                 statut: "paid" as any, // Historique des transactions = payé
                 periode: p.DateTransact ? p.DateTransact.substring(0, 7) : new Date().toISOString().substring(0, 7),
                 methode: (p.ModePaiement || "especes") as any,

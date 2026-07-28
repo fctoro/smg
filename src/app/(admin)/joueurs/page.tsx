@@ -15,6 +15,7 @@ import { useConfirm } from "@/hooks/useConfirm";
 
 import { PlayerViewModal } from "@/components/club/modals/PlayerViewModal";
 import { PlayerEditModal } from "@/components/club/modals/PlayerEditModal";
+import { PlayerAddModal } from "@/components/club/modals/PlayerAddModal";
 import { Player } from "@/types/club";
 
 export default function PlayersPage() {
@@ -26,6 +27,7 @@ export default function PlayersPage() {
 
   const [selectedViewPlayer, setSelectedViewPlayer] = useState<Player | null>(null);
   const [selectedEditPlayer, setSelectedEditPlayer] = useState<Player | null>(null);
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
   const handleDeletePlayer = (playerId: string) => {
     const target = players.find((player) => player.id === playerId);
@@ -116,12 +118,12 @@ export default function PlayersPage() {
         onEditPlayer={(player) => setSelectedEditPlayer(player)}
         onDeletePlayer={(player) => handleDeletePlayer(player.id)}
         actionButton={
-          <Link
-            href="/joueurs/nouveau"
+          <button
+            onClick={() => setIsAddModalOpen(true)}
             className="inline-flex h-11 items-center justify-center whitespace-nowrap rounded-lg bg-brand-500 px-4 text-sm font-medium text-white shadow-theme-xs hover:bg-brand-600"
           >
             + Ajouter un joueur
-          </Link>
+          </button>
         }
         exportButton={
           <div className="relative">
@@ -168,6 +170,10 @@ export default function PlayersPage() {
         isOpen={!!selectedEditPlayer}
         onClose={() => setSelectedEditPlayer(null)}
         player={selectedEditPlayer}
+      />
+      <PlayerAddModal
+        isOpen={isAddModalOpen}
+        onClose={() => setIsAddModalOpen(false)}
       />
       <ConfirmComponent />
     </div>

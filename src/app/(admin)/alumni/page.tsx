@@ -18,6 +18,7 @@ import { PencilIcon, TrashBinIcon } from "@/icons";
 import { useClubData } from "@/context/ClubDataContext";
 import { deleteAlumniInSupabase } from "@/lib/club/supabase-crud";
 import { useConfirm } from "@/hooks/useConfirm";
+import { AlumniAddModal } from "@/components/club/modals/AlumniAddModal";
 
 export default function AlumniPage() {
   const router = useRouter();
@@ -28,6 +29,7 @@ export default function AlumniPage() {
   const { confirm, ConfirmComponent } = useConfirm();
   const [currentPage, setCurrentPage] = useState(1);
   const [currentPageSize, setCurrentPageSize] = useState(10);
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
   const situations = useMemo(() => {
     return Array.from(new Set(alumni.map(a => a.situationActuelle).filter(Boolean)));
@@ -154,12 +156,12 @@ export default function AlumniPage() {
         </div>
 
         <div className="shrink-0">
-          <Link
-            href="/alumni/nouveau"
+          <button
+            onClick={() => setIsAddModalOpen(true)}
             className="inline-flex h-11 items-center justify-center whitespace-nowrap rounded-lg bg-brand-500 px-4 text-sm font-medium text-white shadow-theme-xs hover:bg-brand-600"
           >
             + Ajouter un alumni
-          </Link>
+          </button>
         </div>
       </div>
 
@@ -320,6 +322,10 @@ export default function AlumniPage() {
                   }}
                 />
               </div>
+              <AlumniAddModal
+                isOpen={isAddModalOpen}
+                onClose={() => setIsAddModalOpen(false)}
+              />
               <ConfirmComponent />
             </div>
           </>

@@ -19,6 +19,112 @@ const currentPeriod = () => {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 };
 
+interface PricingItem {
+  id: string;
+  rubrique: string;
+  montant: number;
+  devise: "US" | "HTG";
+  precision: string;
+  categorie?: string;
+}
+
+interface PaymentPlan {
+  id: string;
+  plan: string;
+  modalites: string;
+  montantFCToro: number;
+  montantTIToro: number;
+  avantage: string;
+}
+
+const pricingItems: PricingItem[] = [
+  {
+    id: "inscription",
+    rubrique: "Frais d'inscription / réinscription",
+    montant: 75,
+    devise: "US",
+    precision: "Applicables à tous les joueurs, nouveaux et anciens",
+  },
+  {
+    id: "adhesion-fc",
+    rubrique: "Adhésion annuelle - FC TORO",
+    montant: 1350,
+    devise: "US",
+    precision: "Catégories École de Football / Académie / Élite, hors uniformes",
+    categorie: "FC TORO",
+  },
+  {
+    id: "adhesion-ti",
+    rubrique: "Adhésion annuelle - TI TORO",
+    montant: 1000,
+    devise: "US",
+    precision: "Catégorie Ti Toro / U6-U8, hors uniformes",
+    categorie: "TI TORO",
+  },
+  {
+    id: "uniforme-jeux1",
+    rubrique: "Uniforme – Jeux 1",
+    montant: 80,
+    devise: "US",
+    precision: "Jeux Entrainement - Obligatoire",
+  },
+  {
+    id: "uniforme-jeux2",
+    rubrique: "Uniforme – Jeux 2",
+    montant: 100,
+    devise: "US",
+    precision: "Jeux Match 1 - Obligatoire",
+  },
+  {
+    id: "uniforme-jeux3",
+    rubrique: "Uniforme – Jeux 3",
+    montant: 100,
+    devise: "US",
+    precision: "Jeux Match 2 - Obligatoire",
+  },
+  {
+    id: "tracksuit",
+    rubrique: "Tracksuit",
+    montant: 150,
+    devise: "US",
+    precision: "Jacket & Jogger – Facultatif",
+  },
+  {
+    id: "backpack",
+    rubrique: "Backpack",
+    montant: 90,
+    devise: "US",
+    precision: "Sac à dos – Facultatif",
+  },
+];
+
+const paymentPlans: PaymentPlan[] = [
+  {
+    id: "annuel",
+    plan: "Annuel",
+    modalites: "Un versement unique à l'inscription",
+    montantFCToro: 1215,
+    montantTIToro: 900,
+    avantage: "10% de rabais",
+  },
+  {
+    id: "semestriel",
+    plan: "Semestriel",
+    modalites: "2 versements égaux : inscription & janvier",
+    montantFCToro: 641.25,
+    montantTIToro: 475,
+    avantage: "5% de rabais",
+  },
+  {
+    id: "mensuel",
+    plan: "Mensuel",
+    modalites: "9 versements, de septembre à mai, payables avant le 10 de chaque mois",
+    montantFCToro: 155,
+    montantTIToro: 115,
+    avantage: "Mensualité",
+  },
+];
+
 export default function NewPaymentPage() {
   const router = useRouter();
   const { players, setPayments } = useClubData();
@@ -33,6 +139,8 @@ export default function NewPaymentPage() {
   const [statut, setStatut] = useState<PaymentStatus>("pending");
   const [methode, setMethode] = useState<PaymentMethod>("virement");
   const [datePaiement, setDatePaiement] = useState("");
+  const [selectedPricing, setSelectedPricing] = useState<string>("");
+  const [selectedPlan, setSelectedPlan] = useState<string>("");
 
   const playerOptions = useMemo(() => players, [players]);
   const searchContainerRef = useRef<HTMLDivElement>(null);
@@ -111,6 +219,31 @@ export default function NewPaymentPage() {
     setShowPlayerDropdown(false);
   };
 
+  const handlePricingChange = (pricingId: string) => {
+    setSelectedPricing(pricingId);
+    const pricing = pricingItems.find((p) => p.id === pricingId);
+    if (pricing) {
+      setMontant(pricing.montant);
+      setDevise(pricing.devise);
+    }
+  };
+
+  const selectedPricingItem = pricingItems.find((p) => p.id === selectedPricing);
+
+  const handlePlanChange = (planId: string) => {
+    setSelectedPlan(planId);
+    const plan = paymentPlans.find((p) => p.id === planId);
+    if (plan && selectedPlayer) {
+      const isFCToro = selectedPlayer.categorie === "FC TORO" || 
+                       selectedPlayer.categorie === "Académie" || 
+                       selectedPlayer.categorie === "Élite" ||
+                       selectedPlayer.categorie === "École de Football";
+      const planAmount = isFCToro ? plan.montantFCToro : plan.montantTIToro;
+      setMontant(planAmount);
+      setDevise("US");
+    }
+  };
+
   return (
     <div className="space-y-6">
       <PageBreadcrumb pageTitle="Ajouter un paiement" />
@@ -171,17 +304,57 @@ export default function NewPaymentPage() {
               )}
             </div>
           </div>
+          <div className="md:col-span-2 xl:col-span-3">
+            <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
+              Rubrique
+            </label>
+            <select
+              value={selectedPricing}
+              onChange={(event) => handlePricingChange(event.target.value)}
+              className={selectClassName}
+            >
+              <option value="">Sélectionner une rubrique</option>
+              {pricingItems.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.rubrique} - ${item.montant}
+                </option>
+              ))}
+            </select>
+            {selectedPricingItem && (
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                {selectedPricingItem.precision}
+              </p>
+            )}
+          </div>
           <div>
             <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
               Montant
             </label>
-            <input
-              type="number"
-              min={0}
-              value={montant}
-              onChange={(event) => setMontant(Number(event.target.value))}
-              className={inputClassName}
-            />
+            <div className="flex gap-2">
+              <select
+                value=""
+                onChange={(event) => {
+                  if (event.target.value) {
+                    setMontant(Number(event.target.value));
+                  }
+                }}
+                className={selectClassName}
+              >
+                <option value="">Sélectionner</option>
+                {pricingItems.map((item) => (
+                  <option key={item.id} value={item.montant}>
+                    {item.rubrique} - ${item.montant}
+                  </option>
+                ))}
+              </select>
+              <input
+                type="number"
+                min={0}
+                value={montant}
+                onChange={(event) => setMontant(Number(event.target.value))}
+                className={inputClassName}
+              />
+            </div>
           </div>
           <div>
             <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
@@ -273,6 +446,28 @@ export default function NewPaymentPage() {
               <option value="pending">En attente</option>
               <option value="late">En retard</option>
             </select>
+          </div>
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
+              Plan de paiement
+            </label>
+            <select
+              value={selectedPlan}
+              onChange={(event) => handlePlanChange(event.target.value)}
+              className={selectClassName}
+            >
+              <option value="">Sélectionner un plan</option>
+              {paymentPlans.map((plan) => (
+                <option key={plan.id} value={plan.id}>
+                  {plan.plan} - {plan.avantage}
+                </option>
+              ))}
+            </select>
+            {selectedPlan && (
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                {paymentPlans.find((p) => p.id === selectedPlan)?.modalites}
+              </p>
+            )}
           </div>
           <div>
             <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">

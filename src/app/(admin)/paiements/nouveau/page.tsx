@@ -1,10 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import { useClubData } from "@/context/ClubDataContext";
-import { PaymentMethod, PaymentStatus } from "@/types/club";
+import { PaymentMethod, PaymentStatus, Player } from "@/types/club";
 import { getPlayerFullName } from "@/lib/club/metrics";
 import { addPaymentToSupabase } from "@/lib/club/supabase-crud";
 
@@ -23,6 +23,8 @@ export default function NewPaymentPage() {
   const router = useRouter();
   const { players, setPayments } = useClubData();
   const [playerId, setPlayerId] = useState(players[0]?.id ?? "");
+  const [playerSearch, setPlayerSearch] = useState("");
+  const [showPlayerDropdown, setShowPlayerDropdown] = useState(false);
   const [montant, setMontant] = useState(180);
   const [devise, setDevise] = useState<"US" | "HTG">("US");
   const [taux, setTaux] = useState(0);
@@ -33,6 +35,35 @@ export default function NewPaymentPage() {
   const [datePaiement, setDatePaiement] = useState("");
 
   const playerOptions = useMemo(() => players, [players]);
+  const searchContainerRef = useRef<HTMLDivElement>(null);
+
+  const selectedPlayer = useMemo(
+    () => players.find((p) => p.id === playerId) ?? null,
+    [players, playerId]
+  );
+
+  const filteredPlayers = useMemo(() => {
+    const query = playerSearch.trim().toLowerCase();
+    if (!query) return playerOptions.slice(0, 20);
+    return playerOptions.filter((player) => {
+      const fullName = getPlayerFullName(player).toLowerCase();
+      const matricule = (player.matricule || "").toLowerCase();
+      return fullName.includes(query) || matricule.includes(query);
+    });
+  }, [playerOptions, playerSearch]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        searchContainerRef.current &&
+        !searchContainerRef.current.contains(event.target as Node)
+      ) {
+        setShowPlayerDropdown(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   const handleSubmit = async () => {
     if (!playerId || !periode || montant <= 0 || (devise === "HTG" && taux <= 0)) {
@@ -74,6 +105,12 @@ export default function NewPaymentPage() {
     }
   };
 
+  const handleSelectPlayer = (player: Player) => {
+    setPlayerId(player.id);
+    setPlayerSearch("");
+    setShowPlayerDropdown(false);
+  };
+
   return (
     <div className="space-y-6">
       <PageBreadcrumb pageTitle="Ajouter un paiement" />
@@ -83,17 +120,56 @@ export default function NewPaymentPage() {
             <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
               Joueur
             </label>
-            <select
-              value={playerId}
-              onChange={(event) => setPlayerId(event.target.value)}
-              className={selectClassName}
-            >
-              {playerOptions.map((player) => (
-                <option key={player.id} value={player.id}>
-                  {getPlayerFullName(player)}
-                </option>
-              ))}
-            </select>
+            <div ref={searchContainerRef} className="relative">
+              <input
+                type="text"
+                value={playerSearch}
+                onChange={(event) => {
+                  setPlayerSearch(event.target.value);
+                  setShowPlayerDropdown(true);
+                }}
+                onFocus={() => setShowPlayerDropdown(true)}
+                placeholder={
+                  selectedPlayer
+                    ? `${getPlayerFullName(selectedPlayer)}${selectedPlayer.matricule ? ` (${selectedPlayer.matricule})` : ""}`
+                    : "Rechercher un joueur..."
+                }
+                className={inputClassName}
+              />
+              {showPlayerDropdown && (
+                <div className="absolute z-20 mt-1 max-h-60 w-full overflow-auto rounded-lg border border-gray-200 bg-white shadow-lg dark:border-gray-700 dark:bg-gray-900">
+                  {filteredPlayers.length === 0 ? (
+                    <div className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
+                      Aucun joueur trouve.
+                    </div>
+                  ) : (
+                    filteredPlayers.map((player) => (
+                      <button
+                        type="button"
+                        key={player.id}
+                        onMouseDown={(event) => event.preventDefault()}
+                        onClick={() => handleSelectPlayer(player)}
+                        className={`flex w-full flex-col items-start px-4 py-2.5 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-800 ${
+                          player.id === playerId
+                            ? "bg-brand-50 dark:bg-brand-500/10"
+                            : ""
+                        }`}
+                      >
+                        <span className="font-medium text-gray-800 dark:text-white/90">
+                          {getPlayerFullName(player)}
+                        </span>
+                        <span className="text-xs text-gray-500 dark:text-gray-400">
+                          {player.matricule
+                            ? `Code: ${player.matricule}`
+                            : "Sans code"}
+                          {` • ${player.categorie} • ${player.poste}`}
+                        </span>
+                      </button>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
           </div>
           <div>
             <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
@@ -145,6 +221,34 @@ export default function NewPaymentPage() {
               placeholder="Statut joueur: boursier, demi-bourse, special..."
               className={inputClassName}
             />
+            {selectedPlayer && (
+              <div className="mt-2 flex items-center gap-2 rounded-lg border border-brand-200 bg-brand-50 px-3 py-2 dark:border-brand-500/30 dark:bg-brand-500/10">
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-brand-900 dark:text-brand-100">
+                    {getPlayerFullName(selectedPlayer)}
+                  </p>
+                  <p className="text-xs text-brand-700 dark:text-brand-300">
+                    {selectedPlayer.matricule
+                      ? `Code: ${selectedPlayer.matricule}`
+                      : "Sans code"}
+                    {` • ${selectedPlayer.categorie} • ${selectedPlayer.poste}`}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPlayerId("");
+                    setPlayerSearch("");
+                  }}
+                  className="rounded-full p-1 text-brand-600 hover:bg-brand-100 dark:text-brand-300 dark:hover:bg-brand-500/20"
+                  title="Changer de joueur"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            )}
           </div>
           <div>
             <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">

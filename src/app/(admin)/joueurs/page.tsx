@@ -13,12 +13,19 @@ import { Dropdown } from "@/components/ui/dropdown/Dropdown";
 import { DropdownItem } from "@/components/ui/dropdown/DropdownItem";
 import { useConfirm } from "@/hooks/useConfirm";
 
+import { PlayerViewModal } from "@/components/club/modals/PlayerViewModal";
+import { PlayerEditModal } from "@/components/club/modals/PlayerEditModal";
+import { Player } from "@/types/club";
+
 export default function PlayersPage() {
   const router = useRouter();
   const { players, setPlayers } = useClubData();
   const [isExportOpen, setIsExportOpen] = useState(false);
   const { enabledPlayerColumns } = useDashboardConfig();
   const { confirm, ConfirmComponent } = useConfirm();
+
+  const [selectedViewPlayer, setSelectedViewPlayer] = useState<Player | null>(null);
+  const [selectedEditPlayer, setSelectedEditPlayer] = useState<Player | null>(null);
 
   const handleDeletePlayer = (playerId: string) => {
     const target = players.find((player) => player.id === playerId);
@@ -105,8 +112,8 @@ export default function PlayersPage() {
       <PlayerTable
         players={players}
         columns={tableColumns}
-        onViewPlayer={(player) => router.push(`/joueurs/${player.id}`)}
-        onEditPlayer={(player) => router.push(`/joueurs/${player.id}/modifier`)}
+        onViewPlayer={(player) => setSelectedViewPlayer(player)}
+        onEditPlayer={(player) => setSelectedEditPlayer(player)}
         onDeletePlayer={(player) => handleDeletePlayer(player.id)}
         actionButton={
           <Link
@@ -150,6 +157,17 @@ export default function PlayersPage() {
             </Dropdown>
           </div>
         }
+      />
+      <PlayerViewModal 
+        isOpen={!!selectedViewPlayer} 
+        onClose={() => setSelectedViewPlayer(null)} 
+        player={selectedViewPlayer} 
+      />
+      
+      <PlayerEditModal
+        isOpen={!!selectedEditPlayer}
+        onClose={() => setSelectedEditPlayer(null)}
+        player={selectedEditPlayer}
       />
       <ConfirmComponent />
     </div>

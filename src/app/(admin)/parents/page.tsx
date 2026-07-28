@@ -12,11 +12,16 @@ import { useClubData } from "@/context/ClubDataContext";
 import { getParentLinkedPlayerIds } from "@/lib/club/parents";
 import { deleteParentInSupabase } from "@/lib/club/supabase-crud";
 
+import { ParentEditModal } from "@/components/club/modals/ParentEditModal";
+import { Parent } from "@/types/club";
+
 export default function ParentsPage() {
   const router = useRouter();
   const { parents, setParents, players } = useClubData();
   const [isExportOpen, setIsExportOpen] = useState(false);
   const { confirm, ConfirmComponent } = useConfirm();
+
+  const [selectedEditParent, setSelectedEditParent] = useState<Parent | null>(null);
 
   const handleExportCSV = () => {
     setIsExportOpen(false);
@@ -94,7 +99,7 @@ export default function ParentsPage() {
       <ParentTable
         parents={parents}
         players={players}
-        onEditParent={(parent) => router.push(`/parents/${parent.id}/modifier`)}
+        onEditParent={(parent) => setSelectedEditParent(parent)}
         onDeleteParent={(parent) => handleDeleteParent(parent.id)}
         actionButton={
           <Link
@@ -141,6 +146,13 @@ export default function ParentsPage() {
           </div>
         }
       />
+      
+      <ParentEditModal
+        isOpen={!!selectedEditParent}
+        onClose={() => setSelectedEditParent(null)}
+        parent={selectedEditParent}
+      />
+      
       <ConfirmComponent />
     </div>
   );

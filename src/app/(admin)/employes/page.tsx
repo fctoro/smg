@@ -11,11 +11,16 @@ import EmployeeTable from "@/components/club/EmployeeTable";
 import { useClubData } from "@/context/ClubDataContext";
 import { softDeleteEmployeeInSupabase } from "@/lib/club/supabase-crud";
 
+import { EmployeeEditModal } from "@/components/club/modals/EmployeeEditModal";
+import { Employee } from "@/types/club";
+
 export default function EmployesPage() {
   const router = useRouter();
   const { employees, setEmployees } = useClubData();
   const [isExportOpen, setIsExportOpen] = useState(false);
   const { confirm, ConfirmComponent } = useConfirm();
+
+  const [selectedEditEmployee, setSelectedEditEmployee] = useState<Employee | null>(null);
 
   const handleExportCSV = () => {
     setIsExportOpen(false);
@@ -92,7 +97,7 @@ export default function EmployesPage() {
 
       <EmployeeTable
         employees={employees}
-        onEditEmployee={(emp) => router.push(`/employes/${emp.id}/modifier`)}
+        onEditEmployee={(emp) => setSelectedEditEmployee(emp)}
         onDeleteEmployee={(emp) => handleDeleteEmployee(emp.id)}
         actionButton={
           <Link
@@ -139,6 +144,13 @@ export default function EmployesPage() {
           </div>
         }
       />
+      
+      <EmployeeEditModal
+        isOpen={!!selectedEditEmployee}
+        onClose={() => setSelectedEditEmployee(null)}
+        employee={selectedEditEmployee}
+      />
+      
       <ConfirmComponent />
     </div>
   );

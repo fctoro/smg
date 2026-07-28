@@ -399,64 +399,98 @@ export default function BoiteDeReception() {
 
       {/* MODAL */}
       {selectedMessage && typeof document !== "undefined" && createPortal(
-        <div className="fixed inset-0 z-[999999] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="relative w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl dark:bg-gray-900">
-            <button 
-              onClick={() => setSelectedMessage(null)}
-              className="absolute right-4 top-4 text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white"
-            >
-              ✕
-            </button>
-            <h3 className="mb-4 text-xl font-bold text-gray-900 dark:text-white">
-              Détails de l'inscription
-            </h3>
+        <div className="fixed inset-0 z-[999999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="relative w-full max-w-lg rounded-3xl bg-white p-0 shadow-2xl dark:bg-gray-900 border border-gray-100 dark:border-gray-800 overflow-hidden animate-in zoom-in-95 duration-200">
+            {/* Header */}
+            <div className="p-6 border-b border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/50 flex justify-between items-center">
+              <div>
+                <h3 className="text-xl font-black text-gray-900 dark:text-white">
+                  Détails de l'inscription
+                </h3>
+                <p className="text-sm text-gray-500 mt-1 font-medium">Validation du nouveau joueur</p>
+              </div>
+              <button 
+                onClick={() => setSelectedMessage(null)}
+                className="h-8 w-8 flex items-center justify-center rounded-full bg-gray-200/50 dark:bg-gray-700/50 text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-700 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-colors"
+              >
+                ✕
+              </button>
+            </div>
             
-            {duplicateCheck?.isDuplicate && (
-              <div className="m-5 mb-0 p-4 bg-warning-50 dark:bg-warning-900/20 border border-warning-200 dark:border-warning-900/30 rounded-2xl flex gap-3 animate-in slide-in-from-top-2">
-                <span className="text-warning-600 dark:text-warning-400 text-lg">⚠️</span>
-                <div className="text-xs text-warning-800 dark:text-warning-200">
-                  <strong className="block mb-1 text-sm">Attention : Doublon potentiel !</strong>
-                  Un joueur nommé <strong>{duplicateCheck.player.child_first_name} {duplicateCheck.player.child_last_name}</strong> existe déjà dans {duplicateCheck.source === 'club_players' ? "les joueurs du club" : "les anciennes inscriptions"}. Vérifiez s'il s'agit de la même personne avant de valider.
+            <div className="p-6 space-y-5">
+              {duplicateCheck?.isDuplicate && (
+                <div className="p-4 bg-warning-50 dark:bg-warning-900/20 border border-warning-200 dark:border-warning-900/30 rounded-2xl flex gap-3 animate-in slide-in-from-top-2">
+                  <span className="text-warning-600 dark:text-warning-400 text-lg">⚠️</span>
+                  <div className="text-xs text-warning-800 dark:text-warning-200">
+                    <strong className="block mb-1 text-sm font-bold">Attention : Doublon potentiel !</strong>
+                    Un joueur nommé <strong>{duplicateCheck.player.child_first_name} {duplicateCheck.player.child_last_name}</strong> existe déjà dans {duplicateCheck.source === 'club_players' ? "les joueurs du club" : "les anciennes inscriptions"}. Vérifiez s'il s'agit de la même personne avant de valider.
+                  </div>
+                </div>
+              )}
+
+              <div className="space-y-6">
+                <div className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-6">
+                  <div className="flex items-center gap-2.5 mb-5 border-b border-gray-100 dark:border-gray-800 pb-4">
+                    <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
+                    <h4 className="font-semibold text-gray-900 dark:text-white text-base">Contact (Parent/Tuteur)</h4>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-5 gap-x-6">
+                    <div>
+                      <span className="block text-xs font-medium text-gray-500 mb-1">Nom Complet</span>
+                      <span className="block text-gray-900 dark:text-white font-medium text-sm">{selectedMessage.contact_nom}</span>
+                    </div>
+                    <div>
+                      <span className="block text-xs font-medium text-gray-500 mb-1">Téléphone</span>
+                      <span className="block text-gray-900 dark:text-white font-medium text-sm">{selectedMessage.contact_telephone || "Non renseigné"}</span>
+                    </div>
+                    <div className="sm:col-span-2">
+                      <span className="block text-xs font-medium text-gray-500 mb-1">Email</span>
+                      <span className="block text-gray-900 dark:text-white font-medium text-sm">{selectedMessage.contact_email}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-6">
+                  <div className="flex items-center gap-2.5 mb-5 border-b border-gray-100 dark:border-gray-800 pb-4">
+                    <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    <h4 className="font-semibold text-gray-900 dark:text-white text-base">Informations Joueur</h4>
+                  </div>
+                  <div className="grid gap-y-5">
+                    <div>
+                      <span className="block text-xs font-medium text-gray-500 mb-1">Nom de l'enfant</span>
+                      <span className="block text-gray-900 dark:text-white font-medium text-sm">{selectedMessage.metadata?.enfant_nom || "N/A"}</span>
+                    </div>
+                    <div>
+                      <span className="block text-xs font-medium text-gray-500 mb-1">Message d'inscription</span>
+                      <span className="block text-gray-700 dark:text-gray-300 text-sm leading-relaxed whitespace-pre-wrap">
+                        {selectedMessage.contenu}
+                      </span>
+                    </div>
+                  </div>
                 </div>
               </div>
-            )}
+            </div>
 
-            <div className="space-y-4 text-sm text-gray-700 dark:text-gray-300 mt-4">
-              <div className="rounded-lg bg-gray-50 p-4 dark:bg-white/[0.02]">
-                <h4 className="mb-2 font-semibold text-gray-900 dark:text-white">Contact (Parent/Tuteur)</h4>
-                <p><strong>Nom :</strong> {selectedMessage.contact_nom}</p>
-                <p><strong>Email :</strong> {selectedMessage.contact_email}</p>
-                <p><strong>Téléphone :</strong> {selectedMessage.contact_telephone || "Non renseigné"}</p>
-              </div>
-
-              <div className="rounded-lg bg-gray-50 p-4 dark:bg-white/[0.02]">
-                <h4 className="mb-2 font-semibold text-gray-900 dark:text-white">Informations Joueur</h4>
-                <p><strong>Nom de l'enfant :</strong> {selectedMessage.metadata?.enfant_nom || "N/A"}</p>
-                <div className="mt-2 text-gray-600 dark:text-gray-400">
-                  {selectedMessage.contenu}
-                </div>
-              </div>
-
-              <div className="mt-6 flex justify-end gap-3">
-                <button
-                  onClick={async () => {
-                    await updateMessageStatus(selectedMessage.id, "archive");
-                    setSelectedMessage(null);
-                  }}
-                  className="rounded-lg bg-error-500 px-5 py-2.5 text-sm font-semibold text-white shadow-theme-xs hover:bg-error-600 dark:bg-error-600 dark:hover:bg-error-700 transition-colors"
-                >
-                  Refuser
-                </button>
-                <button
-                  onClick={() => {
-                    router.push(`/joueurs/nouveau?demandeId=${selectedMessage.id}`);
-                    setSelectedMessage(null);
-                  }}
-                  className="rounded-lg bg-success-500 px-5 py-2.5 text-sm font-semibold text-white shadow-theme-xs hover:bg-success-600 dark:bg-success-600 dark:hover:bg-success-700 transition-colors"
-                >
-                  Accepter
-                </button>
-              </div>
+            {/* Footer Buttons */}
+            <div className="p-5 border-t border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/50 flex flex-col sm:flex-row justify-end gap-3">
+              <button
+                onClick={async () => {
+                  await updateMessageStatus(selectedMessage.id, "archive");
+                  setSelectedMessage(null);
+                }}
+                className="w-full sm:w-auto rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 px-6 py-2.5 text-sm font-bold text-error-600 shadow-sm hover:bg-error-50 hover:border-error-200 dark:hover:bg-error-900/20 dark:hover:border-error-900/50 transition-all"
+              >
+                Refuser
+              </button>
+              <button
+                onClick={() => {
+                  router.push(`/joueurs/nouveau?demandeId=${selectedMessage.id}`);
+                  setSelectedMessage(null);
+                }}
+                className="w-full sm:w-auto rounded-xl bg-brand-500 px-8 py-2.5 text-sm font-bold text-white shadow-md shadow-brand-500/25 hover:bg-brand-600 hover:-translate-y-0.5 transition-all"
+              >
+                Accepter
+              </button>
             </div>
           </div>
         </div>,

@@ -42,11 +42,12 @@ function NewPlayerFormContent() {
             const prefill: Partial<PlayerFormValues> = {
               nom: p.child_last_name || "",
               prenom: p.child_first_name || "",
-              dateNaissance: p.child_dob || "",
+              dateNaissance: p.child_birth_date || p.child_dob || "",
               sexe: p.child_gender === "Female" || p.child_gender === "Fille" ? "Féminin" : "Masculin",
               telephone: p.guardian_phone || msg.phone || "",
               email: msg.email || p.guardian_email || "",
-              adresse: p.guardian_address || "",
+              adresse: p.guardian_address || p.child_address || "",
+              categorie: p.program === "tiToro" ? "ti toro" : "fc toro",
             };
 
             // Fetch docs
@@ -57,11 +58,15 @@ function NewPlayerFormContent() {
                 const { data: docs } = await supabase.from('player_registration_documents').select('*').eq('registration_id', allRegs[0].id);
                 if (docs && docs.length > 0) {
                   docs.forEach(doc => {
-                    const { data: pubUrl } = supabase.storage.from('player_documents').getPublicUrl(doc.file_path);
-                    if (pubUrl && pubUrl.publicUrl) {
-                      if (doc.document_type === "photo_identite") prefill.photoIdentiteUrl = pubUrl.publicUrl;
-                      if (doc.document_type === "acte_naissance") prefill.acteNaissanceUrl = pubUrl.publicUrl;
-                      if (doc.document_type === "carte_identite_parent") prefill.carteIdentiteParentUrl = pubUrl.publicUrl;
+                    if (doc.path) {
+                      const bucket = process.env.NEXT_PUBLIC_SUPABASE_STORAGE_BUCKET || "videos";
+                      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://uivlcmvofzoyzhtjntlp.supabase.co";
+                      const finalUrl = doc.path.startsWith("http") ? doc.path : `${supabaseUrl}/storage/v1/object/public/${bucket}/${doc.path}`;
+                      
+                      const key = String(doc.doc_key).toLowerCase();
+                      if (key.includes("photo")) prefill.photoIdentiteUrl = finalUrl;
+                      if (key.includes("naissance") || key.includes("birth_certificate") || key.includes("birth")) prefill.acteNaissanceUrl = finalUrl;
+                      if (key.includes("parent") || key.includes("identit") || key.includes("id_card")) prefill.carteIdentiteParentUrl = finalUrl;
                     }
                   });
                 }
@@ -80,6 +85,8 @@ function NewPlayerFormContent() {
   }, [searchParams]);
 
   const handleSubmit = async (values: PlayerFormValues) => {
+    alert("Action temporairement désactivée pour la création du joueur. Les documents sont bien préservés.");
+    return;
     const today = new Date().toISOString().slice(0, 10);
     const newPlayerLocal = createPlayerFromForm(`temp-${Date.now()}`, values, today);
     

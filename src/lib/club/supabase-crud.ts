@@ -149,7 +149,7 @@ export const addPlayerToSupabase = async (data: Omit<Player & { photoIdentiteUrl
     .single();
 
   if (error) {
-    console.error("Erreur lors de l'ajout du joueur :", error);
+    console.error("Erreur lors de l'ajout du joueur :", JSON.stringify(error, null, 2));
     throw error;
   }
 

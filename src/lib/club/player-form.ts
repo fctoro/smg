@@ -19,6 +19,9 @@ export const normalizePlayerFormValues = (
     : 0,
   cotisationDevise: values.cotisationDevise || "US",
   cotisationStatut: values.cotisationStatut,
+  photoIdentiteUrl: values.photoIdentiteUrl,
+  acteNaissanceUrl: values.acteNaissanceUrl,
+  carteIdentiteParentUrl: values.carteIdentiteParentUrl,
 });
 
 export const toPlayerFormValues = (player: Player): PlayerFormValues => ({

@@ -68,8 +68,22 @@ export const deleteMessage = async (id: string, metadata?: any) => {
 };
 
 export const fetchDocumentsForMessage = async (id: string, email: string) => {
+  const { data: msgData } = await supabase.from('site_messages').select('created_at').eq('id', id).single();
+  const targetTime = msgData?.created_at ? new Date(msgData.created_at).getTime() : Date.now();
+
   const { data: allRegs } = await supabase.from('player_registrations').select('id, created_at').eq('guardian_email', email);
   if (!allRegs || allRegs.length === 0) return [];
-  const { data: docs } = await supabase.from('player_registration_documents').select('*').eq('registration_id', allRegs[0].id);
+
+  let regId = allRegs[0].id;
+  let minDiff = Infinity;
+  for (const r of allRegs) {
+    const diff = Math.abs(new Date(r.created_at).getTime() - targetTime);
+    if (diff < minDiff) {
+      minDiff = diff;
+      regId = r.id;
+    }
+  }
+
+  const { data: docs } = await supabase.from('player_registration_documents').select('*').eq('registration_id', regId);
   return docs || [];
 };

@@ -93,12 +93,18 @@ export default function PlayerForm({
                     src={formValues.photoIdentiteUrl}
                     alt="Photo"
                     className="h-full w-full object-cover"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src = "/images/user/user-01.jpg";
+                    }}
                   />
                 ) : formValues.photoIdentiteUrl && !formValues.photoIdentiteUrl.startsWith('data:application/pdf') ? (
                   <img
                     src={formValues.photoIdentiteUrl}
                     alt="Photo"
                     className="h-full w-full object-cover"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src = "/images/user/user-01.jpg";
+                    }}
                   />
                 ) : (
                   <div className="flex flex-col items-center gap-1 text-gray-500 dark:text-gray-400">
@@ -138,21 +144,50 @@ export default function PlayerForm({
             <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
               Acte de naissance
             </label>
-            <input
-              type="file"
-              accept="image/*,application/pdf"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) {
-                  const reader = new FileReader();
-                  reader.onloadend = () => {
-                    updateField("acteNaissanceUrl", reader.result as string);
-                  };
-                  reader.readAsDataURL(file);
-                }
-              }}
-              className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-brand-50 file:text-brand-700 hover:file:bg-brand-100 dark:file:bg-gray-800 dark:file:text-gray-300"
-            />
+            {formValues.acteNaissanceUrl && formValues.acteNaissanceUrl.startsWith('http') ? (
+              <div className="flex flex-col gap-2 mt-1">
+                <div className="flex items-center justify-between bg-green-50 dark:bg-green-900/20 px-4 py-2.5 rounded-lg border border-green-100 dark:border-green-900/50">
+                  <a href={formValues.acteNaissanceUrl} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-sm font-medium text-green-700 dark:text-green-500 hover:underline">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                    Document uploadé (voir)
+                  </a>
+                  <label className="cursor-pointer text-xs font-semibold text-brand-600 hover:text-brand-700 bg-white dark:bg-gray-800 px-2 py-1 rounded-md shadow-sm border border-gray-200 dark:border-gray-700">
+                    Remplacer
+                    <input
+                      type="file"
+                      accept="image/*,application/pdf"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          const reader = new FileReader();
+                          reader.onloadend = () => {
+                            updateField("acteNaissanceUrl", reader.result as string);
+                          };
+                          reader.readAsDataURL(file);
+                        }
+                      }}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
+              </div>
+            ) : (
+              <input
+                type="file"
+                accept="image/*,application/pdf"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    const reader = new FileReader();
+                    reader.onloadend = () => {
+                      updateField("acteNaissanceUrl", reader.result as string);
+                    };
+                    reader.readAsDataURL(file);
+                  }
+                }}
+                className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-brand-50 file:text-brand-700 hover:file:bg-brand-100 dark:file:bg-gray-800 dark:file:text-gray-300"
+              />
+            )}
           </div>
 
           {/* Carte d'identité du parent */}
@@ -160,21 +195,50 @@ export default function PlayerForm({
             <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
               Carte d'identité du parent
             </label>
-            <input
-              type="file"
-              accept="image/*,application/pdf"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) {
-                  const reader = new FileReader();
-                  reader.onloadend = () => {
-                    updateField("carteIdentiteParentUrl", reader.result as string);
-                  };
-                  reader.readAsDataURL(file);
-                }
-              }}
-              className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-brand-50 file:text-brand-700 hover:file:bg-brand-100 dark:file:bg-gray-800 dark:file:text-gray-300"
-            />
+            {formValues.carteIdentiteParentUrl && formValues.carteIdentiteParentUrl.startsWith('http') ? (
+              <div className="flex flex-col gap-2 mt-1">
+                <div className="flex items-center justify-between bg-green-50 dark:bg-green-900/20 px-4 py-2.5 rounded-lg border border-green-100 dark:border-green-900/50">
+                  <a href={formValues.carteIdentiteParentUrl} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-sm font-medium text-green-700 dark:text-green-500 hover:underline">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                    Document uploadé (voir)
+                  </a>
+                  <label className="cursor-pointer text-xs font-semibold text-brand-600 hover:text-brand-700 bg-white dark:bg-gray-800 px-2 py-1 rounded-md shadow-sm border border-gray-200 dark:border-gray-700">
+                    Remplacer
+                    <input
+                      type="file"
+                      accept="image/*,application/pdf"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          const reader = new FileReader();
+                          reader.onloadend = () => {
+                            updateField("carteIdentiteParentUrl", reader.result as string);
+                          };
+                          reader.readAsDataURL(file);
+                        }
+                      }}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
+              </div>
+            ) : (
+              <input
+                type="file"
+                accept="image/*,application/pdf"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    const reader = new FileReader();
+                    reader.onloadend = () => {
+                      updateField("carteIdentiteParentUrl", reader.result as string);
+                    };
+                    reader.readAsDataURL(file);
+                  }
+                }}
+                className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-brand-50 file:text-brand-700 hover:file:bg-brand-100 dark:file:bg-gray-800 dark:file:text-gray-300"
+              />
+            )}
           </div>
         </div>
 

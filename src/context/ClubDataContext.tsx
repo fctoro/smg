@@ -105,7 +105,9 @@ const generateMockPayrollRecords = (empList: any[]): PayrollRecord[] => {
       (empList || []).forEach((emp: any, index: number) => {
         const baseSalary = emp.salaire || emp.Salaire || 400 + (index % 5) * 120;
         const bonus = (index + mIdx) % 3 === 0 ? 50 : 0;
-        const deductions = 25;
+        const prelevementPourcentage = 2;
+        const prelevementMontant = Math.round(baseSalary * prelevementPourcentage) / 100;
+        const deductions = 25 + prelevementMontant;
         const net = baseSalary + bonus - deductions;
         const mKey = `${yearStr}-${monthStr}`;
 
@@ -124,6 +126,8 @@ const generateMockPayrollRecords = (empList: any[]): PayrollRecord[] => {
           salaireBase: baseSalary,
           bonus: bonus,
           deductions: deductions,
+          prelevementPourcentage,
+          prelevementMontant,
           netAPayer: net,
           devise: empDevise,
           statut: isPending ? "en_attente" : "paye",
@@ -543,6 +547,12 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
             const baseSalary = p.SalaireBase || p.salairebase || p.salaire_base || (emp ? emp.Salaire : 0) || 0;
             const bonus = p.Bonus || p.bonus || 0;
             const deductions = p.Deductions || p.deductions || 0;
+            const prelevementPourcentage = p.PrelevementPourcentage || p.prelevementpourcentage || p.prelevement_pourcentage || 2;
+            const prelevementMontant =
+              p.PrelevementMontant ||
+              p.prelevementmontant ||
+              p.prelevement_montant ||
+              Math.round(baseSalary * prelevementPourcentage) / 100;
             const fallbackNet = baseSalary + bonus - deductions;
 
             return {
@@ -555,6 +565,8 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
               salaireBase: baseSalary,
               bonus: bonus,
               deductions: deductions,
+              prelevementPourcentage,
+              prelevementMontant,
               netAPayer: p.NetAPayer || p.netapayer || p.net_a_payer || fallbackNet,
               devise: (p.Devise || p.devise || (emp?.Devise || emp?.devise) || (baseSalary >= 1000 ? "HTG" : "US")) as "US" | "HTG",
               statut: p.Statut || p.statut || "en_attente",

@@ -11,6 +11,11 @@ const isMissingTauxColumnError = (error: any) =>
   error?.code === "PGRST204" ||
   String(error?.message || "").toLowerCase().includes("taux");
 
+const isMissingPrelevementColumnError = (error: any) => {
+  const message = String(error?.message || "").toLowerCase();
+  return error?.code === "PGRST204" || message.includes("prelevement");
+};
+
 // --- PLAYERS (tblEtudiants) ---
 
 export const updatePlayerInSupabase = async (playerId: string, data: Partial<Player & { photoIdentiteUrl?: string; acteNaissanceUrl?: string; carteIdentiteParentUrl?: string }>) => {
@@ -492,7 +497,7 @@ export const addPayrollToSupabase = async (data: Omit<import("@/types/club").Pay
   }
 
   // 2. Insert into tblPayroll
-  const insertPayload = {
+  const insertPayload: any = {
     EmployeId: parseInt(data.employeId, 10),
     EmployeNom: data.employeNom,
     EmployePrenom: data.employePrenom,
@@ -501,6 +506,8 @@ export const addPayrollToSupabase = async (data: Omit<import("@/types/club").Pay
     SalaireBase: data.salaireBase,
     Bonus: data.bonus,
     Deductions: data.deductions,
+    PrelevementPourcentage: data.prelevementPourcentage,
+    PrelevementMontant: data.prelevementMontant,
     NetAPayer: data.netAPayer,
     Devise: data.devise || "HTG",
     Statut: data.statut,
@@ -510,11 +517,21 @@ export const addPayrollToSupabase = async (data: Omit<import("@/types/club").Pay
     PieceJointe: pieceJointeUrl,
   };
 
-  const { data: insertedData, error } = await supabase
+  let { data: insertedData, error } = await supabase
     .from("tblPayroll")
     .insert(insertPayload)
     .select("Id")
     .single();
+
+  if (error && isMissingPrelevementColumnError(error)) {
+    delete insertPayload.PrelevementPourcentage;
+    delete insertPayload.PrelevementMontant;
+    ({ data: insertedData, error } = await supabase
+      .from("tblPayroll")
+      .insert(insertPayload)
+      .select("Id")
+      .single());
+  }
 
   if (error) throw error;
   return { ...insertedData, PieceJointe: pieceJointeUrl };
@@ -551,14 +568,25 @@ export const updatePayrollInSupabase = async (id: string, data: Partial<import("
   if (data.salaireBase !== undefined) updatePayload.SalaireBase = data.salaireBase;
   if (data.bonus !== undefined) updatePayload.Bonus = data.bonus;
   if (data.deductions !== undefined) updatePayload.Deductions = data.deductions;
+  if (data.prelevementPourcentage !== undefined) updatePayload.PrelevementPourcentage = data.prelevementPourcentage;
+  if (data.prelevementMontant !== undefined) updatePayload.PrelevementMontant = data.prelevementMontant;
   if (data.netAPayer !== undefined) updatePayload.NetAPayer = data.netAPayer;
   if (data.notes !== undefined) updatePayload.Notes = data.notes;
   if (pieceJointeUrl !== undefined) updatePayload.PieceJointe = pieceJointeUrl;
 
-  const { error } = await supabase
+  let { error } = await supabase
     .from("tblPayroll")
     .update(updatePayload)
     .eq("Id", parseInt(id, 10));
+
+  if (error && isMissingPrelevementColumnError(error)) {
+    delete updatePayload.PrelevementPourcentage;
+    delete updatePayload.PrelevementMontant;
+    ({ error } = await supabase
+      .from("tblPayroll")
+      .update(updatePayload)
+      .eq("Id", parseInt(id, 10)));
+  }
 
   if (error) {
     console.error("Erreur mise à jour paie :", error);

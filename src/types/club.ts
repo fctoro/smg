@@ -221,6 +221,8 @@ export interface PayrollRecord {
   salaireBase: number;
   bonus: number;
   deductions: number;
+  prelevementPourcentage?: number;
+  prelevementMontant?: number;
   netAPayer: number;
   devise?: "US" | "HTG";
   statut: "paye" | "en_attente" | "annule";

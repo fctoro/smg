@@ -108,6 +108,12 @@ const formatAmountWithDevise = (amount: number, devise?: "US" | "HTG") => {
   return `$${amount.toLocaleString("en-US")}`;
 };
 
+const calculatePrelevement = (salary: number, percentage: number) =>
+  Math.round(((salary * percentage) / 100) * 100) / 100;
+
+const getPrelevementAmount = (record: PayrollRecord) =>
+  record.prelevementMontant ?? calculatePrelevement(record.salaireBase, record.prelevementPourcentage ?? 2);
+
 export default function PayrollPage() {
   const { employees, payrollRecords, setPayrollRecords } = useClubData();
 
@@ -131,6 +137,7 @@ export default function PayrollPage() {
     salaireBase: number;
     bonus: number;
     deductions: number;
+    prelevementPourcentage: number;
     devise: "US" | "HTG";
     statut: "paye" | "en_attente";
     modePaiement: "virement" | "especes" | "chèque" | "mobile";
@@ -143,6 +150,7 @@ export default function PayrollPage() {
     salaireBase: 500,
     bonus: 0,
     deductions: 0,
+    prelevementPourcentage: 2,
     devise: "HTG",
     statut: "paye",
     modePaiement: "virement",
@@ -200,7 +208,9 @@ export default function PayrollPage() {
     const targetEmp = employees.find((emp) => emp.id === formData.employeId);
     if (!targetEmp) return;
 
-    const net = formData.salaireBase + formData.bonus - formData.deductions;
+    const prelevementMontant = calculatePrelevement(formData.salaireBase, formData.prelevementPourcentage);
+    const totalDeductions = formData.deductions + prelevementMontant;
+    const net = formData.salaireBase + formData.bonus - totalDeductions;
     const targetMois = `${formData.annee}-${formData.mois}`;
 
     const recordData: Omit<PayrollRecord, "id"> = {
@@ -211,7 +221,9 @@ export default function PayrollPage() {
       mois: targetMois,
       salaireBase: formData.salaireBase,
       bonus: formData.bonus,
-      deductions: formData.deductions,
+      deductions: totalDeductions,
+      prelevementPourcentage: formData.prelevementPourcentage,
+      prelevementMontant,
       netAPayer: net,
       devise: formData.devise,
       statut: formData.statut,
@@ -247,6 +259,8 @@ export default function PayrollPage() {
           salaireBase: recordData.salaireBase,
           bonus: recordData.bonus,
           deductions: recordData.deductions,
+          prelevementPourcentage: recordData.prelevementPourcentage,
+          prelevementMontant: recordData.prelevementMontant,
           netAPayer: recordData.netAPayer,
           statut: recordData.statut,
           datePaiement: normalizedDatePaiement as string | undefined,
@@ -268,6 +282,7 @@ export default function PayrollPage() {
         salaireBase: 500,
         bonus: 0,
         deductions: 0,
+        prelevementPourcentage: 2,
         devise: "HTG",
         statut: "paye",
         modePaiement: "virement",
@@ -334,6 +349,8 @@ export default function PayrollPage() {
 
   const handleEditPayroll = (record: PayrollRecord) => {
     const [year, month] = record.mois.split("-");
+    const prelevementPourcentage = record.prelevementPourcentage ?? 2;
+    const prelevementMontant = record.prelevementMontant ?? calculatePrelevement(record.salaireBase, prelevementPourcentage);
     setEditingPayrollId(record.id);
     setFileError(null);
     setFormData({
@@ -342,7 +359,8 @@ export default function PayrollPage() {
       mois: month || "01",
       salaireBase: record.salaireBase,
       bonus: record.bonus,
-      deductions: record.deductions,
+      deductions: Math.max(0, record.deductions - prelevementMontant),
+      prelevementPourcentage,
       devise: record.devise || "HTG",
       statut: record.statut === "paye" ? "paye" : "en_attente",
       modePaiement: record.modePaiement,
@@ -671,6 +689,7 @@ export default function PayrollPage() {
                       ...prev,
                       employeId: empId,
                       salaireBase: empSal,
+                      prelevementPourcentage: prev.prelevementPourcentage || 2,
                       devise: empDev,
                     }));
                   }}
@@ -703,7 +722,7 @@ export default function PayrollPage() {
               <div className="grid grid-cols-3 gap-3">
                 <div>
                   <label className="mb-1 block text-xs font-semibold text-gray-700 dark:text-gray-300">
-                    Salaire Base ($)
+                    Salaire Base ({formData.devise === "HTG" ? "Gdes" : "$"})
                   </label>
                   <input
                     type="number"
@@ -718,7 +737,7 @@ export default function PayrollPage() {
                 </div>
                 <div>
                   <label className="mb-1 block text-xs font-semibold text-gray-700 dark:text-gray-300">
-                    Bonus ($)
+                    Bonus ({formData.devise === "HTG" ? "Gdes" : "$"})
                   </label>
                   <input
                     type="number"
@@ -730,7 +749,7 @@ export default function PayrollPage() {
                 </div>
                 <div>
                   <label className="mb-1 block text-xs font-semibold text-gray-700 dark:text-gray-300">
-                    Retenues ($)
+                    Autres retenues ({formData.devise === "HTG" ? "Gdes" : "$"})
                   </label>
                   <input
                     type="number"
@@ -741,6 +760,41 @@ export default function PayrollPage() {
                     }
                     className="w-full rounded-xl border border-gray-300 p-2.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
                   />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 rounded-xl border border-gray-200 bg-gray-50 p-3 dark:border-gray-800 dark:bg-gray-800/40">
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-gray-700 dark:text-gray-300">
+                    Prelevement (%)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={formData.prelevementPourcentage}
+                    onChange={(e) =>
+                      setFormData({ ...formData, prelevementPourcentage: Number(e.target.value) })
+                    }
+                    className="w-full rounded-xl border border-gray-300 bg-white p-2.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-gray-700 dark:text-gray-300">
+                    Montant retire automatiquement
+                  </label>
+                  <div className="flex h-[42px] items-center rounded-xl border border-gray-200 bg-white px-3 text-sm font-bold text-rose-600 dark:border-gray-700 dark:bg-gray-900 dark:text-rose-400">
+                    -{formatAmountWithDevise(calculatePrelevement(formData.salaireBase, formData.prelevementPourcentage), formData.devise)}
+                  </div>
+                </div>
+                <div className="col-span-2 text-xs font-semibold text-gray-600 dark:text-gray-300">
+                  Total retenues: {formatAmountWithDevise(
+                    formData.deductions + calculatePrelevement(formData.salaireBase, formData.prelevementPourcentage),
+                    formData.devise,
+                  )} | Net a payer: {formatAmountWithDevise(
+                    formData.salaireBase + formData.bonus - formData.deductions - calculatePrelevement(formData.salaireBase, formData.prelevementPourcentage),
+                    formData.devise,
+                  )}
                 </div>
               </div>
 
@@ -913,9 +967,18 @@ export default function PayrollPage() {
                   </td>
                 </tr>
                 <tr>
-                  <td className="p-2.5">Déductions / Retenues</td>
+                  <td className="p-2.5">Prelevement {selectedSlip.prelevementPourcentage ?? 2}%</td>
                   <td className="p-2.5 text-right font-medium text-rose-600">
-                    -{formatAmountWithDevise(selectedSlip.deductions, selectedSlip.devise)}
+                    -{formatAmountWithDevise(getPrelevementAmount(selectedSlip), selectedSlip.devise)}
+                  </td>
+                </tr>
+                <tr>
+                  <td className="p-2.5">Autres retenues</td>
+                  <td className="p-2.5 text-right font-medium text-rose-600">
+                    -{formatAmountWithDevise(
+                      Math.max(0, selectedSlip.deductions - getPrelevementAmount(selectedSlip)),
+                      selectedSlip.devise,
+                    )}
                   </td>
                 </tr>
                 <tr className="border-t bg-gray-50 font-bold">

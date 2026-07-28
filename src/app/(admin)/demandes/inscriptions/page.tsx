@@ -399,8 +399,8 @@ export default function BoiteDeReception() {
 
       {/* MODAL */}
       {selectedMessage && typeof document !== "undefined" && createPortal(
-        <div className="fixed inset-0 z-[999999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-          <div className="relative w-full max-w-lg rounded-3xl bg-white p-0 shadow-2xl dark:bg-gray-900 border border-gray-100 dark:border-gray-800 overflow-hidden animate-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 z-[999999] flex items-start justify-center overflow-y-auto bg-black/60 p-4 backdrop-blur-sm animate-in fade-in duration-200 sm:p-6">
+          <div className="relative my-6 w-full max-w-lg rounded-3xl bg-white p-0 shadow-2xl dark:bg-gray-900 border border-gray-100 dark:border-gray-800 overflow-hidden animate-in zoom-in-95 duration-200">
             {/* Header */}
             <div className="p-6 border-b border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/50 flex justify-between items-center">
               <div>
@@ -417,7 +417,7 @@ export default function BoiteDeReception() {
               </button>
             </div>
             
-            <div className="p-6 space-y-5">
+            <div className="max-h-[calc(100vh-14rem)] overflow-y-auto p-6 space-y-5">
               {duplicateCheck?.isDuplicate && (
                 <div className="p-4 bg-warning-50 dark:bg-warning-900/20 border border-warning-200 dark:border-warning-900/30 rounded-2xl flex gap-3 animate-in slide-in-from-top-2">
                   <span className="text-warning-600 dark:text-warning-400 text-lg">⚠️</span>
@@ -499,8 +499,8 @@ export default function BoiteDeReception() {
 
       {/* DOWNLOAD MODAL */}
       {downloadTarget && typeof document !== "undefined" && createPortal(
-        <div className="fixed inset-0 z-[999999] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="w-full max-w-lg rounded-3xl bg-white shadow-2xl dark:bg-gray-900 border border-gray-100 dark:border-gray-800 overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 z-[999999] flex items-start justify-center overflow-y-auto bg-black/50 p-4 backdrop-blur-sm sm:p-6">
+          <div className="my-6 flex max-h-[calc(100vh-3rem)] w-full max-w-lg flex-col overflow-hidden rounded-3xl bg-white shadow-2xl dark:bg-gray-900 border border-gray-100 dark:border-gray-800 animate-in zoom-in-95 duration-200">
             <div className="p-5 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between bg-white dark:bg-gray-900">
                <div>
                   <h3 className="text-lg font-black text-gray-900 dark:text-white">Téléchargements</h3>
@@ -509,7 +509,7 @@ export default function BoiteDeReception() {
                <button onClick={() => setDownloadTarget(null)} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl transition-colors text-gray-400">✕</button>
             </div>
             
-            <div className="p-6 space-y-4 bg-gray-50/30 dark:bg-white/[0.01]">
+            <div className="overflow-y-auto p-6 space-y-4 bg-gray-50/30 dark:bg-white/[0.01]">
                <button 
                   onClick={() => window.open(downloadTarget.type_message === "stagiaire" ? `/api/stages/pdf?id=${downloadTarget.id}` : `/api/demandes/pdf?id=${downloadTarget.id}`, "_blank")}
                   className="w-full group relative overflow-hidden p-5 bg-gradient-to-br from-brand-500 to-brand-600 dark:from-brand-600 dark:to-brand-800 rounded-2xl transition-all flex items-center gap-4 text-left shadow-lg hover:shadow-brand-500/25 hover:-translate-y-0.5"

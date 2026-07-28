@@ -53,9 +53,12 @@ export const Modal: React.FC<ModalProps> = ({
   const contentClasses = isFullscreen
     ? "w-full h-full"
     : "relative w-full rounded-3xl bg-white  dark:bg-gray-900";
+  const scrollClasses = isFullscreen
+    ? ""
+    : "my-auto max-h-[calc(100vh-3rem)] overflow-y-auto";
 
   return (
-    <div className="fixed inset-0 flex items-center justify-center overflow-y-auto modal z-99999">
+    <div className="fixed inset-0 flex items-start justify-center overflow-y-auto px-4 py-6 modal z-99999 sm:py-8">
       {!isFullscreen && (
         <div
           className="fixed inset-0 h-full w-full bg-gray-900/25 backdrop-blur-[2px]"
@@ -64,7 +67,7 @@ export const Modal: React.FC<ModalProps> = ({
       )}
       <div
         ref={modalRef}
-        className={`${contentClasses}  ${className}`}
+        className={`${scrollClasses} ${contentClasses}  ${className}`}
         onClick={(e) => e.stopPropagation()}
       >
         {showCloseButton && (

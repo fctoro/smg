@@ -51,10 +51,7 @@ const adminNavItems: NavItem[] = [
   {
     icon: <UserCircleIcon />,
     name: "Joueurs",
-    subItems: [
-      { name: "Liste", path: "/joueurs" },
-      { name: "Ajouter", path: "/joueurs/nouveau" },
-    ],
+    path: "/joueurs",
   },
   {
     icon: <GroupIcon />,
@@ -67,10 +64,7 @@ const adminNavItems: NavItem[] = [
   {
     name: "Alumni",
     icon: <DocsIcon />,
-    subItems: [
-      { name: "Liste", path: "/alumni" },
-      { name: "Ajouter", path: "/alumni/nouveau" },
-    ],
+    path: "/alumni",
   },
   {
     icon: <BoxCubeIcon />,

@@ -9,6 +9,7 @@ import { SiteMessage } from "@/types/club";
 import Pagination from "@/components/tables/Pagination";
 import { DownloadIcon, EyeIcon, TrashBinIcon } from "@/icons";
 import { useConfirm } from "@/hooks/useConfirm";
+import { useClubData } from "@/context/ClubDataContext";
 import { fetchDocumentsForMessage } from "@/lib/club/supabase-demandes";
 
 // Placeholder icon for document
@@ -20,6 +21,7 @@ const DocumentIcon = () => (
 
 export default function BoiteDeReception() {
   const router = useRouter();
+  const { players } = useClubData();
   const [messages, setMessages] = useState<SiteMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"contact_general" | "inscription_joueur" | "devenir_fan" | "stagiaire">("inscription_joueur");
@@ -34,6 +36,7 @@ export default function BoiteDeReception() {
   const [selectedMessage, setSelectedMessage] = useState<SiteMessage | null>(null);
   const [modalMode, setModalMode] = useState<"details" | "documents">("details");
   const [duplicateCheck, setDuplicateCheck] = useState<{ isDuplicate: boolean; source?: string; player?: any } | null>(null);
+  const [verificationResult, setVerificationResult] = useState<{ status: "not_verified" | "not_found" | "found_missing_data" | "found_complete"; missingFields?: string[]; playerId?: string }>({ status: "not_verified" });
   
   // Download states
   const [downloadTarget, setDownloadTarget] = useState<SiteMessage | null>(null);
@@ -41,9 +44,22 @@ export default function BoiteDeReception() {
   const [isLoadingDocs, setIsLoadingDocs] = useState(false);
 
   useEffect(() => {
+    setVerificationResult({ status: "not_verified" });
     if (selectedMessage && selectedMessage.type_message === "inscription_joueur") {
       fetch(`/api/demandes/${selectedMessage.id}/check-duplicate`)
-        .then(res => res.json())
+        .then(res => {
+          if (!res.ok) {
+            console.error("API returned status:", res.status);
+            return { error: true };
+          }
+          const contentType = res.headers.get("content-type");
+          if (contentType && contentType.includes("application/json")) {
+            return res.json();
+          } else {
+            console.error("API returned non-JSON response");
+            return { error: true };
+          }
+        })
         .then(data => {
           if (!data.error && data.isDuplicate) {
             setDuplicateCheck(data);
@@ -69,6 +85,57 @@ export default function BoiteDeReception() {
     } finally {
       setIsLoadingDocs(false);
     }
+  };
+
+  const handleVerifyPlayer = () => {
+    if (!selectedMessage || !selectedMessage.metadata) return;
+
+    let existingPlayer = null;
+
+    if (duplicateCheck && duplicateCheck.isDuplicate && duplicateCheck.player) {
+      existingPlayer = players.find(p => p.id === duplicateCheck.player.id);
+    }
+
+    if (!existingPlayer) {
+      let nom = (selectedMessage.metadata.enfant_nom || selectedMessage.metadata.child_last_name || "").toString().toLowerCase().trim();
+      let prenom = (selectedMessage.metadata.enfant_prenom || selectedMessage.metadata.child_first_name || "").toString().toLowerCase().trim();
+
+      if (nom && !prenom && nom.includes(" ")) {
+        const parts = nom.split(" ");
+        prenom = parts[0];
+        nom = parts.slice(1).join(" ");
+      }
+
+      if (nom || prenom) {
+        existingPlayer = players.find(
+          (p) => 
+            (nom && p.nom.toLowerCase().includes(nom) && prenom && p.prenom.toLowerCase().includes(prenom)) ||
+            (nom && p.nom.toLowerCase().includes(prenom) && prenom && p.prenom.toLowerCase().includes(nom))
+        );
+      }
+    }
+
+    if (existingPlayer) {
+      const missingFields: string[] = [];
+      if (!existingPlayer.photoIdentiteUrl) missingFields.push("Photo d'identité");
+      if (!existingPlayer.acteNaissanceUrl) missingFields.push("Acte de naissance");
+      if (!existingPlayer.carteIdentiteParentUrl) missingFields.push("Carte d'identité du parent");
+      if (!existingPlayer.telephone) missingFields.push("Téléphone");
+      if (!existingPlayer.email) missingFields.push("Email");
+      if (!existingPlayer.adresse) missingFields.push("Adresse");
+
+      if (missingFields.length > 0) {
+        setVerificationResult({ status: "found_missing_data", missingFields, playerId: existingPlayer.id });
+      } else {
+        setVerificationResult({ status: "found_complete", playerId: existingPlayer.id });
+      }
+    } else {
+      setVerificationResult({ status: "not_found" });
+    }
+
+    setTimeout(() => {
+      document.getElementById("verification-result-container")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }, 100);
   };
 
   useEffect(() => {
@@ -469,6 +536,38 @@ export default function BoiteDeReception() {
                   </div>
                 </div>
               </div>
+
+              <div id="verification-result-container">
+                {verificationResult.status === "found_missing_data" && (
+                <div className="p-4 bg-warning-50 dark:bg-warning-900/20 border border-warning-200 dark:border-warning-900/30 rounded-2xl flex gap-3 animate-in slide-in-from-bottom-2">
+                  <span className="text-warning-600 dark:text-warning-400 text-lg">⚠️</span>
+                  <div className="text-xs text-warning-800 dark:text-warning-200">
+                    <strong className="block mb-1 text-sm font-bold">Joueur existant mais incomplet</strong>
+                    Le joueur existe déjà dans la base de données, mais il manque des informations importantes (ex: {verificationResult.missingFields?.join(", ")}).
+                  </div>
+                </div>
+              )}
+
+              {verificationResult.status === "found_complete" && (
+                <div className="p-4 bg-success-50 dark:bg-success-900/20 border border-success-200 dark:border-success-900/30 rounded-2xl flex gap-3 animate-in slide-in-from-bottom-2">
+                  <span className="text-success-600 dark:text-success-400 text-lg">✅</span>
+                  <div className="text-xs text-success-800 dark:text-success-200">
+                    <strong className="block mb-1 text-sm font-bold">Joueur existant et complet</strong>
+                    Le joueur existe déjà et toutes les informations de base sont renseignées.
+                  </div>
+                </div>
+              )}
+
+              {verificationResult.status === "not_found" && (
+                <div className="p-4 bg-info-50 dark:bg-info-900/20 border border-info-200 dark:border-info-900/30 rounded-2xl flex gap-3 animate-in slide-in-from-bottom-2">
+                  <span className="text-info-600 dark:text-info-400 text-lg">ℹ️</span>
+                  <div className="text-xs text-info-800 dark:text-info-200">
+                    <strong className="block mb-1 text-sm font-bold">Nouveau joueur</strong>
+                    Aucun joueur existant trouvé avec ce nom. Vous pouvez procéder à l'inscription.
+                  </div>
+                </div>
+              )}
+              </div>
             </div>
 
             {/* Footer Buttons */}
@@ -482,15 +581,35 @@ export default function BoiteDeReception() {
               >
                 Refuser
               </button>
-              <button
-                onClick={() => {
-                  router.push(`/joueurs/nouveau?demandeId=${selectedMessage.id}`);
-                  setSelectedMessage(null);
-                }}
-                className="w-full sm:w-auto rounded-xl bg-brand-500 px-8 py-2.5 text-sm font-bold text-white shadow-md shadow-brand-500/25 hover:bg-brand-600 hover:-translate-y-0.5 transition-all"
-              >
-                Accepter
-              </button>
+              
+              {verificationResult.status === "not_verified" ? (
+                <button
+                  onClick={handleVerifyPlayer}
+                  className="w-full sm:w-auto rounded-xl bg-gray-800 px-8 py-2.5 text-sm font-bold text-white shadow-md shadow-gray-500/25 hover:bg-gray-700 transition-all"
+                >
+                  Vérifier
+                </button>
+              ) : verificationResult.status === "found_missing_data" ? (
+                <button
+                  onClick={() => {
+                    router.push(`/joueurs?editPlayerId=${verificationResult.playerId}&demandeId=${selectedMessage.id}`);
+                    setSelectedMessage(null);
+                  }}
+                  className="w-full sm:w-auto rounded-xl bg-warning-500 px-8 py-2.5 text-sm font-bold text-white shadow-md shadow-warning-500/25 hover:bg-warning-600 hover:-translate-y-0.5 transition-all"
+                >
+                  Remplir champs
+                </button>
+              ) : (
+                <button
+                  onClick={() => {
+                    router.push(`/joueurs/nouveau?demandeId=${selectedMessage.id}`);
+                    setSelectedMessage(null);
+                  }}
+                  className="w-full sm:w-auto rounded-xl bg-brand-500 px-8 py-2.5 text-sm font-bold text-white shadow-md shadow-brand-500/25 hover:bg-brand-600 hover:-translate-y-0.5 transition-all"
+                >
+                  Accepter
+                </button>
+              )}
             </div>
           </div>
         </div>,

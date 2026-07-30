@@ -26,20 +26,23 @@ export const normalizePlayerFormValues = (
 
 export const toPlayerFormValues = (player: Player): PlayerFormValues => ({
   ...normalizePlayerFormValues({
-    photoUrl: player.photoUrl,
-    nom: player.nom,
-    prenom: player.prenom,
-    dateNaissance: player.dateNaissance,
-    poste: player.poste,
+    photoUrl: player.photoUrl || "",
+    nom: player.nom || "",
+    prenom: player.prenom || "",
+    dateNaissance: player.dateNaissance || "",
+    poste: player.poste || "",
     sexe: player.sexe,
-    categorie: player.categorie,
-    telephone: player.telephone,
-    email: player.email,
-    adresse: player.adresse,
+    categorie: player.categorie || "",
+    telephone: player.telephone || "",
+    email: player.email || "",
+    adresse: player.adresse || "",
     statut: player.statut,
     cotisationMontant: player.cotisationMontant,
     cotisationDevise: player.cotisationDevise,
     cotisationStatut: player.cotisationStatut,
+    photoIdentiteUrl: player.photoIdentiteUrl,
+    acteNaissanceUrl: player.acteNaissanceUrl,
+    carteIdentiteParentUrl: player.carteIdentiteParentUrl,
   }),
 });
 

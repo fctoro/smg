@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, useContext, useEffect, useState, useMemo } from "react";
 import {
   mockAlumni,
   mockEmployees,
@@ -146,7 +146,7 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
   const [parents, setParents] = useState<Parent[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [staff, setStaff] = useState<StaffMember[]>([]);
-  const [alumni, setAlumni] = useState<Alumni[]>([]);
+  // alumni is derived from players
   const [events, setEvents] = useState<ClubEvent[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
@@ -182,17 +182,18 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
           return allData;
         };
 
-        const [etudiantsData, paiementsData, inscriptionsData, sessionsData, facturesData, employesData, alumniData, evenementsData, payrollData] = await Promise.all([
+        const [etudiantsData, paiementsData, inscriptionsData, sessionsData, facturesData, employesData, evenementsData, payrollData] = await Promise.all([
           fetchAll("tblEtudiants"),
           fetchAll("tblPaiements"),
           fetchAll("tblInscriptions"),
           fetchAll("tblSessions"),
           fetchAll("tblFacture"),
           fetchAll("tblEmployes"),
-          fetchAll("tblAlumni").catch(() => []),
           fetchAll("tblEvenements").catch(() => []),
           fetchAll("tblPayroll").catch(() => [])
         ]);
+
+        console.log("[DEBUG ClubDataContext] etudiantsData length:", etudiantsData?.length);
 
         const sessionsMap = new Map();
         if (sessionsData && sessionsData.length > 0) {
@@ -232,6 +233,7 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
             const prenom = (d.Prenom || "").toLowerCase().trim();
             
             if (!nom) return false; // Pas de nom = invalide
+            if (d.IsDeleted === 1 || d.IsDeleted === true || String(d.IsDeleted).toLowerCase() === "true") return false; // Exclusion des joueurs supprimés logiquement
             if (nom.includes("sponsor")) return false; // Exclusion des sponsors
             if (/^x+$/i.test(nom)) return false; // Exclusion de "x", "xx", "xxx"...
             if (nom === "test") return false;
@@ -240,6 +242,8 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
             return true;
           });
           
+          console.log("[DEBUG ClubDataContext] validEtudiants length:", validEtudiants?.length);
+
           const fetchedPlayers: Player[] = validEtudiants.map((d: any) => {
             const studentPayments = paiements.filter((p: any) => p.EtudiantId === d.EtudiantID);
             const totalPaid = studentPayments.reduce((sum: number, p: any) => sum + (p.MntPayeUS || p.MntPayeGd || 0), 0);
@@ -249,6 +253,7 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
             );
             const dernierPaiementDate = sortedPayments.length > 0 && sortedPayments[0].DateTransact 
               ? sortedPayments[0].DateTransact.split("T")[0] 
+
               : "";
 
             const studentInscriptions = inscriptions.filter((i: any) => i.EtudiantId === d.EtudiantID);
@@ -297,23 +302,24 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
 
             // Détermination du statut réel du joueur
             let playerStatus: PlayerStatus = "actif";
-            const allObjStr = (JSON.stringify(d) + JSON.stringify(studentInscriptions)).toLowerCase();
-            if (
-              allObjStr.includes("abandon") ||
-              allObjStr.includes("quitt") ||
-              allObjStr.includes("déménag") ||
-              allObjStr.includes("demenag") ||
-              allObjStr.includes("inactif") ||
+            const allValuesStr = (JSON.stringify(Object.values(d)) + JSON.stringify(studentInscriptions)).toLowerCase();
+            if (d.EstAlumni === true || d.EstAlumni === 1 || d.EstAlumni === "true" || d.EstAlumni === "1" || allValuesStr.includes("alumni")) {
+              playerStatus = "alumni";
+            } else if (
+              allValuesStr.includes("abandon") ||
+              allValuesStr.includes("quitt") ||
+              allValuesStr.includes("déménag") ||
+              allValuesStr.includes("demenag") ||
+              allValuesStr.includes("inactif") ||
               d.Actif === false ||
               d.Actif === 0 ||
               d.Abandon === true ||
-              d.Abandon === 1 ||
-              d.Abandon === "1"
+              d.Abandon === 1
             ) {
               playerStatus = "abandonne";
-            } else if (allObjStr.includes("bless")) {
+            } else if (allValuesStr.includes("bless")) {
               playerStatus = "blesse";
-            } else if (allObjStr.includes("suspend")) {
+            } else if (allValuesStr.includes("suspend")) {
               playerStatus = "suspendu";
             }
 
@@ -516,16 +522,7 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
           setStaff(fallbackEmps);
         }
 
-        if (alumniData && alumniData.length > 0) {
-          setAlumni(alumniData);
-        } else {
-          setAlumni(
-            parseStoredArray<Alumni>(
-              window.localStorage.getItem(STORAGE_KEYS.alumni),
-              []
-            )
-          );
-        }
+        // Alumni is now derived from players, no need to process it here
 
         if (evenementsData && evenementsData.length > 0) {
           setEvents(evenementsData);
@@ -612,10 +609,6 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
     safeSetItem(STORAGE_KEYS.staff, employees);
   }, [hydrated, employees]);
 
-  useEffect(() => {
-    if (!hydrated) return;
-    safeSetItem(STORAGE_KEYS.alumni, alumni);
-  }, [hydrated, alumni]);
 
   useEffect(() => {
     if (!hydrated) return;
@@ -637,6 +630,8 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
     safeSetItem(STORAGE_KEYS.payrollRecords, payrollRecords);
   }, [hydrated, payrollRecords]);
 
+  const alumni = useMemo(() => players.filter(p => p.statut === "alumni"), [players]);
+
   return (
     <ClubDataContext.Provider
       value={{
@@ -649,7 +644,7 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
         staff,
         setStaff,
         alumni,
-        setAlumni,
+        setAlumni: () => {}, 
         events,
         setEvents,
         payments,

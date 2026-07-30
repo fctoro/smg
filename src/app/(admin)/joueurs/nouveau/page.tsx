@@ -85,8 +85,6 @@ function NewPlayerFormContent() {
   }, [searchParams]);
 
   const handleSubmit = async (values: PlayerFormValues) => {
-    alert("Action temporairement désactivée pour la création du joueur. Les documents sont bien préservés.");
-    return;
     const today = new Date().toISOString().slice(0, 10);
     const newPlayerLocal = createPlayerFromForm(`temp-${Date.now()}`, values, today);
     
@@ -98,7 +96,7 @@ function NewPlayerFormContent() {
         // Also archive the message if it came from one
         const demandeId = searchParams.get("demandeId");
         if (demandeId) {
-          await supabase.from("site_messages").update({ status: "resolved", is_read: true }).eq("id", demandeId);
+          await supabase.from("site_messages").update({ status: "enrolled", is_read: true }).eq("id", demandeId);
         }
         router.push("/joueurs");
       }

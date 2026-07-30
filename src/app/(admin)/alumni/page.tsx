@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/table";
 import { PencilIcon, TrashBinIcon } from "@/icons";
 import { useClubData } from "@/context/ClubDataContext";
-import { deleteAlumniInSupabase } from "@/lib/club/supabase-crud";
+import { softDeletePlayerInSupabase } from "@/lib/club/supabase-crud";
 import { useConfirm } from "@/hooks/useConfirm";
 import { AlumniAddModal } from "@/components/club/modals/AlumniAddModal";
 import { AlumniEditModal } from "@/components/club/modals/AlumniEditModal";
@@ -24,7 +24,7 @@ import { Alumni } from "@/types/club";
 
 export default function AlumniPage() {
   const router = useRouter();
-  const { alumni, setAlumni } = useClubData();
+  const { alumni, setPlayers } = useClubData();
   const [searchQuery, setSearchQuery] = useState("");
   const [situationFilter, setSituationFilter] = useState("all");
   const [isExportOpen, setIsExportOpen] = useState(false);
@@ -35,22 +35,23 @@ export default function AlumniPage() {
   const [selectedEditAlumni, setSelectedEditAlumni] = useState<Alumni | null>(null);
 
   const situations = useMemo(() => {
-    return Array.from(new Set(alumni.map(a => a.situationActuelle).filter(Boolean)));
+    return Array.from(new Set(alumni.map(a => a.statut).filter(Boolean)));
   }, [alumni]);
 
   const filteredAlumni = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
     return alumni.filter((entry) => {
-      if (situationFilter !== "all" && entry.situationActuelle !== situationFilter) {
+      if (situationFilter !== "all" && entry.statut !== situationFilter) {
         return false;
       }
       if (!query) {
         return true;
       }
       return (
-        entry.nom.toLowerCase().includes(query) ||
-        entry.poste.toLowerCase().includes(query) ||
-        entry.situationActuelle.toLowerCase().includes(query)
+        (entry.nom || "").toLowerCase().includes(query) ||
+        (entry.prenom || "").toLowerCase().includes(query) ||
+        (entry.poste || "").toLowerCase().includes(query) ||
+        (entry.statut || "").toLowerCase().includes(query)
       );
     });
   }, [alumni, searchQuery, situationFilter]);
@@ -61,10 +62,10 @@ export default function AlumniPage() {
       title: "Exporter la liste",
       message: "Voulez-vous vraiment exporter la liste des alumni au format CSV ?",
       onConfirm: () => {
-        const headers = ["Nom", "Période", "Poste", "Situation Actuelle"];
+        const headers = ["Nom", "Prénom", "Poste", "Statut"];
         let csvContent = headers.join(",") + "\n";
         filteredAlumni.forEach(entry => {
-          const row = [entry.nom, `${entry.anneeEntree} - ${entry.anneeSortie}`, entry.poste, entry.situationActuelle];
+          const row = [entry.nom, entry.prenom, entry.poste, entry.statut];
           const csvRow = row.map(field => `"${(field || "").toString().replace(/"/g, '""')}"`);
           csvContent += csvRow.join(",") + "\n";
         });
@@ -86,10 +87,10 @@ export default function AlumniPage() {
       title: "Exporter la liste",
       message: "Voulez-vous vraiment exporter la liste des alumni au format Excel ?",
       onConfirm: () => {
-        const headers = ["Nom", "Période", "Poste", "Situation Actuelle"];
+        const headers = ["Nom", "Prénom", "Poste", "Statut"];
         let csvContent = "\uFEFF" + headers.join(";") + "\n";
         filteredAlumni.forEach(entry => {
-          const row = [entry.nom, `${entry.anneeEntree} - ${entry.anneeSortie}`, entry.poste, entry.situationActuelle];
+          const row = [entry.nom, entry.prenom, entry.poste, entry.statut];
           const csvRow = row.map(field => `"${(field || "").toString().replace(/"/g, '""')}"`);
           csvContent += csvRow.join(";") + "\n";
         });
@@ -115,8 +116,8 @@ export default function AlumniPage() {
       isDestructive: true,
       onConfirm: async () => {
         try {
-          await deleteAlumniInSupabase(alumniId);
-          setAlumni((prevEntries) =>
+          await softDeletePlayerInSupabase(alumniId);
+          setPlayers((prevEntries) =>
             prevEntries.filter((entry) => entry.id !== alumniId),
           );
         } catch (error) {
@@ -238,7 +239,13 @@ export default function AlumniPage() {
                         isHeader
                         className="py-3 text-start text-theme-xs font-medium text-gray-500 dark:text-gray-400"
                       >
-                        Periode club
+                        Prénom
+                      </TableCell>
+                      <TableCell
+                        isHeader
+                        className="py-3 text-start text-theme-xs font-medium text-gray-500 dark:text-gray-400"
+                      >
+                        Sexe
                       </TableCell>
                       <TableCell
                         isHeader
@@ -250,7 +257,7 @@ export default function AlumniPage() {
                         isHeader
                         className="py-3 text-start text-theme-xs font-medium text-gray-500 dark:text-gray-400"
                       >
-                        Situation actuelle
+                        Statut
                       </TableCell>
                       <TableCell
                         isHeader
@@ -277,13 +284,18 @@ export default function AlumniPage() {
                             {entry.nom}
                           </TableCell>
                           <TableCell className="py-3 text-theme-sm text-gray-500 dark:text-gray-400">
-                            {entry.anneeEntree} - {entry.anneeSortie}
+                            {entry.prenom}
+                          </TableCell>
+                          <TableCell className="py-3 text-theme-sm text-gray-500 dark:text-gray-400">
+                            {entry.sexe}
                           </TableCell>
                           <TableCell className="py-3 text-theme-sm text-gray-500 dark:text-gray-400">
                             {entry.poste}
                           </TableCell>
                           <TableCell className="py-3 text-theme-sm text-gray-500 dark:text-gray-400">
-                            {entry.situationActuelle}
+                            <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${entry.statut === 'actif' ? 'bg-success-50 text-success-700 dark:bg-success-900/20 dark:text-success-400' : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300'}`}>
+                              {entry.statut}
+                            </span>
                           </TableCell>
                           <TableCell className="py-3 text-theme-sm text-gray-500 dark:text-gray-400">
                             <div className="flex items-center gap-3">

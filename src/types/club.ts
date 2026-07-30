@@ -1,4 +1,4 @@
-export type PlayerStatus = "actif" | "blesse" | "suspendu" | "abandonne";
+export type PlayerStatus = "actif" | "blesse" | "suspendu" | "abandonne" | "alumni";
 
 export type PaymentStatus = "paid" | "pending" | "late";
 
@@ -139,14 +139,7 @@ export interface Employee {
 
 export type StaffMember = Employee;
 
-export interface Alumni {
-  id: string;
-  nom: string;
-  anneeEntree: number;
-  anneeSortie: number;
-  poste: string;
-  situationActuelle: string;
-}
+export type Alumni = Player;
 
 export interface ClubStandingRow {
   teamId: string;
@@ -227,13 +220,7 @@ export interface EmployeeFormValues {
 
 export type StaffFormValues = EmployeeFormValues;
 
-export interface AlumniFormValues {
-  nom: string;
-  anneeEntree: number;
-  anneeSortie: number;
-  poste: string;
-  situationActuelle: string;
-}
+export type AlumniFormValues = PlayerFormValues;
 
 export interface PayrollRecord {
   id: string;

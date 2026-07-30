@@ -1,9 +1,9 @@
 import React, { useState } from "react";
 import { Modal } from "@/components/ui/modal";
 import AlumniForm from "@/components/club/forms/AlumniForm";
-import { AlumniFormValues, Alumni } from "@/types/club";
+import { AlumniFormValues, Alumni, PlayerStatus } from "@/types/club";
 import { useClubData } from "@/context/ClubDataContext";
-import { updateAlumniInSupabase } from "@/lib/club/supabase-crud";
+import { updatePlayerInSupabase } from "@/lib/club/supabase-crud";
 
 interface AlumniEditModalProps {
   isOpen: boolean;
@@ -12,7 +12,7 @@ interface AlumniEditModalProps {
 }
 
 export function AlumniEditModal({ isOpen, onClose, alumniEntry }: AlumniEditModalProps) {
-  const { setAlumni } = useClubData();
+  const { setPlayers } = useClubData();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   if (!alumniEntry) return null;
@@ -20,8 +20,8 @@ export function AlumniEditModal({ isOpen, onClose, alumniEntry }: AlumniEditModa
   const handleSubmit = async (values: AlumniFormValues) => {
     setIsSubmitting(true);
     try {
-      await updateAlumniInSupabase(alumniEntry.id, values);
-      setAlumni((prevEntries) =>
+      await updatePlayerInSupabase(alumniEntry.id, values);
+      setPlayers((prevEntries) =>
         prevEntries.map((entry) =>
           entry.id === alumniEntry.id ? { ...entry, ...values } : entry,
         ),

@@ -10,6 +10,8 @@ interface PlayerFormProps {
   onSubmit: (values: PlayerFormValues) => void;
   onCancel: () => void;
   submitLabel?: string;
+  highlightFields?: string[];
+  draftKey?: string;
 }
 
 const inputClassName =
@@ -41,6 +43,8 @@ export default function PlayerForm({
   onSubmit,
   onCancel,
   submitLabel = "Enregistrer",
+  highlightFields = [],
+  draftKey,
 }: PlayerFormProps) {
   const [formValues, setFormValues] = useState<PlayerFormValues>({
     ...defaultValues,
@@ -51,13 +55,48 @@ export default function PlayerForm({
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
-    setFormValues({
+    let savedDraft = null;
+    if (draftKey) {
+      try {
+        const stored = sessionStorage.getItem(`draft_${draftKey}`);
+        if (stored) {
+          savedDraft = JSON.parse(stored);
+        }
+      } catch (e) {}
+    }
+    
+    const merged = {
       ...defaultValues,
       ...initialValues,
-    });
+    };
+
+    if (savedDraft) {
+      Object.keys(savedDraft).forEach((key) => {
+        const k = key as keyof PlayerFormValues;
+        // Only overwrite with draft if draft has a non-empty value
+        if (savedDraft[k] !== "" && savedDraft[k] !== null && savedDraft[k] !== undefined) {
+          merged[k] = savedDraft[k] as never;
+        }
+      });
+    }
+
+    setFormValues(merged);
     setSelectedFileName("");
     setPhotoError(null);
-  }, [initialValues]);
+  }, [initialValues, draftKey]);
+
+  useEffect(() => {
+    if (draftKey) {
+      sessionStorage.setItem(`draft_${draftKey}`, JSON.stringify(formValues));
+    }
+  }, [formValues, draftKey]);
+
+  const getInputClass = (fieldName: string) => {
+    if (highlightFields.includes(fieldName)) {
+      return `${inputClassName} border-brand-500 ring-2 ring-brand-500/50 bg-brand-50/10 dark:bg-brand-900/10 relative`;
+    }
+    return inputClassName;
+  };
 
   const fullNameSeed = useMemo(
     () => `${formValues.prenom} ${formValues.nom}`.trim() || "Nouveau Joueur",
@@ -325,35 +364,39 @@ export default function PlayerForm({
         <div>
           <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
             Telephone
+            {highlightFields.includes("telephone") && <span className="ml-2 text-[10px] bg-brand-500 text-white px-1.5 py-0.5 rounded-full">Nouveau</span>}
           </label>
           <input
             value={formValues.telephone}
             onChange={(event) => updateField("telephone", event.target.value)}
-            className={inputClassName}
+            className={getInputClass("telephone")}
           />
         </div>
 
         <div>
           <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
             Email
+            {highlightFields.includes("email") && <span className="ml-2 text-[10px] bg-brand-500 text-white px-1.5 py-0.5 rounded-full">Nouveau</span>}
           </label>
           <input
             required
             type="email"
             value={formValues.email}
             onChange={(event) => updateField("email", event.target.value)}
-            className={inputClassName}
+            className={getInputClass("email")}
           />
         </div>
 
-        <div className="md:col-span-2 xl:col-span-3">
+        <div className="sm:col-span-2">
           <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
             Adresse
+            {highlightFields.includes("adresse") && <span className="ml-2 text-[10px] bg-brand-500 text-white px-1.5 py-0.5 rounded-full">Nouveau</span>}
           </label>
           <input
+            required
             value={formValues.adresse}
             onChange={(event) => updateField("adresse", event.target.value)}
-            className={inputClassName}
+            className={getInputClass("adresse")}
           />
         </div>
 
@@ -372,6 +415,7 @@ export default function PlayerForm({
             <option value="blesse">Blessé</option>
             <option value="suspendu">Suspendu</option>
             <option value="abandonne">Abandonné</option>
+            <option value="alumni">Alumni</option>
           </select>
         </div>
 

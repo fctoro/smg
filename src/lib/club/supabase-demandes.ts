@@ -40,6 +40,34 @@ export const fetchSiteMessages = async (): Promise<SiteMessage[]> => {
   return allMessages;
 };
 
+export const fetchSiteMessageById = async (id: string): Promise<SiteMessage | null> => {
+  const { data, error } = await supabase
+    .from("site_messages")
+    .select("*")
+    .eq("id", id)
+    .single();
+
+  if (error || !data) return null;
+
+  const enfantNom = data.payload?.child_first_name 
+    ? `${data.payload.child_first_name} ${data.payload.child_last_name || ''}`.trim() 
+    : undefined;
+
+  return {
+    id: data.id,
+    type_message: data.type === 'joueur' ? 'inscription_joueur' : data.type || "contact_general",
+    statut: data.status === 'enrolled' ? 'inscrit' : data.status === 'archived' ? 'archive' : data.is_read ? 'lu' : 'nouveau',
+    contact_nom: data.name || "",
+    contact_email: data.email || "",
+    contact_telephone: data.phone || "",
+    sujet: data.type === 'joueur' ? `Inscription Joueur - ${enfantNom || 'N/A'}` : "Message",
+    contenu: data.message || "",
+    reference_id: data.id,
+    created_at: data.created_at || new Date().toISOString(),
+    metadata: { ...data.payload, enfant_nom: enfantNom, source_table: 'site_messages' },
+  } as SiteMessage;
+};
+
 // Update message status
 export const updateMessageStatus = async (id: string, statut: "nouveau" | "lu" | "archive", metadata?: any) => {
   const isRead = statut === "lu" || statut === "archive";

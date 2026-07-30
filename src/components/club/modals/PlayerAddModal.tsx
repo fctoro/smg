@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import { Modal } from "@/components/ui/modal";
 import PlayerForm from "@/components/club/forms/PlayerForm";
 import { PlayerFormValues, Player } from "@/types/club";
@@ -14,6 +14,7 @@ interface PlayerAddModalProps {
 
 export function PlayerAddModal({ isOpen, onClose }: PlayerAddModalProps) {
   const { players, setPlayers } = useClubData();
+  const [successMessage, setSuccessMessage] = useState("");
   
   const categories = useMemo(
     () => [...new Set([...DEFAULT_CATEGORIES, ...players.map((player) => player.categorie)])],
@@ -31,7 +32,17 @@ export function PlayerAddModal({ isOpen, onClose }: PlayerAddModalProps) {
       if (inserted && inserted.EtudiantID) {
         const newPlayer: Player = { ...newPlayerLocal, id: String(inserted.EtudiantID) };
         setPlayers((prevPlayers) => [newPlayer, ...prevPlayers]);
-        onClose(); // Close modal after successful creation
+        
+        setSuccessMessage(
+          newPlayerLocal.statut === "alumni" 
+            ? "Joueur enregistré dans alumni avec succès !" 
+            : "Joueur enregistré avec succès !"
+        );
+        
+        setTimeout(() => {
+          setSuccessMessage("");
+          onClose(); // Close modal after successful creation
+        }, 2000);
       } else {
         alert("Erreur lors de la création. Aucune ID retournée.");
       }
@@ -54,8 +65,25 @@ export function PlayerAddModal({ isOpen, onClose }: PlayerAddModalProps) {
             </p>
           </div>
         </div>
+        
+        {successMessage && (
+          <div className="fixed bottom-5 right-5 z-[9999] rounded-lg bg-green-50 p-4 border border-green-200 dark:bg-green-900/80 dark:border-green-800 shadow-xl animate-in slide-in-from-bottom-5">
+            <div className="flex items-center">
+              <div className="flex-shrink-0">
+                <svg className="h-5 w-5 text-green-500 dark:text-green-400" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div className="ml-3">
+                <p className="text-sm font-medium text-green-800 dark:text-green-200">
+                  {successMessage}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
 
-        <div className="p-6 overflow-y-auto custom-scrollbar">
+        <div className="max-h-[70vh] overflow-y-auto pr-2 px-1 -mx-1 mt-5 custom-scrollbar">
           <PlayerForm
             initialValues={{}} // Empty initial values for a new player
             onSubmit={handleSubmit}

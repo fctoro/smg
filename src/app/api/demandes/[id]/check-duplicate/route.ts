@@ -20,7 +20,7 @@ export async function GET(request: Request, context: any) {
     // Fetch the site_message
     const { data: msgRows, error: msgErr } = await supabase
       .from("site_messages")
-      .select("metadata, type_message, contact_email")
+      .select("payload, type, email")
       .eq("id", id);
 
     if (msgErr || !msgRows || msgRows.length === 0) {
@@ -28,14 +28,14 @@ export async function GET(request: Request, context: any) {
     }
 
     const msg = msgRows[0];
-    if (msg.type_message !== "inscription_joueur") {
+    if (msg.type !== "joueur") {
       return NextResponse.json({ isDuplicate: false });
     }
 
-    let payload = msg.metadata || {};
+    let payload = msg.payload || {};
 
-    const firstName = payload.enfant_prenom?.trim();
-    const lastName = payload.enfant_nom?.trim();
+    const firstName = payload.child_first_name?.trim();
+    const lastName = payload.child_last_name?.trim();
     
     if (!firstName || !lastName) {
        return NextResponse.json({ isDuplicate: false });
@@ -44,21 +44,23 @@ export async function GET(request: Request, context: any) {
     const normalizedFirst = firstName.toLowerCase();
     const normalizedLast = lastName.toLowerCase();
 
-    // Check in player_registrations 
-    // We check if any registration exists with the same name (case-insensitive approximation)
-    // Supabase ilike can be used
+    // Check in tblEtudiants
+    // We check if any student exists with the same name (case-insensitive approximation)
     const { data: regRows, error: regErr } = await supabase
-      .from("player_registrations")
-      .select("id, child_first_name, child_last_name, child_birth_date, created_at")
-      .ilike("child_first_name", normalizedFirst)
-      .ilike("child_last_name", normalizedLast)
-      .order("created_at", { ascending: false });
+      .from("tblEtudiants")
+      .select("EtudiantID, Nom, Prenom")
+      .ilike("Prenom", `%${normalizedFirst}%`)
+      .ilike("Nom", `%${normalizedLast}%`);
 
-    if (!regErr && regRows && regRows.length > 1) {
+    if (!regErr && regRows && regRows.length > 0) {
       return NextResponse.json({
         isDuplicate: true,
-        source: "player_registrations",
-        player: regRows[1] // The older one
+        source: "tblEtudiants",
+        player: {
+          id: String(regRows[0].EtudiantID),
+          child_first_name: regRows[0].Prenom,
+          child_last_name: regRows[0].Nom
+        }
       });
     }
 

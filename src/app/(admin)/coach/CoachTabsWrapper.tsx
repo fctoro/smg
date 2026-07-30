@@ -13,7 +13,12 @@ export default function CoachTabsWrapper() {
     return <CoachPlayersPage />;
   }
   if (tab === "tactiques") {
-    return <CoachTacticsPage planId={searchParams.get("planId")} />;
+    return (
+      <CoachTacticsPage 
+        planId={searchParams.get("planId")} 
+        effectifId={searchParams.get("effectifId")} 
+      />
+    );
   }
   return <CoachDashboardPage />;
 }

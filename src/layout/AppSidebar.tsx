@@ -21,6 +21,8 @@ import {
   TableIcon,
   UserCircleIcon,
   LockIcon,
+  PaperPlaneIcon,
+  CoachIcon,
 } from "../icons/index";
 
 type NavItem = {
@@ -59,6 +61,11 @@ const adminNavItems: NavItem[] = [
     icon: <GroupIcon />,
     name: "Parents",
     path: "/parents",
+  },
+  {
+    icon: <CoachIcon />,
+    name: "Coachs",
+    path: "/coachs",
   },
   {
     name: "Alumni",

@@ -3,6 +3,8 @@ import React, { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { PencilIcon } from "@/icons";
 import { createUser, getUsersList, deleteUser, updateUserPassword, updateUserAccess } from "@/app/actions/user";
+import { fetchCoaches } from "@/lib/club/coachs";
+import { Coach } from "@/types/club";
 
 type Profile = {
   id: string;
@@ -60,6 +62,9 @@ export default function AccessControlPage() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
 
+  const [coaches, setCoaches] = useState<Coach[]>([]);
+  const [selectedCoachId, setSelectedCoachId] = useState<string>("");
+
   const [editingAccessUserId, setEditingAccessUserId] = useState<string | null>(null);
 
   const [activeConfigRole, setActiveConfigRole] = useState<string>("Admin");
@@ -86,17 +91,42 @@ export default function AccessControlPage() {
         setAvailableCategories(predefined);
       }
     }
+    async function loadCoaches() {
+      const data = await fetchCoaches();
+      setCoaches(data);
+    }
     checkUser();
     fetchCategories();
     fetchProfiles();
+    loadCoaches();
   }, []);
 
   const handleRoleSelect = (roleId: string) => {
     setFormData(prev => ({ ...prev, role: roleId }));
     if (roleId === "Coach") {
       setSelectedSections([]);
+      // Reset selected coach on role switch
+      setSelectedCoachId("");
+      setFormData(prev => ({ ...prev, email: "" }));
+      setSelectedCategories([]);
     } else {
       setSelectedSections(rolePermissions[roleId] || []);
+    }
+  };
+
+  const handleCoachSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const coachId = e.target.value;
+    setSelectedCoachId(coachId);
+    
+    if (coachId) {
+      const coach = coaches.find(c => c.id === coachId);
+      if (coach) {
+        setFormData(prev => ({ ...prev, email: coach.email }));
+        setSelectedCategories(coach.categories || []);
+      }
+    } else {
+      setFormData(prev => ({ ...prev, email: "" }));
+      setSelectedCategories([]);
     }
   };
 
@@ -180,6 +210,7 @@ export default function AccessControlPage() {
       setEditingAccessUserId(null);
       setFormData({ email: "", password: "", role: "Admin" });
       setSelectedSections(rolePermissions["Admin"]);
+      setSelectedCoachId("");
       fetchProfiles();
     }
     setSaving(false);
@@ -362,6 +393,26 @@ export default function AccessControlPage() {
           </div>
 
           <div className="grid grid-cols-1 gap-6 pt-2">
+            {formData.role === "Coach" && !editingAccessUserId && (
+              <div className="space-y-2">
+                <label className="text-[14px] font-medium text-[#334155]">Sélectionner un Coach <span className="text-red-500">*</span></label>
+                <select
+                  value={selectedCoachId}
+                  onChange={handleCoachSelect}
+                  required
+                  className="w-full h-11 px-4 bg-[#f8fafc] border border-[#e2e8f0] rounded-lg text-[14px] text-[#0f172a] focus:border-[#0f172a] outline-none transition-colors"
+                >
+                  <option value="">-- Choisir un coach --</option>
+                  {coaches.map(c => (
+                    <option key={c.id} value={c.id}>
+                      {c.nom} {c.prenom} ({c.email})
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[12px] text-[#64748b] mt-1">L'email et les catégories seront récupérés automatiquement.</p>
+              </div>
+            )}
+
             <div className="space-y-2">
               <label className="text-[14px] font-medium text-[#334155]">Adresse email <span className="text-red-500">*</span></label>
               <input 
@@ -371,7 +422,7 @@ export default function AccessControlPage() {
                 type="email" 
                 placeholder="nom@fctoro.club"
                 required
-                disabled={!!editingAccessUserId}
+                disabled={!!editingAccessUserId || formData.role === "Coach"}
                 className="w-full h-11 px-4 bg-[#f8fafc] disabled:cursor-not-allowed disabled:bg-[#e2e8f0] border border-[#e2e8f0] rounded-lg text-[14px] text-[#0f172a] placeholder-[#94a3b8] focus:border-[#0f172a] outline-none transition-colors" 
               />
               {editingAccessUserId && (
@@ -390,6 +441,7 @@ export default function AccessControlPage() {
                   value={formData.password}
                   onChange={handleInputChange}
                   type={showPassword ? "text" : "password"} 
+                  autoComplete="new-password"
                   placeholder={editingAccessUserId ? "•••••••• (facultatif)" : "••••••••"}
                   required={!editingAccessUserId}
                   className="w-full h-11 px-4 pr-11 bg-[#f1f5f9] border border-[#e2e8f0] rounded-lg text-[14px] text-[#0f172a] placeholder-[#94a3b8] focus:border-[#0f172a] outline-none transition-colors" 

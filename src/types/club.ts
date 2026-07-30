@@ -14,6 +14,30 @@ export type MatchFormResult = "W" | "D" | "L";
 
 export type MatchState = "FT" | "A venir";
 
+export interface Coach {
+  id: string;
+  nom: string;
+  prenom: string;
+  email: string;
+  telephone?: string;
+  sexe?: string;
+  categories: string[];
+  saison?: string;
+  created_at?: string;
+}
+
+export interface Effectif {
+  id: string;
+  nom: string;
+  date_match: string;
+  periode: string;
+  categorie: string;
+  joueurs: string[];
+  tactique_id?: string;
+  coach_email: string;
+  created_at?: string;
+}
+
 export interface Player {
   id: string;
   matricule?: string;

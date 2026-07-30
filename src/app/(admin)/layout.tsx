@@ -5,7 +5,7 @@ import AppHeader from "@/layout/AppHeader";
 import AppSidebar from "@/layout/AppSidebar";
 import Backdrop from "@/layout/Backdrop";
 import AutoLogoutListener from "@/components/auth/AutoLogoutListener";
-import React from "react";
+import React, { Suspense } from "react";
 
 export default function AdminLayout({
   children,
@@ -27,7 +27,9 @@ export default function AdminLayout({
       <AutoLogoutListener />
       
       {/* Sidebar and Backdrop */}
-      <AppSidebar />
+      <Suspense fallback={null}>
+        <AppSidebar />
+      </Suspense>
       <Backdrop />
       {/* Main Content Area */}
       <div

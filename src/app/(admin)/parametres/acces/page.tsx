@@ -10,6 +10,7 @@ type Profile = {
   full_name: string;
   role: string;
   sections?: string[];
+  categories?: string[];
   created_at: string;
 };
 
@@ -54,6 +55,8 @@ export default function AccessControlPage() {
   });
 
   const [selectedSections, setSelectedSections] = useState<string[]>(rolePermissions["Admin"]);
+  const [availableCategories, setAvailableCategories] = useState<string[]>([]);
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
 
@@ -72,13 +75,29 @@ export default function AccessControlPage() {
         }
       } catch (e) {}
     }
+    async function fetchCategories() {
+      const predefined = ["ti toro", "U8", "U10", "U12", "U14", "U16", "U18"];
+      const { data } = await supabase.from('tblEtudiants').select('Categorie');
+      if (data) {
+        const fromDb = data.map(d => d.Categorie).filter(Boolean);
+        const unique = Array.from(new Set([...predefined, ...fromDb]));
+        setAvailableCategories(unique);
+      } else {
+        setAvailableCategories(predefined);
+      }
+    }
     checkUser();
+    fetchCategories();
     fetchProfiles();
   }, []);
 
   const handleRoleSelect = (roleId: string) => {
     setFormData(prev => ({ ...prev, role: roleId }));
-    setSelectedSections(rolePermissions[roleId] || []);
+    if (roleId === "Coach") {
+      setSelectedSections([]);
+    } else {
+      setSelectedSections(rolePermissions[roleId] || []);
+    }
   };
 
   const fetchProfiles = async () => {
@@ -95,6 +114,14 @@ export default function AccessControlPage() {
       prev.includes(section) 
         ? prev.filter(s => s !== section)
         : [...prev, section]
+    );
+  };
+
+  const handleToggleCategory = (category: string) => {
+    setSelectedCategories(prev => 
+      prev.includes(category) 
+        ? prev.filter(c => c !== category)
+        : [...prev, category]
     );
   };
 
@@ -122,7 +149,8 @@ export default function AccessControlPage() {
     form.append("email", formData.email);
     form.append("password", formData.password);
     form.append("role", formData.role);
-    form.append("sections", JSON.stringify(selectedSections));
+    form.append("sections", JSON.stringify(formData.role === "Coach" ? [] : selectedSections));
+    form.append("categories", JSON.stringify(formData.role === "Coach" ? selectedCategories : []));
 
     let result;
     if (editingAccessUserId) {
@@ -134,7 +162,12 @@ export default function AccessControlPage() {
           return;
         }
       }
-      result = await updateUserAccess(editingAccessUserId, formData.role, selectedSections);
+      result = await updateUserAccess(
+        editingAccessUserId, 
+        formData.role, 
+        formData.role === "Coach" ? [] : selectedSections,
+        formData.role === "Coach" ? selectedCategories : []
+      );
     } else {
       result = await createUser(form);
     }
@@ -162,7 +195,8 @@ export default function AccessControlPage() {
 
     setEditingAccessUserId(user.id);
     setFormData({ email: user.email, password: "", role: user.role });
-    setSelectedSections(user.sections || rolePermissions[user.role] || []);
+    setSelectedSections(user.role === "Coach" ? [] : (user.sections || rolePermissions[user.role] || []));
+    setSelectedCategories(user.categories || []);
   };
 
   const handleDeleteUser = async (user: Profile) => {
@@ -382,40 +416,78 @@ export default function AccessControlPage() {
           </div>
 
           {/* Sections accessibles personnalisées */}
-          <div className="mt-8 border border-[#e2e8f0] rounded-xl overflow-hidden">
-            <div className="px-5 py-4 flex items-center justify-between border-b border-[#f1f5f9] bg-[#f8fafc]">
-              <h3 className="text-[14px] font-semibold text-[#334155]">
-                Sections affichées pour ce compte ({formData.role})
-              </h3>
-              <span className="text-[13px] text-[#94a3b8]">
-                {selectedSections.length === 0 ? "Aucune sélectionnée" : `${selectedSections.length} sélectionnée(s)`}
-              </span>
+          {formData.role !== "Coach" && (
+            <div className="mt-8 border border-[#e2e8f0] rounded-xl overflow-hidden">
+              <div className="px-5 py-4 flex items-center justify-between border-b border-[#f1f5f9] bg-[#f8fafc]">
+                <h3 className="text-[14px] font-semibold text-[#334155]">
+                  Sections affichées pour ce compte ({formData.role})
+                </h3>
+                <span className="text-[13px] text-[#94a3b8]">
+                  {selectedSections.length === 0 ? "Aucune sélectionnée" : `${selectedSections.length} sélectionnée(s)`}
+                </span>
+              </div>
+              
+              <div className="p-5 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-y-4 gap-x-4">
+                {SECTIONS.map(section => (
+                  <label key={section} className="flex items-center gap-3 cursor-pointer group">
+                    <div className="relative flex items-center">
+                      <input 
+                        type="checkbox"
+                        checked={selectedSections.includes(section)}
+                        onChange={() => handleToggleSection(section)}
+                        className="peer h-[18px] w-[18px] cursor-pointer appearance-none rounded-[4px] border border-[#cbd5e1] bg-white checked:border-[#0f172a] checked:bg-[#0f172a] transition-all outline-none"
+                      />
+                      <svg className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-3 h-3 pointer-events-none opacity-0 peer-checked:opacity-100 text-white stroke-white" viewBox="0 0 14 10" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M1 5L4.5 8.5L13 1" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    </div>
+                    <span className="text-[14px] text-[#475569] group-hover:text-[#0f172a] transition-colors">
+                      {section}
+                    </span>
+                  </label>
+                ))}
+              </div>
             </div>
-            
-            <div className="p-5 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-y-4 gap-x-4">
-              {SECTIONS.map(section => (
-                <label key={section} className="flex items-center gap-3 cursor-pointer group">
-                  <div className="relative flex items-center">
-                    <input 
-                      type="checkbox"
-                      checked={selectedSections.includes(section)}
-                      onChange={() => handleToggleSection(section)}
-                      className="peer h-[18px] w-[18px] cursor-pointer appearance-none rounded-[4px] border border-[#cbd5e1] bg-white checked:border-[#0f172a] checked:bg-[#0f172a] transition-all outline-none"
-                    />
-                    <svg className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-3 h-3 pointer-events-none opacity-0 peer-checked:opacity-100 text-white stroke-white" viewBox="0 0 14 10" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      <path d="M1 5L4.5 8.5L13 1" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                    </svg>
-                  </div>
-                  <span className="text-[14px] text-[#475569] group-hover:text-[#0f172a] transition-colors">
-                    {section}
-                  </span>
-                </label>
-              ))}
+          )}
+
+          {formData.role === "Coach" && (
+            <div className="mt-8 border border-[#e2e8f0] rounded-xl overflow-hidden">
+              <div className="px-5 py-4 flex items-center justify-between border-b border-[#f1f5f9] bg-[#f8fafc]">
+                <h3 className="text-[14px] font-semibold text-[#334155]">
+                  Catégories assignées au Coach
+                </h3>
+                <span className="text-[13px] text-[#94a3b8]">
+                  {selectedCategories.length === 0 ? "Aucune sélectionnée" : `${selectedCategories.length} sélectionnée(s)`}
+                </span>
+              </div>
+              
+              <div className="p-5 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-y-4 gap-x-4">
+                {availableCategories.map(category => (
+                  <label key={category} className="flex items-center gap-3 cursor-pointer group">
+                    <div className="relative flex items-center">
+                      <input 
+                        type="checkbox"
+                        checked={selectedCategories.includes(category)}
+                        onChange={() => handleToggleCategory(category)}
+                        className="peer h-[18px] w-[18px] cursor-pointer appearance-none rounded-[4px] border border-[#cbd5e1] bg-white checked:border-[#0f172a] checked:bg-[#0f172a] transition-all outline-none"
+                      />
+                      <svg className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-3 h-3 pointer-events-none opacity-0 peer-checked:opacity-100 text-white stroke-white" viewBox="0 0 14 10" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M1 5L4.5 8.5L13 1" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    </div>
+                    <span className="text-[14px] text-[#475569] group-hover:text-[#0f172a] transition-colors">
+                      {category}
+                    </span>
+                  </label>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
 
           <div className="mt-8 pt-6 border-t border-[#f1f5f9] flex items-center justify-between">
-            <span className="text-[13px] text-[#94a3b8]">{selectedSections.length} section(s) attribuée(s)</span>
+            <span className="text-[13px] text-[#94a3b8]">
+              {formData.role === "Coach" ? `${selectedCategories.length} catégorie(s)` : `${selectedSections.length} section(s)`} attribuée(s)
+            </span>
             <button 
               type="submit" 
               disabled={saving}

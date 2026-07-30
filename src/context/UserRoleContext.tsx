@@ -26,6 +26,7 @@ interface UserRoleContextType {
   isFinance: boolean;
   isSuperAdmin: boolean;
   userSections: string[];
+  userCategories: string[];
   setRole: (role: UserRole) => void;
   toggleRole: () => void;
 }
@@ -75,6 +76,19 @@ export const UserRoleProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     return ALL_SECTIONS;
   });
 
+  const [userCategories, setUserCategories] = useState<string[]>(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("fctoro_user_categories");
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed)) return parsed;
+        } catch (e) {}
+      }
+    }
+    return [];
+  });
+
   const pathname = usePathname();
 
   useEffect(() => {
@@ -102,11 +116,16 @@ export const UserRoleProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             const normalized = metaRole.toLowerCase() as UserRole;
             setRoleState(normalized);
             localStorage.setItem("fctoro_user_role", normalized);
-            const activeSections = (Array.isArray(metaSections) && metaSections.length > 0)
+            const activeSections = Array.isArray(metaSections)
               ? metaSections
               : getDefaultSectionsForRole(normalized);
             setUserSections(activeSections);
             localStorage.setItem("fctoro_user_sections", JSON.stringify(activeSections));
+            
+            const metaCategories = data.user.user_metadata?.categories;
+            if (Array.isArray(metaCategories)) {
+               setUserCategories(metaCategories);
+            }
             return;
           }
 
@@ -161,11 +180,12 @@ export const UserRoleProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       value={{
         role,
         userEmail,
-        isCoach,
-        isAdmin,
-        isFinance,
-        isSuperAdmin,
+        isCoach: role === "coach",
+        isAdmin: role === "admin" || role === "super admin",
+        isFinance: role === "finance",
+        isSuperAdmin: role === "super admin",
         userSections: isSuperAdmin ? ALL_SECTIONS : userSections,
+        userCategories,
         setRole,
         toggleRole,
       }}

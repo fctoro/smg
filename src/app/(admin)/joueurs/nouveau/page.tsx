@@ -134,13 +134,19 @@ function NewPlayerFormContent() {
   );
 }
 
-export default function NewPlayerPage() {
+function NewPlayerPageContent() {
   return (
     <div className="space-y-6">
       <PageBreadcrumb pageTitle="Ajouter un joueur" />
-      <Suspense fallback={<div className="flex justify-center p-10"><div className="h-6 w-6 animate-spin rounded-full border-2 border-brand-500 border-t-transparent"></div></div>}>
-        <NewPlayerFormContent />
-      </Suspense>
+      <NewPlayerFormContent />
     </div>
+  );
+}
+
+export default function NewPlayerPage() {
+  return (
+    <Suspense fallback={<div className="flex justify-center p-10"><div className="h-6 w-6 animate-spin rounded-full border-2 border-brand-500 border-t-transparent"></div></div>}>
+      <NewPlayerPageContent />
+    </Suspense>
   );
 }

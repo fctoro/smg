@@ -323,7 +323,7 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
               nom: d.Nom || "",
               prenom: d.Prenom || "",
               photoUrl: d.PhotoUrl || "/images/user/silhouette.svg",
-              poste: "Joueur",
+              poste: d.Poste || d.poste || "Joueur",
               sexe: d.Sexe === "F" ? "Féminin" : "Masculin", 
               categorie: (() => {
                 const rawCat = (d.Categorie || d.categorie || d.Category || d.category || "").toString().trim();

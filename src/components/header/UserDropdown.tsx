@@ -11,7 +11,7 @@ export default function UserDropdown() {
   const [isOpen, setIsOpen] = useState(false);
   const [userEmail, setUserEmail] = useState<string>("");
   const [mounted, setMounted] = useState(false);
-  const { isCoach, isFinance, isSuperAdmin } = useUserRole();
+  const { isCoach, isFinance, isSuperAdmin, userCategories } = useUserRole();
 
   useEffect(() => {
     setMounted(true);
@@ -84,10 +84,10 @@ export default function UserDropdown() {
             {userEmail || "Utilisateur"}
           </span>
           <span
-            className="block text-[11px] font-semibold text-brand-600 dark:text-brand-400 leading-tight"
+            className="block text-[11px] font-semibold text-brand-600 dark:text-brand-400 leading-tight truncate max-w-[150px]"
             suppressHydrationWarning
           >
-            {displayRoleLabel}
+            {displayRoleLabel} {mounted && isCoach && userCategories?.length ? `- ${userCategories.join(', ')}` : ""}
           </span>
         </div>
 
@@ -120,9 +120,14 @@ export default function UserDropdown() {
           <span className="block font-medium text-gray-700 text-theme-sm dark:text-gray-400 truncate">
             {userEmail}
           </span>
-          <span className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-700 dark:bg-brand-500/15 dark:text-brand-300" suppressHydrationWarning>
+          <span className="mt-2 inline-flex flex-wrap items-center gap-1.5 rounded-full bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-700 dark:bg-brand-500/15 dark:text-brand-300" suppressHydrationWarning>
             <span className="h-1.5 w-1.5 rounded-full bg-brand-500" />
             Connecté en {displayRoleLabel}
+            {mounted && isCoach && userCategories && userCategories.length > 0 && (
+              <span className="opacity-80">
+                ({userCategories.join(", ")})
+              </span>
+            )}
           </span>
         </div>
 

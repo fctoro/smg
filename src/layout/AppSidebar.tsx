@@ -2,7 +2,7 @@
 import React, { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { useSidebar } from "../context/SidebarContext";
 import { useUserRole } from "../context/UserRoleContext";
 import { supabase } from "@/lib/supabaseClient";
@@ -145,6 +145,7 @@ const AppSidebar: React.FC = () => {
   const { isExpanded, isMobileOpen, isHovered, setIsHovered } = useSidebar();
   const { role, isCoach, isAdmin, isSuperAdmin, userSections } = useUserRole();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [mounted, setMounted] = useState(false);
   const [unreadCount, setUnreadCount] = useState<number>(0);
 
@@ -238,16 +239,22 @@ const AppSidebar: React.FC = () => {
       if (path === "/") {
         return pathname === "/";
       }
+      
+      if (path === "/coach") {
+        const currentTab = searchParams.get("tab");
+        return pathname === "/coach" && !currentTab;
+      }
+
       if (path.includes("?tab=")) {
         const [basePath, search] = path.split("?");
-        if (typeof window !== "undefined") {
-          const currentSearch = window.location.search;
-          return pathname === basePath && currentSearch.includes(search);
-        }
+        const searchParamsFromPath = new URLSearchParams(search);
+        const tabToMatch = searchParamsFromPath.get("tab");
+        const currentTab = searchParams.get("tab");
+        return pathname === basePath && currentTab === tabToMatch;
       }
       return pathname === path || (path !== "/dashboard" && pathname.startsWith(`${path}/`));
     },
-    [pathname],
+    [pathname, searchParams],
   );
 
   const renderMenuItems = (

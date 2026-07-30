@@ -7,6 +7,7 @@ import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import PlayerTable from "@/components/club/PlayerTable";
 import { useDashboardConfig } from "@/hooks/useDashboardConfig";
 import { useClubData } from "@/context/ClubDataContext";
+import { useUserRole } from "@/context/UserRoleContext";
 import { getPlayerFullName } from "@/lib/club/metrics";
 import { softDeletePlayerInSupabase } from "@/lib/club/supabase-crud";
 import { Dropdown } from "@/components/ui/dropdown/Dropdown";
@@ -20,7 +21,13 @@ import { Player } from "@/types/club";
 
 export default function PlayersPage() {
   const router = useRouter();
-  const { players, setPlayers } = useClubData();
+  const { players: allPlayers, setPlayers } = useClubData();
+  const { isCoach, userCategories } = useUserRole();
+
+  const players = isCoach && userCategories && userCategories.length > 0
+    ? allPlayers.filter(p => userCategories.includes(p.categorie))
+    : allPlayers;
+
   const [isExportOpen, setIsExportOpen] = useState(false);
   const { enabledPlayerColumns } = useDashboardConfig();
   const { confirm, ConfirmComponent } = useConfirm();

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
-import CoachTacticsPage from "@/components/club/pages/CoachTacticsPage";
+import CoachTabsWrapper from "./CoachTabsWrapper";
+import { Suspense } from "react";
 
 export const metadata: Metadata = {
   title: "Espace Coach | FC Toro",
@@ -7,5 +8,9 @@ export const metadata: Metadata = {
 };
 
 export default function CoachPage() {
-  return <CoachTacticsPage />;
+  return (
+    <Suspense fallback={<div className="p-8 text-center text-gray-500">Chargement...</div>}>
+      <CoachTabsWrapper />
+    </Suspense>
+  );
 }

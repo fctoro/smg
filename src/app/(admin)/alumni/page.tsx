@@ -19,6 +19,8 @@ import { useClubData } from "@/context/ClubDataContext";
 import { deleteAlumniInSupabase } from "@/lib/club/supabase-crud";
 import { useConfirm } from "@/hooks/useConfirm";
 import { AlumniAddModal } from "@/components/club/modals/AlumniAddModal";
+import { AlumniEditModal } from "@/components/club/modals/AlumniEditModal";
+import { Alumni } from "@/types/club";
 
 export default function AlumniPage() {
   const router = useRouter();
@@ -30,6 +32,7 @@ export default function AlumniPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [currentPageSize, setCurrentPageSize] = useState(10);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [selectedEditAlumni, setSelectedEditAlumni] = useState<Alumni | null>(null);
 
   const situations = useMemo(() => {
     return Array.from(new Set(alumni.map(a => a.situationActuelle).filter(Boolean)));
@@ -127,7 +130,7 @@ export default function AlumniPage() {
     <div className="space-y-3">
       <PageBreadcrumb pageTitle="Alumni" />
 
-      <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
         <div className="flex flex-1 gap-2">
           <input
             value={searchQuery}
@@ -287,7 +290,7 @@ export default function AlumniPage() {
                               <button
                                 type="button"
                                 className="inline-flex items-center justify-center text-gray-500 transition hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200"
-                                onClick={() => router.push(`/alumni/${entry.id}/modifier`)}
+                                onClick={() => setSelectedEditAlumni(entry)}
                                 aria-label="Modifier"
                                 title="Modifier"
                               >
@@ -325,6 +328,11 @@ export default function AlumniPage() {
               <AlumniAddModal
                 isOpen={isAddModalOpen}
                 onClose={() => setIsAddModalOpen(false)}
+              />
+              <AlumniEditModal
+                isOpen={!!selectedEditAlumni}
+                onClose={() => setSelectedEditAlumni(null)}
+                alumniEntry={selectedEditAlumni}
               />
               <ConfirmComponent />
             </div>

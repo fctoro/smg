@@ -12,6 +12,7 @@ import { useClubData } from "@/context/ClubDataContext";
 import { softDeleteEmployeeInSupabase } from "@/lib/club/supabase-crud";
 
 import { EmployeeEditModal } from "@/components/club/modals/EmployeeEditModal";
+import { EmployeeAddModal } from "@/components/club/modals/EmployeeAddModal";
 import { Employee } from "@/types/club";
 
 export default function EmployesPage() {
@@ -21,6 +22,7 @@ export default function EmployesPage() {
   const { confirm, ConfirmComponent } = useConfirm();
 
   const [selectedEditEmployee, setSelectedEditEmployee] = useState<Employee | null>(null);
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
   const handleExportCSV = () => {
     setIsExportOpen(false);
@@ -100,12 +102,12 @@ export default function EmployesPage() {
         onEditEmployee={(emp) => setSelectedEditEmployee(emp)}
         onDeleteEmployee={(emp) => handleDeleteEmployee(emp.id)}
         actionButton={
-          <Link
-            href="/employes/nouveau"
-            className="inline-flex h-11 items-center justify-center whitespace-nowrap rounded-lg bg-brand-500 px-4 text-sm font-medium text-white shadow-theme-xs hover:bg-brand-600"
+          <button
+            onClick={() => setIsAddModalOpen(true)}
+            className="inline-flex h-11 items-center justify-center whitespace-nowrap rounded-lg bg-brand-500 px-4 text-sm font-medium text-white shadow-theme-xs hover:bg-brand-600 cursor-pointer"
           >
             + Ajouter un employé
-          </Link>
+          </button>
         }
         exportButton={
           <div className="relative">
@@ -149,6 +151,11 @@ export default function EmployesPage() {
         isOpen={!!selectedEditEmployee}
         onClose={() => setSelectedEditEmployee(null)}
         employee={selectedEditEmployee}
+      />
+      
+      <EmployeeAddModal
+        isOpen={isAddModalOpen}
+        onClose={() => setIsAddModalOpen(false)}
       />
       
       <ConfirmComponent />

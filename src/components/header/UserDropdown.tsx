@@ -6,12 +6,14 @@ import { Dropdown } from "../ui/dropdown/Dropdown";
 import { DropdownItem } from "../ui/dropdown/DropdownItem";
 import { useUserRole } from "@/context/UserRoleContext";
 import { supabase } from "@/lib/supabaseClient";
+import { useConfirm } from "@/hooks/useConfirm";
 
 export default function UserDropdown() {
   const [isOpen, setIsOpen] = useState(false);
   const [userEmail, setUserEmail] = useState<string>("");
   const [mounted, setMounted] = useState(false);
   const { isCoach, isFinance, isSuperAdmin, userCategories } = useUserRole();
+  const { confirm, ConfirmComponent } = useConfirm();
 
   useEffect(() => {
     setMounted(true);
@@ -35,22 +37,29 @@ export default function UserDropdown() {
     setIsOpen(false);
   }
 
-  const handleSignOut = async (e: React.MouseEvent) => {
+  const handleSignOut = (e: React.MouseEvent) => {
     e.preventDefault();
     closeDropdown();
-    const confirmed = window.confirm("Êtes-vous sûr de vouloir vous déconnecter du système ?");
-    if (!confirmed) return;
 
-    try {
-      await supabase.auth.signOut();
-    } catch (err) {
-      console.error("SignOut error:", err);
-    } finally {
-      localStorage.removeItem("fctoro_user_role");
-      localStorage.removeItem("fctoro_user_email");
-      localStorage.removeItem("fctoro_user_sections");
-      window.location.href = "/signin";
-    }
+    confirm({
+      title: "Se déconnecter",
+      message: "Êtes-vous sûr de vouloir vous déconnecter du système ?",
+      isDestructive: true,
+      confirmText: "Se déconnecter",
+      cancelText: "Annuler",
+      onConfirm: async () => {
+        try {
+          await supabase.auth.signOut();
+        } catch (err) {
+          console.error("SignOut error:", err);
+        } finally {
+          localStorage.removeItem("fctoro_user_role");
+          localStorage.removeItem("fctoro_user_email");
+          localStorage.removeItem("fctoro_user_sections");
+          window.location.href = "/signin";
+        }
+      }
+    });
   };
 
   // Always render "Administrateur" on server to match SSR, swap after mount
@@ -180,6 +189,7 @@ export default function UserDropdown() {
           Se déconnecter
         </button>
       </Dropdown>
+      <ConfirmComponent />
     </div>
   );
 }

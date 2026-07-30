@@ -2,8 +2,8 @@ import SignInClient from "@/components/auth/SignInClient";
 import { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Next.js SignIn Page | TailAdmin - Next.js Dashboard Template",
-  description: "This is Next.js Signin Page TailAdmin Dashboard Template",
+  title: "Connexion | FC Toro",
+  description: "Page de connexion pour la plateforme administrative de FC Toro",
 };
 
 export default function SignIn() {

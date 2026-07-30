@@ -13,6 +13,7 @@ import { getParentLinkedPlayerIds } from "@/lib/club/parents";
 import { deleteParentInSupabase } from "@/lib/club/supabase-crud";
 
 import { ParentEditModal } from "@/components/club/modals/ParentEditModal";
+import { ParentAddModal } from "@/components/club/modals/ParentAddModal";
 import { Parent } from "@/types/club";
 
 export default function ParentsPage() {
@@ -22,6 +23,7 @@ export default function ParentsPage() {
   const { confirm, ConfirmComponent } = useConfirm();
 
   const [selectedEditParent, setSelectedEditParent] = useState<Parent | null>(null);
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
   const handleExportCSV = () => {
     setIsExportOpen(false);
@@ -102,12 +104,12 @@ export default function ParentsPage() {
         onEditParent={(parent) => setSelectedEditParent(parent)}
         onDeleteParent={(parent) => handleDeleteParent(parent.id)}
         actionButton={
-          <Link
-            href="/parents/nouveau"
-            className="inline-flex h-11 items-center justify-center whitespace-nowrap rounded-lg bg-brand-500 px-4 text-sm font-medium text-white shadow-theme-xs hover:bg-brand-600"
+          <button
+            onClick={() => setIsAddModalOpen(true)}
+            className="inline-flex h-11 items-center justify-center whitespace-nowrap rounded-lg bg-brand-500 px-4 text-sm font-medium text-white shadow-theme-xs hover:bg-brand-600 cursor-pointer"
           >
             + Ajouter un parent
-          </Link>
+          </button>
         }
         exportButton={
           <div className="relative">
@@ -151,6 +153,11 @@ export default function ParentsPage() {
         isOpen={!!selectedEditParent}
         onClose={() => setSelectedEditParent(null)}
         parent={selectedEditParent}
+      />
+      
+      <ParentAddModal
+        isOpen={isAddModalOpen}
+        onClose={() => setIsAddModalOpen(false)}
       />
       
       <ConfirmComponent />

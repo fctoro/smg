@@ -96,31 +96,12 @@ export const updatePlayerInSupabase = async (playerId: string, data: Partial<Pla
 export const softDeletePlayerInSupabase = async (playerId: string) => {
   const etudiantId = resolveEtudiantId(playerId);
   
-  // Fetch email to revert site_messages status if needed
-  const { data: player } = await supabase
-    .from("tblEtudiants")
-    .select("Email")
-    .eq("EtudiantID", etudiantId)
-    .single();
-
-  // Soft delete: set IsDeleted = 1
-  const { error } = await supabase
-    .from("tblEtudiants")
-    .update({ IsDeleted: 1 })
-    .eq("EtudiantID", etudiantId);
-
-  if (error) {
-    console.error("Erreur lors de la suppression du joueur :", error);
-    throw error;
-  }
+  const { softDeletePlayerAdmin } = await import("@/app/actions/club");
+  const result = await softDeletePlayerAdmin(etudiantId);
   
-  // Revert site_messages from "enrolled" to "resolved" (LU)
-  if (player?.Email) {
-    await supabase
-      .from("site_messages")
-      .update({ status: "resolved" })
-      .eq("email", player.Email)
-      .eq("status", "enrolled");
+  if (!result.success) {
+    console.error("Erreur lors de la suppression du joueur :", result.error);
+    throw new Error(result.error);
   }
 };
 

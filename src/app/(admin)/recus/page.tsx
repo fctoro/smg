@@ -113,6 +113,10 @@ export default function RecusPage() {
     doc.text("Football Club", 43, 29);
     doc.text("7 Rue Rigaud, Pétion-Ville, Haïti", 43, 34);
     doc.text("+509 2817-8676 | footballclubtoro@gmail.com", 43, 39);
+    
+    // Website link (clickable)
+    doc.setTextColor(82, 107, 132); // Gris bleu
+    doc.textWithLink("www.fctoro.com", 43, 44, { url: "https://www.fctoro.com" });
 
     // ==========================================
     // REÇU TITLE & META INFOS (Alignés à droite)
@@ -147,29 +151,62 @@ export default function RecusPage() {
     doc.line(14, 48, 196, 48);
 
     // ==========================================
-    // FACTURÉ À (Client)
+    // INFO PARENT (Gauche) & JOUEURS (Droite)
     // ==========================================
+    const headerTextColor: [number, number, number] = [82, 107, 132]; // Gris bleu du screenshot
+    const headerLineColor: [number, number, number] = [226, 232, 240];
+
+    // --- GAUCHE : Parent ---
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(9);
-    doc.setTextColor(grayMedium[0], grayMedium[1], grayMedium[2]);
-    doc.text("FACTURE À :", 14, 58);
+    doc.setFontSize(8);
+    doc.setTextColor(headerTextColor[0], headerTextColor[1], headerTextColor[2]);
+    doc.text("PARENT", 14, 60);
 
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(11);
+    doc.setFontSize(10);
     doc.setTextColor(grayDark[0], grayDark[1], grayDark[2]);
-    doc.text(parentFullName, 14, 64);
+    doc.text(parentFullName, 14, 66);
 
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(10);
+    doc.setFontSize(9);
     doc.setTextColor(grayMedium[0], grayMedium[1], grayMedium[2]);
-    doc.text(`Tél : ${parentData.telephone || "Non renseigné"}`, 14, 69);
-    doc.text(`Email : ${parentData.email || "Non renseigné"}`, 14, 74);
-    doc.text(`Nb. joueur(s) inscrit(s) : ${parentData.playerIds.length}`, 14, 79);
+    doc.text(`Tél : ${parentData.telephone || "-"}`, 14, 72);
+    doc.text(`Email : ${parentData.email || "-"}`, 14, 78);
+    
+    // --- DROITE : Joueurs ---
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8);
+    doc.setTextColor(headerTextColor[0], headerTextColor[1], headerTextColor[2]);
+    doc.text("JOUEUR (ENFANT)", 120, 60);
+    
+    let currentY = 66;
+    parentData.playerIds.forEach((id: string) => {
+      const p = players.find(player => player.id === id);
+      if (p) {
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(9);
+        doc.setTextColor(grayDark[0], grayDark[1], grayDark[2]);
+        doc.text(`${p.prenom} ${p.nom}`, 120, currentY);
+        currentY += 6;
+        
+        if (p.categorie) {
+          doc.setFont("helvetica", "normal");
+          doc.setFontSize(9);
+          doc.setTextColor(grayMedium[0], grayMedium[1], grayMedium[2]);
+          doc.text(`Catégorie : ${p.categorie}`, 120, currentY);
+          currentY += 8;
+        } else {
+          currentY += 4;
+        }
+      }
+    });
+
+    const tableStartY = Math.max(90, currentY + 5);
 
     // ==========================================
     // TABLEAU DES VERSEMENTS (Corporate)
     // ==========================================
-    const tableColumn = ["Description (Joueur / Remarque)", "Date", "Mode", "Montant"];
+    const tableColumn = ["Date", "Joueur (Enfant)", "Remarque", "Mode", "Montant"];
     const tableRows: any[] = [];
 
     const mapMode = (mode: any) => {
@@ -189,8 +226,9 @@ export default function RecusPage() {
       const joueurNom = joueurObj ? getPlayerFullName(joueurObj) : "Inconnu";
       
       const pData = [
-        `${joueurNom}\n${p.remarque || "Paiement de cotisation"}`,
         String(formatClubDate(p.datePaiement ?? "")),
+        joueurNom,
+        p.remarque || "Paiement de cotisation",
         String(mapMode(p.methode)),
         String(formatCurrencyPDF(p.montant)),
       ];
@@ -200,39 +238,45 @@ export default function RecusPage() {
     autoTable(doc, {
       head: [tableColumn],
       body: tableRows,
-      startY: 90,
+      startY: tableStartY,
       theme: 'plain',
-      styles: { fontSize: 9, cellPadding: 8 },
+      styles: { 
+        fontSize: 9, 
+        cellPadding: 6,
+      },
       headStyles: { 
-        fillColor: [249, 250, 251], // Très gris clair (presque blanc)
-        textColor: black, // Noir
+        fillColor: false,
+        textColor: headerTextColor,
         fontStyle: 'bold',
-        halign: 'left', // Alignement à gauche par défaut pour l'en-tête
-        lineWidth: { top: 1, bottom: 1 }, 
-        lineColor: grayDark // Bordure foncée pour un look très structuré
+        halign: 'left',
       },
       bodyStyles: { textColor: grayDark },
-      alternateRowStyles: { fillColor: white }, // Pas de couleur alternée pour le côté corporate pur
       columnStyles: {
-        0: { cellWidth: 'auto', halign: 'left' },
-        1: { cellWidth: 35, halign: 'left' },
-        2: { cellWidth: 35, halign: 'left' },
-        3: { cellWidth: 40, fontStyle: 'bold', halign: 'right' }
+        0: { cellWidth: 30, halign: 'left' },
+        1: { cellWidth: 50, halign: 'left' },
+        2: { cellWidth: 'auto', halign: 'left' },
+        3: { cellWidth: 30, halign: 'left' },
+        4: { cellWidth: 35, fontStyle: 'bold', halign: 'right' }
       },
       didParseCell: function (data: any) {
-        // Force right alignment for the Montant header specifically
-        if (data.section === 'head' && data.column.index === 3) {
+        if (data.section === 'head' && data.column.index === 4) {
           data.cell.styles.halign = 'right';
+        }
+      },
+      didDrawCell: function (data: any) {
+        // Dessiner manuellement les lignes horizontales pour l'en-tête (contourne les limites du theme plain)
+        if (data.section === 'head') {
+          doc.setDrawColor(headerLineColor[0], headerLineColor[1], headerLineColor[2]);
+          doc.setLineWidth(0.3);
+          // Ligne du haut
+          doc.line(data.cell.x, data.cell.y, data.cell.x + data.cell.width, data.cell.y);
+          // Ligne du bas
+          doc.line(data.cell.x, data.cell.y + data.cell.height, data.cell.x + data.cell.width, data.cell.y + data.cell.height);
         }
       }
     });
 
-    const finalY = (doc as any).lastAutoTable.finalY || 90;
-
-    // Ligne de fin de tableau
-    doc.setDrawColor(grayDark[0], grayDark[1], grayDark[2]);
-    doc.setLineWidth(1);
-    doc.line(14, finalY, 196, finalY);
+    const finalY = (doc as any).lastAutoTable.finalY || tableStartY;
 
     // ==========================================
     // FOOTER SECTION (Totals)
@@ -278,12 +322,10 @@ export default function RecusPage() {
     // ==========================================
     // BOTTOM BANNER
     // ==========================================
-    const pageHeight = doc.internal.pageSize.height;
     
-    doc.setFont("helvetica", "normal");
+    doc.setFont("helvetica", "italic");
     doc.setFontSize(8);
     doc.setTextColor(grayMedium[0], grayMedium[1], grayMedium[2]);
-    doc.text("www.fctoro.com", 105, pageHeight - 10, { align: 'center' });
 
     doc.save(`Recu_${parentFullName.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`);
   };

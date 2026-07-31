@@ -1,9 +1,7 @@
 "use client";
-import Checkbox from "@/components/form/input/Checkbox";
-import Label from "@/components/form/Label";
-import Button from "@/components/ui/button/Button";
-import { EyeCloseIcon, EyeIcon } from "@/icons";
+
 import React, { useState } from "react";
+import Image from "next/image";
 import { supabase } from "@/lib/supabaseClient";
 
 const getDefaultSectionsForRole = (normalizedRole: string): string[] => {
@@ -19,7 +17,7 @@ const getDefaultSectionsForRole = (normalizedRole: string): string[] => {
 
 export default function SignInForm() {
   const [showPassword, setShowPassword] = useState(false);
-  const [isChecked, setIsChecked] = useState(false);
+  const [isChecked, setIsChecked] = useState(true);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -45,7 +43,6 @@ export default function SignInForm() {
         const uMetaRole = u.user_metadata?.role;
         const uMetaSections = u.user_metadata?.sections;
 
-        // Fetch DB profile if metadata is empty
         let userRole = uMetaRole || (uEmail === "footballclubtoro@gmail.com" ? "Super Admin" : "Admin");
         let userSections = Array.isArray(uMetaSections) && uMetaSections.length > 0 ? uMetaSections : [];
 
@@ -69,97 +66,115 @@ export default function SignInForm() {
         localStorage.setItem("fctoro_user_role", normalizedRole);
         localStorage.setItem("fctoro_user_sections", JSON.stringify(userSections));
 
-        // Perform instant full navigation
         window.location.href = normalizedRole === "coach" ? "/coach" : "/dashboard";
       }
     } catch (err: any) {
-      setError(err.message || "An error occurred during sign in.");
+      setError(err.message || "Erreur lors de la connexion.");
       setLoading(false);
     }
   };
 
   return (
-    <div className="flex flex-col flex-1 lg:w-1/2 w-full">
-      <div className="flex flex-col justify-center flex-1 w-full max-w-md mx-auto">
-        <div>
-          <div className="mb-5 sm:mb-8">
-            <h1 className="mb-2 font-semibold text-gray-800 text-title-sm dark:text-white/90 sm:text-title-md">
-              Se Connecter
-            </h1>
-            <p className="text-sm text-gray-500 dark:text-gray-400">
-              Saisissez vos identifiants FC Toro pour vous connecter à la plateforme.
-            </p>
+    <div className="w-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-3xl p-6 sm:p-8">
+      {/* Header - ONLY LOGO */}
+      <div className="flex justify-center mb-6">
+        <Image
+          width={84}
+          height={84}
+          src="/images/logo/fc-toro.png"
+          alt="FC Toro Logo"
+          className="h-20 w-20 object-contain"
+          priority
+        />
+      </div>
+
+      <form onSubmit={handleSignIn} className="space-y-5">
+        {error && (
+          <div className="p-3.5 text-xs font-semibold text-red-700 bg-red-50 dark:bg-red-950/40 dark:text-red-300 rounded-xl border border-red-200 dark:border-red-900/50 flex items-center gap-2">
+            <svg className="w-4 h-4 shrink-0 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span>{error}</span>
           </div>
-          <div>
-            <form onSubmit={handleSignIn}>
-              <div className="space-y-6">
-                {error && (
-                  <div className="p-3 text-sm text-error-600 bg-error-50 rounded-lg border border-error-200">
-                    {error}
-                  </div>
-                )}
-                <div>
-                  <Label>
-                    Adresse Email <span className="text-error-500">*</span>{" "}
-                  </Label>
-                  <input 
-                    placeholder="nom@fctoro.club" 
-                    type="email" 
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
-                    className="w-full h-11 px-4 bg-transparent border border-gray-300 rounded-lg text-sm text-gray-800 placeholder:text-gray-400 focus:border-brand-500 focus:ring-1 focus:ring-brand-500/20 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
-                  />
-                </div>
-                <div>
-                  <Label>
-                    Mot de passe <span className="text-error-500">*</span>{" "}
-                  </Label>
-                  <div className="relative">
-                    <input
-                      type={showPassword ? "text" : "password"}
-                      placeholder="••••••••"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      required
-                      className="w-full h-11 px-4 bg-transparent border border-gray-300 rounded-lg text-sm text-gray-800 placeholder:text-gray-400 focus:border-brand-500 focus:ring-1 focus:ring-brand-500/20 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
-                    />
-                    <span
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute z-30 -translate-y-1/2 cursor-pointer right-4 top-1/2"
-                    >
-                      {showPassword ? (
-                        <EyeIcon className="fill-gray-500 dark:fill-gray-400" />
-                      ) : (
-                        <EyeCloseIcon className="fill-gray-500 dark:fill-gray-400" />
-                      )}
-                    </span>
-                  </div>
-                </div>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <Checkbox checked={isChecked} onChange={setIsChecked} />
-                    <span className="block font-normal text-gray-700 text-theme-sm dark:text-gray-400">
-                      Rester connecté
-                    </span>
-                  </div>
-                  <a
-                    href="/forgot-password"
-                    className="text-sm text-brand-600 hover:text-brand-700 font-medium transition-colors"
-                  >
-                    Mot de passe oublié ?
-                  </a>
-                </div>
-                <div>
-                  <Button className="w-full" size="sm" disabled={loading}>
-                    {loading ? "Connexion en cours..." : "Se connecter"}
-                  </Button>
-                </div>
-              </div>
-            </form>
+        )}
+
+        <div>
+          <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wide mb-1.5">
+            Adresse Email <span className="text-red-500">*</span>
+          </label>
+          <input
+            placeholder="nom@fctoro.club"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            className="w-full h-11 px-4 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-xl text-sm font-medium text-gray-900 dark:text-white placeholder:text-gray-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 transition-colors"
+          />
+        </div>
+
+        <div>
+          <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wide mb-1.5">
+            Mot de passe <span className="text-red-500">*</span>
+          </label>
+          <div className="relative flex items-center">
+            <input
+              type={showPassword ? "text" : "password"}
+              placeholder="••••••••"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              className="w-full h-11 px-4 pr-12 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-xl text-sm font-medium text-gray-900 dark:text-white placeholder:text-gray-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 transition-colors"
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              title={showPassword ? "Masquer le mot de passe" : "Afficher le mot de passe"}
+              className="absolute right-3.5 top-1/2 -translate-y-1/2 p-1 text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-white transition-colors z-10 cursor-pointer"
+            >
+              {showPassword ? (
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858-5.908a10.04 10.04 0 013.682-.663c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m-3.518-3.518a3 3 0 10-4.243-4.243" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 3l18 18" />
+                </svg>
+              ) : (
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                </svg>
+              )}
+            </button>
           </div>
         </div>
-      </div>
+
+        <div className="flex items-center">
+          <label className="flex items-center gap-2.5 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={isChecked}
+              onChange={(e) => setIsChecked(e.target.checked)}
+              className="h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+            />
+            <span className="text-xs font-medium text-gray-600 dark:text-gray-400">
+              Rester connecté
+            </span>
+          </label>
+        </div>
+
+        <button
+          type="submit"
+          disabled={loading}
+          className="w-full h-12 rounded-xl bg-brand-500 hover:bg-brand-600 active:scale-[0.99] text-white font-bold text-sm transition-colors disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer"
+        >
+          {loading ? (
+            <>
+              <div className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              <span>Connexion en cours...</span>
+            </>
+          ) : (
+            <span>Se connecter</span>
+          )}
+        </button>
+      </form>
     </div>
   );
 }

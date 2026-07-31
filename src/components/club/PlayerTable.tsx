@@ -142,12 +142,12 @@ export default function PlayerTable({
 
   const visibleColumnsCount = Math.max(1, visibleColumnSet.size);
 
-  const getSafeAvatarSrc = (photoUrl: string, fullName: string) => {
-    const trimmed = photoUrl.trim();
-    if (trimmed.length > 0) {
+  const getSafeAvatarSrc = (photoUrl?: string) => {
+    const trimmed = (photoUrl || "").trim();
+    if (trimmed.length > 0 && !trimmed.includes("user-01")) {
       return trimmed;
     }
-    return "/images/user/user-01.jpg";
+    return "/images/user/silhouette.svg";
   };
 
   return (
@@ -332,7 +332,7 @@ export default function PlayerTable({
             ) : (
               pagedPlayers.map((player) => {
                 const fullName = getPlayerFullName(player);
-                const safeAvatarSrc = getSafeAvatarSrc(player.photoUrl, fullName);
+                const safeAvatarSrc = getSafeAvatarSrc(player.photoIdentiteUrl || player.photoUrl);
                 const safeMatricule = player.matricule && !player.matricule.includes("XXXX")
                   ? player.matricule
                   : `FCT-2526-${String(player.id).padStart(4, "0")}`;
@@ -347,7 +347,7 @@ export default function PlayerTable({
                           height={40}
                           src={safeAvatarSrc}
                           alt={fullName}
-                          className="h-10 w-10 rounded-full object-cover"
+                          className="h-10 w-10 rounded-full object-cover shadow-xs border border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800 p-0.5"
                           unoptimized
                         />
                         <div>

@@ -115,3 +115,51 @@ export const fetchDocumentsForMessage = async (id: string, email: string) => {
   const { data: docs } = await supabase.from('player_registration_documents').select('*').eq('registration_id', regId);
   return docs || [];
 };
+
+export const fetchFullRegistrationDataForPlayer = async (player: any) => {
+  try {
+    const emailToSearch = player?.email || player?.parentEmail;
+    let reg: any = null;
+
+    if (emailToSearch) {
+      const { data: allRegs } = await supabase
+        .from('player_registrations')
+        .select('*')
+        .eq('guardian_email', emailToSearch)
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (allRegs && allRegs.length > 0) {
+        reg = allRegs[0];
+      }
+    }
+
+    if (!reg && player?.nom && player?.prenom) {
+      const { data: nameRegs } = await supabase
+        .from('player_registrations')
+        .select('*')
+        .ilike('child_last_name', `%${player.nom}%`)
+        .ilike('child_first_name', `%${player.prenom}%`)
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (nameRegs && nameRegs.length > 0) {
+        reg = nameRegs[0];
+      }
+    }
+
+    let docs: any[] = [];
+    if (reg?.id) {
+      const { data: docRows } = await supabase
+        .from('player_registration_documents')
+        .select('*')
+        .eq('registration_id', reg.id);
+      docs = docRows || [];
+    }
+
+    return { registration: reg, documents: docs };
+  } catch (e) {
+    console.warn("Error fetching registration data for player:", e);
+    return { registration: null, documents: [] };
+  }
+};

@@ -14,10 +14,10 @@ import {
 } from "@/lib/club/metrics";
 import { paymentStatusLabel, playerStatusLabel } from "@/lib/club/status";
 
-const getSafeAvatarSrc = (photoUrl: string, fullName: string) => {
-  const trimmed = photoUrl.trim();
-  if (trimmed.length > 0) return trimmed;
-  return "/images/user/user-01.jpg";
+const getSafeAvatarSrc = (photoUrl?: string): string => {
+  const trimmed = (photoUrl || "").trim();
+  if (trimmed.length > 0 && !trimmed.includes("user-01")) return trimmed;
+  return "/images/user/silhouette.svg";
 };
 
 export default function PlayerDetailsPage() {
@@ -55,7 +55,7 @@ export default function PlayerDetailsPage() {
   }
 
   const fullName = getPlayerFullName(player);
-  const avatarSrc = getSafeAvatarSrc(player.photoUrl, fullName);
+  const avatarSrc = getSafeAvatarSrc(player.photoIdentiteUrl || player.photoUrl);
 
   return (
     <div className="space-y-6">
@@ -69,7 +69,7 @@ export default function PlayerDetailsPage() {
               alt={fullName}
               width={80}
               height={80}
-              className="h-20 w-20 rounded-full object-cover"
+              className="h-20 w-20 rounded-full object-cover shadow-md border-2 border-brand-500 bg-gray-100 dark:bg-gray-800 p-1"
               unoptimized
             />
             <div>

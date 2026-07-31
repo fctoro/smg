@@ -178,14 +178,20 @@ export default function CoachDashboardPage() {
                   className="flex items-center justify-between rounded-xl border border-gray-100 bg-gray-50/50 p-4 dark:border-gray-800 dark:bg-gray-800/30"
                 >
                   <div className="flex items-center gap-3 min-w-0">
-                    <Image
-                      src={player.photoUrl || "/images/user/user-01.jpg"}
-                      alt={getPlayerFullName(player)}
-                      width={40}
-                      height={40}
-                      className="h-10 w-10 rounded-full object-cover shadow-sm"
-                      unoptimized
-                    />
+                    {player.photoUrl && !player.photoUrl.includes("user-01") && !player.photoUrl.includes("silhouette") ? (
+                      <Image
+                        src={player.photoUrl}
+                        alt={getPlayerFullName(player)}
+                        width={40}
+                        height={40}
+                        className="h-10 w-10 rounded-full object-cover shadow-sm"
+                        unoptimized
+                      />
+                    ) : (
+                      <div className="h-10 w-10 rounded-full bg-gradient-to-br from-brand-500 to-brand-700 text-white font-bold text-xs flex items-center justify-center shadow-xs border border-brand-400 shrink-0">
+                        {player.prenom?.charAt(0)}{player.nom?.charAt(0)}
+                      </div>
+                    )}
                     <div className="min-w-0">
                       <p className="truncate text-sm font-semibold text-gray-900 dark:text-white">
                         {getPlayerFullName(player)}

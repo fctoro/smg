@@ -714,18 +714,24 @@ export default function CoachTacticsPage({ planId, effectifId }: { planId?: stri
                     }`}
                   >
                     <div className="flex items-center gap-3">
-                      <Image
-                        width={40}
-                        height={40}
-                        src={player.photoUrl || "/images/user/user-01.jpg"}
-                        alt={getPlayerFullName(player)}
-                        className={`h-10 w-10 rounded-full object-cover shadow-sm ${
-                          selectedBenchPlayerId === player.id
-                            ? "ring-2 ring-brand-500 ring-offset-2 dark:ring-brand-400 dark:ring-offset-gray-900"
-                            : ""
-                        }`}
-                        unoptimized
-                      />
+                      {player.photoUrl && !player.photoUrl.includes("user-01") && !player.photoUrl.includes("silhouette") ? (
+                        <Image
+                          width={40}
+                          height={40}
+                          src={player.photoUrl}
+                          alt={getPlayerFullName(player)}
+                          className={`h-10 w-10 rounded-full object-cover shadow-sm ${
+                            selectedBenchPlayerId === player.id
+                              ? "ring-2 ring-brand-500 ring-offset-2 dark:ring-brand-400 dark:ring-offset-gray-900"
+                              : ""
+                          }`}
+                          unoptimized
+                        />
+                      ) : (
+                        <div className="h-10 w-10 rounded-full bg-gradient-to-br from-brand-500 to-brand-700 text-white font-bold text-xs flex items-center justify-center shadow-xs border border-brand-400 shrink-0">
+                          {player.prenom?.charAt(0)}{player.nom?.charAt(0)}
+                        </div>
+                      )}
                       <div className="min-w-0">
                         <p className="truncate text-sm font-semibold text-gray-800 dark:text-white/90">
                           {getPlayerFullName(player)}

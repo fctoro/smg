@@ -61,6 +61,30 @@ export interface Player {
   photoIdentiteUrl?: string;
   acteNaissanceUrl?: string;
   carteIdentiteParentUrl?: string;
+  dossierPdfUrl?: string;
+
+  // Extended Inscription sections (01 to 07)
+  programme?: string;
+  ecole?: string;
+  experienceSoccer?: string;
+
+  parentNomPrenom?: string;
+  parentEmail?: string;
+  parentTelephone?: string;
+  parentAdresse?: string;
+
+  urgenceNomPrenom?: string;
+  urgenceLien?: string;
+  urgenceTelephone?: string;
+  urgenceEmail?: string;
+  urgenceAdresse?: string;
+
+  tailleHaut?: string;
+  tailleShort?: string;
+  numerosPreferes?: string;
+
+  planPaiement?: string;
+  modePaiementChoisi?: string;
 }
 
 export interface ClubEvent {
@@ -189,6 +213,30 @@ export interface PlayerFormValues {
   photoIdentiteUrl?: string;
   acteNaissanceUrl?: string;
   carteIdentiteParentUrl?: string;
+  dossierPdfUrl?: string;
+
+  // Extended Inscription sections (01 to 07)
+  programme?: string;
+  ecole?: string;
+  experienceSoccer?: string;
+
+  parentNomPrenom?: string;
+  parentEmail?: string;
+  parentTelephone?: string;
+  parentAdresse?: string;
+
+  urgenceNomPrenom?: string;
+  urgenceLien?: string;
+  urgenceTelephone?: string;
+  urgenceEmail?: string;
+  urgenceAdresse?: string;
+
+  tailleHaut?: string;
+  tailleShort?: string;
+  numerosPreferes?: string;
+
+  planPaiement?: string;
+  modePaiementChoisi?: string;
 }
 
 export interface ParentFormValues {

@@ -69,9 +69,20 @@ export const updatePlayerInSupabase = async (playerId: string, data: Partial<Pla
     return null;
   };
 
+  if (data.photoUrl && data.photoUrl.startsWith("data:")) {
+    const url = await handleDocUpload(data.photoUrl, "photo_joueur");
+    if (url) {
+      updatePayload.PhotoIdentiteUrl = url;
+      updatePayload.PhotoUrl = url;
+    }
+  }
+
   if (data.photoIdentiteUrl) {
     const url = await handleDocUpload(data.photoIdentiteUrl, "photo_identite");
-    if (url) updatePayload.PhotoIdentiteUrl = url;
+    if (url) {
+      updatePayload.PhotoIdentiteUrl = url;
+      updatePayload.PhotoUrl = url;
+    }
   }
   if (data.acteNaissanceUrl) {
     const url = await handleDocUpload(data.acteNaissanceUrl, "acte_naissance");

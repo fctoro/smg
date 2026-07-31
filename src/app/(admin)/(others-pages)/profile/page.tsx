@@ -4,6 +4,8 @@ import React, { useState, useEffect } from "react";
 import { useUserRole } from "@/context/UserRoleContext";
 import { supabase } from "@/lib/supabaseClient";
 
+import { Skeleton } from "@/components/ui/skeleton/Skeleton";
+
 export default function ProfilePage() {
   const { userEmail, isSuperAdmin, isCoach, isFinance, userSections } = useUserRole();
   const [createdDate, setCreatedDate] = useState<string>("");
@@ -114,7 +116,7 @@ export default function ProfilePage() {
         <div className="flex-1 text-center sm:text-left space-y-2">
           <div className="flex flex-col sm:flex-row sm:items-center gap-2">
             <h2 className="text-xl font-bold text-[#0f172a]" suppressHydrationWarning>
-              {mounted ? (userEmail || "—") : "Chargement..."}
+              {mounted ? (userEmail || "—") : <Skeleton className="h-6 w-48" />}
             </h2>
             <span className="self-center sm:self-auto px-3 py-1 rounded-full text-xs font-bold bg-[#0f172a] text-white w-fit" suppressHydrationWarning>
               {roleLabel}

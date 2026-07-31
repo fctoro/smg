@@ -14,6 +14,9 @@ import { PencilIcon, TrashBinIcon } from "@/icons";
 import { Employee } from "@/types/club";
 import { formatClubDate } from "@/lib/club/metrics";
 
+import { useClubData } from "@/context/ClubDataContext";
+import { TableBodySkeleton } from "@/components/ui/skeleton/Skeleton";
+
 interface EmployeeTableProps {
   employees: Employee[];
   title?: string;
@@ -47,6 +50,7 @@ export default function EmployeeTable({
   actionButton,
   exportButton,
 }: EmployeeTableProps) {
+  const { hydrated } = useClubData();
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [fonctionFilter, setFonctionFilter] = useState("all");
@@ -220,7 +224,9 @@ export default function EmployeeTable({
             </TableRow>
           </TableHeader>
           <TableBody className="divide-y divide-gray-100 dark:divide-gray-800">
-            {pagedEmployees.length === 0 ? (
+            {!hydrated ? (
+              <TableBodySkeleton rows={6} columns={8} />
+            ) : pagedEmployees.length === 0 ? (
               <TableRow>
                 <td
                   colSpan={8}

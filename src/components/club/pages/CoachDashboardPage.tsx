@@ -9,6 +9,8 @@ import { getSavedPlans, SavedTacticalPlan, deletePlan } from "@/lib/club/tactics
 import Link from "next/link";
 import { GroupIcon } from "@/icons";
 
+import { CardSkeleton } from "@/components/ui/skeleton/Skeleton";
+
 export default function CoachDashboardPage() {
   const { players: allPlayers, hydrated } = useClubData();
   const { userCategories } = useUserRole();
@@ -27,8 +29,13 @@ export default function CoachDashboardPage() {
 
   if (!hydrated) {
     return (
-      <div className="flex h-64 items-center justify-center">
-        <p className="text-gray-500">Chargement du dashboard...</p>
+      <div className="space-y-6">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <CardSkeleton />
+          <CardSkeleton />
+          <CardSkeleton />
+          <CardSkeleton />
+        </div>
       </div>
     );
   }

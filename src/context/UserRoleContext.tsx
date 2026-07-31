@@ -183,7 +183,7 @@ export const UserRoleProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         isCoach: role === "coach",
         isAdmin: role === "admin" || role === "super admin",
         isFinance: role === "finance",
-        isSuperAdmin: role === "super admin",
+        isSuperAdmin,
         userSections: isSuperAdmin ? ALL_SECTIONS : userSections,
         userCategories,
         setRole,

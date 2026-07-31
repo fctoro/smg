@@ -17,9 +17,10 @@ import Link from "next/link";
 import { useClubData } from "@/context/ClubDataContext";
 import { formatClubCurrency, formatClubDate, getPlayerFullName } from "@/lib/club/metrics";
 import { PaymentAddModal } from "@/components/club/modals/PaymentAddModal";
+import { TableBodySkeleton } from "@/components/ui/skeleton/Skeleton";
 
 export default function PaymentsPage() {
-  const { payments, players } = useClubData();
+  const { payments, players, hydrated } = useClubData();
   const [searchQuery, setSearchQuery] = useState("");
   const [deviseFilter, setDeviseFilter] = useState("all");
   const [selectedSeason, setSelectedSeason] = useState("all");
@@ -227,7 +228,9 @@ export default function PaymentsPage() {
               </TableRow>
             </TableHeader>
             <TableBody className="divide-y divide-gray-100 dark:divide-gray-800">
-              {pagedPayments.length === 0 ? (
+              {!hydrated ? (
+                <TableBodySkeleton rows={6} columns={4} />
+              ) : pagedPayments.length === 0 ? (
                 <TableRow>
                   <td
                     colSpan={7}

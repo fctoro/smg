@@ -1,5 +1,7 @@
 "use client";
 
+import { getSeasonCode, generatePlayerMatricule } from "@/lib/club/season";
+
 import React, { createContext, useContext, useEffect, useState, useMemo } from "react";
 import {
   mockAlumni,
@@ -294,11 +296,10 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
 
             // Ultime secours si aucune date disponible : saison courante (ex: 2526)
             if (!sCode) {
-              const curY = new Date().getFullYear();
-              sCode = `${String(curY - 1).substring(2, 4)}${String(curY).substring(2, 4)}`;
+              sCode = getSeasonCode();
             }
 
-            const matricule = `FCT-${sCode}-${String(d.EtudiantID).padStart(4, "0")}`;
+            const matricule = generatePlayerMatricule(d.EtudiantID, playerSaison);
 
             // Détermination du statut réel du joueur
             let playerStatus: PlayerStatus = "actif";

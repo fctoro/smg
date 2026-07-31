@@ -12,6 +12,8 @@ import { convertRostersToCSV, downloadCSV } from "@/lib/club/rosterExport";
 import { useConfirm } from "@/hooks/useConfirm";
 import Link from "next/link";
 
+import { TableSkeleton, CardSkeleton } from "@/components/ui/skeleton/Skeleton";
+
 export default function CoachPlayersPage() {
   const { players: allPlayers, setPlayers, hydrated } = useClubData();
   const { userCategories, userEmail } = useUserRole();
@@ -46,8 +48,10 @@ export default function CoachPlayersPage() {
 
   if (!hydrated) {
     return (
-      <div className="flex h-64 items-center justify-center">
-        <p className="text-gray-500">Chargement...</p>
+      <div className="space-y-6">
+        <div className="p-6 bg-white rounded-2xl border border-gray-200 dark:border-gray-800 dark:bg-gray-900">
+          <TableSkeleton rows={6} columns={4} />
+        </div>
       </div>
     );
   }
@@ -271,7 +275,11 @@ export default function CoachPlayersPage() {
       {activeTab === "effectifs" && (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
           {loadingRosters ? (
-            <div className="py-12 text-center text-gray-500">Chargement des effectifs...</div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <CardSkeleton />
+              <CardSkeleton />
+              <CardSkeleton />
+            </div>
           ) : filteredRosters.length === 0 ? (
             <div className="py-12 text-center border border-dashed border-gray-300 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-900">
               <p className="text-gray-500">Aucun effectif trouvé pour cette Période.</p>

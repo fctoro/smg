@@ -1,4 +1,6 @@
 "use client";
+
+import { Skeleton } from "@/components/ui/skeleton/Skeleton";
 import Link from "next/link";
 import React, { useState, useEffect } from "react";
 import { Dropdown } from "../ui/dropdown/Dropdown";
@@ -120,7 +122,22 @@ export default function NotificationDropdown() {
 
         <ul className="flex flex-col flex-1 overflow-y-auto custom-scrollbar gap-1">
           {loading ? (
-            <li className="p-6 text-center text-xs text-gray-500">Chargement des demandes...</li>
+            <li className="p-3 space-y-3">
+              <div className="flex gap-3 items-center">
+                <Skeleton className="h-10 w-10 rounded-full shrink-0" />
+                <div className="space-y-1.5 flex-1">
+                  <Skeleton className="h-3.5 w-32" />
+                  <Skeleton className="h-3 w-24" />
+                </div>
+              </div>
+              <div className="flex gap-3 items-center">
+                <Skeleton className="h-10 w-10 rounded-full shrink-0" />
+                <div className="space-y-1.5 flex-1">
+                  <Skeleton className="h-3.5 w-36" />
+                  <Skeleton className="h-3 w-20" />
+                </div>
+              </div>
+            </li>
           ) : recentMessages.length === 0 ? (
             <li className="p-6 text-center text-xs text-gray-500">Aucune demande reçue.</li>
           ) : (

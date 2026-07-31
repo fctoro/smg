@@ -5,6 +5,8 @@ import { Coach } from "@/types/club";
 import Link from "next/link";
 import { EyeIcon, PencilIcon, TrashBinIcon } from "@/icons";
 
+import { getDynamicSeasonOptions } from "@/lib/club/season";
+
 interface CoachTableProps {
   coaches: Coach[];
   onDelete: (coach: Coach) => void;
@@ -23,9 +25,9 @@ export default function CoachTable({ coaches, onDelete, actionButton }: CoachTab
   }, [coaches]);
 
   const seasons = useMemo(() => {
-    const customSeasons = coaches.map((c) => c.saison).filter(Boolean);
-    const unique = Array.from(new Set(customSeasons));
-    return unique.sort((a, b) => (b || "").localeCompare(a || ""));
+    const customSeasons = coaches.map((c) => c.saison).filter(Boolean) as string[];
+    const allOptions = Array.from(new Set([...getDynamicSeasonOptions(), ...customSeasons]));
+    return allOptions.sort((a, b) => b.localeCompare(a));
   }, [coaches]);
 
   const filteredCoaches = useMemo(() => {

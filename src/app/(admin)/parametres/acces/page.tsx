@@ -1,4 +1,6 @@
 "use client";
+
+import { TableSkeleton } from "@/components/ui/skeleton/Skeleton";
 import React, { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { PencilIcon } from "@/icons";
@@ -279,7 +281,7 @@ export default function AccessControlPage() {
         
         <div className="p-6">
           {loading ? (
-            <div className="text-center py-4 text-sm text-[#64748b]">Chargement des comptes...</div>
+            <TableSkeleton rows={4} columns={4} />
           ) : profiles.length === 0 ? (
             <div className="text-center py-6 text-sm text-[#64748b]">Aucun compte trouvé dans la base de données.</div>
           ) : (

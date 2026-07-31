@@ -38,6 +38,10 @@ const defaultColumns: PlayerColumnKey[] = [
   "actions",
 ];
 
+import { useClubData } from "@/context/ClubDataContext";
+import { getDynamicSeasonOptions } from "@/lib/club/season";
+import { TableBodySkeleton } from "@/components/ui/skeleton/Skeleton";
+
 interface PlayerTableProps {
   players: Player[];
   columns?: PlayerColumnKey[];
@@ -65,6 +69,7 @@ export default function PlayerTable({
   actionButton,
   exportButton,
 }: PlayerTableProps) {
+  const { hydrated } = useClubData();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [selectedSeason, setSelectedSeason] = useState("all");
@@ -90,13 +95,11 @@ export default function PlayerTable({
     return Array.from(uniqueMap.values());
   }, [players]);
 
-  const seasons = useMemo(
-    () =>
-      [...new Set(players.map((player) => player.saison).filter(Boolean))].sort(
-        (a, b) => (b || "").localeCompare(a || ""),
-      ),
-    [players],
-  );
+  const seasons = useMemo(() => {
+    const customSeasons = players.map((player) => player.saison).filter(Boolean) as string[];
+    const allOptions = Array.from(new Set([...getDynamicSeasonOptions(), ...customSeasons]));
+    return allOptions.sort((a, b) => b.localeCompare(a));
+  }, [players]);
 
   const filteredPlayers = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -315,7 +318,9 @@ export default function PlayerTable({
           </TableHeader>
 
           <TableBody className="divide-y divide-gray-100 dark:divide-gray-800">
-            {pagedPlayers.length === 0 ? (
+            {!hydrated ? (
+              <TableBodySkeleton rows={6} columns={visibleColumnsCount} />
+            ) : pagedPlayers.length === 0 ? (
               <TableRow>
                 <TableCell
                   className="py-6 text-center text-theme-sm text-gray-500 dark:text-gray-400"

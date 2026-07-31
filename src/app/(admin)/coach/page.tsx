@@ -7,9 +7,11 @@ export const metadata: Metadata = {
   description: "Tactiques, compositions, classement et gestion d'equipe",
 };
 
+import { CardSkeleton } from "@/components/ui/skeleton/Skeleton";
+
 export default function CoachPage() {
   return (
-    <Suspense fallback={<div className="p-8 text-center text-gray-500">Chargement...</div>}>
+    <Suspense fallback={<div className="p-6 space-y-4"><CardSkeleton /><CardSkeleton /></div>}>
       <CoachTabsWrapper />
     </Suspense>
   );

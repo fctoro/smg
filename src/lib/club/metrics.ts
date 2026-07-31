@@ -1,4 +1,5 @@
 import { ClubEvent, Payment, Player } from "@/types/club";
+export * from "./season";
 
 export const getPlayerFullName = (player: Player) =>
   `${player.prenom} ${player.nom}`;

@@ -273,9 +273,11 @@ function PlayersPageContent() {
   );
 }
 
+import { TableSkeleton } from "@/components/ui/skeleton/Skeleton";
+
 export default function PlayersPage() {
   return (
-    <Suspense fallback={<div>Chargement des joueurs...</div>}>
+    <Suspense fallback={<div className="p-6 bg-white rounded-2xl border border-gray-200 dark:border-gray-800 dark:bg-gray-900"><TableSkeleton rows={6} columns={8} /></div>}>
       <PlayersPageContent />
     </Suspense>
   );

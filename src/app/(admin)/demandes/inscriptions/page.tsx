@@ -10,6 +10,7 @@ import Pagination from "@/components/tables/Pagination";
 import { DownloadIcon, EyeIcon, TrashBinIcon } from "@/icons";
 import { useConfirm } from "@/hooks/useConfirm";
 import { useClubData } from "@/context/ClubDataContext";
+import { TableBodySkeleton } from "@/components/ui/skeleton/Skeleton";
 import { fetchDocumentsForMessage } from "@/lib/club/supabase-demandes";
 
 // Placeholder icon for document
@@ -341,9 +342,7 @@ export default function BoiteDeReception() {
             </thead>
             <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
               {loading ? (
-                <tr>
-                  <td colSpan={5} className="py-8 text-center text-gray-500">Chargement des données...</td>
-                </tr>
+                <TableBodySkeleton rows={5} columns={5} />
               ) : pagedMessages.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="py-8 text-center text-gray-500">Aucune demande trouvée pour cette catégorie.</td>

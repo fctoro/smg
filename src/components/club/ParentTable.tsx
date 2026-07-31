@@ -13,6 +13,8 @@ import { PencilIcon, TrashBinIcon } from "@/icons";
 import { Parent, Player } from "@/types/club";
 import { getPlayerFullName } from "@/lib/club/metrics";
 import { getParentLinkedPlayerIds } from "@/lib/club/parents";
+import { useClubData } from "@/context/ClubDataContext";
+import { TableBodySkeleton } from "@/components/ui/skeleton/Skeleton";
 
 interface ParentTableProps {
   parents: Parent[];
@@ -35,6 +37,7 @@ export default function ParentTable({
   actionButton,
   exportButton,
 }: ParentTableProps) {
+  const { hydrated } = useClubData();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedChildrenCount, setSelectedChildrenCount] = useState("all");
   const [selectedSeason, setSelectedSeason] = useState("all");
@@ -214,7 +217,9 @@ export default function ParentTable({
             </TableRow>
           </TableHeader>
           <TableBody className="divide-y divide-gray-100 dark:divide-gray-800">
-            {pagedParents.length === 0 ? (
+            {!hydrated ? (
+              <TableBodySkeleton rows={6} columns={6} />
+            ) : pagedParents.length === 0 ? (
               <TableRow>
                 <td
                   colSpan={6}

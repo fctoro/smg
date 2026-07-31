@@ -3,6 +3,8 @@
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import { useDashboardConfig } from "@/hooks/useDashboardConfig";
 
+import { Skeleton } from "@/components/ui/skeleton/Skeleton";
+
 export default function DashboardSettingsPage() {
   const {
     config,
@@ -80,7 +82,7 @@ export default function DashboardSettingsPage() {
         <p className="text-sm text-gray-500 dark:text-gray-400">
           {hydrated
             ? "Configuration sauvegardee automatiquement (localStorage)."
-            : "Chargement de la configuration..."}
+            : <Skeleton className="h-4 w-56 inline-block" />}
         </p>
         <button
           type="button"

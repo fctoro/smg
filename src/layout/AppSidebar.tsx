@@ -214,10 +214,10 @@ const AppSidebar: React.FC = () => {
     return baseOthersItems.filter((item) => item.path !== "/parametres/acces");
   }, [isSuperAdmin, userSections]);
 
-  // Render empty sidebar items during SSR/hydration to avoid any hydration layout shifts or menu flashes.
-  // Once mounted, render the items instantly from client-side state.
-  const displayMainItems = mounted ? filteredMainItems : [];
-  const displayOthersItems = mounted ? filteredOthersItems : [];
+  // Render default admin items during SSR & initial hydration pass for 100% HTML match (0 hydration error).
+  // Once mounted, smoothly adapt to user's specific role & permissions.
+  const displayMainItems = mounted ? filteredMainItems : adminNavItems;
+  const displayOthersItems = mounted ? filteredOthersItems : baseOthersItems;
 
   const isActive = useCallback(
     (path: string) => {

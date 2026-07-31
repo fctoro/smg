@@ -292,60 +292,60 @@ export default function RecusPage() {
         </div>
 
         <div className="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/[0.03]">
-          <div className="max-w-full overflow-x-auto">
-            <table className="w-full whitespace-nowrap text-left text-sm text-gray-600 dark:text-gray-400">
-              <thead className="bg-gray-50 text-gray-800 dark:bg-white/[0.02] dark:text-white/90">
+          <div className="w-full overflow-x-auto">
+            <table className="w-full text-left text-sm text-gray-600 dark:text-gray-400">
+              <thead className="bg-gray-50 text-gray-800 dark:bg-white/[0.02] dark:text-white/90 border-b border-gray-200 dark:border-gray-800">
                 <tr>
-                  <th className="px-4 py-3 font-medium">Parent</th>
-                  <th className="px-4 py-3 font-medium">Contact</th>
-                  <th className="px-4 py-3 font-medium text-center">Enfants Inscrits</th>
-                  <th className="px-4 py-3 font-medium text-right">Total Payé (USD)</th>
-                  <th className="px-4 py-3 font-medium text-center">Action</th>
+                  <th className="px-5 py-3.5 font-semibold">Parent</th>
+                  <th className="px-5 py-3.5 font-semibold">Contact</th>
+                  <th className="px-5 py-3.5 font-semibold text-center">Enfants Inscrits</th>
+                  <th className="px-5 py-3.5 font-semibold text-right">Total Payé</th>
+                  <th className="px-5 py-3.5 font-semibold text-center">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
                 {filteredParents.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="px-4 py-8 text-center text-gray-500">
+                    <td colSpan={5} className="px-5 py-8 text-center text-gray-500">
                       Aucun compte parent trouvé.
                     </td>
                   </tr>
                 ) : (
                   filteredParents.map((parentData) => (
-                    <tr key={parentData.key} className="hover:bg-gray-50 dark:hover:bg-white/[0.02]">
-                      <td className="px-4 py-3">
-                        <span className="font-semibold text-gray-800 dark:text-white/90">
+                    <tr key={parentData.key} className="hover:bg-gray-50/50 dark:hover:bg-white/[0.02] transition-colors">
+                      <td className="px-5 py-4">
+                        <span className="font-semibold text-gray-900 dark:text-white">
                           {parentData.nom} {parentData.prenom}
                         </span>
                       </td>
-                      <td className="px-4 py-3">
-                        <div className="flex flex-col">
-                          <span>{parentData.telephone || "Aucun tél"}</span>
-                          <span className="text-xs text-gray-500">{parentData.email || "Aucun email"}</span>
+                      <td className="px-5 py-4">
+                        <div className="flex flex-col text-sm">
+                          <span className="font-medium text-gray-800 dark:text-gray-200">{parentData.telephone || "Aucun tél"}</span>
+                          <span className="text-xs text-gray-500 truncate max-w-[220px]">{parentData.email || "Aucun email"}</span>
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-center">
-                        <span className="inline-flex items-center rounded-full bg-brand-50 px-2.5 py-0.5 text-xs font-medium text-brand-700 dark:bg-brand-500/10 dark:text-brand-400">
+                      <td className="px-5 py-4 text-center">
+                        <span className="inline-flex items-center rounded-full bg-brand-50 px-3 py-1 text-xs font-semibold text-brand-700 dark:bg-brand-500/10 dark:text-brand-400">
                           {parentData.playerIds.length}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-right font-medium text-gray-800 dark:text-white/90">
+                      <td className="px-5 py-4 text-right font-bold text-gray-900 dark:text-white">
                         {parentData.totalPaye}
                       </td>
-                      <td className="px-4 py-3 text-center">
+                      <td className="px-5 py-4 text-center">
                         <button
                           onClick={() => handleGeneratePDF(parentData)}
                           disabled={parentData.parentPayments.length === 0}
-                          className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-white transition-colors 
+                          className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-xs font-bold text-white transition-all 
                             ${parentData.parentPayments.length === 0 
-                              ? "bg-gray-300 cursor-not-allowed dark:bg-gray-700" 
-                              : "bg-gray-900 hover:bg-gray-800 dark:bg-brand-500 dark:hover:bg-brand-600 shadow-sm"}`}
+                              ? "bg-gray-200 text-gray-400 cursor-not-allowed dark:bg-gray-800 dark:text-gray-600" 
+                              : "bg-brand-500 hover:bg-brand-600 shadow-sm hover:shadow-brand-500/20 active:scale-95 cursor-pointer"}`}
                           title={parentData.parentPayments.length === 0 ? "Aucun paiement à générer" : "Télécharger le reçu consolidé"}
                         >
-                          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                           </svg>
-                          PDF
+                          Télécharger PDF
                         </button>
                       </td>
                     </tr>

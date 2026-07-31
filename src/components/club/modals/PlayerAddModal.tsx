@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from "react";
+import { getCurrentSeason, generatePlayerMatricule } from "@/lib/club/season";
 import { Modal } from "@/components/ui/modal";
 import PlayerForm from "@/components/club/forms/PlayerForm";
 import { PlayerFormValues, Player } from "@/types/club";
@@ -30,19 +31,27 @@ export function PlayerAddModal({ isOpen, onClose }: PlayerAddModalProps) {
       
       const inserted = await addPlayerToSupabase(newPlayerLocal);
       if (inserted && inserted.EtudiantID) {
-        const newPlayer: Player = { ...newPlayerLocal, id: String(inserted.EtudiantID) };
+        const currentSeasonStr = getCurrentSeason();
+        const matriculeCode = generatePlayerMatricule(inserted.EtudiantID, currentSeasonStr);
+        
+        const newPlayer: Player = { 
+          ...newPlayerLocal, 
+          id: String(inserted.EtudiantID),
+          saison: currentSeasonStr,
+          matricule: matriculeCode,
+        };
         setPlayers((prevPlayers) => [newPlayer, ...prevPlayers]);
         
         setSuccessMessage(
           newPlayerLocal.statut === "alumni" 
-            ? "Joueur enregistré dans alumni avec succès !" 
-            : "Joueur enregistré avec succès !"
+            ? `Joueur enregistré dans alumni avec succès ! (Code: ${matriculeCode})` 
+            : `Joueur enregistré avec succès ! (Code: ${matriculeCode})`
         );
         
         setTimeout(() => {
           setSuccessMessage("");
-          onClose(); // Close modal after successful creation
-        }, 2000);
+          onClose();
+        }, 3000);
       } else {
         alert("Erreur lors de la création. Aucune ID retournée.");
       }

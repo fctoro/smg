@@ -7,6 +7,8 @@ import CoachForm, { CoachFormValues } from "@/components/club/forms/CoachForm";
 import { fetchCoachById, updateCoach } from "@/lib/club/coachs";
 import { Coach } from "@/types/club";
 
+import { CardSkeleton } from "@/components/ui/skeleton/Skeleton";
+
 export default function EditCoachPage() {
   const router = useRouter();
   const params = useParams();
@@ -47,8 +49,8 @@ export default function EditCoachPage() {
 
   if (isLoading) {
     return (
-      <div className="flex h-64 items-center justify-center">
-        <p className="text-gray-500">Chargement...</p>
+      <div className="p-6 space-y-4">
+        <CardSkeleton />
       </div>
     );
   }

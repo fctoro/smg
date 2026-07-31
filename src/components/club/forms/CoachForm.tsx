@@ -1,5 +1,7 @@
 "use client";
 
+import { getCurrentSeason, getDynamicSeasonOptions } from "@/lib/club/season";
+
 import React, { useState } from "react";
 import { Coach } from "@/types/club";
 import { DEFAULT_CATEGORIES } from "@/config/dashboard.config";
@@ -36,7 +38,7 @@ export default function CoachForm({
     telephone: initialValues.telephone || "",
     sexe: initialValues.sexe || "Masculin",
     categories: initialValues.categories || [],
-    saison: initialValues.saison || new Date().getFullYear().toString(),
+    saison: initialValues.saison || getCurrentSeason(),
   });
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -135,14 +137,18 @@ export default function CoachForm({
           <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
             Saison
           </label>
-          <input
-            type="text"
+          <select
             name="saison"
             value={formData.saison}
             onChange={handleChange}
-            placeholder="ex: 2024-2025"
             className="w-full rounded-lg border border-gray-300 bg-transparent px-4 py-2.5 text-sm text-gray-800 focus:border-brand-500 focus:outline-none dark:border-gray-700 dark:text-white"
-          />
+          >
+            {getDynamicSeasonOptions().map((opt) => (
+              <option key={opt} value={opt}>
+                Saison {opt}
+              </option>
+            ))}
+          </select>
         </div>
       </div>
 

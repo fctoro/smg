@@ -8,9 +8,13 @@ import CoachTable from "@/components/club/CoachTable";
 import { Coach } from "@/types/club";
 import { fetchCoaches, deleteCoach } from "@/lib/club/coachs";
 
+import { TableSkeleton } from "@/components/ui/skeleton/Skeleton";
+import { CoachAddModal } from "@/components/club/modals/CoachAddModal";
+
 export default function CoachsPage() {
   const [coaches, setCoaches] = useState<Coach[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const { confirm, ConfirmComponent } = useConfirm();
 
   const loadCoaches = async () => {
@@ -56,26 +60,32 @@ export default function CoachsPage() {
       </div>
 
       {isLoading ? (
-        <div className="flex h-64 items-center justify-center">
-          <p className="text-gray-500">Chargement...</p>
+        <div className="p-6 bg-white rounded-2xl border border-gray-200 dark:border-gray-800 dark:bg-gray-900">
+          <TableSkeleton rows={5} columns={5} />
         </div>
       ) : (
         <CoachTable 
           coaches={coaches} 
           onDelete={handleDeleteCoach} 
           actionButton={
-            <Link
-              href="/coachs/nouveau"
-              className="inline-flex items-center justify-center gap-2 rounded-lg bg-brand-500 px-4 py-2 text-sm font-medium text-white hover:bg-brand-600 focus:ring-4 focus:ring-brand-500/20"
+            <button
+              onClick={() => setIsAddModalOpen(true)}
+              className="inline-flex items-center justify-center gap-2 rounded-lg bg-brand-500 px-4 py-2 text-sm font-medium text-white hover:bg-brand-600 focus:ring-4 focus:ring-brand-500/20 cursor-pointer"
             >
               <svg className="h-5 w-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
               </svg>
               Ajouter Coach
-            </Link>
+            </button>
           }
         />
       )}
+
+      <CoachAddModal
+        isOpen={isAddModalOpen}
+        onClose={() => setIsAddModalOpen(false)}
+        onSuccess={loadCoaches}
+      />
     </div>
   );
 }

@@ -113,8 +113,8 @@ export default function ProfilePage() {
 
         <div className="flex-1 text-center sm:text-left space-y-2">
           <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-            <h2 className="text-xl font-bold text-[#0f172a]">
-              {userEmail || "Chargement..."}
+            <h2 className="text-xl font-bold text-[#0f172a]" suppressHydrationWarning>
+              {mounted ? (userEmail || "—") : "Chargement..."}
             </h2>
             <span className="self-center sm:self-auto px-3 py-1 rounded-full text-xs font-bold bg-[#0f172a] text-white w-fit" suppressHydrationWarning>
               {roleLabel}
@@ -136,7 +136,7 @@ export default function ProfilePage() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
             <label className="text-xs font-semibold uppercase text-[#94a3b8]">Adresse Email</label>
-            <p className="text-[#0f172a] font-medium text-sm mt-1">{userEmail || "—"}</p>
+            <p className="text-[#0f172a] font-medium text-sm mt-1" suppressHydrationWarning>{mounted ? (userEmail || "—") : "—"}</p>
           </div>
 
           <div>

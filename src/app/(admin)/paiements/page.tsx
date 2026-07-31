@@ -16,6 +16,7 @@ import {
 import Link from "next/link";
 import { useClubData } from "@/context/ClubDataContext";
 import { formatClubCurrency, formatClubDate, getPlayerFullName } from "@/lib/club/metrics";
+import { PaymentAddModal } from "@/components/club/modals/PaymentAddModal";
 
 export default function PaymentsPage() {
   const { payments, players } = useClubData();
@@ -23,6 +24,7 @@ export default function PaymentsPage() {
   const [deviseFilter, setDeviseFilter] = useState("all");
   const [selectedSeason, setSelectedSeason] = useState("all");
   const [isExportOpen, setIsExportOpen] = useState(false);
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [currentPageSize, setCurrentPageSize] = useState(12);
 
@@ -152,12 +154,12 @@ export default function PaymentsPage() {
         </div>
 
         <div className="shrink-0">
-          <Link
-            href="/paiements/nouveau"
-            className="inline-flex h-11 items-center justify-center whitespace-nowrap rounded-lg bg-brand-500 px-4 text-sm font-medium text-white shadow-theme-xs hover:bg-brand-600"
+          <button
+            onClick={() => setIsAddModalOpen(true)}
+            className="inline-flex h-11 items-center justify-center whitespace-nowrap rounded-lg bg-brand-500 px-4 text-sm font-medium text-white shadow-theme-xs hover:bg-brand-600 cursor-pointer"
           >
-            + Ajouter
-          </Link>
+            + Ajouter un paiement
+          </button>
         </div>
       </div>
 
@@ -274,6 +276,11 @@ export default function PaymentsPage() {
           }}
         />
       </div>
+
+      <PaymentAddModal
+        isOpen={isAddModalOpen}
+        onClose={() => setIsAddModalOpen(false)}
+      />
     </div>
   );
 }

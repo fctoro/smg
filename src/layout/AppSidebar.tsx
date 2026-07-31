@@ -138,18 +138,6 @@ const coachNavItems: NavItem[] = [
 
 const baseOthersItems: NavItem[] = [
   {
-    icon: <PlugInIcon />,
-    name: "Paramètres Club",
-    path: "/parametres",
-    sections: ["Paramètres"],
-  },
-  {
-    icon: <GridIcon />,
-    name: "Config Dashboard",
-    path: "/parametres/dashboard",
-    sections: ["Paramètres"],
-  },
-  {
     icon: <LockIcon />,
     name: "Gestion des accès",
     path: "/parametres/acces",

@@ -97,7 +97,7 @@ export const softDeletePlayerInSupabase = async (playerId: string) => {
   const etudiantId = resolveEtudiantId(playerId);
   
   const { softDeletePlayerAdmin } = await import("@/app/actions/club");
-  const result = await softDeletePlayerAdmin(etudiantId);
+  const result = await softDeletePlayerAdmin(Number(etudiantId));
   
   if (!result.success) {
     console.error("Erreur lors de la suppression du joueur :", result.error);
@@ -162,7 +162,7 @@ export const addPlayerToSupabase = async (data: Omit<Player & { photoIdentiteUrl
     throw new Error(result.error);
   }
 
-  return { EtudiantID: result.data.EtudiantID };
+  return { EtudiantID: result.data?.EtudiantID };
 };
 
 // --- EMPLOYEES (tblEmployes) ---

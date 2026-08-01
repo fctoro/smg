@@ -16,15 +16,53 @@ import {
 import Link from "next/link";
 import { useClubData } from "@/context/ClubDataContext";
 import { formatClubCurrency, formatClubDate, getPlayerFullName } from "@/lib/club/metrics";
+import { updatePaymentInSupabase } from "@/lib/club/supabase-crud";
+
+interface PaymentPlan {
+  id: string;
+  plan: string;
+  montantFCToro: number;
+  montantTIToro: number;
+  nombreVersements: number;
+}
+
+const paymentPlans: PaymentPlan[] = [
+  {
+    id: "annuel",
+    plan: "Annuel",
+    montantFCToro: 1215,
+    montantTIToro: 900,
+    nombreVersements: 1,
+  },
+  {
+    id: "semestriel",
+    plan: "Semestriel",
+    montantFCToro: 641.25,
+    montantTIToro: 475,
+    nombreVersements: 2,
+  },
+  {
+    id: "mensuel",
+    plan: "Mensuel",
+    montantFCToro: 155,
+    montantTIToro: 115,
+    nombreVersements: 9,
+  },
+];
 
 export default function PaymentsPage() {
-  const { payments, players } = useClubData();
+  const { payments, players, setPayments } = useClubData();
   const [searchQuery, setSearchQuery] = useState("");
   const [deviseFilter, setDeviseFilter] = useState("all");
   const [selectedSeason, setSelectedSeason] = useState("all");
   const [isExportOpen, setIsExportOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [currentPageSize, setCurrentPageSize] = useState(12);
+  const [editingPayment, setEditingPayment] = useState<(typeof payments)[number] | null>(null);
+  const [newAmount, setNewAmount] = useState(0);
+  const [newPaymentDate, setNewPaymentDate] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+  const [editError, setEditError] = useState("");
 
   const playerMap = useMemo(
     () => new Map(players.map((player) => [player.id, player])),
@@ -38,6 +76,132 @@ export default function PaymentsPage() {
       ),
     [players],
   );
+
+  const calculateBalance = (currentPayment: (typeof payments)[number]): number => {
+    const player = playerMap.get(currentPayment.playerId);
+    if (!player) return 0;
+
+    const normalizeText = (value?: string) => (value || "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .replace(/\s+/g, " ")
+      .trim();
+    const categorieLower = normalizeText(player.categorie);
+    const defaultAdhesion = categorieLower.includes("ti toro") ||
+      categorieLower.includes("titoro") ||
+      categorieLower.includes("u6-u8")
+      ? "ti toro"
+      : "fc toro";
+
+    const getPlanId = (remark?: string) => {
+      const normalized = normalizeText(remark);
+      const marker = normalized.match(/\[plan\s*:\s*(annuel|semestriel|mensuel)\]/);
+      const legacy = normalized.match(/plan\s*:\s*(annuel|semestriel|mensuel)/);
+      return (marker?.[1] || legacy?.[1]);
+    };
+    const getAdhesionId = (remark?: string) => {
+      const normalized = normalizeText(remark);
+      const marker = normalized.match(/\[adhesion\s*:\s*(fc_toro|ti_toro)\]/);
+      const legacy = normalized.match(/adhesion\s*:\s*(fc toro|ti toro)/);
+      return marker?.[1]?.replace("_", " ") || legacy?.[1] || defaultAdhesion;
+    };
+    const selectedPlanId = getPlanId(currentPayment.remarque);
+    const selectedAdhesionId = getAdhesionId(currentPayment.remarque);
+    const selectedPlan = paymentPlans.find(
+      (plan) => normalizeText(plan.plan) === selectedPlanId,
+    );
+
+    if (!selectedPlan || currentPayment.statut !== "paid") return 0;
+
+    // Calculate total amount due based on category
+    const installmentAmount = selectedAdhesionId === "ti toro"
+      ? selectedPlan.montantTIToro
+      : selectedPlan.montantFCToro;
+    const totalDue = installmentAmount * selectedPlan.nombreVersements;
+
+    // Calculate total paid for the PLAN only (not all payments)
+    const totalPaidUSD = payments
+      .filter((payment) =>
+        payment.playerId === currentPayment.playerId &&
+        payment.statut === "paid" &&
+        getPlanId(payment.remarque) === selectedPlanId &&
+        getAdhesionId(payment.remarque) === selectedAdhesionId,
+      )
+      .reduce((sum, p) => {
+        if (p.devise === "HTG") {
+          const taux = p.taux || 1000;
+          return sum + (p.montant / taux);
+        } else {
+          return sum + p.montant;
+        }
+      }, 0);
+
+    // Return balance in USD (positive = owes, negative = overpaid)
+    return Math.max(0, totalDue - totalPaidUSD);
+  };
+
+  const hasPaymentPlan = (remark?: string) =>
+    /(?:\[plan\s*:\s*|plan\s*:\s*)(annuel|semestriel|mensuel)/i.test(remark || "");
+
+  const openEditModal = (payment: (typeof payments)[number]) => {
+    setEditingPayment(payment);
+    setNewAmount(0);
+    setNewPaymentDate(payment.datePaiement || new Date().toISOString().slice(0, 10));
+    setEditError("");
+  };
+
+  const closeEditModal = () => {
+    if (isSaving) return;
+    setEditingPayment(null);
+    setEditError("");
+  };
+
+  const handleEditPayment = async () => {
+    if (!editingPayment || newAmount <= 0 || !newPaymentDate) {
+      setEditError("Veuillez entrer un montant supérieur à zéro et une date.");
+      return;
+    }
+
+    setIsSaving(true);
+    setEditError("");
+    try {
+      const totalAmountPaid = editingPayment.montant + newAmount;
+      const montantUS = editingPayment.devise === "US"
+        ? totalAmountPaid
+        : (editingPayment.taux ? totalAmountPaid / editingPayment.taux : 0);
+      const montantHTG = editingPayment.devise === "HTG" ? totalAmountPaid : 0;
+      await updatePaymentInSupabase(editingPayment.id, {
+        montant: totalAmountPaid,
+        montantUS,
+        montantHTG,
+        devise: editingPayment.devise,
+        datePaiement: newPaymentDate,
+      });
+      setPayments((currentPayments) =>
+        currentPayments.map((payment) =>
+          payment.id === editingPayment.id
+            ? { ...payment, montant: totalAmountPaid, montantUS, montantHTG, datePaiement: newPaymentDate }
+            : payment,
+        ),
+      );
+      setEditingPayment(null);
+    } catch (error) {
+      setEditError(error instanceof Error ? error.message : "Impossible d'enregistrer la modification.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const getPaymentPlanLabel = (remark?: string) =>
+    remark?.match(/\[PLAN:\s*(ANNUEL|SEMESTRIEL|MENSUEL)\]/i)?.[1] ||
+    remark?.match(/plan\s*:\s*(annuel|semestriel|mensuel)/i)?.[1] ||
+    "Plan manquant";
+
+  const getPaymentStatusLabel = (payment: (typeof payments)[number]) => {
+    const marker = payment.remarque?.match(/\[STATUT:\s*(PAID|PENDING|LATE)\]/i)?.[1];
+    return marker?.toLowerCase() || payment.statut;
+  };
 
   const filteredPayments = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -220,6 +384,12 @@ export default function PaymentsPage() {
                   Montant
                 </TableCell>
                 <TableCell isHeader className="py-3 text-start text-theme-xs font-medium text-gray-500 dark:text-gray-400">
+                  Balance
+                </TableCell>
+                <TableCell isHeader className="py-3 text-start text-theme-xs font-medium text-gray-500 dark:text-gray-400">
+                  Action
+                </TableCell>
+                <TableCell isHeader className="py-3 text-start text-theme-xs font-medium text-gray-500 dark:text-gray-400">
                   Informations
                 </TableCell>
               </TableRow>
@@ -228,7 +398,7 @@ export default function PaymentsPage() {
               {pagedPayments.length === 0 ? (
                 <TableRow>
                   <td
-                    colSpan={7}
+                    colSpan={6}
                     className="py-6 text-center text-theme-sm text-gray-500 dark:text-gray-400"
                   >
                     Aucun paiement trouve.
@@ -237,6 +407,7 @@ export default function PaymentsPage() {
               ) : (
                 pagedPayments.map((payment) => {
                   const player = playerMap.get(payment.playerId)!;
+                  const balance = calculateBalance(payment);
                   return (
                     <TableRow key={payment.id}>
                       <TableCell className="py-3 text-theme-sm text-gray-800 dark:text-white/90">
@@ -248,9 +419,45 @@ export default function PaymentsPage() {
                       <TableCell className="py-3 text-theme-sm text-gray-500 dark:text-gray-400">
                         {formatClubCurrency(payment.montant, payment.devise)}
                       </TableCell>
+                      <TableCell className="py-3 text-theme-sm">
+                        {balance > 0 ? (
+                          <span className="font-medium text-error-600 dark:text-error-400">
+                            {formatClubCurrency(balance, "US")} à payer
+                          </span>
+                        ) : balance < 0 ? (
+                          <span className="font-medium text-success-600 dark:text-success-400">
+                            {formatClubCurrency(Math.abs(balance), payment.devise)} en trop
+                          </span>
+                        ) : !hasPaymentPlan(payment.remarque) ? (
+                          <span className="text-warning-600 dark:text-warning-400">
+                            Plan manquant
+                          </span>
+                        ) : (
+                          <span className="text-gray-400">-</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="py-3 text-theme-sm">
+                        {balance > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => openEditModal(payment)}
+                            className="rounded-lg bg-red-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-600"
+                          >
+                            Modifier
+                          </button>
+                        )}
+                        {balance < 0 && (
+                          <span className="text-xs text-gray-500">
+                            Payé en trop
+                          </span>
+                        )}
+                      </TableCell>
                       <TableCell className="py-3 text-theme-sm text-gray-500 dark:text-gray-400">
                         <span className="block truncate max-w-[200px]" title={payment.remarque}>
                           {payment.remarque || "-"}
+                          <span className="mt-1 block text-xs text-gray-400">
+                            Plan: {getPaymentPlanLabel(payment.remarque)} · Statut: {getPaymentStatusLabel(payment)}
+                          </span>
                         </span>
                       </TableCell>
                     </TableRow>
@@ -261,6 +468,55 @@ export default function PaymentsPage() {
           </Table>
         </div>
       </div>
+
+      {editingPayment && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="edit-payment-title"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) closeEditModal();
+          }}
+        >
+          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl dark:bg-gray-900">
+            <div className="mb-5 flex items-start justify-between gap-4">
+              <div>
+                <h2 id="edit-payment-title" className="text-lg font-semibold text-gray-800 dark:text-white">
+                  Modifier le paiement
+                </h2>
+                <p className="mt-2 text-lg font-bold text-gray-900 dark:text-white">
+                  {getPlayerFullName(playerMap.get(editingPayment.playerId)!)}
+                </p>
+              </div>
+              <button type="button" onClick={closeEditModal} className="text-xl text-gray-400 hover:text-gray-700" aria-label="Fermer">
+                ×
+              </button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">Montant dû</label>
+                <p className="rounded-lg bg-gray-100 px-3 py-2 text-sm text-gray-700 dark:bg-gray-800 dark:text-gray-300">
+                  {formatClubCurrency(calculateBalance(editingPayment), "US")}
+                </p>
+              </div>
+              <div>
+                <label htmlFor="new-payment-amount" className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">Montant supplémentaire payé</label>
+                <input id="new-payment-amount" type="number" min="0.01" step="0.01" value={newAmount} onChange={(event) => setNewAmount(Number(event.target.value))} className="h-11 w-full rounded-lg border border-gray-300 px-3 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white" />
+              </div>
+              <div>
+                <label htmlFor="new-payment-date" className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">Date du paiement</label>
+                <input id="new-payment-date" type="date" value={newPaymentDate} onChange={(event) => setNewPaymentDate(event.target.value)} className="h-11 w-full rounded-lg border border-gray-300 px-3 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white" />
+              </div>
+              {editError && <p className="text-sm text-red-600">{editError}</p>}
+            </div>
+            <div className="mt-6 flex justify-end gap-3">
+              <button type="button" onClick={closeEditModal} disabled={isSaving} className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 dark:border-gray-700 dark:text-gray-300">Annuler</button>
+              <button type="button" onClick={handleEditPayment} disabled={isSaving} className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-medium text-white hover:bg-brand-600 disabled:opacity-50">{isSaving ? "Enregistrement..." : "Enregistrer"}</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="mt-4 flex justify-end print:hidden">
         <Pagination

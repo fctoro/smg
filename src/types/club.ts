@@ -24,6 +24,7 @@ export interface Player {
   sexe: "Féminin" | "Masculin";
   categorie: string;
   statut: PlayerStatus;
+  statutJoueur?: string;
   telephone: string;
   email: string;
   dateInscription: string;

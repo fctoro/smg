@@ -25,6 +25,7 @@ export const updatePlayerInSupabase = async (playerId: string, data: Partial<Pla
   if (data.prenom !== undefined) updatePayload.Prenom = data.prenom;
   if (data.sexe !== undefined) updatePayload.Sexe = data.sexe === "Féminin" ? "F" : "M";
   if (data.categorie !== undefined) updatePayload.Categorie = data.categorie;
+  if (data.statutJoueur !== undefined) updatePayload.StatutJoueur = data.statutJoueur;
   if (data.cotisationDevise !== undefined) updatePayload.CotisationDevise = data.cotisationDevise;
   if (data.telephone !== undefined) updatePayload.Telephone = data.telephone;
   if (data.email !== undefined) updatePayload.Email = data.email;
@@ -305,15 +306,17 @@ export const updatePaymentInSupabase = async (paymentId: string, data: Partial<i
   if (data.datePaiement !== undefined) updatePayload.DateTransact = data.datePaiement;
   if (data.methode !== undefined) updatePayload.ModePaiement = data.methode;
   if (data.remarque !== undefined) updatePayload.Remarque = data.remarque;
-  if (data.taux !== undefined) updatePayload.Taux = data.taux;
+  if (data.statut !== undefined) updatePayload.Statut = data.statut;
+  if (data.periode !== undefined) updatePayload.Periode = data.periode;
+  if (data.taux !== undefined) updatePayload.TauxChange = data.taux;
 
   let { error } = await supabase
     .from("tblPaiements")
     .update(updatePayload)
     .eq("Id", resolveEtudiantId(paymentId));
 
-  if (error && updatePayload.Taux !== undefined && isMissingTauxColumnError(error)) {
-    delete updatePayload.Taux;
+  if (error && updatePayload.TauxChange !== undefined && isMissingTauxColumnError(error)) {
+    delete updatePayload.TauxChange;
     ({ error } = await supabase
       .from("tblPaiements")
       .update(updatePayload)
@@ -332,13 +335,25 @@ export const deletePaymentInSupabase = async (paymentId: string) => {
 };
 
 export const addPaymentToSupabase = async (data: Omit<import("@/types/club").Payment, "id">) => {
+  // Mapping des modes de paiement vers des entiers
+  const modePaiementMap: Record<string, number> = {
+    'especes': 1,
+    'carte': 2,
+    'virement': 3,
+    'mobile': 4
+  };
+
   const insertPayload: any = {
     EtudiantId: parseInt(data.playerId, 10),
+    FactureId: 0, // Valeur par défaut pour FactureId (obligatoire)
     DateTransact: data.datePaiement || new Date().toISOString(),
-    ModePaiement: data.methode,
+    ModePaiement: modePaiementMap[data.methode] || 1, // Convertir en entier, défaut à 1 (espèces)
     Remarque: data.remarque || "",
+    Description: data.remarque || "",
+    Statut: data.statut,
+    Periode: data.periode,
+    TauxChange: data.taux,
   };
-  if (data.taux !== undefined) insertPayload.Taux = data.taux;
   
   if (data.devise === "HTG") {
     insertPayload.MntPayeGd = data.montant;
@@ -354,8 +369,8 @@ export const addPaymentToSupabase = async (data: Omit<import("@/types/club").Pay
     .select("Id")
     .single();
 
-  if (error && insertPayload.Taux !== undefined && isMissingTauxColumnError(error)) {
-    delete insertPayload.Taux;
+  if (error && insertPayload.TauxChange !== undefined && isMissingTauxColumnError(error)) {
+    delete insertPayload.TauxChange;
     ({ data: insertedData, error } = await supabase
       .from("tblPaiements")
       .insert(insertPayload)

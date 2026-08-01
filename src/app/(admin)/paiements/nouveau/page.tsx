@@ -6,7 +6,7 @@ import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import { useClubData } from "@/context/ClubDataContext";
 import { PaymentMethod, PaymentStatus, Player } from "@/types/club";
 import { getPlayerFullName } from "@/lib/club/metrics";
-import { addPaymentToSupabase } from "@/lib/club/supabase-crud";
+import { addPaymentToSupabase, addInvoiceToSupabase, updatePlayerInSupabase } from "@/lib/club/supabase-crud";
 
 const inputClassName =
   "h-11 w-full rounded-lg border border-gray-300 bg-transparent px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs placeholder:text-gray-400 focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90";
@@ -127,8 +127,8 @@ const paymentPlans: PaymentPlan[] = [
 
 export default function NewPaymentPage() {
   const router = useRouter();
-  const { players, setPayments } = useClubData();
-  const [playerId, setPlayerId] = useState(players[0]?.id ?? "");
+  const { players, setPayments, setPlayers } = useClubData();
+  const [playerId, setPlayerId] = useState("");
   const [playerSearch, setPlayerSearch] = useState("");
   const [showPlayerDropdown, setShowPlayerDropdown] = useState(false);
   const [montant, setMontant] = useState(180);
@@ -139,11 +139,21 @@ export default function NewPaymentPage() {
   const [statut, setStatut] = useState<PaymentStatus>("pending");
   const [methode, setMethode] = useState<PaymentMethod>("virement");
   const [datePaiement, setDatePaiement] = useState("");
-  const [selectedPricing, setSelectedPricing] = useState<string>("");
+  const [selectedPricing, setSelectedPricing] = useState<string[]>([]);
   const [selectedPlan, setSelectedPlan] = useState<string>("");
+  const [montantDonne, setMontantDonne] = useState<number>(0);
+  const [error, setError] = useState<string>("");
+  const [playerStatus, setPlayerStatus] = useState<string>("");
+  const [customStatuses, setCustomStatuses] = useState<string[]>([
+    "Boursier",
+    "Demi-bourse",
+    "Joueur spécial"
+  ]);
+  const [newStatus, setNewStatus] = useState<string>("");
 
   const playerOptions = useMemo(() => players, [players]);
   const searchContainerRef = useRef<HTMLDivElement>(null);
+  const playerInputRef = useRef<HTMLInputElement>(null);
 
   const selectedPlayer = useMemo(
     () => players.find((p) => p.id === playerId) ?? null,
@@ -173,31 +183,142 @@ export default function NewPaymentPage() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  useEffect(() => {
+    if (playerInputRef.current && selectedPlayer) {
+      playerInputRef.current.style.fontWeight = 'bold';
+      playerInputRef.current.style.color = 'black';
+    } else if (playerInputRef.current) {
+      playerInputRef.current.style.fontWeight = '';
+      playerInputRef.current.style.color = '';
+    }
+  }, [selectedPlayer]);
+
+  const handleAddStatus = () => {
+    if (newStatus.trim() && !customStatuses.includes(newStatus.trim())) {
+      setCustomStatuses([...customStatuses, newStatus.trim()]);
+      setPlayerStatus(newStatus.trim());
+      setNewStatus("");
+    }
+  };
+
   const handleSubmit = async () => {
-    if (!playerId || !periode || montant <= 0 || (devise === "HTG" && taux <= 0)) {
+    setError("");
+
+    // Validation basique
+    if (!playerId) {
+      const msg = "❌ Erreur: Veuillez sélectionner un joueur.";
+      setError(msg);
+      alert(msg);
+      return;
+    }
+    if (!periode) {
+      const msg = "❌ Erreur: Veuillez entrer la période (format: YYYY-MM).";
+      setError(msg);
+      alert(msg);
+      return;
+    }
+    if (!selectedPricing.includes("adhesion-fc") && !selectedPricing.includes("adhesion-ti")) {
+      const msg = "❌ Erreur: Veuillez sélectionner une adhésion FC TORO ou TI TORO.";
+      setError(msg);
+      alert(msg);
+      return;
+    }
+    if (!selectedPlan) {
+      const msg = "❌ Erreur: Veuillez sélectionner un plan de paiement.";
+      setError(msg);
+      alert(msg);
+      return;
+    }
+
+    // Si montantDonne est 0 mais qu'il y a un montantAvecPlan, utiliser montantAvecPlan
+    const finalMontant = montantDonne > 0 ? montantDonne : montantAvecPlan;
+    if (finalMontant <= 0) {
+      const msg = "❌ Erreur: Veuillez entrer un montant donné ou sélectionner des rubriques/plan.";
+      setError(msg);
+      alert(msg);
       return;
     }
 
     try {
-      const montantUS = devise === "US" ? montant : 0;
-      const montantHTG = devise === "HTG" ? montant : 0;
+      console.log("🔄 Début de l'ajout du paiement...", {
+        playerId,
+        paymentAmount: finalMontant,
+        devise,
+        taux,
+        periode,
+        statut,
+        methode,
+        selectedPlan,
+        description,
+        playerStatus
+      });
+
+      // Use the final calculated amount
+      const paymentAmount = finalMontant;
+      
+      // Convert to USD for storage if in HTG
+      const montantUS = devise === "US" ? paymentAmount : (taux > 0 ? paymentAmount / taux : 0);
+      const montantHTG = devise === "HTG" ? paymentAmount : 0;
+      
+      // Only transactions explicitly marked as paid affect the balance.
+      const paymentStatus: PaymentStatus = statut;
+
+      // Build the description/remark with player status
+      const statusRemark = playerStatus ? `[${playerStatus}] ` : "";
+      const planRemark = selectedPlan ? `Plan: ${paymentPlans.find(p => p.id === selectedPlan)?.plan}` : "";
+      const adhesionRemark = selectedPricing.includes("adhesion-ti")
+        ? "Adhésion: TI TORO"
+        : selectedPricing.includes("adhesion-fc")
+          ? "Adhésion: FC TORO"
+          : "";
+      const adhesionCode = selectedPricing.includes("adhesion-ti") ? "TI_TORO" : "FC_TORO";
+      const planCode = selectedPlan.toUpperCase();
+      const statusCode = paymentStatus.toUpperCase();
+      const paymentMarkers = `[ADHESION:${adhesionCode}] [PLAN:${planCode}] [STATUT:${statusCode}]`;
+      const finalRemarque = `${paymentMarkers} ${statusRemark}${description.trim()} ${adhesionRemark} ${planRemark}`.trim();
+
+      // Create invoice first
+      const invoiceData = {
+        noFacture: `FAC-${Date.now()}`,
+        playerId,
+        sessionId: "1",
+        montantAPayer: paymentAmount,
+        montantPaye: paymentAmount,
+        devise,
+        dateFacture: new Date().toISOString(),
+        datePaiement: paymentStatus === "paid" ? datePaiement || new Date().toISOString() : undefined,
+        remarque: finalRemarque,
+        statut: paymentStatus,
+        montantUS: montantUS,
+        montantHTG: montantHTG,
+      };
+
+      console.log("📄 Création de la facture:", invoiceData);
+      const invoice = await addInvoiceToSupabase(invoiceData);
+      console.log("✅ Facture créée:", invoice);
+
       const dataToInsert = {
         playerId,
-        montant,
+        montant: paymentAmount,
         montantUS,
         montantHTG,
         devise,
         taux: devise === "HTG" ? taux : undefined,
-        statut,
+        statut: paymentStatus,
         periode,
         methode,
-        remarque: description.trim(),
-        datePaiement: statut === "paid" ? datePaiement || undefined : undefined,
+        remarque: finalRemarque,
+        datePaiement: paymentStatus === "paid" ? datePaiement || undefined : undefined,
+        factureId: invoice.Id, // Link to the created invoice
       };
 
+      console.log("📤 Données à insérer:", dataToInsert);
+
       const inserted = await addPaymentToSupabase(dataToInsert);
+      console.log("✅ Réponse de l'insertion:", inserted);
+      
       if (!inserted) {
-        throw new Error("Paiement non cree.");
+        throw new Error("Paiement non cree. La base de données n'a pas retourné de résultat.");
       }
 
       setPayments((prevPayments) => [
@@ -207,9 +328,23 @@ export default function NewPaymentPage() {
         },
         ...prevPayments,
       ]);
+
+      if (playerStatus) {
+        await updatePlayerInSupabase(playerId, { statutJoueur: playerStatus });
+        setPlayers((prevPlayers) =>
+          prevPlayers.map((player) =>
+            player.id === playerId ? { ...player, statutJoueur: playerStatus } : player,
+          ),
+        );
+      }
+      
+      console.log("✅ Paiement ajouté avec succès, redirection...");
       router.push("/paiements");
     } catch (error) {
-      alert("Erreur lors de l'ajout du paiement. Veuillez reessayer.");
+      const errorMsg = `❌ Erreur lors de l'ajout du paiement:\n${error instanceof Error ? error.message : "Erreur inconnue"}\n\nVérifiez la console pour plus de détails.`;
+      console.error("❌ Erreur complète:", error);
+      setError(errorMsg);
+      alert(errorMsg);
     }
   };
 
@@ -220,29 +355,75 @@ export default function NewPaymentPage() {
   };
 
   const handlePricingChange = (pricingId: string) => {
-    setSelectedPricing(pricingId);
-    const pricing = pricingItems.find((p) => p.id === pricingId);
-    if (pricing) {
-      setMontant(pricing.montant);
-      setDevise(pricing.devise);
-    }
+    setSelectedPricing((prev) => {
+      if (prev.includes(pricingId)) {
+        return prev.filter((id) => id !== pricingId);
+      } else {
+        if (pricingId === "adhesion-fc") {
+          return [...prev.filter((id) => id !== "adhesion-ti"), pricingId];
+        }
+        if (pricingId === "adhesion-ti") {
+          return [...prev.filter((id) => id !== "adhesion-fc"), pricingId];
+        }
+        return [...prev, pricingId];
+      }
+    });
   };
 
-  const selectedPricingItem = pricingItems.find((p) => p.id === selectedPricing);
+  const selectedPricingItems = pricingItems.filter((p) => selectedPricing.includes(p.id));
 
   const handlePlanChange = (planId: string) => {
     setSelectedPlan(planId);
-    const plan = paymentPlans.find((p) => p.id === planId);
-    if (plan && selectedPlayer) {
-      const isFCToro = selectedPlayer.categorie === "FC TORO" || 
-                       selectedPlayer.categorie === "Académie" || 
-                       selectedPlayer.categorie === "Élite" ||
-                       selectedPlayer.categorie === "École de Football";
-      const planAmount = isFCToro ? plan.montantFCToro : plan.montantTIToro;
-      setMontant(planAmount);
-      setDevise("US");
-    }
   };
+
+  const totalRubriques = useMemo(() => {
+    const total = selectedPricingItems.reduce((sum, item) => sum + item.montant, 0);
+    // Convert to HTG if needed
+    if (devise === "HTG" && taux > 0) {
+      return total * taux;
+    }
+    return total;
+  }, [selectedPricingItems, devise, taux]);
+
+  const montantAvecPlan = useMemo(() => {
+    if (!selectedPlan || totalRubriques === 0) return totalRubriques;
+    
+    const plan = paymentPlans.find((p) => p.id === selectedPlan);
+    if (!plan || !selectedPlayer) return totalRubriques;
+    
+    const categorieLower = (selectedPlayer.categorie || "")
+      .trim()
+      .toLowerCase();
+    const selectedFCToro = selectedPricing.includes("adhesion-fc");
+    const selectedTIToro = selectedPricing.includes("adhesion-ti");
+    const isFCToro = selectedFCToro ||
+                     (!selectedTIToro && (categorieLower.includes("fc toro") ||
+                     categorieLower.includes("académie") ||
+                     categorieLower.includes("elite") ||
+                     categorieLower.includes("école de football")));
+    
+    // For plans, we use the plan amounts instead of individual rubriques
+    const planAmount = isFCToro ? plan.montantFCToro : plan.montantTIToro;
+    
+    // Convert to HTG if needed
+    if (devise === "HTG" && taux > 0) {
+      return planAmount * taux;
+    }
+    
+    return planAmount;
+  }, [selectedPlan, selectedPlayer, selectedPricing, totalRubriques, devise, taux]);
+
+  const montantRestant = useMemo(() => {
+    return montantAvecPlan - montantDonne;
+  }, [montantAvecPlan, montantDonne]);
+
+  // Convert montantDonne to HTG if needed
+  const montantDonneConverti = useMemo(() => {
+    if (devise === "HTG" && taux > 0 && montantDonne > 0) {
+      return montantDonne / taux;
+    }
+    return montantDonne;
+  }, [devise, taux, montantDonne]);
 
   return (
     <div className="space-y-6">
@@ -255,18 +436,20 @@ export default function NewPaymentPage() {
             </label>
             <div ref={searchContainerRef} className="relative">
               <input
+                ref={playerInputRef}
                 type="text"
-                value={playerSearch}
+                value={selectedPlayer ? getPlayerFullName(selectedPlayer) : playerSearch}
                 onChange={(event) => {
                   setPlayerSearch(event.target.value);
                   setShowPlayerDropdown(true);
                 }}
-                onFocus={() => setShowPlayerDropdown(true)}
-                placeholder={
-                  selectedPlayer
-                    ? `${getPlayerFullName(selectedPlayer)}${selectedPlayer.matricule ? ` (${selectedPlayer.matricule})` : ""}`
-                    : "Rechercher un joueur..."
-                }
+                onFocus={() => {
+                  setShowPlayerDropdown(true);
+                  if (selectedPlayer) {
+                    setPlayerSearch(getPlayerFullName(selectedPlayer));
+                  }
+                }}
+                placeholder={selectedPlayer ? "" : "Rechercher un joueur..."}
                 className={inputClassName}
               />
               {showPlayerDropdown && (
@@ -288,10 +471,10 @@ export default function NewPaymentPage() {
                             : ""
                         }`}
                       >
-                        <span className="font-medium text-gray-800 dark:text-white/90">
+                        <span className={`${player.id === playerId ? "font-bold text-black dark:text-black" : "font-medium text-gray-900 dark:text-white"}`}>
                           {getPlayerFullName(player)}
                         </span>
-                        <span className="text-xs text-gray-500 dark:text-gray-400">
+                        <span className={`text-xs ${player.id === playerId ? "font-medium text-gray-700 dark:text-gray-300" : "text-gray-500 dark:text-gray-400"}`}>
                           {player.matricule
                             ? `Code: ${player.matricule}`
                             : "Sans code"}
@@ -306,55 +489,85 @@ export default function NewPaymentPage() {
           </div>
           <div className="md:col-span-2 xl:col-span-3">
             <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
-              Rubrique
+              Rubriques
             </label>
-            <select
-              value={selectedPricing}
-              onChange={(event) => handlePricingChange(event.target.value)}
-              className={selectClassName}
-            >
-              <option value="">Sélectionner une rubrique</option>
+            <div className="max-h-48 overflow-auto rounded-lg border border-gray-300 bg-white dark:border-gray-700 dark:bg-gray-900">
               {pricingItems.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.rubrique} - ${item.montant}
-                </option>
+                <label
+                  key={item.id}
+                  className="flex cursor-pointer items-start gap-3 border-b border-gray-100 px-4 py-2.5 last:border-b-0 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800"
+                >
+                  <input
+                    type="checkbox"
+                    checked={selectedPricing.includes(item.id)}
+                    onChange={() => handlePricingChange(item.id)}
+                    className="mt-0.5 h-4 w-4 rounded border-gray-300 text-brand-500 focus:ring-brand-500"
+                  />
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-gray-800 dark:text-white/90">
+                        {item.rubrique}
+                      </span>
+                      <span className="text-sm font-semibold text-brand-600 dark:text-brand-400">
+                        ${item.montant}
+                      </span>
+                    </div>
+                    <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                      {item.precision}
+                    </p>
+                  </div>
+                </label>
               ))}
-            </select>
-            {selectedPricingItem && (
+            </div>
+            {selectedPricingItems.length > 0 && (
+              <div className="mt-2 rounded-lg bg-brand-50 px-3 py-2 dark:bg-brand-500/10">
+                <p className="text-sm font-medium text-brand-900 dark:text-brand-100">
+                  Total rubriques: ${totalRubriques.toFixed(2)}
+                </p>
+              </div>
+            )}
+          </div>
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
+              Montant donné
+            </label>
+            <input
+              type="number"
+              min={0}
+              value={montantDonne}
+              onChange={(event) => setMontantDonne(Number(event.target.value))}
+              className={inputClassName}
+            />
+          </div>
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
+              Montant total dû
+            </label>
+            <input
+              type="number"
+              min={0}
+              value={montantAvecPlan}
+              onChange={(event) => setMontant(Number(event.target.value))}
+              className={`${inputClassName} bg-gray-100 dark:bg-gray-800`}
+              readOnly
+            />
+            {selectedPlan && (
               <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                {selectedPricingItem.precision}
+                {paymentPlans.find((p) => p.id === selectedPlan)?.modalites}
               </p>
             )}
           </div>
           <div>
             <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
-              Montant
+              Montant restant
             </label>
-            <div className="flex gap-2">
-              <select
-                value=""
-                onChange={(event) => {
-                  if (event.target.value) {
-                    setMontant(Number(event.target.value));
-                  }
-                }}
-                className={selectClassName}
-              >
-                <option value="">Sélectionner</option>
-                {pricingItems.map((item) => (
-                  <option key={item.id} value={item.montant}>
-                    {item.rubrique} - ${item.montant}
-                  </option>
-                ))}
-              </select>
-              <input
-                type="number"
-                min={0}
-                value={montant}
-                onChange={(event) => setMontant(Number(event.target.value))}
-                className={inputClassName}
-              />
-            </div>
+            <input
+              type="number"
+              min={0}
+              value={montantRestant}
+              className={`${inputClassName} bg-gray-100 dark:bg-gray-800`}
+              readOnly
+            />
           </div>
           <div>
             <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
@@ -386,12 +599,46 @@ export default function NewPaymentPage() {
           ) : null}
           <div className="md:col-span-2 xl:col-span-3">
             <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
-              Description
+              Statut du joueur
+            </label>
+            <div className="flex gap-2">
+              <select
+                value={playerStatus}
+                onChange={(event) => setPlayerStatus(event.target.value)}
+                className={selectClassName}
+              >
+                <option value="">Sélectionner un statut</option>
+                {customStatuses.map((status) => (
+                  <option key={status} value={status}>
+                    {status}
+                  </option>
+                ))}
+              </select>
+              <input
+                type="text"
+                value={newStatus}
+                onChange={(event) => setNewStatus(event.target.value)}
+                placeholder="Nouveau statut..."
+                className={inputClassName}
+                style={{ width: "200px" }}
+              />
+              <button
+                type="button"
+                onClick={handleAddStatus}
+                className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-medium text-white hover:bg-brand-600"
+              >
+                Ajouter
+              </button>
+            </div>
+          </div>
+          <div className="md:col-span-2 xl:col-span-3">
+            <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
+              Description / Notes
             </label>
             <input
               value={description}
               onChange={(event) => setDescription(event.target.value)}
-              placeholder="Statut joueur: boursier, demi-bourse, special..."
+              placeholder="Raison du paiement, notes supplémentaires..."
               className={inputClassName}
             />
             {selectedPlayer && (
@@ -463,11 +710,6 @@ export default function NewPaymentPage() {
                 </option>
               ))}
             </select>
-            {selectedPlan && (
-              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                {paymentPlans.find((p) => p.id === selectedPlan)?.modalites}
-              </p>
-            )}
           </div>
           <div>
             <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
@@ -497,6 +739,11 @@ export default function NewPaymentPage() {
           </div>
         </div>
 
+        {error && (
+          <div className="rounded-lg bg-error-50 px-4 py-3 text-sm text-error-600 dark:bg-error-500/10 dark:text-error-400">
+            {error}
+          </div>
+        )}
         <div className="mt-6 flex justify-end gap-3">
           <button
             type="button"

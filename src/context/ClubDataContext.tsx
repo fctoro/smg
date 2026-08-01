@@ -296,6 +296,7 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
             const matricule = `FCT-${sCode}-${String(d.EtudiantID).padStart(4, "0")}`;
 
             // Détermination du statut réel du joueur
+            const savedPlayerStatus = String(d.StatutJoueur || "").trim();
             let playerStatus: PlayerStatus = "actif";
             const allObjStr = (JSON.stringify(d) + JSON.stringify(studentInscriptions)).toLowerCase();
             if (
@@ -358,6 +359,7 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
                 return rawCat || "ti toro";
               })(),
               statut: playerStatus,
+              statutJoueur: savedPlayerStatus || undefined,
               cotisationDevise: d.CotisationDevise || "US",
               telephone: d.Telephone || "",
               email: d.Email || "",
@@ -426,6 +428,19 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
               const montantHTG = p.MntPayeGd || 0;
               const montant = montantUS || montantHTG || 0;
               const devise: "US" | "HTG" = montantHTG > 0 ? "HTG" : "US";
+              const remarque = p.Remarque || p.Description || "";
+              const statusMatch = remarque.match(/\[STATUT:(PAID|PENDING|LATE)\]/i);
+              const storedStatus = String(p.Statut || statusMatch?.[1] || "paid")
+                .normalize("NFD")
+                .replace(/[\u0300-\u036f]/g, "")
+                .toLowerCase()
+                .trim();
+              const statut: Payment["statut"] =
+                storedStatus === "pending" || storedStatus === "en_attente" || storedStatus === "en attente"
+                  ? "pending"
+                  : storedStatus === "late" || storedStatus === "en_retard" || storedStatus === "en retard"
+                    ? "late"
+                    : "paid";
 
               return {
                 id: String(p.Id),
@@ -434,12 +449,12 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
                 montantUS,
                 montantHTG,
                 devise,
-                taux: p.Taux || p.taux || undefined,
-                statut: "paid" as any, // Historique des transactions = payé
-                periode: p.DateTransact ? p.DateTransact.substring(0, 7) : new Date().toISOString().substring(0, 7),
+                taux: p.TauxChange || p.Taux || p.taux || undefined,
+                statut,
+                periode: p.Periode || (p.DateTransact ? p.DateTransact.substring(0, 7) : new Date().toISOString().substring(0, 7)),
                 methode: (p.ModePaiement || "especes") as any,
                 datePaiement: p.DateTransact ? p.DateTransact.split("T")[0] : undefined,
-                remarque: p.Remarque || p.Description || "",
+                remarque,
               };
             })
             .filter((p: Payment) => p.montant > 0 || p.montantUS > 0 || p.montantHTG > 0);

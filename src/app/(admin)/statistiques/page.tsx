@@ -88,6 +88,23 @@ export default function StatistiquesPage() {
   const totalRegistrations = filteredPlayers.length;
   const totalPayments = filteredPayments.length;
 
+  // Calculate player status statistics from the persisted player status.
+  const playerStatusStats = useMemo(() => {
+    const statusLabels = ["Boursier", "Demi-bourse", "Joueur spécial"];
+    const stats: Record<string, number> = Object.fromEntries(
+      statusLabels.map((status) => [status, 0]),
+    );
+    filteredPlayers.forEach((player) => {
+      const status = player.statutJoueur?.trim();
+      const matchingStatus = statusLabels.find(
+        (label) => label.toLowerCase() === status?.toLowerCase(),
+      );
+      if (matchingStatus) stats[matchingStatus] += 1;
+    });
+    
+    return stats;
+  }, [filteredPlayers]);
+
   const yearsList = availableYears.length > 0 ? availableYears : Array.from({ length: currentYearActual - 2012 + 1 }, (_, i) => currentYearActual - i);
 
   // CSV export helper
@@ -227,7 +244,7 @@ export default function StatistiquesPage() {
           </div>
         </div>
 
-        <div className="col-span-12 lg:col-span-4 space-y-4">
+         <div className="col-span-12 lg:col-span-4 space-y-4">
           <div className="rounded-2xl border border-gray-100 bg-white p-4">
             <div className="flex items-center justify-between">
               <div>
@@ -264,6 +281,22 @@ export default function StatistiquesPage() {
               </div>
             </div>
           </div>
+
+          {Object.keys(playerStatusStats).length > 0 && (
+            <div className="rounded-2xl border border-gray-100 bg-white p-4">
+              <div className="text-xs text-gray-400 mb-3">Statuts des joueurs</div>
+              <div className="space-y-2">
+                {Object.entries(playerStatusStats)
+                  .sort((a, b) => b[1] - a[1])
+                  .map(([status, count]) => (
+                    <div key={status} className="flex items-center justify-between">
+                      <span className="text-sm text-gray-600">{status}</span>
+                      <span className="text-xl font-bold text-gray-900">{count}</span>
+                    </div>
+                  ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

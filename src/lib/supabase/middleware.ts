@@ -27,9 +27,23 @@ export async function updateSession(request: NextRequest) {
     }
   )
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  let user = null
+
+  try {
+    const {
+      data: { user: authenticatedUser },
+    } = await supabase.auth.getUser()
+
+    user = authenticatedUser
+  } catch {
+    request.cookies
+      .getAll()
+      .filter(({ name }) => name.startsWith('sb-'))
+      .forEach(({ name }) => {
+        request.cookies.delete(name)
+        supabaseResponse.cookies.delete(name)
+      })
+  }
 
   const isAuthPage = 
     request.nextUrl.pathname.startsWith('/signin') || 

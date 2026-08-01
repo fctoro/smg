@@ -8,6 +8,7 @@ import { getPlayerFullName } from "@/lib/club/metrics";
 import { addPaymentToSupabase, addInvoiceToSupabase, updatePlayerInSupabase } from "@/lib/club/supabase-crud";
 import { validatePaymentPhotoFile, getPaymentPhotoPreviewUrl, uploadPaymentPhotoToSupabase } from "@/lib/club/payment-photo-utils";
 import { calculateDiscountedAmount, serializeReductionMetadata, type PaymentReductionType } from "@/lib/club/payment-reduction-utils";
+import { generateReceiptPDFBase64 } from "@/lib/club/pdf-generator";
 
 const inputClassName =
   "h-11 w-full rounded-lg border border-gray-300 bg-transparent px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs placeholder:text-gray-400 focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90";
@@ -295,6 +296,51 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
         },
         ...prevPayments,
       ]);
+
+      // --- SEND EMAIL LOGIC ---
+      try {
+        if (selectedPlayer) {
+          const paymentForPdf = {
+            id: inserted.Id.toString(),
+            ...dataToInsert,
+          };
+          
+          const nomParts = (selectedPlayer.parentNomPrenom || "").split(" ");
+          const parentNom = nomParts[0] || "";
+          const parentPrenom = nomParts.slice(1).join(" ") || "";
+          
+          const receiptBase64 = await generateReceiptPDFBase64(
+            selectedPlayer,
+            [paymentForPdf],
+            parentNom,
+            parentPrenom,
+            selectedPlayer.parentTelephone || "",
+            selectedPlayer.parentEmail || selectedPlayer.email || ""
+          );
+          
+          const emailToSend = selectedPlayer.parentEmail || selectedPlayer.email;
+          if (emailToSend) {
+            const mntStr = devise === "HTG" ? montantDonne + " HTG" : montantDonne + " USD";
+            await fetch("/api/send-receipt", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                email: emailToSend,
+                parentName: selectedPlayer.parentNomPrenom || getPlayerFullName(selectedPlayer),
+                receiptBase64,
+                receiptNumber: `FAC-${Date.now()}`,
+                amount: mntStr
+              }),
+            });
+          }
+        }
+      } catch (err) {
+        console.error("Erreur lors de l'envoi du reçu par email:", err);
+      }
+      // ------------------------
+
       if (playerStatus) {
         await updatePlayerInSupabase(playerId, { statutJoueur: playerStatus });
         setPlayers((prevPlayers) => prevPlayers.map((player) =>

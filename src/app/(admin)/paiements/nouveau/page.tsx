@@ -7,6 +7,7 @@ import { useClubData } from "@/context/ClubDataContext";
 import { PaymentMethod, PaymentStatus, Player } from "@/types/club";
 import { getPlayerFullName } from "@/lib/club/metrics";
 import { addPaymentToSupabase, addInvoiceToSupabase, updatePlayerInSupabase } from "@/lib/club/supabase-crud";
+import { validatePaymentPhotoFile, getPaymentPhotoPreviewUrl, uploadPaymentPhotoToSupabase } from "@/lib/club/payment-photo-utils";
 
 const inputClassName =
   "h-11 w-full rounded-lg border border-gray-300 bg-transparent px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs placeholder:text-gray-400 focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90";
@@ -150,6 +151,9 @@ export default function NewPaymentPage() {
     "Joueur spécial"
   ]);
   const [newStatus, setNewStatus] = useState<string>("");
+  const [paymentPhoto, setPaymentPhoto] = useState<File | null>(null);
+  const [paymentPhotoPreview, setPaymentPhotoPreview] = useState<string | null>(null);
+  const [paymentPhotoError, setPaymentPhotoError] = useState<string | null>(null);
 
   const playerOptions = useMemo(() => players, [players]);
   const searchContainerRef = useRef<HTMLDivElement>(null);
@@ -200,6 +204,35 @@ export default function NewPaymentPage() {
       setNewStatus("");
     }
   };
+
+  const handlePaymentPhotoChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0] ?? null;
+    const validation = validatePaymentPhotoFile(file);
+
+    if (!validation.valid) {
+      setPaymentPhoto(null);
+      setPaymentPhotoPreview(null);
+      setPaymentPhotoError(validation.error ?? "Erreur de validation du fichier.");
+      return;
+    }
+
+    if (paymentPhotoPreview?.startsWith("blob:")) {
+      URL.revokeObjectURL(paymentPhotoPreview);
+    }
+
+    const previewUrl = getPaymentPhotoPreviewUrl(file);
+    setPaymentPhoto(file);
+    setPaymentPhotoPreview(previewUrl);
+    setPaymentPhotoError(null);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (paymentPhotoPreview?.startsWith("blob:")) {
+        URL.revokeObjectURL(paymentPhotoPreview);
+      }
+    };
+  }, [paymentPhotoPreview]);
 
   const handleSubmit = async () => {
     setError("");
@@ -276,6 +309,9 @@ export default function NewPaymentPage() {
       const statusCode = paymentStatus.toUpperCase();
       const paymentMarkers = `[ADHESION:${adhesionCode}] [PLAN:${planCode}] [STATUT:${statusCode}]`;
       const finalRemarque = `${paymentMarkers} ${statusRemark}${description.trim()} ${adhesionRemark} ${planRemark}`.trim();
+      const paymentPhotoUrl = paymentPhoto ? await uploadPaymentPhotoToSupabase(paymentPhoto) : null;
+      const paymentPhotoNote = paymentPhotoUrl ? ` [JUSTIFICATIF:${paymentPhotoUrl}]` : paymentPhoto ? ` [JUSTIFICATIF:${paymentPhoto.name}]` : "";
+      const finalRemarqueWithPhoto = `${finalRemarque}${paymentPhotoNote}`.trim();
 
       // Create invoice first
       const invoiceData = {
@@ -287,7 +323,7 @@ export default function NewPaymentPage() {
         devise,
         dateFacture: new Date().toISOString(),
         datePaiement: paymentStatus === "paid" ? datePaiement || new Date().toISOString() : undefined,
-        remarque: finalRemarque,
+        remarque: finalRemarqueWithPhoto,
         statut: paymentStatus,
         montantUS: montantUS,
         montantHTG: montantHTG,
@@ -307,7 +343,7 @@ export default function NewPaymentPage() {
         statut: paymentStatus,
         periode,
         methode,
-        remarque: finalRemarque,
+        remarque: finalRemarqueWithPhoto,
         datePaiement: paymentStatus === "paid" ? datePaiement || undefined : undefined,
         factureId: invoice.Id, // Link to the created invoice
       };
@@ -737,6 +773,27 @@ export default function NewPaymentPage() {
               className={inputClassName}
             />
           </div>
+        </div>
+
+        <div className="mt-4 rounded-xl border border-dashed border-gray-300 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800/40">
+          <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-400">
+            Photo du paiement / justificatif (JPG, PNG, WEBP, max 5 Mo)
+          </label>
+          <input
+            type="file"
+            accept="image/jpeg,image/png,image/webp,image/jpg"
+            onChange={handlePaymentPhotoChange}
+            className="block w-full text-sm text-gray-600 file:mr-4 file:rounded-lg file:border-0 file:bg-brand-500 file:px-4 file:py-2 file:text-sm file:font-medium file:text-white hover:file:bg-brand-600"
+          />
+          {paymentPhotoError && <p className="mt-2 text-sm text-red-600">{paymentPhotoError}</p>}
+          {paymentPhoto && !paymentPhotoError && (
+            <div className="mt-3 flex items-center gap-3">
+              <span className="text-sm text-gray-600 dark:text-gray-300">Fichier sélectionné : {paymentPhoto.name}</span>
+              {paymentPhotoPreview && (
+                <img src={paymentPhotoPreview} alt="Aperçu du justificatif" className="h-16 w-16 rounded-lg object-cover border border-gray-200 dark:border-gray-700" />
+              )}
+            </div>
+          )}
         </div>
 
         {error && (

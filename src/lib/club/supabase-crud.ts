@@ -1,5 +1,19 @@
 import { supabase } from "@/lib/supabaseClient";
 import { Player, Employee } from "@/types/club";
+import { createClient } from "@supabase/supabase-js";
+
+const supabaseAdmin: any = process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY
+  ? createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL,
+      process.env.SUPABASE_SERVICE_ROLE_KEY,
+      {
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false,
+        },
+      }
+    )
+  : null;
 
 const resolveEtudiantId = (playerId: string) => {
   const trimmed = String(playerId).trim();
@@ -335,6 +349,41 @@ export const updatePaymentInSupabase = async (paymentId: string, data: Partial<i
   }
 
   if (error) throw error;
+
+  // If payment was updated, check if the related invoice should be marked as paid
+  if (!error && data.playerId && data.montant !== undefined) {
+    try {
+      // Find the invoice for this player
+      const { data: invoices, error: invoiceQueryError } = await supabase
+        .from("tblFacture")
+        .select("*")
+        .eq("EtudiantId", parseInt(data.playerId, 10))
+        .order("DateFacture", { ascending: false })
+        .limit(1);
+
+      if (!invoiceQueryError && invoices && invoices.length > 0) {
+        const invoice = invoices[0];
+        const montantAPayer = parseFloat(invoice.MntAPayer) || 0;
+        const montantPayeGd = parseFloat(invoice.MntPayeGd) || 0;
+        const montantPayeUS = parseFloat(invoice.MntPayeUS) || 0;
+        const totalPaye = montantPayeGd + montantPayeUS;
+
+        // If invoice is fully paid and not already marked as paid, update it
+        if (totalPaye >= montantAPayer && montantAPayer > 0 && invoice.Statut !== "paid") {
+          await supabase
+            .from("tblFacture")
+            .update({
+              Statut: "paid",
+              DatePaiement: new Date().toISOString()
+            })
+            .eq("Id", invoice.Id);
+        }
+      }
+    } catch (invoiceError) {
+      console.error("Error updating invoice status:", invoiceError);
+      // Don't throw - payment was successful, invoice update is secondary
+    }
+  }
 };
 
 export const deletePaymentInSupabase = async (paymentId: string) => {
@@ -346,7 +395,6 @@ export const deletePaymentInSupabase = async (paymentId: string) => {
 };
 
 export const addPaymentToSupabase = async (data: Omit<import("@/types/club").Payment, "id">) => {
-  // Mapping des modes de paiement vers des entiers
   const modePaiementMap: Record<string, number> = {
     'especes': 1,
     'carte': 2,
@@ -356,16 +404,16 @@ export const addPaymentToSupabase = async (data: Omit<import("@/types/club").Pay
 
   const insertPayload: any = {
     EtudiantId: parseInt(data.playerId, 10),
-    FactureId: 0, // Valeur par défaut pour FactureId (obligatoire)
+    FactureId: 0,
     DateTransact: data.datePaiement || new Date().toISOString(),
-    ModePaiement: modePaiementMap[data.methode] || 1, // Convertir en entier, défaut à 1 (espèces)
+    ModePaiement: modePaiementMap[data.methode] || 1,
     Remarque: data.remarque || "",
     Description: data.remarque || "",
     Statut: data.statut,
     Periode: data.periode,
     TauxChange: data.taux,
   };
-  
+
   if (data.devise === "HTG") {
     insertPayload.MntPayeGd = data.montant;
     insertPayload.MntPayeUS = 0;
@@ -374,23 +422,61 @@ export const addPaymentToSupabase = async (data: Omit<import("@/types/club").Pay
     insertPayload.MntPayeGd = 0;
   }
 
-  let { data: insertedData, error } = await supabase
-    .from("tblPaiements")
-    .insert(insertPayload)
-    .select("Id")
-    .single();
+  const { insertPaymentAdmin } = await import("@/app/actions/club");
+  const result = await insertPaymentAdmin(insertPayload);
 
-  if (error && insertPayload.TauxChange !== undefined && isMissingTauxColumnError(error)) {
-    delete insertPayload.TauxChange;
-    ({ data: insertedData, error } = await supabase
-      .from("tblPaiements")
-      .insert(insertPayload)
-      .select("Id")
-      .single());
+  if (!result.success) {
+    throw new Error(result.error || "Impossible d’enregistrer le paiement.");
   }
 
-  if (error) throw error;
-  return insertedData;
+  // After payment is added, update the invoice with the new total
+  if (result.success && data.playerId) {
+    try {
+      // Get all payments for this player to calculate total
+      const { data: allPayments, error: paymentsError } = await supabase
+        .from("tblPaiements")
+        .select("MntPayeUS, MntPayeGd")
+        .eq("EtudiantId", parseInt(data.playerId, 10));
+
+      if (!paymentsError && allPayments) {
+        // Calculate total paid across all payments
+        const totalPayeUS = allPayments.reduce((sum: number, p: any) => sum + (parseFloat(p.MntPayeUS) || 0), 0);
+        const totalPayeGd = allPayments.reduce((sum: number, p: any) => sum + (parseFloat(p.MntPayeGd) || 0), 0);
+
+        // Find the most recent invoice for this player
+        const { data: invoices, error: invoiceQueryError } = await supabase
+          .from("tblFacture")
+          .select("*")
+          .eq("EtudiantId", parseInt(data.playerId, 10))
+          .order("DateFacture", { ascending: false })
+          .limit(1);
+
+        if (!invoiceQueryError && invoices && invoices.length > 0) {
+          const invoice = invoices[0];
+          const montantAPayer = parseFloat(invoice.MntAPayer) || 0;
+          
+          // Determine if invoice is fully paid
+          const isFullyPaid = totalPayeUS + totalPayeGd >= montantAPayer && montantAPayer > 0;
+          
+          // Update the invoice
+          await supabase
+            .from("tblFacture")
+            .update({
+              MntPayeUS: totalPayeUS,
+              MntPayeGd: totalPayeGd,
+              Statut: isFullyPaid ? "paid" : invoice.Statut,
+              DatePaiement: isFullyPaid ? new Date().toISOString() : invoice.DatePaiement
+            })
+            .eq("Id", invoice.Id);
+        }
+      }
+    } catch (invoiceError) {
+      console.error("Error updating invoice after payment:", invoiceError);
+      // Don't throw - payment was successful, invoice update is secondary
+    }
+  }
+
+  return result.data;
 };
 
 // --- FACTURES (tblFacture) ---
@@ -449,14 +535,14 @@ export const addInvoiceToSupabase = async (data: Omit<import("@/types/club").Inv
     insertPayload.MntPayeGd = 0;
   }
 
-  const { data: insertedData, error } = await supabase
-    .from("tblFacture")
-    .insert(insertPayload)
-    .select("Id")
-    .single();
+  const { insertInvoiceAdmin } = await import("@/app/actions/club");
+  const result = await insertInvoiceAdmin(insertPayload);
 
-  if (error) throw error;
-  return insertedData;
+  if (!result.success) {
+    throw new Error(result.error || "Impossible d’enregistrer la facture.");
+  }
+
+  return result.data;
 };
 
 // --- ALUMNI (tblAlumni) ---

@@ -47,11 +47,6 @@ const adminNavItems: NavItem[] = [
     path: "/statistiques",
   },
   {
-    icon: <PieChartIcon />,
-    name: "Tracking",
-    path: "/tracking",
-  },
-  {
     icon: <DocsIcon />,
     name: "Demandes",
     path: "/demandes/inscriptions",

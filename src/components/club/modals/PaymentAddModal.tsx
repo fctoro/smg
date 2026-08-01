@@ -5,7 +5,9 @@ import { Modal } from "@/components/ui/modal";
 import { useClubData } from "@/context/ClubDataContext";
 import { PaymentMethod, PaymentStatus, Player } from "@/types/club";
 import { getPlayerFullName } from "@/lib/club/metrics";
-import { addPaymentToSupabase } from "@/lib/club/supabase-crud";
+import { addPaymentToSupabase, addInvoiceToSupabase, updatePlayerInSupabase } from "@/lib/club/supabase-crud";
+import { validatePaymentPhotoFile, getPaymentPhotoPreviewUrl, uploadPaymentPhotoToSupabase } from "@/lib/club/payment-photo-utils";
+import { calculateDiscountedAmount, serializeReductionMetadata, type PaymentReductionType } from "@/lib/club/payment-reduction-utils";
 
 const inputClassName =
   "h-11 w-full rounded-lg border border-gray-300 bg-transparent px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs placeholder:text-gray-400 focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90";
@@ -34,6 +36,7 @@ interface PaymentPlan {
   montantFCToro: number;
   montantTIToro: number;
   avantage: string;
+  nombreVersements: number;
 }
 
 const pricingItems: PricingItem[] = [
@@ -105,6 +108,7 @@ const paymentPlans: PaymentPlan[] = [
     montantFCToro: 1215,
     montantTIToro: 900,
     avantage: "10% de rabais",
+    nombreVersements: 1,
   },
   {
     id: "semestriel",
@@ -113,6 +117,7 @@ const paymentPlans: PaymentPlan[] = [
     montantFCToro: 641.25,
     montantTIToro: 475,
     avantage: "5% de rabais",
+    nombreVersements: 2,
   },
   {
     id: "mensuel",
@@ -121,6 +126,7 @@ const paymentPlans: PaymentPlan[] = [
     montantFCToro: 155,
     montantTIToro: 115,
     avantage: "Mensualité",
+    nombreVersements: 9,
   },
 ];
 
@@ -129,12 +135,15 @@ interface PaymentAddModalProps {
   onClose: () => void;
 }
 
+const adhesionOptions = pricingItems.filter((item) => item.id === "adhesion-fc" || item.id === "adhesion-ti");
+const rubricOptions = pricingItems;
+
 export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
-  const { players, setPayments } = useClubData();
-  const [playerId, setPlayerId] = useState(players[0]?.id ?? "");
+  const { players, setPayments, setPlayers } = useClubData();
+  const [playerId, setPlayerId] = useState("");
   const [playerSearch, setPlayerSearch] = useState("");
   const [showPlayerDropdown, setShowPlayerDropdown] = useState(false);
-  const [montant, setMontant] = useState(180);
+  const [montantDonne, setMontantDonne] = useState(0);
   const [devise, setDevise] = useState<"US" | "HTG">("US");
   const [taux, setTaux] = useState(0);
   const [description, setDescription] = useState("");
@@ -142,8 +151,16 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
   const [statut, setStatut] = useState<PaymentStatus>("pending");
   const [methode, setMethode] = useState<PaymentMethod>("virement");
   const [datePaiement, setDatePaiement] = useState("");
-  const [selectedPricing, setSelectedPricing] = useState<string>("");
+  const [selectedPricing, setSelectedPricing] = useState<string[]>([]);
   const [selectedPlan, setSelectedPlan] = useState<string>("");
+  const [reductionType, setReductionType] = useState<PaymentReductionType>("none");
+  const [customReductionPercent, setCustomReductionPercent] = useState(0);
+  const [playerStatus, setPlayerStatus] = useState("");
+  const [customStatuses, setCustomStatuses] = useState(["Boursier", "Demi-bourse", "Joueur spécial"]);
+  const [newStatus, setNewStatus] = useState("");
+  const [paymentPhoto, setPaymentPhoto] = useState<File | null>(null);
+  const [paymentPhotoPreview, setPaymentPhotoPreview] = useState<string | null>(null);
+  const [paymentPhotoError, setPaymentPhotoError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const searchContainerRef = useRef<HTMLDivElement>(null);
@@ -177,10 +194,10 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
   }, []);
 
   const resetForm = () => {
-    setPlayerId(players[0]?.id ?? "");
+    setPlayerId("");
     setPlayerSearch("");
     setShowPlayerDropdown(false);
-    setMontant(180);
+    setMontantDonne(0);
     setDevise("US");
     setTaux(0);
     setDescription("");
@@ -188,8 +205,15 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
     setStatut("pending");
     setMethode("virement");
     setDatePaiement("");
-    setSelectedPricing("");
+    setSelectedPricing([]);
     setSelectedPlan("");
+    setReductionType("none");
+    setCustomReductionPercent(0);
+    setPlayerStatus("");
+    setNewStatus("");
+    setPaymentPhoto(null);
+    setPaymentPhotoPreview(null);
+    setPaymentPhotoError(null);
   };
 
   const handleClose = () => {
@@ -198,18 +222,42 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
   };
 
   const handleSubmit = async () => {
-    if (!playerId || !periode || montant <= 0 || (devise === "HTG" && taux <= 0)) {
-      alert("Veuillez remplir correctement les champs obligatoires.");
+    if (!playerId || !periode || montantDonne <= 0 || (devise === "HTG" && taux <= 0)) {
+      alert("Veuillez remplir le joueur, la période et le montant payé.");
+      return;
+    }
+    const hasAdhesion = selectedPricing.some((item) => item === "adhesion-fc" || item === "adhesion-ti");
+    if (!hasAdhesion) {
+      alert("Veuillez sélectionner une adhésion FC TORO ou TI TORO.");
+      return;
+    }
+    if (!selectedPlan) {
+      alert("Veuillez sélectionner un plan de paiement.");
       return;
     }
 
     setIsSubmitting(true);
     try {
-      const montantUS = devise === "US" ? montant : 0;
-      const montantHTG = devise === "HTG" ? montant : 0;
+      const plan = paymentPlans.find((item) => item.id === selectedPlan)!;
+      const selectedAdhesion = selectedPricing.find((item) => item === "adhesion-fc" || item === "adhesion-ti");
+      const isTiToro = selectedAdhesion === "adhesion-ti";
+      const totalDue = (isTiToro ? plan.montantTIToro : plan.montantFCToro) * plan.nombreVersements;
+      const discountedDue = calculateDiscountedAmount(totalDue, reductionType, customReductionPercent);
+      const paymentAmount = devise === "HTG" ? montantDonne : montantDonne;
+      const montantUS = devise === "US" ? paymentAmount : (taux > 0 ? paymentAmount / taux : 0);
+      const montantHTG = devise === "HTG" ? paymentAmount : 0;
+      const adhesionCode = isTiToro ? "TI_TORO" : "FC_TORO";
+      const reductionMetadata = serializeReductionMetadata(reductionType, customReductionPercent);
+      const selectedRubricsLabel = selectedPricing.filter((item) => item !== "adhesion-fc" && item !== "adhesion-ti").map((item) => pricingItems.find((pricingItem) => pricingItem.id === item)?.rubrique).filter(Boolean).join(", ");
+      const paymentMarkers = `[ADHESION:${adhesionCode}] [PLAN:${selectedPlan.toUpperCase()}] [STATUT:${statut.toUpperCase()}]`;
+      const adhesionLabel = isTiToro ? "Adhésion: TI TORO" : "Adhésion: FC TORO";
+      const finalRemarque = `${paymentMarkers} ${reductionMetadata ? `${reductionMetadata} ` : ""}${playerStatus ? `[${playerStatus}] ` : ""}${description.trim()} ${adhesionLabel}${selectedRubricsLabel ? ` | Rubriques: ${selectedRubricsLabel}` : ""} Plan: ${plan.plan}`.trim();
+      const paymentPhotoUrl = paymentPhoto ? await uploadPaymentPhotoToSupabase(paymentPhoto) : null;
+      const paymentPhotoNote = paymentPhotoUrl ? ` [JUSTIFICATIF:${paymentPhotoUrl}]` : paymentPhoto ? ` [JUSTIFICATIF:${paymentPhoto.name}]` : "";
+      const finalRemarqueWithPhoto = `${finalRemarque}${paymentPhotoNote}`.trim();
       const dataToInsert = {
         playerId,
-        montant,
+        montant: paymentAmount,
         montantUS,
         montantHTG,
         devise,
@@ -217,10 +265,24 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
         statut,
         periode,
         methode,
-        remarque: description.trim(),
+        remarque: finalRemarqueWithPhoto,
         datePaiement: statut === "paid" ? datePaiement || undefined : undefined,
       };
 
+      await addInvoiceToSupabase({
+        noFacture: `FAC-${Date.now()}`,
+        playerId,
+        sessionId: "1",
+        remarque: finalRemarque,
+        montantAPayer: discountedDue,
+        montantPaye: paymentAmount,
+        montantUS,
+        montantHTG,
+        devise,
+        statut,
+        dateFacture: new Date().toISOString(),
+        datePaiement: dataToInsert.datePaiement,
+      });
       const inserted = await addPaymentToSupabase(dataToInsert);
       if (!inserted) {
         throw new Error("Paiement non créé.");
@@ -233,6 +295,12 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
         },
         ...prevPayments,
       ]);
+      if (playerStatus) {
+        await updatePlayerInSupabase(playerId, { statutJoueur: playerStatus });
+        setPlayers((prevPlayers) => prevPlayers.map((player) =>
+          player.id === playerId ? { ...player, statutJoueur: playerStatus } : player,
+        ));
+      }
       handleClose();
     } catch (error) {
       console.error(error);
@@ -248,31 +316,82 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
     setShowPlayerDropdown(false);
   };
 
-  const handlePricingChange = (pricingId: string) => {
-    setSelectedPricing(pricingId);
-    const pricing = pricingItems.find((p) => p.id === pricingId);
-    if (pricing) {
-      setMontant(pricing.montant);
-      setDevise(pricing.devise);
-    }
+  const handlePricingChange = (itemId: string) => {
+    setSelectedPricing((current) => {
+      if (current.includes(itemId)) {
+        return current.filter((value) => value !== itemId);
+      }
+
+      const isAdhesion = itemId === "adhesion-fc" || itemId === "adhesion-ti";
+      if (isAdhesion) {
+        return [...current.filter((value) => value !== "adhesion-fc" && value !== "adhesion-ti"), itemId];
+      }
+
+      return [...current, itemId];
+    });
   };
 
-  const selectedPricingItem = pricingItems.find((p) => p.id === selectedPricing);
+  const selectedPricingItems = rubricOptions.filter((item) => selectedPricing.includes(item.id));
+  const selectedAdhesionItem = adhesionOptions.find((item) => item.id === selectedPricing.find((value) => value === "adhesion-fc" || value === "adhesion-ti"));
 
   const handlePlanChange = (planId: string) => {
     setSelectedPlan(planId);
     const plan = paymentPlans.find((p) => p.id === planId);
     if (plan && selectedPlayer) {
-      const isFCToro =
-        selectedPlayer.categorie === "FC TORO" ||
-        selectedPlayer.categorie === "Académie" ||
-        selectedPlayer.categorie === "Élite" ||
-        selectedPlayer.categorie === "École de Football";
-      const planAmount = isFCToro ? plan.montantFCToro : plan.montantTIToro;
-      setMontant(planAmount);
       setDevise("US");
     }
   };
+
+  const selectedPlanData = paymentPlans.find((plan) => plan.id === selectedPlan);
+  const selectedAdhesion = selectedPricing.find((item) => item === "adhesion-fc" || item === "adhesion-ti");
+  const isTiToro = selectedAdhesion === "adhesion-ti";
+  const totalDue = selectedPlanData
+    ? (isTiToro ? selectedPlanData.montantTIToro : selectedPlanData.montantFCToro) * selectedPlanData.nombreVersements
+    : 0;
+  const discountedDue = selectedPlanData
+    ? calculateDiscountedAmount(
+        (isTiToro ? selectedPlanData.montantTIToro : selectedPlanData.montantFCToro) * selectedPlanData.nombreVersements,
+        reductionType,
+        customReductionPercent,
+      )
+    : 0;
+  const remainingAmount = Math.max(0, discountedDue - montantDonne);
+
+  const handleAddStatus = () => {
+    const value = newStatus.trim();
+    if (value && !customStatuses.includes(value)) setCustomStatuses((current) => [...current, value]);
+    if (value) setPlayerStatus(value);
+    setNewStatus("");
+  };
+
+  const handlePaymentPhotoChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0] ?? null;
+    const validation = validatePaymentPhotoFile(file);
+
+    if (!validation.valid) {
+      setPaymentPhoto(null);
+      setPaymentPhotoPreview(null);
+      setPaymentPhotoError(validation.error ?? "Erreur de validation du fichier.");
+      return;
+    }
+
+    if (paymentPhotoPreview?.startsWith("blob:")) {
+      URL.revokeObjectURL(paymentPhotoPreview);
+    }
+
+    const previewUrl = getPaymentPhotoPreviewUrl(file);
+    setPaymentPhoto(file);
+    setPaymentPhotoPreview(previewUrl);
+    setPaymentPhotoError(null);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (paymentPhotoPreview?.startsWith("blob:")) {
+        URL.revokeObjectURL(paymentPhotoPreview);
+      }
+    };
+  }, [paymentPhotoPreview]);
 
   return (
     <Modal isOpen={isOpen} onClose={handleClose} className="max-w-3xl">
@@ -332,7 +451,7 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
                               : ""
                           }`}
                         >
-                          <span className="font-medium text-gray-800 dark:text-white/90">
+                          <span className={`font-medium text-gray-800 dark:text-white/90 ${player.id === playerId ? "font-semibold" : ""}`}>
                             {getPlayerFullName(player)}
                           </span>
                           <span className="text-xs text-gray-500 dark:text-gray-400">
@@ -349,7 +468,7 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
                 <div className="mt-2 flex items-center gap-2 rounded-lg border border-brand-200 bg-brand-50 px-3 py-2 dark:border-brand-500/30 dark:bg-brand-500/10">
                   <div className="flex-1">
                     <p className="text-sm font-semibold text-brand-900 dark:text-brand-100">
-                      {getPlayerFullName(selectedPlayer)}
+                      <span className="font-bold">{getPlayerFullName(selectedPlayer)}</span>
                     </p>
                     <p className="text-xs text-brand-700 dark:text-brand-300">
                       {selectedPlayer.matricule ? `Code: ${selectedPlayer.matricule}` : "Sans code"}
@@ -373,42 +492,70 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
               )}
             </div>
 
-            {/* Rubrique */}
+            {/* Rubriques */}
             <div className="md:col-span-2">
               <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
-                Rubrique
+                Rubriques
               </label>
-              <select
-                value={selectedPricing}
-                onChange={(event) => handlePricingChange(event.target.value)}
-                className={selectClassName}
-              >
-                <option value="">Sélectionner une rubrique</option>
-                {pricingItems.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.rubrique} - ${item.montant}
-                  </option>
+              <div className="max-h-48 overflow-auto rounded-lg border border-gray-300 bg-white dark:border-gray-700 dark:bg-gray-900">
+                {rubricOptions.map((item) => (
+                  <label
+                    key={item.id}
+                    className="flex cursor-pointer items-start gap-3 border-b border-gray-100 px-4 py-2.5 last:border-b-0 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedPricing.includes(item.id)}
+                      onChange={() => handlePricingChange(item.id)}
+                      className="mt-0.5 h-4 w-4 rounded border-gray-300 text-brand-500 focus:ring-brand-500"
+                    />
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-gray-800 dark:text-white/90">
+                          {item.rubrique}
+                        </span>
+                        <span className="text-sm font-semibold text-brand-600 dark:text-brand-400">
+                          ${item.montant}
+                        </span>
+                      </div>
+                      <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                        {item.precision}
+                      </p>
+                    </div>
+                  </label>
                 ))}
-              </select>
-              {selectedPricingItem && (
-                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                  {selectedPricingItem.precision}
-                </p>
+              </div>
+              <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                Choisissez une adhésion FC/TI et autant d’autres rubriques que nécessaire.
+              </p>
+              {selectedPricingItems.length > 0 && (
+                <div className="mt-2 rounded-lg bg-brand-50 px-3 py-2 dark:bg-brand-500/10">
+                  <p className="text-sm font-medium text-brand-900 dark:text-brand-100">
+                    Sélection: {selectedPricingItems.map((item) => item.rubrique).join(", ")}
+                  </p>
+                </div>
               )}
             </div>
 
-            {/* Montant & Devise */}
+            {/* Montant dû, montant versé et balance */}
             <div>
               <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
-                Montant
+                Montant dû
               </label>
               <input
                 type="number"
-                min={0}
-                value={montant}
-                onChange={(event) => setMontant(Number(event.target.value))}
+                value={discountedDue}
                 className={inputClassName}
+                readOnly
               />
+            </div>
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">Montant donné</label>
+              <input type="number" min={0} step="0.01" value={montantDonne} onChange={(event) => setMontantDonne(Number(event.target.value))} className={inputClassName} />
+            </div>
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">Montant restant</label>
+              <input type="number" value={remainingAmount} className={inputClassName} readOnly />
             </div>
             <div>
               <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
@@ -513,6 +660,38 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
               </select>
             </div>
 
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
+                Réduction
+              </label>
+              <select
+                value={reductionType}
+                onChange={(event) => setReductionType(event.target.value as PaymentReductionType)}
+                className={selectClassName}
+              >
+                <option value="none">Aucune réduction</option>
+                <option value="full">Bourse 100%</option>
+                <option value="half">Demi-bourse 50%</option>
+                <option value="custom">Spécial</option>
+              </select>
+            </div>
+            {reductionType === "custom" && (
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
+                  Pourcentage spécial
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  step="1"
+                  value={customReductionPercent}
+                  onChange={(event) => setCustomReductionPercent(Number(event.target.value))}
+                  className={inputClassName}
+                />
+              </div>
+            )}
+
             {/* Date Paiement */}
             <div className="md:col-span-2">
               <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
@@ -525,6 +704,39 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
                 className={inputClassName}
               />
             </div>
+
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">Statut du joueur</label>
+              <select value={playerStatus} onChange={(event) => setPlayerStatus(event.target.value)} className={selectClassName}>
+                <option value="">Sélectionner un statut</option>
+                {customStatuses.map((status) => <option key={status} value={status}>{status}</option>)}
+              </select>
+            </div>
+            <div className="flex items-end gap-2">
+              <input value={newStatus} onChange={(event) => setNewStatus(event.target.value)} placeholder="Nouveau statut..." className={inputClassName} />
+              <button type="button" onClick={handleAddStatus} className="rounded-lg bg-brand-500 px-3 py-2 text-sm text-white">Ajouter</button>
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800/40">
+            <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-400">
+              Photo du paiement / justificatif (JPG, PNG, WEBP, max 5 Mo)
+            </label>
+            <input
+              type="file"
+              accept="image/jpeg,image/png,image/webp,image/jpg"
+              onChange={handlePaymentPhotoChange}
+              className="block w-full text-sm text-gray-600 file:mr-4 file:rounded-lg file:border-0 file:bg-brand-500 file:px-4 file:py-2 file:text-sm file:font-medium file:text-white hover:file:bg-brand-600"
+            />
+            {paymentPhotoError && <p className="mt-2 text-sm text-red-600">{paymentPhotoError}</p>}
+            {paymentPhoto && !paymentPhotoError && (
+              <div className="mt-3 flex items-center gap-3">
+                <span className="text-sm text-gray-600 dark:text-gray-300">Fichier sélectionné : {paymentPhoto.name}</span>
+                {paymentPhotoPreview && (
+                  <img src={paymentPhotoPreview} alt="Aperçu du justificatif" className="h-16 w-16 rounded-lg object-cover border border-gray-200 dark:border-gray-700" />
+                )}
+              </div>
+            )}
           </div>
 
           <div className="pt-4 border-t border-gray-100 dark:border-gray-800 flex justify-end gap-3">

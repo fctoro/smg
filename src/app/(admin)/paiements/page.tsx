@@ -17,6 +17,9 @@ import Link from "next/link";
 import { useClubData } from "@/context/ClubDataContext";
 import { formatClubCurrency, formatClubDate, getPlayerFullName } from "@/lib/club/metrics";
 import { updatePaymentInSupabase } from "@/lib/club/supabase-crud";
+import { calculateDiscountedAmount, parseReductionFromRemark } from "@/lib/club/payment-reduction-utils";
+import { ImageModal } from "@/components/club/modals/ImageModal";
+import { extractPhotoUrlFromRemark } from "@/lib/club/payment-photo-utils";
 
 interface PaymentPlan {
   id: string;
@@ -67,6 +70,8 @@ export default function PaymentsPage() {
   const [newPaymentDate, setNewPaymentDate] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [editError, setEditError] = useState("");
+  const [selectedPaymentImage, setSelectedPaymentImage] = useState<string | null>(null);
+  const [isImageModalOpen, setIsImageModalOpen] = useState(false);
 
   const playerMap = useMemo(
     () => new Map(players.map((player) => [player.id, player])),
@@ -115,6 +120,7 @@ export default function PaymentsPage() {
     const selectedPlan = paymentPlans.find(
       (plan) => normalizeText(plan.plan) === selectedPlanId,
     );
+    const reductionState = parseReductionFromRemark(currentPayment.remarque);
 
     if (!selectedPlan || currentPayment.statut !== "paid") return 0;
 
@@ -123,6 +129,7 @@ export default function PaymentsPage() {
       ? selectedPlan.montantTIToro
       : selectedPlan.montantFCToro;
     const totalDue = installmentAmount * selectedPlan.nombreVersements;
+    const discountedDue = calculateDiscountedAmount(totalDue, reductionState.reductionType, reductionState.customPercent);
 
     // Calculate total paid for the PLAN only (not all payments)
     const totalPaidUSD = payments
@@ -142,7 +149,7 @@ export default function PaymentsPage() {
       }, 0);
 
     // Return balance in USD (positive = owes, negative = overpaid)
-    return Math.max(0, totalDue - totalPaidUSD);
+    return Math.max(0, discountedDue - totalPaidUSD);
   };
 
   const hasPaymentPlan = (remark?: string) =>
@@ -417,7 +424,7 @@ export default function PaymentsPage() {
                   return (
                     <TableRow key={payment.id}>
                       <TableCell className="py-3 text-theme-sm text-gray-800 dark:text-white/90">
-                        {getPlayerFullName(player)}
+                        <span className="font-semibold">{getPlayerFullName(player)}</span>
                       </TableCell>
                       <TableCell className="py-3 text-theme-sm text-gray-700 dark:text-gray-300 font-medium">
                         {payment.datePaiement ? formatClubDate(payment.datePaiement) : "-"}
@@ -426,7 +433,7 @@ export default function PaymentsPage() {
                         {formatClubCurrency(payment.montant, payment.devise)}
                       </TableCell>
                       <TableCell className="py-3 text-theme-sm">
-                        {balance > 0 ? (
+                        {balance > 0 && payment.statut === "paid" ? (
                           <span className="font-medium text-error-600 dark:text-error-400">
                             {formatClubCurrency(balance, "US")} à payer
                           </span>
@@ -443,7 +450,7 @@ export default function PaymentsPage() {
                         )}
                       </TableCell>
                       <TableCell className="py-3 text-theme-sm">
-                        {balance > 0 && (
+                        {balance > 0 && payment.statut === "paid" && (
                           <button
                             type="button"
                             onClick={() => openEditModal(payment)}
@@ -465,6 +472,29 @@ export default function PaymentsPage() {
                             Plan: {getPaymentPlanLabel(payment.remarque)} · Statut: {getPaymentStatusLabel(payment)}
                           </span>
                         </span>
+                      </TableCell>
+                      <TableCell className="py-3 text-theme-sm">
+                        {(() => {
+                          const photoUrl = extractPhotoUrlFromRemark(payment.remarque);
+                          if (!photoUrl) return <span className="text-gray-400">-</span>;
+                          return (
+                            <button
+                              onClick={() => {
+                                setSelectedPaymentImage(photoUrl);
+                                setIsImageModalOpen(true);
+                              }}
+                              className="flex items-center gap-1 text-brand-500 hover:text-brand-600"
+                              title="Voir le justificatif"
+                            >
+                              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                                <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                                <polyline points="21 15 16 10 5 21"></polyline>
+                              </svg>
+                              Justificatif
+                            </button>
+                          );
+                        })()}
                       </TableCell>
                     </TableRow>
                   );
@@ -501,13 +531,19 @@ export default function PaymentsPage() {
             </div>
             <div className="space-y-4">
               <div>
-                <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">Montant dû</label>
+                <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">Joueur</label>
+                <p className="rounded-lg bg-gray-100 px-3 py-2 text-sm font-semibold text-gray-700 dark:bg-gray-800 dark:text-gray-300">
+                  {getPlayerFullName(playerMap.get(editingPayment.playerId)!)}
+                </p>
+              </div>
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">Montant à régler</label>
                 <p className="rounded-lg bg-gray-100 px-3 py-2 text-sm text-gray-700 dark:bg-gray-800 dark:text-gray-300">
                   {formatClubCurrency(calculateBalance(editingPayment), "US")}
                 </p>
               </div>
               <div>
-                <label htmlFor="new-payment-amount" className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">Montant supplémentaire payé</label>
+                <label htmlFor="new-payment-amount" className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">Différence à ajouter</label>
                 <input id="new-payment-amount" type="number" min="0.01" step="0.01" value={newAmount} onChange={(event) => setNewAmount(Number(event.target.value))} className="h-11 w-full rounded-lg border border-gray-300 px-3 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white" />
               </div>
               <div>
@@ -540,6 +576,16 @@ export default function PaymentsPage() {
       <PaymentAddModal
         isOpen={isAddModalOpen}
         onClose={() => setIsAddModalOpen(false)}
+      />
+
+      <ImageModal
+        isOpen={isImageModalOpen}
+        onClose={() => {
+          setIsImageModalOpen(false);
+          setSelectedPaymentImage(null);
+        }}
+        imageUrl={selectedPaymentImage}
+        title="Justificatif de paiement"
       />
     </div>
   );

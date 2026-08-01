@@ -80,7 +80,7 @@ function PlayersPageContent() {
                 if (allRegs && allRegs.length > 0) {
                   const { data: docs } = await supabase.from('player_registration_documents').select('*').eq('registration_id', allRegs[0].id);
                   if (docs && docs.length > 0) {
-                    docs.forEach(doc => {
+                    docs.forEach((doc: any) => {
                       if (doc.path) {
                         const bucket = process.env.NEXT_PUBLIC_SUPABASE_STORAGE_BUCKET || "videos";
                         const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://uivlcmvofzoyzhtjntlp.supabase.co";

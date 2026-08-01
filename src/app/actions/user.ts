@@ -3,16 +3,18 @@
 import { createClient } from "@supabase/supabase-js";
 import { revalidatePath } from "next/cache";
 
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false,
-    },
-  }
-);
+const supabaseAdmin: any = process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY
+  ? createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL,
+      process.env.SUPABASE_SERVICE_ROLE_KEY,
+      {
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false,
+        },
+      }
+    )
+  : null;
 
 export async function getUsersList() {
   try {
@@ -22,10 +24,10 @@ export async function getUsersList() {
     }
 
     const { data: profiles } = await supabaseAdmin.from("profiles").select("*");
-    const profileMap = new Map((profiles || []).map(p => [p.id, p]));
+    const profileMap = new Map((profiles || []).map((p: Record<string, any>) => [p.id, p]));
 
-    const users = authData.users.map(u => {
-      const prof = profileMap.get(u.id);
+    const users = authData.users.map((u: Record<string, any>) => {
+      const prof = profileMap.get(u.id) as Record<string, any> | undefined;
       const metaRole = u.user_metadata?.role;
       return {
         id: u.id,

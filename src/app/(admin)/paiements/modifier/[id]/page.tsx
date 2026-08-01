@@ -7,6 +7,7 @@ import { useClubData } from "@/context/ClubDataContext";
 import { PaymentMethod, PaymentStatus } from "@/types/club";
 import { getPlayerFullName } from "@/lib/club/metrics";
 import { updatePaymentInSupabase } from "@/lib/club/supabase-crud";
+import { validatePaymentPhotoFile, getPaymentPhotoPreviewUrl, uploadPaymentPhotoToSupabase } from "@/lib/club/payment-photo-utils";
 
 const inputClassName =
   "h-11 w-full rounded-lg border border-gray-300 bg-transparent px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs placeholder:text-gray-400 focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90";
@@ -30,6 +31,9 @@ export default function ModifyPaymentPage({ params }: { params: { id: string } }
   const [datePaiement, setDatePaiement] = useState("");
   const [error, setError] = useState<string>("");
   const [loading, setLoading] = useState(true);
+  const [paymentPhoto, setPaymentPhoto] = useState<File | null>(null);
+  const [paymentPhotoPreview, setPaymentPhotoPreview] = useState<string | null>(null);
+  const [paymentPhotoError, setPaymentPhotoError] = useState<string | null>(null);
 
   const searchContainerRef = { current: null as HTMLDivElement | null };
 
@@ -60,6 +64,27 @@ export default function ModifyPaymentPage({ params }: { params: { id: string } }
     setLoading(false);
   }, [params.id, payments]);
 
+  const handlePaymentPhotoChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0] ?? null;
+    const validation = validatePaymentPhotoFile(file);
+
+    if (!validation.valid) {
+      setPaymentPhoto(null);
+      setPaymentPhotoPreview(null);
+      setPaymentPhotoError(validation.error ?? "Erreur de validation du fichier.");
+      return;
+    }
+
+    if (paymentPhotoPreview?.startsWith("blob:")) {
+      URL.revokeObjectURL(paymentPhotoPreview);
+    }
+
+    const previewUrl = getPaymentPhotoPreviewUrl(file);
+    setPaymentPhoto(file);
+    setPaymentPhotoPreview(previewUrl);
+    setPaymentPhotoError(null);
+  };
+
   const handleSubmit = async () => {
     setError("");
 
@@ -76,6 +101,19 @@ export default function ModifyPaymentPage({ params }: { params: { id: string } }
       const montantUS = devise === "US" ? montant : (taux > 0 ? montant / taux : 0);
       const montantHTG = devise === "HTG" ? montant : 0;
 
+      // Upload photo if provided
+      let paymentPhotoUrl = null;
+      if (paymentPhoto) {
+        paymentPhotoUrl = await uploadPaymentPhotoToSupabase(paymentPhoto);
+      }
+
+      // Build remark with photo URL if provided
+      let finalRemarque = description.trim() || "Paiement complémentaire";
+      if (paymentPhotoUrl) {
+        const paymentPhotoNote = ` [JUSTIFICATIF:${paymentPhotoUrl}]`;
+        finalRemarque = `${finalRemarque}${paymentPhotoNote}`.trim();
+      }
+
       const paymentData = {
         playerId,
         montant,
@@ -86,7 +124,7 @@ export default function ModifyPaymentPage({ params }: { params: { id: string } }
         statut,
         periode,
         methode,
-        remarque: description.trim() || "Paiement complémentaire",
+        remarque: finalRemarque,
         datePaiement: statut === "paid" ? datePaiement || undefined : undefined,
       };
 
@@ -225,6 +263,30 @@ export default function ModifyPaymentPage({ params }: { params: { id: string } }
               onChange={(event) => setDatePaiement(event.target.value)}
               className={inputClassName}
             />
+          </div>
+        </div>
+
+        {/* Photo upload section */}
+        <div className="md:col-span-2 xl:col-span-3">
+          <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
+            Justificatif de paiement (optionnel)
+          </label>
+          <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800/40">
+            <input
+              type="file"
+              accept="image/jpeg,image/png,image/webp,image/jpg"
+              onChange={handlePaymentPhotoChange}
+              className="block w-full text-sm text-gray-600 file:mr-4 file:rounded-lg file:border-0 file:bg-brand-500 file:px-4 file:py-2 file:text-sm file:font-medium file:text-white hover:file:bg-brand-600"
+            />
+            {paymentPhotoError && <p className="mt-2 text-sm text-red-600">{paymentPhotoError}</p>}
+            {paymentPhoto && !paymentPhotoError && (
+              <div className="mt-3 flex items-center gap-3">
+                <span className="text-sm text-gray-600 dark:text-gray-300">Fichier sélectionné : {paymentPhoto.name}</span>
+                {paymentPhotoPreview && (
+                  <img src={paymentPhotoPreview} alt="Aperçu du justificatif" className="h-16 w-16 rounded-lg object-cover border border-gray-200 dark:border-gray-700" />
+                )}
+              </div>
+            )}
           </div>
         </div>
 

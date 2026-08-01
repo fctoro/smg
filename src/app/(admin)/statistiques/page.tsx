@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { useClubData } from "@/context/ClubDataContext";
 import CombinedRevenueChart from "@/components/club/charts/CombinedRevenueChart";
 import RegistrationsChart from "@/components/club/charts/RegistrationsChart";
@@ -22,6 +22,35 @@ import {
   DownloadIcon,
 } from "@/icons";
 
+const TRACKING_KEY = "club-tracking-active-time-v1";
+type TrackingPeriod = "day" | "week" | "month" | "year";
+type TrackingTimeByDay = Record<string, number>;
+
+const getTrackingDateKey = (date: Date) => date.toISOString().slice(0, 10);
+const getTrackingPeriodStart = (date: Date, period: TrackingPeriod) => {
+  const start = new Date(date);
+  start.setHours(0, 0, 0, 0);
+  if (period === "week") {
+    const day = start.getDay() || 7;
+    start.setDate(start.getDate() - day + 1);
+  } else if (period === "month") {
+    start.setDate(1);
+  } else if (period === "year") {
+    start.setMonth(0, 1);
+  }
+  return start;
+};
+
+const isInTrackingPeriod = (date: Date, period: TrackingPeriod, reference: Date) =>
+  date >= getTrackingPeriodStart(reference, period) && date <= reference;
+
+const formatTrackingDuration = (seconds: number) => {
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  return `${hours} h ${minutes % 60} min`;
+};
+
 export default function StatistiquesPage() {
   const { players, payments } = useClubData();
   const [selectedYear, setSelectedYear] = useState<string>("all");
@@ -29,6 +58,10 @@ export default function StatistiquesPage() {
   const [dateFrom, setDateFrom] = useState<string>("");
   const [dateTo, setDateTo] = useState<string>("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [trackingPeriod, setTrackingPeriod] = useState<TrackingPeriod>("day");
+  const [trackingReferenceDate, setTrackingReferenceDate] = useState(() => new Date());
+  const [trackingActiveSeconds, setTrackingActiveSeconds] = useState(0);
+  const [trackingTimeByDay, setTrackingTimeByDay] = useState<TrackingTimeByDay>({});
 
   const now = new Date();
   const currentYearActual = now.getFullYear();
@@ -38,6 +71,47 @@ export default function StatistiquesPage() {
   const isUSDDevise = (devise?: "US" | "HTG"): boolean => {
     return String(devise || "").toUpperCase() === "US";
   };
+
+  useEffect(() => {
+    try {
+      const stored = JSON.parse(localStorage.getItem(TRACKING_KEY) || "{}");
+      setTrackingTimeByDay(stored.timeByDay || {});
+    } catch {
+      setTrackingTimeByDay({});
+    }
+
+    let lastRecordedAt = Date.now();
+    const recordTime = () => {
+      const now = Date.now();
+      const elapsed = Math.max(0, Math.floor((now - lastRecordedAt) / 1000));
+      if (!elapsed) return;
+      const key = getTrackingDateKey(new Date(lastRecordedAt));
+      setTrackingTimeByDay((current) => {
+        const next = { ...current, [key]: (current[key] || 0) + elapsed };
+        localStorage.setItem(TRACKING_KEY, JSON.stringify({ timeByDay: next }));
+        return next;
+      });
+      setTrackingActiveSeconds((current) => current + elapsed);
+      lastRecordedAt = now;
+    };
+
+    const interval = window.setInterval(recordTime, 30000);
+    const handleVisibility = () => {
+      if (document.visibilityState === "hidden") recordTime();
+      else {
+        lastRecordedAt = Date.now();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    window.addEventListener("beforeunload", recordTime);
+
+    return () => {
+      recordTime();
+      window.clearInterval(interval);
+      document.removeEventListener("visibilitychange", handleVisibility);
+      window.removeEventListener("beforeunload", recordTime);
+    };
+  }, []);
 
   // apply filters to payments/players
   const filteredPayments = useMemo(() => {
@@ -87,6 +161,38 @@ export default function StatistiquesPage() {
   );
   const totalRegistrations = filteredPlayers.length;
   const totalPayments = filteredPayments.length;
+
+  const trackingPeriodPayments = useMemo(
+    () =>
+      payments.filter((payment) => {
+        if (payment.statut !== "paid") return false;
+        const date = new Date(payment.datePaiement || `${payment.periode}-01`);
+        return isInTrackingPeriod(date, trackingPeriod, trackingReferenceDate);
+      }),
+    [payments, trackingPeriod, trackingReferenceDate],
+  );
+
+  const trackingPeriodTime = useMemo(() => {
+    const start = getTrackingPeriodStart(trackingReferenceDate, trackingPeriod);
+    return Object.entries(trackingTimeByDay).reduce((total, [key, seconds]) => {
+      const date = new Date(`${key}T12:00:00`);
+      return date >= start && date <= trackingReferenceDate ? total + seconds : total;
+    }, 0) + (trackingPeriod === "day" ? trackingActiveSeconds : 0);
+  }, [trackingTimeByDay, trackingActiveSeconds, trackingPeriod, trackingReferenceDate]);
+
+  const trackingTotalUSD = trackingPeriodPayments
+    .filter((payment) => payment.devise === "US")
+    .reduce((total, payment) => total + payment.montant, 0);
+  const trackingTotalHTG = trackingPeriodPayments
+    .filter((payment) => payment.devise === "HTG")
+    .reduce((total, payment) => total + payment.montant, 0);
+
+  const trackingPeriodLabels: Record<TrackingPeriod, string> = {
+    day: "Aujourd'hui",
+    week: "Cette semaine",
+    month: "Ce mois",
+    year: "Cette année",
+  };
 
   // Calculate player status statistics from the persisted player status.
   const playerStatusStats = useMemo(() => {
@@ -300,6 +406,77 @@ export default function StatistiquesPage() {
         </div>
       </div>
 
+      <div className="rounded-2xl border border-gray-100 bg-white p-5">
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div>
+            <h3 className="text-lg font-semibold text-gray-700">Tracking</h3>
+            <p className="text-sm text-gray-500">Suivi de l’activité, des revenus et du temps passé dans le système.</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <label htmlFor="tracking-date" className="text-sm text-gray-500">Date</label>
+            <input
+              id="tracking-date"
+              type="date"
+              value={getTrackingDateKey(trackingReferenceDate)}
+              onChange={(event) => setTrackingReferenceDate(new Date(`${event.target.value}T23:59:59`))}
+              className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            />
+          </div>
+        </div>
+
+        <div className="mt-4 flex gap-2 overflow-x-auto">
+          {(Object.keys(trackingPeriodLabels) as TrackingPeriod[]).map((value) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => setTrackingPeriod(value)}
+              className={`whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium ${trackingPeriod === value ? "bg-slate-900 text-white" : "border border-gray-200 bg-white text-gray-600"}`}
+            >
+              {trackingPeriodLabels[value]}
+            </button>
+          ))}
+        </div>
+
+        <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <TrackingMetric label="Reçus" value={String(trackingPeriodPayments.length)} detail="Paiements validés" />
+          <TrackingMetric label="Revenus USD" value={`${trackingTotalUSD.toLocaleString("fr-FR")} $`} detail="Paiements en dollars" />
+          <TrackingMetric label="Revenus HTG" value={`${trackingTotalHTG.toLocaleString("fr-FR")} G`} detail="Paiements en gourdes" />
+          <TrackingMetric label="Temps dans le système" value={formatTrackingDuration(trackingPeriodTime)} detail="Temps actif enregistré" />
+        </div>
+
+        <div className="mt-4 rounded-xl border border-gray-200 p-4">
+          <h4 className="text-sm font-semibold text-gray-700">Détail {trackingPeriodLabels[trackingPeriod].toLowerCase()}</h4>
+          <div className="mt-4 overflow-x-auto">
+            <table className="w-full min-w-[600px] text-left text-sm">
+              <thead className="border-b border-gray-100 text-xs uppercase text-gray-500">
+                <tr>
+                  <th className="px-3 py-3">Date</th>
+                  <th className="px-3 py-3">Reçus</th>
+                  <th className="px-3 py-3">USD</th>
+                  <th className="px-3 py-3">HTG</th>
+                </tr>
+              </thead>
+              <tbody>
+                {trackingPeriodPayments.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className="px-3 py-8 text-center text-gray-500">Aucun paiement validé pour cette période.</td>
+                  </tr>
+                ) : (
+                  trackingPeriodPayments.map((payment) => (
+                    <tr key={payment.id} className="border-b border-gray-50">
+                      <td className="px-3 py-3">{payment.datePaiement || payment.periode}</td>
+                      <td className="px-3 py-3">1</td>
+                      <td className="px-3 py-3">{payment.devise === "US" ? payment.montant.toLocaleString("fr-FR") : "-"}</td>
+                      <td className="px-3 py-3">{payment.devise === "HTG" ? payment.montant.toLocaleString("fr-FR") : "-"}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
       {/* Secondary widgets grid */}
       <div className="grid grid-cols-12 gap-4">
         {hasYearlyRevenue && (
@@ -328,6 +505,16 @@ export default function StatistiquesPage() {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function TrackingMetric({ label, value, detail }: { label: string; value: string; detail: string }) {
+  return (
+    <div className="rounded-2xl border border-gray-200 bg-white p-5">
+      <p className="text-sm text-gray-500">{label}</p>
+      <p className="mt-2 text-2xl font-bold text-gray-900">{value}</p>
+      <p className="mt-1 text-xs text-gray-400">{detail}</p>
     </div>
   );
 }

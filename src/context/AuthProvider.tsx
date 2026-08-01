@@ -55,8 +55,12 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
 
   // Monitor auth state changes from Supabase
   useEffect(() => {
+    if (!supabase) {
+      return;
+    }
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
+      (event: string, session: any) => {
         setSession(session);
         if (event === "SIGNED_OUT") {
           router.push("/signin");
@@ -66,7 +70,7 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
     );
 
     // Initial check
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(({ data: { session } }: { data: { session: any } }) => {
       setSession(session);
     });
 

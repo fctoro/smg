@@ -86,7 +86,7 @@ export default function AccessControlPage() {
       const predefined = ["ti toro", "U8", "U10", "U12", "U14", "U16", "U18"];
       const { data } = await supabase.from('tblEtudiants').select('Categorie');
       if (data) {
-        const fromDb = data.map(d => d.Categorie).filter(Boolean);
+        const fromDb = data.map((d: any) => d.Categorie).filter(Boolean);
         const unique = Array.from(new Set([...predefined, ...fromDb]));
         setAvailableCategories(unique);
       } else {

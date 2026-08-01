@@ -1,5 +1,6 @@
 "use client";
 
+import React from "react";
 import { useMemo, useState } from "react";
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import { Dropdown } from "@/components/ui/dropdown";
@@ -16,15 +17,20 @@ import {
 import { useClubData } from "@/context/ClubDataContext";
 import { formatClubCurrency, formatClubDate, getPlayerFullName } from "@/lib/club/metrics";
 import { colorFromPaymentStatus, paymentStatusLabel } from "@/lib/club/status";
+import { ImageModal } from "@/components/club/modals/ImageModal";
+import { extractPhotoUrlFromRemark } from "@/lib/club/payment-photo-utils";
 
 export default function InvoicesPage() {
-  const { invoices, players } = useClubData();
+  const { invoices, players, payments } = useClubData();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedStatus, setSelectedStatus] = useState("all");
   const [selectedSeason, setSelectedSeason] = useState("all");
   const [isExportOpen, setIsExportOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [currentPageSize, setCurrentPageSize] = useState(12);
+  const [expandedInvoice, setExpandedInvoice] = useState<string | null>(null);
+  const [selectedPaymentImage, setSelectedPaymentImage] = useState<string | null>(null);
+  const [isImageModalOpen, setIsImageModalOpen] = useState(false);
 
   const playerMap = useMemo(
     () => new Map(players.map((player) => [player.id, player])),
@@ -243,34 +249,115 @@ export default function InvoicesPage() {
               ) : (
                 pagedInvoices.map((invoice) => {
                   const player = playerMap.get(invoice.playerId)!;
+                  const invoicePayments = payments.filter(p => p.playerId === invoice.playerId);
+                  const isExpanded = expandedInvoice === invoice.id;
+                  
                   return (
-                    <TableRow key={invoice.id}>
-                      <TableCell className="py-3 text-theme-sm font-medium text-brand-500">
-                        {invoice.noFacture}
-                      </TableCell>
-                      <TableCell className="py-3 text-theme-sm text-gray-500 dark:text-gray-400">
-                        {formatClubDate(invoice.dateFacture)}
-                      </TableCell>
-                      <TableCell className="py-3 text-theme-sm text-gray-800 dark:text-white/90">
-                        {getPlayerFullName(player)}
-                      </TableCell>
-                      <TableCell className="py-3 text-theme-sm font-medium text-gray-800 dark:text-white/90">
-                        {formatClubCurrency(invoice.montantAPayer, invoice.devise)}
-                      </TableCell>
-                      <TableCell className="py-3 text-theme-sm text-gray-500 dark:text-gray-400">
-                        {formatClubCurrency(invoice.montantPaye, invoice.devise)}
-                      </TableCell>
-                      <TableCell className="py-3 text-theme-sm text-gray-500 dark:text-gray-400">
-                        <Badge size="sm" color={colorFromPaymentStatus(invoice.statut)}>
-                          {paymentStatusLabel[invoice.statut]}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="py-3 text-theme-sm text-gray-500 dark:text-gray-400">
-                        <span className="block truncate max-w-[200px]" title={invoice.remarque}>
-                          {invoice.remarque}
-                        </span>
-                      </TableCell>
-                    </TableRow>
+                    <React.Fragment key={invoice.id}>
+                      <TableRow className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                        <TableCell className="py-3 text-theme-sm font-medium text-brand-500">
+                          {invoice.noFacture}
+                        </TableCell>
+                        <TableCell className="py-3 text-theme-sm text-gray-500 dark:text-gray-400">
+                          {formatClubDate(invoice.dateFacture)}
+                        </TableCell>
+                        <TableCell className="py-3 text-theme-sm text-gray-800 dark:text-white/90">
+                          {getPlayerFullName(player)}
+                        </TableCell>
+                        <TableCell className="py-3 text-theme-sm font-medium text-gray-800 dark:text-white/90">
+                          {formatClubCurrency(invoice.montantAPayer, invoice.devise)}
+                        </TableCell>
+                        <TableCell className="py-3 text-theme-sm text-gray-500 dark:text-gray-400">
+                          {formatClubCurrency(invoice.montantPaye, invoice.devise)}
+                        </TableCell>
+                        <TableCell className="py-3 text-theme-sm text-gray-500 dark:text-gray-400">
+                          <Badge size="sm" color={colorFromPaymentStatus(invoice.statut)}>
+                            {paymentStatusLabel[invoice.statut]}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="py-3 text-theme-sm text-gray-500 dark:text-gray-400">
+                          <button
+                            onClick={() => setExpandedInvoice(isExpanded ? null : invoice.id)}
+                            className="flex items-center gap-1 text-brand-500 hover:text-brand-600"
+                          >
+                            <svg
+                              width="16"
+                              height="16"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              style={{ transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}
+                            >
+                              <polyline points="6 9 12 15 18 9"></polyline>
+                            </svg>
+                            {invoicePayments.length} paiement(s)
+                          </button>
+                        </TableCell>
+                      </TableRow>
+                      {isExpanded && invoicePayments.length > 0 && (
+                        <TableRow key={`${invoice.id}-payments`}>
+                          <td colSpan={7} className="p-0">
+                            <div className="bg-gray-50 dark:bg-gray-800/30 px-6 py-4">
+                              <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
+                                Historique des paiements
+                              </h4>
+                              <div className="space-y-2">
+                                {invoicePayments.map((payment) => {
+                                  const photoUrl = extractPhotoUrlFromRemark(payment.remarque);
+                                  return (
+                                    <div
+                                      key={payment.id}
+                                      className="flex items-center justify-between rounded-lg border border-gray-200 bg-white px-4 py-3 dark:border-gray-700 dark:bg-gray-800"
+                                    >
+                                      <div className="flex-1">
+                                        <div className="flex items-center gap-3">
+                                          <span className="text-sm font-medium text-gray-800 dark:text-white/90">
+                                            {formatClubCurrency(payment.montant, payment.devise)}
+                                          </span>
+                                          <Badge size="sm" color={colorFromPaymentStatus(payment.statut)}>
+                                            {paymentStatusLabel[payment.statut]}
+                                          </Badge>
+                                          {photoUrl && (
+                                            <button
+                                              onClick={() => {
+                                                setSelectedPaymentImage(photoUrl);
+                                                setIsImageModalOpen(true);
+                                              }}
+                                              className="flex items-center gap-1 text-brand-500 hover:text-brand-600"
+                                              title="Voir le justificatif"
+                                            >
+                                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                                                <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                                                <polyline points="21 15 16 10 5 21"></polyline>
+                                              </svg>
+                                            </button>
+                                          )}
+                                        </div>
+                                        <div className="mt-1 flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400">
+                                          <span>{formatClubDate(payment.datePaiement || new Date().toISOString())}</span>
+                                          <span>•</span>
+                                          <span>{payment.methode}</span>
+                                          {payment.remarque && (
+                                            <>
+                                              <span>•</span>
+                                              <span className="truncate max-w-[300px]">{payment.remarque}</span>
+                                            </>
+                                          )}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          </td>
+                        </TableRow>
+                      )}
+                    </React.Fragment>
                   );
                 })
               )}
@@ -291,6 +378,16 @@ export default function InvoicesPage() {
           }}
         />
       </div>
+
+      <ImageModal
+        isOpen={isImageModalOpen}
+        onClose={() => {
+          setIsImageModalOpen(false);
+          setSelectedPaymentImage(null);
+        }}
+        imageUrl={selectedPaymentImage}
+        title="Justificatif de paiement"
+      />
     </div>
   );
 }

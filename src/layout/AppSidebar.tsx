@@ -89,6 +89,12 @@ const adminNavItems: NavItem[] = [
     path: "/evenements",
   },
   {
+    icon: <TaskIcon />,
+    name: "Programmes",
+    path: "/programmes",
+    new: true,
+  },
+  {
     icon: <DollarLineIcon />,
     name: "Paiements",
     path: "/paiements",

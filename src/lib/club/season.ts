@@ -4,8 +4,8 @@
  */
 export function getCurrentSeason(date: Date = new Date()): string {
   const y = date.getFullYear();
-  const m = date.getMonth() + 1; // 1-indexed
-  const startYear = m >= 7 ? y : y - 1;
+  // Le 1er janvier de l'année Y, la saison par défaut devient Y-(Y+1)
+  const startYear = y;
   const endYear = startYear + 1;
   return `${startYear}-${endYear}`;
 }

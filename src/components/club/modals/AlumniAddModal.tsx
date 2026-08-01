@@ -1,9 +1,10 @@
 import React from "react";
 import { Modal } from "@/components/ui/modal";
 import AlumniForm from "@/components/club/forms/AlumniForm";
-import { AlumniFormValues, Alumni } from "@/types/club";
+import { AlumniFormValues, Alumni, PlayerStatus } from "@/types/club";
 import { useClubData } from "@/context/ClubDataContext";
-import { addAlumniToSupabase } from "@/lib/club/supabase-crud";
+import { createPlayerFromForm } from "@/lib/club/player-form";
+import { addPlayerToSupabase } from "@/lib/club/supabase-crud";
 
 interface AlumniAddModalProps {
   isOpen: boolean;
@@ -11,17 +12,23 @@ interface AlumniAddModalProps {
 }
 
 export function AlumniAddModal({ isOpen, onClose }: AlumniAddModalProps) {
-  const { setAlumni } = useClubData();
+  const { setPlayers } = useClubData();
 
   const handleSubmit = async (values: AlumniFormValues) => {
     try {
-      const insertedData = await addAlumniToSupabase(values);
-      const newEntry: Alumni = {
-        id: insertedData.id,
-        ...values,
-      };
-      setAlumni((prevEntries) => [newEntry, ...prevEntries]);
-      onClose();
+      const today = new Date().toISOString().slice(0, 10);
+      // Force statut to 'alumni'
+      const finalValues = { ...values, statut: "alumni" as PlayerStatus };
+      const newPlayerLocal = createPlayerFromForm(`temp-${Date.now()}`, finalValues, today);
+      
+      const inserted = await addPlayerToSupabase(newPlayerLocal);
+      if (inserted && inserted.EtudiantID) {
+        const newPlayer: Alumni = { ...newPlayerLocal, id: String(inserted.EtudiantID) };
+        setPlayers((prevEntries) => [newPlayer, ...prevEntries]);
+        onClose();
+      } else {
+        alert("Erreur lors de la création.");
+      }
     } catch (error) {
       console.error(error);
       alert("Erreur lors de l'ajout. Veuillez réessayer.");

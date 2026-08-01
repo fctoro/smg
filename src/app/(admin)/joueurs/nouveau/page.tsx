@@ -85,8 +85,6 @@ function NewPlayerFormContent() {
   }, [searchParams]);
 
   const handleSubmit = async (values: PlayerFormValues) => {
-    alert("Action temporairement désactivée pour la création du joueur. Les documents sont bien préservés.");
-    return;
     const today = new Date().toISOString().slice(0, 10);
     const newPlayerLocal = createPlayerFromForm(`temp-${Date.now()}`, values, today);
     
@@ -98,7 +96,7 @@ function NewPlayerFormContent() {
         // Also archive the message if it came from one
         const demandeId = searchParams.get("demandeId");
         if (demandeId) {
-          await supabase.from("site_messages").update({ status: "resolved", is_read: true }).eq("id", demandeId);
+          await supabase.from("site_messages").update({ status: "enrolled", is_read: true }).eq("id", demandeId);
         }
         router.push("/joueurs");
       }
@@ -134,13 +132,19 @@ function NewPlayerFormContent() {
   );
 }
 
-export default function NewPlayerPage() {
+function NewPlayerPageContent() {
   return (
     <div className="space-y-6">
       <PageBreadcrumb pageTitle="Ajouter un joueur" />
-      <Suspense fallback={<div className="flex justify-center p-10"><div className="h-6 w-6 animate-spin rounded-full border-2 border-brand-500 border-t-transparent"></div></div>}>
-        <NewPlayerFormContent />
-      </Suspense>
+      <NewPlayerFormContent />
     </div>
+  );
+}
+
+export default function NewPlayerPage() {
+  return (
+    <Suspense fallback={<div className="flex justify-center p-10"><div className="h-6 w-6 animate-spin rounded-full border-2 border-brand-500 border-t-transparent"></div></div>}>
+      <NewPlayerPageContent />
+    </Suspense>
   );
 }

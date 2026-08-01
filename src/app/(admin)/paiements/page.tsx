@@ -50,12 +50,16 @@ const paymentPlans: PaymentPlan[] = [
   },
 ];
 
+import { PaymentAddModal } from "@/components/club/modals/PaymentAddModal";
+import { TableBodySkeleton } from "@/components/ui/skeleton/Skeleton";
+
 export default function PaymentsPage() {
-  const { payments, players, setPayments } = useClubData();
+  const { payments, players, setPayments, hydrated } = useClubData();
   const [searchQuery, setSearchQuery] = useState("");
   const [deviseFilter, setDeviseFilter] = useState("all");
   const [selectedSeason, setSelectedSeason] = useState("all");
   const [isExportOpen, setIsExportOpen] = useState(false);
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [currentPageSize, setCurrentPageSize] = useState(12);
   const [editingPayment, setEditingPayment] = useState<(typeof payments)[number] | null>(null);
@@ -316,12 +320,12 @@ export default function PaymentsPage() {
         </div>
 
         <div className="shrink-0">
-          <Link
-            href="/paiements/nouveau"
-            className="inline-flex h-11 items-center justify-center whitespace-nowrap rounded-lg bg-brand-500 px-4 text-sm font-medium text-white shadow-theme-xs hover:bg-brand-600"
+          <button
+            onClick={() => setIsAddModalOpen(true)}
+            className="inline-flex h-11 items-center justify-center whitespace-nowrap rounded-lg bg-brand-500 px-4 text-sm font-medium text-white shadow-theme-xs hover:bg-brand-600 cursor-pointer"
           >
-            + Ajouter
-          </Link>
+            + Ajouter un paiement
+          </button>
         </div>
       </div>
 
@@ -395,7 +399,9 @@ export default function PaymentsPage() {
               </TableRow>
             </TableHeader>
             <TableBody className="divide-y divide-gray-100 dark:divide-gray-800">
-              {pagedPayments.length === 0 ? (
+              {!hydrated ? (
+                <TableBodySkeleton rows={6} columns={4} />
+              ) : pagedPayments.length === 0 ? (
                 <TableRow>
                   <td
                     colSpan={6}
@@ -530,6 +536,11 @@ export default function PaymentsPage() {
           }}
         />
       </div>
+
+      <PaymentAddModal
+        isOpen={isAddModalOpen}
+        onClose={() => setIsAddModalOpen(false)}
+      />
     </div>
   );
 }

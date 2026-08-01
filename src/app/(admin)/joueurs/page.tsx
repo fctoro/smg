@@ -1,14 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useMemo, Suspense } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import PlayerTable from "@/components/club/PlayerTable";
 import { useDashboardConfig } from "@/hooks/useDashboardConfig";
 import { useClubData } from "@/context/ClubDataContext";
+import { useUserRole } from "@/context/UserRoleContext";
 import { getPlayerFullName } from "@/lib/club/metrics";
 import { softDeletePlayerInSupabase } from "@/lib/club/supabase-crud";
+import { fetchSiteMessageById } from "@/lib/club/supabase-demandes";
 import { Dropdown } from "@/components/ui/dropdown/Dropdown";
 import { DropdownItem } from "@/components/ui/dropdown/DropdownItem";
 import { useConfirm } from "@/hooks/useConfirm";
@@ -17,10 +19,19 @@ import { PlayerViewModal } from "@/components/club/modals/PlayerViewModal";
 import { PlayerEditModal } from "@/components/club/modals/PlayerEditModal";
 import { PlayerAddModal } from "@/components/club/modals/PlayerAddModal";
 import { Player } from "@/types/club";
+import { supabase } from "@/lib/supabaseClient";
 
-export default function PlayersPage() {
+function PlayersPageContent() {
   const router = useRouter();
-  const { players, setPlayers } = useClubData();
+  const searchParams = useSearchParams();
+  const { players: allPlayers, setPlayers } = useClubData();
+  const { isCoach, userCategories } = useUserRole();
+
+  const activePlayers = useMemo(() => allPlayers.filter(p => p.statut !== "alumni"), [allPlayers]);
+  const players = useMemo(() => isCoach && userCategories && userCategories.length > 0
+    ? activePlayers.filter(p => userCategories.includes(p.categorie))
+    : activePlayers, [isCoach, userCategories, activePlayers]);
+
   const [isExportOpen, setIsExportOpen] = useState(false);
   const { enabledPlayerColumns } = useDashboardConfig();
   const { confirm, ConfirmComponent } = useConfirm();
@@ -28,6 +39,83 @@ export default function PlayersPage() {
   const [selectedViewPlayer, setSelectedViewPlayer] = useState<Player | null>(null);
   const [selectedEditPlayer, setSelectedEditPlayer] = useState<Player | null>(null);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [highlightFields, setHighlightFields] = useState<string[]>([]);
+
+  useEffect(() => {
+    const editPlayerId = searchParams.get("editPlayerId");
+    const demandeId = searchParams.get("demandeId");
+
+    const openEditModal = async () => {
+      if (editPlayerId) {
+        const player = players.find(p => p.id === editPlayerId);
+        if (player) {
+          let updatedPlayer = { ...player };
+          let fieldsToHighlight: string[] = [];
+          
+          if (demandeId) {
+            const message = await fetchSiteMessageById(demandeId);
+            if (message && message.metadata) {
+              const meta = message.metadata;
+              if (!updatedPlayer.telephone && (meta.guardian_phone || message.contact_telephone)) {
+                updatedPlayer.telephone = meta.guardian_phone || message.contact_telephone;
+                fieldsToHighlight.push("telephone");
+              }
+              if (!updatedPlayer.email && (meta.guardian_email || message.contact_email)) {
+                updatedPlayer.email = meta.guardian_email || message.contact_email;
+                fieldsToHighlight.push("email");
+              }
+              if (!updatedPlayer.adresse && (meta.child_address || meta.guardian_address)) {
+                updatedPlayer.adresse = meta.child_address || meta.guardian_address;
+                fieldsToHighlight.push("adresse");
+              }
+              if (!updatedPlayer.dateNaissance && (meta.child_birth_date || meta.child_dob)) {
+                updatedPlayer.dateNaissance = meta.child_birth_date || meta.child_dob;
+                fieldsToHighlight.push("dateNaissance");
+              }
+              
+              // Fetch docs
+              const emailToSearch = message.contact_email || meta.guardian_email;
+              if (emailToSearch) {
+                const { data: allRegs } = await supabase.from('player_registrations').select('id').eq('guardian_email', emailToSearch).order('created_at', { ascending: false }).limit(1);
+                if (allRegs && allRegs.length > 0) {
+                  const { data: docs } = await supabase.from('player_registration_documents').select('*').eq('registration_id', allRegs[0].id);
+                  if (docs && docs.length > 0) {
+                    docs.forEach(doc => {
+                      if (doc.path) {
+                        const bucket = process.env.NEXT_PUBLIC_SUPABASE_STORAGE_BUCKET || "videos";
+                        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://uivlcmvofzoyzhtjntlp.supabase.co";
+                        const finalUrl = doc.path.startsWith("http") ? doc.path : `${supabaseUrl}/storage/v1/object/public/${bucket}/${doc.path}`;
+                        
+                        const key = String(doc.doc_key).toLowerCase();
+                        if (key.includes("photo") && !updatedPlayer.photoIdentiteUrl) {
+                           updatedPlayer.photoIdentiteUrl = finalUrl;
+                           fieldsToHighlight.push("photoIdentiteUrl");
+                        }
+                        if ((key.includes("naissance") || key.includes("birth")) && !updatedPlayer.acteNaissanceUrl) {
+                           updatedPlayer.acteNaissanceUrl = finalUrl;
+                           fieldsToHighlight.push("acteNaissanceUrl");
+                        }
+                        if ((key.includes("parent") || key.includes("identit") || key.includes("id_card")) && !updatedPlayer.carteIdentiteParentUrl) {
+                           updatedPlayer.carteIdentiteParentUrl = finalUrl;
+                           fieldsToHighlight.push("carteIdentiteParentUrl");
+                        }
+                      }
+                    });
+                  }
+                }
+              }
+            }
+          }
+          setHighlightFields(fieldsToHighlight);
+          setSelectedEditPlayer(updatedPlayer);
+        }
+      }
+    };
+
+    if (players.length > 0) {
+      openEditModal();
+    }
+  }, [searchParams, players]);
 
   const handleDeletePlayer = (playerId: string) => {
     const target = players.find((player) => player.id === playerId);
@@ -168,8 +256,13 @@ export default function PlayersPage() {
       
       <PlayerEditModal
         isOpen={!!selectedEditPlayer}
-        onClose={() => setSelectedEditPlayer(null)}
+        onClose={() => {
+          setSelectedEditPlayer(null);
+          router.replace("/joueurs");
+        }}
         player={selectedEditPlayer}
+        highlightFields={highlightFields}
+        demandeId={searchParams.get("demandeId")}
       />
       <PlayerAddModal
         isOpen={isAddModalOpen}
@@ -177,5 +270,15 @@ export default function PlayersPage() {
       />
       <ConfirmComponent />
     </div>
+  );
+}
+
+import { TableSkeleton } from "@/components/ui/skeleton/Skeleton";
+
+export default function PlayersPage() {
+  return (
+    <Suspense fallback={<div className="p-6 bg-white rounded-2xl border border-gray-200 dark:border-gray-800 dark:bg-gray-900"><TableSkeleton rows={6} columns={8} /></div>}>
+      <PlayersPageContent />
+    </Suspense>
   );
 }

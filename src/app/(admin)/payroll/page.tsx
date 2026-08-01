@@ -621,7 +621,7 @@ export default function PayrollPage() {
 
       {/* Add Payroll Record Modal */}
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 p-4 backdrop-blur-xs print:hidden sm:p-6">
+        <div className="fixed inset-0 z-[999999] flex items-start justify-center overflow-y-auto bg-black/60 p-4 backdrop-blur-xs print:hidden sm:p-6">
           <div className="my-6 w-full max-w-lg rounded-2xl border border-gray-100 bg-white p-6 shadow-2xl dark:border-gray-800 dark:bg-gray-900">
             <div className="flex items-center justify-between pb-3 border-b dark:border-gray-800 mb-4">
               <h3 className="text-lg font-bold text-gray-900 dark:text-white">

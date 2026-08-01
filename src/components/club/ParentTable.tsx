@@ -13,6 +13,8 @@ import { PencilIcon, TrashBinIcon } from "@/icons";
 import { Parent, Player } from "@/types/club";
 import { getPlayerFullName } from "@/lib/club/metrics";
 import { getParentLinkedPlayerIds } from "@/lib/club/parents";
+import { useClubData } from "@/context/ClubDataContext";
+import { TableBodySkeleton } from "@/components/ui/skeleton/Skeleton";
 
 interface ParentTableProps {
   parents: Parent[];
@@ -35,6 +37,7 @@ export default function ParentTable({
   actionButton,
   exportButton,
 }: ParentTableProps) {
+  const { hydrated } = useClubData();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedChildrenCount, setSelectedChildrenCount] = useState("all");
   const [selectedSeason, setSelectedSeason] = useState("all");
@@ -104,43 +107,49 @@ export default function ParentTable({
       {showToolbar || actionButton ? (
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           {showToolbar ? (
-            <div className="grid flex-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-              <input
-                value={searchQuery}
-                onChange={(event) => {
-                  setSearchQuery(event.target.value);
-                  setCurrentPage(1);
-                }}
-                placeholder="Rechercher parent ou joueur"
-                className="h-11 w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs placeholder:text-gray-400 focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
-              />
-              <select
-                value={selectedChildrenCount}
-                onChange={(event) => {
-                  setSelectedChildrenCount(event.target.value);
-                  setCurrentPage(1);
-                }}
-                className="h-11 w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
-              >
-                <option value="all">Tous (nombre d'enfants)</option>
-                <option value="1">1 enfant</option>
-                <option value=">1">Plus d'1 enfant</option>
-              </select>
-              <select
-                value={selectedSeason}
-                onChange={(event) => {
-                  setSelectedSeason(event.target.value);
-                  setCurrentPage(1);
-                }}
-                className="h-11 w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
-              >
-                <option value="all">Toutes les saisons</option>
-                {seasons.map((season) => (
-                  <option key={season} value={season}>
-                    Saison {season}
-                  </option>
-                ))}
-              </select>
+            <div className="grid flex-1 gap-2 grid-cols-1 sm:grid-cols-3 min-w-0">
+              <div className="min-w-0">
+                <input
+                  value={searchQuery}
+                  onChange={(event) => {
+                    setSearchQuery(event.target.value);
+                    setCurrentPage(1);
+                  }}
+                  placeholder="Rechercher parent ou joueur"
+                  className="h-11 w-full min-w-0 max-w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs placeholder:text-gray-400 focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
+                />
+              </div>
+              <div className="min-w-0">
+                <select
+                  value={selectedChildrenCount}
+                  onChange={(event) => {
+                    setSelectedChildrenCount(event.target.value);
+                    setCurrentPage(1);
+                  }}
+                  className="h-11 w-full min-w-0 max-w-full truncate rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
+                >
+                  <option value="all">Tous (nombre d'enfants)</option>
+                  <option value="1">1 enfant</option>
+                  <option value=">1">Plus d'1 enfant</option>
+                </select>
+              </div>
+              <div className="min-w-0">
+                <select
+                  value={selectedSeason}
+                  onChange={(event) => {
+                    setSelectedSeason(event.target.value);
+                    setCurrentPage(1);
+                  }}
+                  className="h-11 w-full min-w-0 max-w-full truncate rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
+                >
+                  <option value="all">Toutes les saisons</option>
+                  {seasons.map((season) => (
+                    <option key={season} value={season}>
+                      Saison {season}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
           ) : null}
 
@@ -208,7 +217,9 @@ export default function ParentTable({
             </TableRow>
           </TableHeader>
           <TableBody className="divide-y divide-gray-100 dark:divide-gray-800">
-            {pagedParents.length === 0 ? (
+            {!hydrated ? (
+              <TableBodySkeleton rows={6} columns={6} />
+            ) : pagedParents.length === 0 ? (
               <TableRow>
                 <td
                   colSpan={6}

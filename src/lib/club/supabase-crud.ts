@@ -30,7 +30,16 @@ export const updatePlayerInSupabase = async (playerId: string, data: Partial<Pla
   if (data.telephone !== undefined) updatePayload.Telephone = data.telephone;
   if (data.email !== undefined) updatePayload.Email = data.email;
   if (data.dateNaissance !== undefined) updatePayload.DateNaissance = data.dateNaissance;
-  if (data.photoUrl !== undefined && data.photoUrl !== "/images/user/silhouette.svg") updatePayload.PhotoUrl = data.photoUrl;
+  if (data.photoUrl !== undefined && data.photoUrl !== "/images/user/silhouette.svg") updatePayload.PhotoIdentiteUrl = data.photoUrl;
+
+  if (data.statut !== undefined) {
+    updatePayload.EstAlumni = data.statut === "alumni";
+    if (data.statut === "abandonne") {
+      updatePayload.IsDeleted = 1;
+    } else {
+      updatePayload.IsDeleted = 0;
+    }
+  }
 
   // Handle new document uploads
   const handleDocUpload = async (base64Str: string, docType: string) => {
@@ -61,9 +70,20 @@ export const updatePlayerInSupabase = async (playerId: string, data: Partial<Pla
     return null;
   };
 
+  if (data.photoUrl && data.photoUrl.startsWith("data:")) {
+    const url = await handleDocUpload(data.photoUrl, "photo_joueur");
+    if (url) {
+      updatePayload.PhotoIdentiteUrl = url;
+      updatePayload.PhotoUrl = url;
+    }
+  }
+
   if (data.photoIdentiteUrl) {
     const url = await handleDocUpload(data.photoIdentiteUrl, "photo_identite");
-    if (url) updatePayload.PhotoIdentiteUrl = url;
+    if (url) {
+      updatePayload.PhotoIdentiteUrl = url;
+      updatePayload.PhotoUrl = url;
+    }
   }
   if (data.acteNaissanceUrl) {
     const url = await handleDocUpload(data.acteNaissanceUrl, "acte_naissance");
@@ -86,15 +106,14 @@ export const updatePlayerInSupabase = async (playerId: string, data: Partial<Pla
 };
 
 export const softDeletePlayerInSupabase = async (playerId: string) => {
-  // Soft delete: set Actif = false, Abandon = true
-  const { error } = await supabase
-    .from("tblEtudiants")
-    .update({ Actif: false, Abandon: true })
-    .eq("EtudiantID", resolveEtudiantId(playerId));
-
-  if (error) {
-    console.error("Erreur lors de la suppression du joueur :", error);
-    throw error;
+  const etudiantId = resolveEtudiantId(playerId);
+  
+  const { softDeletePlayerAdmin } = await import("@/app/actions/club");
+  const result = await softDeletePlayerAdmin(Number(etudiantId));
+  
+  if (!result.success) {
+    console.error("Erreur lors de la suppression du joueur :", result.error);
+    throw new Error(result.error);
   }
 };
 
@@ -104,14 +123,12 @@ export const addPlayerToSupabase = async (data: Omit<Player & { photoIdentiteUrl
     Prenom: data.prenom,
     Sexe: data.sexe === "Féminin" ? "F" : "M",
     Categorie: data.categorie,
-    CotisationDevise: data.cotisationDevise,
     Telephone: data.telephone,
     Email: data.email,
     DateNaissance: data.dateNaissance || null,
     DtCreation: new Date().toISOString(),
-    Actif: true,
-    Abandon: false,
-    PhotoUrl: data.photoUrl && data.photoUrl !== "/images/user/silhouette.svg" ? data.photoUrl : null,
+    IsDeleted: data.statut === "abandonne" ? 1 : 0,
+    EstAlumni: data.statut === "alumni",
   };
 
   const handleDocUpload = async (base64Str: string, docType: string) => {
@@ -130,8 +147,11 @@ export const addPlayerToSupabase = async (data: Omit<Player & { photoIdentiteUrl
       
       const fileName = `${docType}_${Date.now()}_${Math.random().toString(36).substring(7)}.${ext}`;
       const bucket = process.env.SUPABASE_STORAGE_BUCKET || "videos";
-      const { error: uploadError } = await supabase.storage.from(bucket).upload(fileName, fileBlob);
       
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from(bucket)
+        .upload(fileName, fileBlob, { contentType: isPdf ? "application/pdf" : "image/jpeg" });
+        
       if (!uploadError) {
         const { data: publicUrlData } = supabase.storage.from(bucket).getPublicUrl(fileName);
         return publicUrlData.publicUrl;
@@ -142,28 +162,19 @@ export const addPlayerToSupabase = async (data: Omit<Player & { photoIdentiteUrl
     return null;
   };
 
-  if (data.photoIdentiteUrl) {
-    insertPayload.PhotoIdentiteUrl = await handleDocUpload(data.photoIdentiteUrl, "photo_identite");
-  }
-  if (data.acteNaissanceUrl) {
-    insertPayload.ActeNaissanceUrl = await handleDocUpload(data.acteNaissanceUrl, "acte_naissance");
-  }
-  if (data.carteIdentiteParentUrl) {
-    insertPayload.CarteIdentiteParentUrl = await handleDocUpload(data.carteIdentiteParentUrl, "carte_identite_parent");
+  if (data.photoIdentiteUrl) insertPayload.PhotoIdentiteUrl = await handleDocUpload(data.photoIdentiteUrl, "photo");
+  if (data.acteNaissanceUrl) insertPayload.ActeNaissanceUrl = await handleDocUpload(data.acteNaissanceUrl, "acte");
+  if (data.carteIdentiteParentUrl) insertPayload.CarteIdentiteParentUrl = await handleDocUpload(data.carteIdentiteParentUrl, "carte");
+
+  const { insertPlayerAdmin } = await import("@/app/actions/club");
+  const result = await insertPlayerAdmin(insertPayload);
+  
+  if (!result.success) {
+    console.error("Erreur lors de l'ajout du joueur :", result.error);
+    throw new Error(result.error);
   }
 
-  const { data: insertedData, error } = await supabase
-    .from("tblEtudiants")
-    .insert(insertPayload)
-    .select("EtudiantID")
-    .single();
-
-  if (error) {
-    console.error("Erreur lors de l'ajout du joueur :", JSON.stringify(error, null, 2));
-    throw error;
-  }
-
-  return insertedData;
+  return { EtudiantID: result.data?.EtudiantID };
 };
 
 // --- EMPLOYEES (tblEmployes) ---

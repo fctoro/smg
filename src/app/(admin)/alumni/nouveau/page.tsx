@@ -4,22 +4,28 @@ import { useRouter } from "next/navigation";
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import AlumniForm from "@/components/club/forms/AlumniForm";
 import { useClubData } from "@/context/ClubDataContext";
-import { Alumni, AlumniFormValues } from "@/types/club";
-import { addAlumniToSupabase } from "@/lib/club/supabase-crud";
+import { addPlayerToSupabase } from "@/lib/club/supabase-crud";
+import { createPlayerFromForm } from "@/lib/club/player-form";
+import { PlayerStatus, Alumni, AlumniFormValues } from "@/types/club";
 
 export default function NewAlumniPage() {
   const router = useRouter();
-  const { setAlumni } = useClubData();
+  const { setPlayers } = useClubData();
 
   const handleSubmit = async (values: AlumniFormValues) => {
     try {
-      const insertedData = await addAlumniToSupabase(values);
-      const newEntry: Alumni = {
-        id: insertedData.id,
-        ...values,
-      };
-      setAlumni((prevEntries) => [newEntry, ...prevEntries]);
-      router.push("/alumni");
+      const today = new Date().toISOString().slice(0, 10);
+      const finalValues = { ...values, statut: "alumni" as PlayerStatus };
+      const newPlayerLocal = createPlayerFromForm(`temp-${Date.now()}`, finalValues, today);
+      
+      const inserted = await addPlayerToSupabase(newPlayerLocal);
+      if (inserted && inserted.EtudiantID) {
+        const newEntry: Alumni = { ...newPlayerLocal, id: String(inserted.EtudiantID) };
+        setPlayers((prevEntries) => [newEntry, ...prevEntries]);
+        router.push("/alumni");
+      } else {
+        alert("Erreur lors de la création.");
+      }
     } catch (error) {
       alert("Erreur lors de l'ajout.");
     }

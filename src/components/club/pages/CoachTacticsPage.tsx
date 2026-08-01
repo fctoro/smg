@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import { Modal } from "@/components/ui/modal";
 import { useClubData } from "@/context/ClubDataContext";
@@ -12,7 +13,10 @@ import {
   TacticalRole,
 } from "@/data/club/coach-formations";
 import { getPlayerFullName } from "@/lib/club/metrics";
-import { Player } from "@/types/club";
+import { getTacticalPlan, getSavedPlans, SavedTacticalPlan, savePlan, deletePlan } from "@/lib/club/tactics";
+import { fetchEffectifById, updateEffectif } from "@/lib/club/effectifs";
+import { Player, Effectif } from "@/types/club";
+import { useRouter } from "next/navigation";
 
 type SlotRole = TacticalRole | "GK";
 
@@ -260,7 +264,8 @@ const buildAutoAssignments = (slots: FormationSlot[], players: Player[]) => {
   return assignments;
 };
 
-export default function CoachTacticsPage() {
+export default function CoachTacticsPage({ planId, effectifId }: { planId?: string | null, effectifId?: string | null }) {
+  const router = useRouter();
   const { players, hydrated } = useClubData();
   const [formationId, setFormationId] = useState(
     defaultFifaFormationId || fallbackFormation.id,
@@ -268,6 +273,8 @@ export default function CoachTacticsPage() {
   const [planName, setPlanName] = useState("Plan de match principal");
   const [assignments, setAssignments] = useState<Record<string, string>>({});
   const [savedAt, setSavedAt] = useState<string | null>(null);
+  const [savedPlans, setSavedPlans] = useState<SavedTacticalPlan[]>([]);
+  const [searchBenchQuery, setSearchBenchQuery] = useState("");
   const [selectedStarterSlotId, setSelectedStarterSlotId] = useState<string | null>(
     null,
   );
@@ -279,9 +286,52 @@ export default function CoachTacticsPage() {
     benchPlayerId: string;
   } | null>(null);
 
+  // Effectif state
+  const [effectif, setEffectif] = useState<Effectif | null>(null);
+  const [isEffectifModified, setIsEffectifModified] = useState(false);
+  const [isSavingEffectif, setIsSavingEffectif] = useState(false);
+
+  useEffect(() => {
+    setSavedPlans(getSavedPlans());
+  }, [savedAt]);
+
+  useEffect(() => {
+    if (effectifId) {
+      fetchEffectifById(effectifId).then(data => {
+        if (data) {
+          setEffectif(data);
+          setPlanName(data.nom);
+          if (data.tactique_id) {
+            const plan = getTacticalPlan(data.tactique_id);
+            if (plan) {
+              setFormationId(plan.formationId);
+            }
+          }
+        }
+      });
+    } else if (planId) {
+      const plan = getTacticalPlan(planId);
+      if (plan) {
+        setFormationId(plan.formationId);
+        setPlanName(plan.name);
+        setAssignments(plan.assignments);
+      }
+    }
+  }, [planId]);
+
   const availablePlayers = useMemo(
-    () =>
-      [...players].filter((player) => player.statut === "actif").sort(byPlayerName),
+    () => {
+      const activePlayers = [...players].filter((player) => player.statut === "actif");
+      const uniquePlayers = [];
+      const seen = new Set();
+      for (const p of activePlayers) {
+        if (!seen.has(p.id)) {
+          seen.add(p.id);
+          uniquePlayers.push(p);
+        }
+      }
+      return uniquePlayers.sort(byPlayerName);
+    },
     [players],
   );
 
@@ -306,8 +356,22 @@ export default function CoachTacticsPage() {
   );
 
   useEffect(() => {
-    setAssignments(buildAutoAssignments(slots, players));
-  }, [slots, players]);
+    if (effectif) {
+      // Build assignments from effectif players
+      const rosterPlayerIds = effectif.joueurs || [];
+      const newAssignments: Record<string, string> = {};
+      const starters = rosterPlayerIds.slice(0, 11);
+      
+      starters.forEach((pid, index) => {
+        if (slots[index]) {
+          newAssignments[slots[index].id] = pid;
+        }
+      });
+      setAssignments(newAssignments);
+    } else if (!planId) {
+      setAssignments(buildAutoAssignments(slots, players));
+    }
+  }, [slots, players, effectif, planId]);
 
   const playerById = useMemo(
     () => new Map(players.map((player) => [player.id, player])),
@@ -329,9 +393,26 @@ export default function CoachTacticsPage() {
   );
 
   const benchPlayers = useMemo(
-    () =>
-      availablePlayers.filter((player) => !selectedPlayerIds.has(player.id)),
-    [availablePlayers, selectedPlayerIds],
+    () => {
+      let pool = availablePlayers;
+      if (effectif) {
+        const rosterIds = new Set(effectif.joueurs || []);
+        pool = pool.filter(p => rosterIds.has(p.id));
+      }
+
+      let bench = pool.filter((player) => !selectedPlayerIds.has(player.id));
+      if (searchBenchQuery) {
+        const lower = searchBenchQuery.toLowerCase();
+        bench = bench.filter(
+          (p) =>
+            p.nom.toLowerCase().includes(lower) ||
+            p.prenom.toLowerCase().includes(lower) ||
+            (p.poste && p.poste.toLowerCase().includes(lower))
+        );
+      }
+      return bench;
+    },
+    [availablePlayers, selectedPlayerIds, searchBenchQuery, effectif],
   );
 
   const selectedStarterEntry = useMemo(
@@ -417,7 +498,57 @@ export default function CoachTacticsPage() {
   };
 
   const saveCurrentPlan = () => {
-    setSavedAt(new Date().toISOString());
+    if (window.confirm("Êtes-vous sûr de vouloir sauvegarder ce plan ?")) {
+      savePlan({
+        name: planName,
+        formationId,
+        assignments,
+      });
+      setSavedAt(new Date().toISOString());
+    }
+  };
+
+  const saveEffectifMatch = async () => {
+    if (!effectif) return;
+    setIsSavingEffectif(true);
+
+    const newJoueurs: string[] = [];
+    
+    // Add starters based on current assignments
+    slots.forEach(slot => {
+      const pid = assignments[slot.id];
+      if (pid) newJoueurs.push(pid);
+    });
+    
+    // Add remaining from the original effectif (the bench)
+    const originalJoueurs = effectif.joueurs || [];
+    originalJoueurs.forEach(pid => {
+      if (!newJoueurs.includes(pid)) {
+        newJoueurs.push(pid);
+      }
+    });
+
+    const { error } = await updateEffectif(effectif.id, { 
+      joueurs: newJoueurs,
+      tactique_id: formationId
+    });
+
+    setIsSavingEffectif(false);
+    if (!error) {
+      setIsEffectifModified(false);
+      setEffectif({ ...effectif, joueurs: newJoueurs, tactique_id: formationId });
+      alert("Effectif sauvegardé avec succès !");
+    } else {
+      alert("Erreur lors de la sauvegarde.");
+    }
+  };
+
+  const handleDeletePlan = (id: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    if (window.confirm("Êtes-vous sûr de vouloir supprimer ce plan ?")) {
+      deletePlan(id);
+      setSavedAt(new Date().toISOString());
+    }
   };
 
   const applySwap = (slotId: string, benchPlayerId: string) => {
@@ -443,6 +574,7 @@ export default function CoachTacticsPage() {
     setSelectedStarterSlotId(null);
     setSelectedBenchPlayerId(null);
     setPendingSwap(null);
+    if (effectif) setIsEffectifModified(true);
   };
 
   const swapStarterPositions = (firstSlotId: string, secondSlotId: string) => {
@@ -473,6 +605,7 @@ export default function CoachTacticsPage() {
     setSavedAt(null);
     setSelectedStarterSlotId(null);
     setPendingSwap(null);
+    if (effectif) setIsEffectifModified(true);
   };
 
   const openSwapModal = (slotId: string, benchPlayerId: string) => {
@@ -481,6 +614,8 @@ export default function CoachTacticsPage() {
 
   const closeSwapModal = () => {
     setPendingSwap(null);
+    setSelectedStarterSlotId(null);
+    setSelectedBenchPlayerId(null);
   };
 
   const requestSwapWithStarter = (slot: FormationSlot) => {
@@ -509,6 +644,19 @@ export default function CoachTacticsPage() {
     openSwapModal(slot.id, benchPlayer.id);
   };
 
+  const requestSwapWithBenchPlayer = (benchPlayerId: string) => {
+    if (!selectedStarterSlotId) {
+      setSelectedBenchPlayerId((previous) =>
+        previous === benchPlayerId ? null : benchPlayerId,
+      );
+      setPendingSwap(null);
+      return;
+    }
+
+    setSelectedBenchPlayerId(benchPlayerId);
+    openSwapModal(selectedStarterSlotId, benchPlayerId);
+  };
+
   const handleSwapButtonClick = () => {
     if (!selectedBenchPlayer || !selectedStarterEntry) {
       return;
@@ -526,49 +674,7 @@ export default function CoachTacticsPage() {
 
   return (
     <div className="space-y-6">
-      <PageBreadcrumb pageTitle="Espace Coach" />
-
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-4">
-        <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03]">
-          <p className="text-sm text-gray-500 dark:text-gray-400">Formations tactiques</p>
-          <p className="mt-3 text-2xl font-semibold text-gray-800 dark:text-white/90">
-            {fifaFormations.length}
-          </p>
-          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-            Catalogue complet disponible.
-          </p>
-        </div>
-
-        <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03]">
-          <p className="text-sm text-gray-500 dark:text-gray-400">Joueurs actifs</p>
-          <p className="mt-3 text-2xl font-semibold text-gray-800 dark:text-white/90">
-            {availablePlayers.length}
-          </p>
-          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-            {hydrated ? "Donnees synchronisees localement." : "Chargement..."}
-          </p>
-        </div>
-
-        <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03]">
-          <p className="text-sm text-gray-500 dark:text-gray-400">Postes couverts</p>
-          <p className="mt-3 text-2xl font-semibold text-gray-800 dark:text-white/90">
-            {filledSlots}/{totalSlots}
-          </p>
-          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-            Couverture de terrain: {coverageRate}%
-          </p>
-        </div>
-
-        <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03]">
-          <p className="text-sm text-gray-500 dark:text-gray-400">Compatibilite poste</p>
-          <p className="mt-3 text-2xl font-semibold text-brand-600 dark:text-brand-400">
-            {chemistryRate}%
-          </p>
-          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-            {formattedSavedAt ? `Derniere sauvegarde: ${formattedSavedAt}` : "Plan non sauvegarde"}
-          </p>
-        </div>
-      </div>
+      <PageBreadcrumb pageTitle="Tactiques & Terrain" />
 
       <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03]">
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,760px)_360px] xl:items-start xl:justify-start xl:gap-5">
@@ -577,43 +683,61 @@ export default function CoachTacticsPage() {
             <h3 className="text-base font-semibold text-gray-800 dark:text-white/90">
               Banc des remplacants
             </h3>
-            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400 mb-4">
               Banc vers terrain, ou permutation terrain-terrain en 2 clics.
             </p>
 
-            <div className="mt-4 space-y-2">
+            <div className="relative mb-4">
+              <input
+                type="text"
+                placeholder="Rechercher un joueur..."
+                value={searchBenchQuery}
+                onChange={(e) => setSearchBenchQuery(e.target.value)}
+                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 pl-9 text-sm text-gray-800 shadow-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+              />
+              <svg className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+            </div>
+
+            <div className="mt-4 space-y-2 max-h-[600px] overflow-y-auto pr-1 custom-scrollbar">
               {benchPlayers.length > 0 ? (
                 benchPlayers.map((player) => (
                   <button
-                    key={`bench-left-${player.id}`}
+                    key={`bench-${player.id}`}
                     type="button"
-                    onClick={() => {
-                      setSelectedBenchPlayerId((previous) =>
-                        previous === player.id ? null : player.id,
-                      );
-                      setPendingSwap(null);
-                    }}
-                    className={`flex w-full items-center justify-between rounded-lg border px-3 py-2 text-left transition ${
+                    onClick={() => requestSwapWithBenchPlayer(player.id)}
+                    className={`flex w-full items-center justify-between rounded-xl border p-3 text-left transition-all duration-200 ${
                       selectedBenchPlayerId === player.id
-                        ? "border-brand-300 bg-brand-50 dark:border-brand-500/40 dark:bg-brand-500/10"
-                        : "border-gray-200 hover:border-brand-300 dark:border-gray-700 dark:hover:border-brand-500/40"
+                        ? "border-brand-300 bg-brand-50 shadow-theme-sm dark:border-brand-500/40 dark:bg-brand-500/15"
+                        : "border-gray-100 bg-white hover:border-brand-200 hover:bg-gray-50 dark:border-gray-800/60 dark:bg-gray-800/30 dark:hover:border-brand-500/20 dark:hover:bg-brand-500/5"
                     }`}
                   >
-                    <div className="flex min-w-0 items-center gap-3">
-                      <Image
-                        src={player.photoUrl}
-                        alt={getPlayerFullName(player)}
-                        width={40}
-                        height={40}
-                        className="h-10 w-10 rounded-full border border-white/40 object-cover"
-                        unoptimized
-                      />
+                    <div className="flex items-center gap-3">
+                      {player.photoUrl && !player.photoUrl.includes("user-01") && !player.photoUrl.includes("silhouette") ? (
+                        <Image
+                          width={40}
+                          height={40}
+                          src={player.photoUrl}
+                          alt={getPlayerFullName(player)}
+                          className={`h-10 w-10 rounded-full object-cover shadow-sm ${
+                            selectedBenchPlayerId === player.id
+                              ? "ring-2 ring-brand-500 ring-offset-2 dark:ring-brand-400 dark:ring-offset-gray-900"
+                              : ""
+                          }`}
+                          unoptimized
+                        />
+                      ) : (
+                        <div className="h-10 w-10 rounded-full bg-gradient-to-br from-brand-500 to-brand-700 text-white font-bold text-xs flex items-center justify-center shadow-xs border border-brand-400 shrink-0">
+                          {player.prenom?.charAt(0)}{player.nom?.charAt(0)}
+                        </div>
+                      )}
                       <div className="min-w-0">
-                        <p className="truncate text-sm font-medium text-gray-800 dark:text-white/90">
+                        <p className="truncate text-sm font-semibold text-gray-800 dark:text-white/90">
                           {getPlayerFullName(player)}
                         </p>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">
-                          {player.categorie}
+                        <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">
+                          {player.poste || "Non assigné"}
                         </p>
                       </div>
                     </div>
@@ -739,6 +863,7 @@ export default function CoachTacticsPage() {
                     onChange={(event) => {
                       setFormationId(event.target.value);
                       setSavedAt(null);
+                      if (effectif) setIsEffectifModified(true);
                     }}
                     className="h-11 w-full rounded-lg border border-gray-300 bg-transparent px-3 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
                   >
@@ -752,20 +877,47 @@ export default function CoachTacticsPage() {
               </div>
 
               <div className="flex flex-wrap gap-3">
-                <button
-                  type="button"
-                  onClick={resetAutoAssignments}
-                  className="rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-white/[0.03]"
-                >
-                  Auto composer
-                </button>
-                <button
-                  type="button"
-                  onClick={saveCurrentPlan}
-                  className="rounded-lg bg-brand-500 px-4 py-2.5 text-sm font-medium text-white hover:bg-brand-600"
-                >
-                  Sauvegarder
-                </button>
+                {effectif ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => router.push('/coach?tab=effectifs')}
+                      className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 shadow-sm hover:bg-gray-50 hover:text-gray-900 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700 transition-all"
+                    >
+                      <svg className="h-4 w-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                      </svg>
+                      Quitter
+                    </button>
+                    {isEffectifModified && (
+                      <button
+                        type="button"
+                        onClick={saveEffectifMatch}
+                        disabled={isSavingEffectif}
+                        className="rounded-lg bg-brand-500 px-4 py-2.5 text-sm font-medium text-white hover:bg-brand-600 disabled:opacity-50"
+                      >
+                        {isSavingEffectif ? "Sauvegarde..." : "Sauvegarder l'effectif"}
+                      </button>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      onClick={resetAutoAssignments}
+                      className="rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-white/[0.03]"
+                    >
+                      Auto composer
+                    </button>
+                    <button
+                      type="button"
+                      onClick={saveCurrentPlan}
+                      className="rounded-lg bg-brand-500 px-4 py-2.5 text-sm font-medium text-white hover:bg-brand-600"
+                    >
+                      Sauvegarder
+                    </button>
+                  </>
+                )}
               </div>
             </div>
 
@@ -833,43 +985,55 @@ export default function CoachTacticsPage() {
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-12">
         <div className="xl:col-span-6">
           <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03]">
-            <h3 className="text-base font-semibold text-gray-800 dark:text-white/90">
-              Joueurs indisponibles
+            <h3 className="text-base font-semibold text-gray-800 dark:text-white/90 mb-1">
+              Plans Tactiques Sauvegardés
             </h3>
-            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-              Blesse ou suspendu, hors feuille de match.
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+              Retrouvez ici vos compositions sauvegardées.
             </p>
 
-            <div className="mt-4 space-y-2">
-              {unavailablePlayers.length > 0 ? (
-                unavailablePlayers.map((player) => (
-                  <div
-                    key={`off-${player.id}`}
-                    className="flex items-center justify-between rounded-lg border border-gray-200 px-3 py-2 dark:border-gray-700"
+            <div className="space-y-3">
+              {savedPlans.length > 0 ? (
+                savedPlans.map((plan) => (
+                  <Link
+                    key={plan.id}
+                    href={`/coach?tab=tactiques&planId=${plan.id}`}
+                    className="group flex items-center justify-between rounded-xl border border-gray-100 bg-gray-50/50 p-4 transition hover:border-brand-300 hover:bg-brand-50/30 dark:border-gray-800 dark:bg-gray-800/30 dark:hover:border-brand-500/30 dark:hover:bg-brand-500/10"
                   >
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-medium text-gray-800 dark:text-white/90">
-                        {getPlayerFullName(player)}
+                    <div>
+                      <p className="font-semibold text-gray-900 group-hover:text-brand-600 dark:text-white dark:group-hover:text-brand-400">
+                        {plan.name}
                       </p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">
-                        {player.poste}
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        Formation: <span className="font-medium text-gray-700 dark:text-gray-300">{plan.formationId}</span> • 
+                        {new Date(plan.createdAt).toLocaleDateString("fr-FR", { day: 'numeric', month: 'short' })}
                       </p>
                     </div>
-                    <span
-                      className={`ml-3 shrink-0 rounded-full px-2 py-1 text-[11px] font-medium ${
-                        player.statut === "blesse"
-                          ? "bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300"
-                          : "bg-error-100 text-error-700 dark:bg-error-500/15 dark:text-error-300"
-                      }`}
-                    >
-                      {player.statut}
-                    </span>
-                  </div>
+                    <div className="flex gap-2">
+                      <div className="flex h-8 items-center justify-center rounded-lg bg-brand-500 px-4 text-sm font-medium text-white shadow-theme-xs hover:bg-brand-600">
+                        Ouvrir
+                      </div>
+                      <button
+                        type="button"
+                        onClick={(e) => handleDeletePlan(plan.id, e)}
+                        className="flex h-8 w-8 items-center justify-center rounded-lg bg-error-500 text-white shadow-theme-xs hover:bg-error-600"
+                      >
+                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+                    </div>
+                  </Link>
                 ))
               ) : (
-                <p className="rounded-lg border border-dashed border-gray-300 px-3 py-2 text-sm text-gray-500 dark:border-gray-700 dark:text-gray-400">
-                  Aucun joueur indisponible.
-                </p>
+                <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-gray-200 py-10 dark:border-gray-800">
+                  <svg className="mb-2 h-8 w-8 text-gray-400 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
+                    Aucun plan sauvegardé
+                  </p>
+                </div>
               )}
             </div>
           </div>
@@ -892,6 +1056,7 @@ export default function CoachTacticsPage() {
                   onClick={() => {
                     setFormationId(formation.id);
                     setSavedAt(null);
+                    if (effectif) setIsEffectifModified(true);
                   }}
                   className={`rounded-full border px-3 py-1.5 text-xs font-medium transition ${
                     formation.id === formationId

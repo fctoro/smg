@@ -81,121 +81,142 @@ export default function RecusPage() {
     const randomDigits = Math.floor(Math.random() * 90000) + 10000;
     const receiptNo = `RP-FCTORO-${initials}-${randomDigits}`;
     
-    // Fonction sécurisée pour la devise dans le PDF
     const formatCurrencyPDF = (amountStr: string) => {
       return amountStr;
     };
 
-    // ==========================================
-    // EN-TÊTE
-    // ==========================================
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(24);
-    doc.setTextColor(15, 23, 42); // Slate 900
-    doc.text("Reçu de Paiement", 14, 25);
-    
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(10);
-    doc.setTextColor(100, 116, 139); // Slate 500
-    doc.text("Reçu FC TORO", 14, 31);
-    doc.text(`Numéro de reçu : ${receiptNo}`, 14, 36);
+    // Corporate Monochrome Palette (Minimal color)
+    const grayDark: [number, number, number] = [31, 41, 55];    // Charcoal
+    const grayMedium: [number, number, number] = [107, 114, 128]; // Mid Gray
+    const grayLight: [number, number, number] = [229, 231, 235];  // Light Gray
+    const white: [number, number, number] = [255, 255, 255];
+    const black: [number, number, number] = [0, 0, 0];
 
-    // VRAI Logo FC TORO à droite
-    // FC_TORO_LOGO est un PNG. On l'affiche avec une taille de 25x25 (ajustable)
+    // ==========================================
+    // EN-TÊTE : Logo (gauche) & Infos Document (droite)
+    // ==========================================
     try {
-      doc.addImage(FC_TORO_LOGO, 'PNG', 170, 12, 25, 25);
+      doc.addImage(FC_TORO_LOGO, 'PNG', 14, 15, 25, 25);
     } catch (e) {
       console.warn("Erreur chargement logo PDF", e);
     }
-
-    // Ligne séparatrice
-    doc.setDrawColor(226, 232, 240);
-    doc.setLineWidth(0.5);
-    doc.line(14, 42, 196, 42);
-
-    // ==========================================
-    // MÉTA INFOS (N° et Date)
-    // ==========================================
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(9);
-    doc.setTextColor(148, 163, 184); // Slate 400
-    doc.text("Numéro de reçu", 14, 52);
-    doc.text("Date d'émission", 100, 52);
-
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(11);
-    doc.setTextColor(15, 23, 42);
-    doc.text(receiptNo, 14, 58);
-    doc.text(new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }), 100, 58);
-
-    doc.line(14, 64, 196, 64);
-
-    // ==========================================
-    // ADRESSES (Émetteur et Client)
-    // ==========================================
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(10);
-    doc.setTextColor(234, 88, 12); // Orange / Brand accent
-    doc.text("Émetteur", 14, 76);
-    doc.text("Client (Parent)", 100, 76);
-
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(12);
-    doc.setTextColor(15, 23, 42);
-    doc.text("FC TORO", 14, 83);
-    doc.text(parentFullName, 100, 83);
-
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(10);
-    doc.setTextColor(71, 85, 105);
     
-    // Infos FC TORO
-    doc.text("Complexe Sportif", 14, 89);
-    doc.text("Port-au-Prince, Haïti", 14, 94);
-    doc.text("Téléphone: +509 37 21 41 89", 14, 99);
-    doc.text("Email: info@fctoro.com", 14, 104);
-    doc.text("Web: www.fctoro.com", 14, 109);
-
-    // Infos Parent
-    doc.text(`Téléphone: ${parentData.telephone || "Non renseigné"}`, 100, 89);
-    doc.text(`Email: ${parentData.email || "Non renseigné"}`, 100, 94);
-    doc.text(`Enfant(s) inscrit(s): ${parentData.playerIds.length}`, 100, 99);
+    // Company Name next to Logo
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(18);
+    doc.setTextColor(grayDark[0], grayDark[1], grayDark[2]);
+    doc.text("FC TORO", 43, 24);
+    
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.setTextColor(grayMedium[0], grayMedium[1], grayMedium[2]);
+    doc.text("Football Club", 43, 29);
+    doc.text("7 Rue Rigaud, Pétion-Ville, Haïti", 43, 34);
+    doc.text("+509 2817-8676 | footballclubtoro@gmail.com", 43, 39);
+    
+    // Website link (clickable)
+    doc.setTextColor(82, 107, 132); // Gris bleu
+    doc.textWithLink("www.fctoro.com", 43, 44, { url: "https://www.fctoro.com" });
 
     // ==========================================
-    // MONTANT TOTAL MIS EN ÉVIDENCE
+    // REÇU TITLE & META INFOS (Alignés à droite)
     // ==========================================
     doc.setFont("helvetica", "bold");
+    doc.setFontSize(28);
+    doc.setTextColor(grayDark[0], grayDark[1], grayDark[2]);
+    doc.text("REÇU", 196, 26, { align: 'right' });
+
+    // FIX OVERLAP: Align labels and values cleanly
     doc.setFontSize(10);
-    doc.setTextColor(148, 163, 184);
-    doc.text("Montant total payé", 14, 125);
-
+    
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(grayMedium[0], grayMedium[1], grayMedium[2]);
+    doc.text("N° de reçu :", 155, 34, { align: 'right' });
+    
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(22);
-    doc.setTextColor(15, 23, 42);
-    doc.text(formatCurrencyPDF(parentData.totalPaye), 14, 134);
+    doc.setTextColor(grayDark[0], grayDark[1], grayDark[2]);
+    doc.text(receiptNo, 196, 34, { align: 'right' });
 
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(10);
-    doc.setTextColor(100, 116, 139);
-    const confText = `Ce reçu confirme les paiements pour ${parentData.playerIds.length} joueur(s).`;
-    const confWidth = doc.getTextWidth(confText);
-    doc.text(confText, 196 - confWidth, 132);
+    doc.setTextColor(grayMedium[0], grayMedium[1], grayMedium[2]);
+    doc.text("Date :", 155, 39, { align: 'right' });
+    
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(grayDark[0], grayDark[1], grayDark[2]);
+    doc.text(new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' }), 196, 39, { align: 'right' });
+
+    // Ligne séparatrice fine
+    doc.setDrawColor(grayLight[0], grayLight[1], grayLight[2]);
+    doc.setLineWidth(0.5);
+    doc.line(14, 48, 196, 48);
 
     // ==========================================
-    // TABLEAU DES VERSEMENTS
+    // INFO PARENT (Gauche) & JOUEURS (Droite)
+    // ==========================================
+    const headerTextColor: [number, number, number] = [82, 107, 132]; // Gris bleu du screenshot
+    const headerLineColor: [number, number, number] = [226, 232, 240];
+
+    // --- GAUCHE : Parent ---
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8);
+    doc.setTextColor(headerTextColor[0], headerTextColor[1], headerTextColor[2]);
+    doc.text("PARENT", 14, 60);
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.setTextColor(grayDark[0], grayDark[1], grayDark[2]);
+    doc.text(parentFullName, 14, 66);
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.setTextColor(grayMedium[0], grayMedium[1], grayMedium[2]);
+    doc.text(`Tél : ${parentData.telephone || "-"}`, 14, 72);
+    doc.text(`Email : ${parentData.email || "-"}`, 14, 78);
+    
+    // --- DROITE : Joueurs ---
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8);
+    doc.setTextColor(headerTextColor[0], headerTextColor[1], headerTextColor[2]);
+    doc.text("JOUEUR (ENFANT)", 120, 60);
+    
+    let currentY = 66;
+    parentData.playerIds.forEach((id: string) => {
+      const p = players.find(player => player.id === id);
+      if (p) {
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(9);
+        doc.setTextColor(grayDark[0], grayDark[1], grayDark[2]);
+        doc.text(`${p.prenom} ${p.nom}`, 120, currentY);
+        currentY += 6;
+        
+        if (p.categorie) {
+          doc.setFont("helvetica", "normal");
+          doc.setFontSize(9);
+          doc.setTextColor(grayMedium[0], grayMedium[1], grayMedium[2]);
+          doc.text(`Catégorie : ${p.categorie}`, 120, currentY);
+          currentY += 8;
+        } else {
+          currentY += 4;
+        }
+      }
+    });
+
+    const tableStartY = Math.max(90, currentY + 5);
+
+    // ==========================================
+    // TABLEAU DES VERSEMENTS (Corporate)
     // ==========================================
     const tableColumn = ["Date", "Joueur (Enfant)", "Remarque", "Mode", "Montant"];
     const tableRows: any[] = [];
 
-    // Helper pour parser le Mode
     const mapMode = (mode: any) => {
       const modeStr = String(mode).toLowerCase();
       if (modeStr === "1") return "Espèces";
-      if (modeStr === "2") return "Virement Bancaire";
+      if (modeStr === "2") return "Virement";
       if (modeStr === "3") return "Chèque";
       if (modeStr === "4") return "Carte";
       if (modeStr === "5") return "Moncash";
-      if (modeStr === "virement") return "Virement Bancaire";
+      if (modeStr === "virement") return "Virement";
       if (modeStr === "especes" || modeStr === "espèces") return "Espèces";
       return String(mode || "-");
     };
@@ -206,8 +227,8 @@ export default function RecusPage() {
       
       const pData = [
         String(formatClubDate(p.datePaiement ?? "")),
-        String(joueurNom),
-        String(p.remarque || "Paiement de cotisation"),
+        joueurNom,
+        p.remarque || "Paiement de cotisation",
         String(mapMode(p.methode)),
         String(formatCurrencyPDF(p.montant)),
       ];
@@ -217,51 +238,94 @@ export default function RecusPage() {
     autoTable(doc, {
       head: [tableColumn],
       body: tableRows,
-      startY: 145,
+      startY: tableStartY,
       theme: 'plain',
-      styles: { fontSize: 9, cellPadding: 5 },
-      headStyles: { fillColor: [255, 255, 255], textColor: [100, 116, 139], fontStyle: 'bold', lineWidth: { bottom: 0.5, top: 0.5 }, lineColor: [226, 232, 240] },
-      bodyStyles: { textColor: [15, 23, 42] },
+      styles: { 
+        fontSize: 9, 
+        cellPadding: 6,
+      },
+      headStyles: { 
+        fillColor: false,
+        textColor: headerTextColor,
+        fontStyle: 'bold',
+        halign: 'left',
+      },
+      bodyStyles: { textColor: grayDark },
       columnStyles: {
-        4: { fontStyle: 'bold', halign: 'right' }
+        0: { cellWidth: 30, halign: 'left' },
+        1: { cellWidth: 50, halign: 'left' },
+        2: { cellWidth: 'auto', halign: 'left' },
+        3: { cellWidth: 30, halign: 'left' },
+        4: { cellWidth: 35, fontStyle: 'bold', halign: 'right' }
+      },
+      didParseCell: function (data: any) {
+        if (data.section === 'head' && data.column.index === 4) {
+          data.cell.styles.halign = 'right';
+        }
+      },
+      didDrawCell: function (data: any) {
+        // Dessiner manuellement les lignes horizontales pour l'en-tête (contourne les limites du theme plain)
+        if (data.section === 'head') {
+          doc.setDrawColor(headerLineColor[0], headerLineColor[1], headerLineColor[2]);
+          doc.setLineWidth(0.3);
+          // Ligne du haut
+          doc.line(data.cell.x, data.cell.y, data.cell.x + data.cell.width, data.cell.y);
+          // Ligne du bas
+          doc.line(data.cell.x, data.cell.y + data.cell.height, data.cell.x + data.cell.width, data.cell.y + data.cell.height);
+        }
       }
     });
 
-    const finalY = (doc as any).lastAutoTable.finalY || 145;
+    const finalY = (doc as any).lastAutoTable.finalY || tableStartY;
 
     // ==========================================
-    // BOX TOTAL FINAL (Style TaïTaï)
+    // FOOTER SECTION (Totals)
     // ==========================================
-    doc.setDrawColor(226, 232, 240);
-    doc.setFillColor(248, 250, 252);
-    doc.rect(100, finalY + 10, 96, 30, 'FD'); // Box pour le total
-
     doc.setFont("helvetica", "normal");
     doc.setFontSize(10);
-    doc.setTextColor(100, 116, 139);
-    doc.text("Somme totale", 105, finalY + 20);
+    doc.setTextColor(grayMedium[0], grayMedium[1], grayMedium[2]);
+    doc.text("Sous-total", 140, finalY + 10);
+    doc.text(formatCurrencyPDF(parentData.totalPaye), 196, finalY + 10, { align: 'right' });
+
+    // Grand Total (Simple ligne, pas de gros bloc de couleur)
+    doc.setDrawColor(grayLight[0], grayLight[1], grayLight[2]);
+    doc.setLineWidth(0.5);
+    doc.line(135, finalY + 15, 196, finalY + 15);
     
     doc.setFont("helvetica", "bold");
-    doc.setTextColor(15, 23, 42);
-    doc.text(formatCurrencyPDF(parentData.totalPaye), 191, finalY + 20, { align: 'right' });
+    doc.setFontSize(12);
+    doc.setTextColor(black[0], black[1], black[2]);
+    doc.text("TOTAL PAYÉ", 140, finalY + 22);
+    doc.text(formatCurrencyPDF(parentData.totalPaye), 196, finalY + 22, { align: 'right' });
 
-    doc.setDrawColor(226, 232, 240);
-    doc.line(105, finalY + 25, 191, finalY + 25);
-
+    // ==========================================
+    // SIGNATURE & TERMES
+    // ==========================================
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(11);
-    doc.setTextColor(15, 23, 42);
-    doc.text("Montant final", 105, finalY + 33);
-    doc.text(formatCurrencyPDF(parentData.totalPaye), 191, finalY + 33, { align: 'right' });
+    doc.setFontSize(9);
+    doc.setTextColor(grayDark[0], grayDark[1], grayDark[2]);
+    doc.text("Merci de votre confiance.", 14, finalY + 15);
+    
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(grayMedium[0], grayMedium[1], grayMedium[2]);
+    doc.text("Ce reçu confirme les paiements pour l'inscription de votre/vos", 14, finalY + 20);
+    doc.text("enfant(s) au sein du FC TORO. Document officiel valide", 14, finalY + 24);
+    doc.text("sans signature physique.", 14, finalY + 28);
 
-    // ==========================================
-    // PIED DE PAGE
-    // ==========================================
     doc.setFont("helvetica", "normal");
     doc.setFontSize(9);
-    doc.setTextColor(148, 163, 184);
-    doc.text("Document officiel généré par le système d'administration du FC TORO.", 14, finalY + 60);
-    doc.text("Merci pour votre confiance envers le club.", 14, finalY + 65);
+    doc.setTextColor(grayMedium[0], grayMedium[1], grayMedium[2]);
+    doc.text("Signature autorisée", 14, finalY + 45);
+    doc.line(14, finalY + 55, 60, finalY + 55);
+
+    // ==========================================
+    // BOTTOM BANNER
+    // ==========================================
+    
+    doc.setFont("helvetica", "italic");
+    doc.setFontSize(8);
+    doc.setTextColor(grayMedium[0], grayMedium[1], grayMedium[2]);
 
     doc.save(`Recu_${parentFullName.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`);
   };
@@ -293,59 +357,59 @@ export default function RecusPage() {
 
         <div className="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/[0.03]">
           <div className="max-w-full overflow-x-auto">
-            <table className="w-full whitespace-nowrap text-left text-sm text-gray-600 dark:text-gray-400">
-              <thead className="bg-gray-50 text-gray-800 dark:bg-white/[0.02] dark:text-white/90">
+            <table className="w-full text-left text-sm text-gray-600 dark:text-gray-400 table-auto">
+              <thead className="bg-gray-50 text-gray-800 dark:bg-white/[0.02] dark:text-white/90 border-b border-gray-200 dark:border-gray-800">
                 <tr>
-                  <th className="px-4 py-3 font-medium">Parent</th>
-                  <th className="px-4 py-3 font-medium">Contact</th>
-                  <th className="px-4 py-3 font-medium text-center">Enfants Inscrits</th>
-                  <th className="px-4 py-3 font-medium text-right">Total Payé (USD)</th>
-                  <th className="px-4 py-3 font-medium text-center">Action</th>
+                  <th className="px-5 py-3.5 font-semibold">Parent</th>
+                  <th className="px-5 py-3.5 font-semibold">Contact</th>
+                  <th className="px-5 py-3.5 font-semibold text-center whitespace-nowrap">Enfants Inscrits</th>
+                  <th className="px-5 py-3.5 font-semibold text-right whitespace-nowrap">Total Payé (USD)</th>
+                  <th className="px-5 py-3.5 font-semibold text-center whitespace-nowrap w-24">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
                 {filteredParents.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="px-4 py-8 text-center text-gray-500">
+                    <td colSpan={5} className="px-5 py-8 text-center text-gray-500">
                       Aucun compte parent trouvé.
                     </td>
                   </tr>
                 ) : (
                   filteredParents.map((parentData) => (
-                    <tr key={parentData.key} className="hover:bg-gray-50 dark:hover:bg-white/[0.02]">
-                      <td className="px-4 py-3">
-                        <span className="font-semibold text-gray-800 dark:text-white/90">
+                    <tr key={parentData.key} className="hover:bg-gray-50/50 dark:hover:bg-white/[0.02] transition-colors">
+                      <td className="px-5 py-4">
+                        <span className="font-semibold text-gray-900 dark:text-white">
                           {parentData.nom} {parentData.prenom}
                         </span>
                       </td>
-                      <td className="px-4 py-3">
-                        <div className="flex flex-col">
-                          <span>{parentData.telephone || "Aucun tél"}</span>
-                          <span className="text-xs text-gray-500">{parentData.email || "Aucun email"}</span>
+                      <td className="px-5 py-4">
+                        <div className="flex flex-col text-sm">
+                          <span className="font-medium text-gray-800 dark:text-gray-200">{parentData.telephone || "Aucun tél"}</span>
+                          <span className="text-xs text-gray-500 truncate max-w-[220px]">{parentData.email || "Aucun email"}</span>
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-center">
-                        <span className="inline-flex items-center rounded-full bg-brand-50 px-2.5 py-0.5 text-xs font-medium text-brand-700 dark:bg-brand-500/10 dark:text-brand-400">
+                      <td className="px-5 py-4 text-center">
+                        <span className="inline-flex items-center rounded-full bg-brand-50 px-3 py-1 text-xs font-semibold text-brand-700 dark:bg-brand-500/10 dark:text-brand-400">
                           {parentData.playerIds.length}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-right font-medium text-gray-800 dark:text-white/90">
+                      <td className="px-5 py-4 text-right font-bold text-gray-900 dark:text-white">
                         {parentData.totalPaye}
                       </td>
-                      <td className="px-4 py-3 text-center">
+                      <td className="px-5 py-4 text-center">
                         <button
                           onClick={() => handleGeneratePDF(parentData)}
                           disabled={parentData.parentPayments.length === 0}
-                          className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-white transition-colors 
+                          className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-xs font-bold text-white transition-all 
                             ${parentData.parentPayments.length === 0 
-                              ? "bg-gray-300 cursor-not-allowed dark:bg-gray-700" 
-                              : "bg-gray-900 hover:bg-gray-800 dark:bg-brand-500 dark:hover:bg-brand-600 shadow-sm"}`}
+                              ? "bg-gray-200 text-gray-400 cursor-not-allowed dark:bg-gray-800 dark:text-gray-600" 
+                              : "bg-brand-500 hover:bg-brand-600 shadow-sm hover:shadow-brand-500/20 active:scale-95 cursor-pointer"}`}
                           title={parentData.parentPayments.length === 0 ? "Aucun paiement à générer" : "Télécharger le reçu consolidé"}
                         >
-                          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                           </svg>
-                          PDF
+                          Télécharger PDF
                         </button>
                       </td>
                     </tr>

@@ -1,4 +1,4 @@
-export type PlayerStatus = "actif" | "blesse" | "suspendu" | "abandonne";
+export type PlayerStatus = "actif" | "blesse" | "suspendu" | "abandonne" | "alumni";
 
 export type PaymentStatus = "paid" | "pending" | "late";
 
@@ -13,6 +13,30 @@ export type StaffRole = "Coach" | "Assistant" | "Admin" | "Medical";
 export type MatchFormResult = "W" | "D" | "L";
 
 export type MatchState = "FT" | "A venir";
+
+export interface Coach {
+  id: string;
+  nom: string;
+  prenom: string;
+  email: string;
+  telephone?: string;
+  sexe?: string;
+  categories: string[];
+  saison?: string;
+  created_at?: string;
+}
+
+export interface Effectif {
+  id: string;
+  nom: string;
+  date_match: string;
+  periode: string;
+  categorie: string;
+  joueurs: string[];
+  tactique_id?: string;
+  coach_email: string;
+  created_at?: string;
+}
 
 export interface Player {
   id: string;
@@ -38,6 +62,30 @@ export interface Player {
   photoIdentiteUrl?: string;
   acteNaissanceUrl?: string;
   carteIdentiteParentUrl?: string;
+  dossierPdfUrl?: string;
+
+  // Extended Inscription sections (01 to 07)
+  programme?: string;
+  ecole?: string;
+  experienceSoccer?: string;
+
+  parentNomPrenom?: string;
+  parentEmail?: string;
+  parentTelephone?: string;
+  parentAdresse?: string;
+
+  urgenceNomPrenom?: string;
+  urgenceLien?: string;
+  urgenceTelephone?: string;
+  urgenceEmail?: string;
+  urgenceAdresse?: string;
+
+  tailleHaut?: string;
+  tailleShort?: string;
+  numerosPreferes?: string;
+
+  planPaiement?: string;
+  modePaiementChoisi?: string;
 }
 
 export interface ClubEvent {
@@ -116,14 +164,7 @@ export interface Employee {
 
 export type StaffMember = Employee;
 
-export interface Alumni {
-  id: string;
-  nom: string;
-  anneeEntree: number;
-  anneeSortie: number;
-  poste: string;
-  situationActuelle: string;
-}
+export type Alumni = Player;
 
 export interface ClubStandingRow {
   teamId: string;
@@ -173,6 +214,30 @@ export interface PlayerFormValues {
   photoIdentiteUrl?: string;
   acteNaissanceUrl?: string;
   carteIdentiteParentUrl?: string;
+  dossierPdfUrl?: string;
+
+  // Extended Inscription sections (01 to 07)
+  programme?: string;
+  ecole?: string;
+  experienceSoccer?: string;
+
+  parentNomPrenom?: string;
+  parentEmail?: string;
+  parentTelephone?: string;
+  parentAdresse?: string;
+
+  urgenceNomPrenom?: string;
+  urgenceLien?: string;
+  urgenceTelephone?: string;
+  urgenceEmail?: string;
+  urgenceAdresse?: string;
+
+  tailleHaut?: string;
+  tailleShort?: string;
+  numerosPreferes?: string;
+
+  planPaiement?: string;
+  modePaiementChoisi?: string;
 }
 
 export interface ParentFormValues {
@@ -204,13 +269,7 @@ export interface EmployeeFormValues {
 
 export type StaffFormValues = EmployeeFormValues;
 
-export interface AlumniFormValues {
-  nom: string;
-  anneeEntree: number;
-  anneeSortie: number;
-  poste: string;
-  situationActuelle: string;
-}
+export type AlumniFormValues = PlayerFormValues;
 
 export interface PayrollRecord {
   id: string;

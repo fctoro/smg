@@ -379,7 +379,12 @@ export async function GET(request) {
       drawFooter(page, pdfDoc.getPageCount());
     }
 
-    const engagementText = "Je soussigne(e), parent/personne responsable du joueur inscrit, reconnais avoir pris connaissance de la tarification de la saison 2026-2027 et du plan de paiement choisi. Je reconnais devoir a FC TORO/Fulmoun Production les montants indiques ci-dessus et m'engage a les regler selon l'echeancier convenu. Tout mois engage est du dans son integralite, meme en cas d'absence, de suspension temporaire ou d'arret de participation non notifie par ecrit avant le debut du mois concerne. Tout retard ou defaut de paiement peut entrainer la suspension de la participation du joueur aux activites, sans annuler les sommes dues. En cas de non-reglement apres relances, le dossier pourra etre transmis au service de recouvrement, conformement aux procedures applicables. Aucun versement deja effectue n'est remboursable, sauf decision exceptionnelle de l'administration.";
+    const curYear = new Date().getFullYear();
+    const curMonth = new Date().getMonth() + 1;
+    const startSeasonYr = curMonth >= 7 ? curYear : curYear - 1;
+    const currentSeasonStr = `${startSeasonYr}-${startSeasonYr + 1}`;
+
+    const engagementText = `Je soussigne(e), parent/personne responsable du joueur inscrit, reconnais avoir pris connaissance de la tarification de la saison ${currentSeasonStr} et du plan de paiement choisi. Je reconnais devoir a FC TORO/Fulmoun Production les montants indiques ci-dessus et m'engage a les regler selon l'echeancier convenu. Tout mois engage est du dans son integralite, meme en cas d'absence, de suspension temporaire ou d'arret de participation non notifie par ecrit avant le debut du mois concerne. Tout retard ou defaut de paiement peut entrainer la suspension de la participation du joueur aux activites, sans annuler les sommes dues. En cas de non-reglement apres relances, le dossier pourra etre transmis au service de recouvrement, conformement aux procedures applicables. Aucun versement deja effectue n'est remboursable, sauf decision exceptionnelle de l'administration.`;
 
     page.drawText(engagementText, {
       x: 50,

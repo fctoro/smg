@@ -38,6 +38,10 @@ const defaultColumns: PlayerColumnKey[] = [
   "actions",
 ];
 
+import { useClubData } from "@/context/ClubDataContext";
+import { getDynamicSeasonOptions } from "@/lib/club/season";
+import { TableBodySkeleton } from "@/components/ui/skeleton/Skeleton";
+
 interface PlayerTableProps {
   players: Player[];
   columns?: PlayerColumnKey[];
@@ -65,6 +69,7 @@ export default function PlayerTable({
   actionButton,
   exportButton,
 }: PlayerTableProps) {
+  const { hydrated } = useClubData();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [selectedSeason, setSelectedSeason] = useState("all");
@@ -90,13 +95,11 @@ export default function PlayerTable({
     return Array.from(uniqueMap.values());
   }, [players]);
 
-  const seasons = useMemo(
-    () =>
-      [...new Set(players.map((player) => player.saison).filter(Boolean))].sort(
-        (a, b) => (b || "").localeCompare(a || ""),
-      ),
-    [players],
-  );
+  const seasons = useMemo(() => {
+    const customSeasons = players.map((player) => player.saison).filter(Boolean) as string[];
+    const allOptions = Array.from(new Set([...getDynamicSeasonOptions(), ...customSeasons]));
+    return allOptions.sort((a, b) => b.localeCompare(a));
+  }, [players]);
 
   const filteredPlayers = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -139,12 +142,12 @@ export default function PlayerTable({
 
   const visibleColumnsCount = Math.max(1, visibleColumnSet.size);
 
-  const getSafeAvatarSrc = (photoUrl: string, fullName: string) => {
-    const trimmed = photoUrl.trim();
-    if (trimmed.length > 0) {
+  const getSafeAvatarSrc = (photoUrl?: string) => {
+    const trimmed = (photoUrl || "").trim();
+    if (trimmed.length > 0 && !trimmed.includes("user-01")) {
       return trimmed;
     }
-    return "/images/user/user-01.jpg";
+    return "/images/user/silhouette.svg";
   };
 
   return (
@@ -153,48 +156,56 @@ export default function PlayerTable({
       {showToolbar || actionButton ? (
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           {showToolbar ? (
-            <div className="grid flex-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
-              <input
-                value={searchQuery}
-                onChange={(event) => setSearchQuery(event.target.value)}
-                placeholder="Rechercher un joueur"
-                className="h-11 w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs placeholder:text-gray-400 focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
-              />
-              <select
-                value={selectedCategory}
-                onChange={(event) => setSelectedCategory(event.target.value)}
-                className="h-11 w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
-              >
-                <option value="all">Toutes catégories</option>
-                {categories.map((category) => (
-                  <option key={category} value={category}>
-                    {category}
-                  </option>
-                ))}
-              </select>
-              <select
-                value={selectedSeason}
-                onChange={(event) => setSelectedSeason(event.target.value)}
-                className="h-11 w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
-              >
-                <option value="all">Toutes les saisons</option>
-                {seasons.map((season) => (
-                  <option key={season} value={season}>
-                    Saison {season}
-                  </option>
-                ))}
-              </select>
-              <select
-                value={selectedStatus}
-                onChange={(event) => setSelectedStatus(event.target.value)}
-                className="h-11 w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
-              >
-                <option value="all">Tous statuts</option>
-                <option value="actif">Actif</option>
-                <option value="blesse">Blessé</option>
-                <option value="suspendu">Suspendu</option>
-                <option value="abandonne">Abandonné</option>
-              </select>
+            <div className="grid flex-1 gap-2 sm:grid-cols-2 lg:grid-cols-4 min-w-0">
+              <div className="min-w-0">
+                <input
+                  value={searchQuery}
+                  onChange={(event) => setSearchQuery(event.target.value)}
+                  placeholder="Rechercher un joueur"
+                  className="h-11 w-full min-w-0 max-w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs placeholder:text-gray-400 focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
+                />
+              </div>
+              <div className="min-w-0">
+                <select
+                  value={selectedCategory}
+                  onChange={(event) => setSelectedCategory(event.target.value)}
+                  className="h-11 w-full min-w-0 max-w-full truncate rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
+                >
+                  <option value="all">Toutes catégories</option>
+                  {categories.map((category) => (
+                    <option key={category} value={category}>
+                      {category}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="min-w-0">
+                <select
+                  value={selectedSeason}
+                  onChange={(event) => setSelectedSeason(event.target.value)}
+                  className="h-11 w-full min-w-0 max-w-full truncate rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
+                >
+                  <option value="all">Toutes les saisons</option>
+                  {seasons.map((season) => (
+                    <option key={season} value={season}>
+                      Saison {season}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="min-w-0">
+                <select
+                  value={selectedStatus}
+                  onChange={(event) => setSelectedStatus(event.target.value)}
+                  className="h-11 w-full min-w-0 max-w-full truncate rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
+                >
+                  <option value="all">Tous statuts</option>
+                  <option value="actif">Actif</option>
+                  <option value="blesse">Blessé</option>
+                  <option value="suspendu">Suspendu</option>
+                  <option value="abandonne">Abandonné</option>
+                </select>
+              </div>
             </div>
           ) : null}
 
@@ -307,7 +318,9 @@ export default function PlayerTable({
           </TableHeader>
 
           <TableBody className="divide-y divide-gray-100 dark:divide-gray-800">
-            {pagedPlayers.length === 0 ? (
+            {!hydrated ? (
+              <TableBodySkeleton rows={6} columns={visibleColumnsCount} />
+            ) : pagedPlayers.length === 0 ? (
               <TableRow>
                 <TableCell
                   className="py-6 text-center text-theme-sm text-gray-500 dark:text-gray-400"
@@ -319,7 +332,7 @@ export default function PlayerTable({
             ) : (
               pagedPlayers.map((player) => {
                 const fullName = getPlayerFullName(player);
-                const safeAvatarSrc = getSafeAvatarSrc(player.photoUrl, fullName);
+                const safeAvatarSrc = getSafeAvatarSrc(player.photoIdentiteUrl || player.photoUrl);
                 const safeMatricule = player.matricule && !player.matricule.includes("XXXX")
                   ? player.matricule
                   : `FCT-2526-${String(player.id).padStart(4, "0")}`;
@@ -334,7 +347,7 @@ export default function PlayerTable({
                           height={40}
                           src={safeAvatarSrc}
                           alt={fullName}
-                          className="h-10 w-10 rounded-full object-cover"
+                          className="h-10 w-10 rounded-full object-cover shadow-xs border border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800 p-0.5"
                           unoptimized
                         />
                         <div>

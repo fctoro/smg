@@ -836,29 +836,4 @@ export const mockEmployees: Employee[] = [
 
 export const mockStaff: StaffMember[] = mockEmployees;
 
-export const mockAlumni: Alumni[] = [
-  {
-    id: "a01",
-    nom: "Mehdi Arfa",
-    anneeEntree: 2016,
-    anneeSortie: 2021,
-    poste: "Attaquant",
-    situationActuelle: "Joue en National 2",
-  },
-  {
-    id: "a02",
-    nom: "Claire Dubreuil",
-    anneeEntree: 2015,
-    anneeSortie: 2020,
-    poste: "Milieu",
-    situationActuelle: "Coach U13",
-  },
-  {
-    id: "a03",
-    nom: "Bilal Toure",
-    anneeEntree: 2014,
-    anneeSortie: 2019,
-    poste: "Defenseur",
-    situationActuelle: "Preparateur physique",
-  },
-];
+export const mockAlumni: Alumni[] = [];

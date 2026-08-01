@@ -1,3 +1,4 @@
+import CoachIcon from "./coach.svg";
 import PlusIcon from "./plus.svg";
 import CloseIcon from "./close.svg";
 import BoxIcon from "./box.svg";
@@ -53,6 +54,7 @@ import MoreDotIcon from "./more-dot.svg";
 import BellIcon from "./bell.svg";
 
 export {
+  CoachIcon,
   DownloadIcon,
   BellIcon,
   MoreDotIcon,

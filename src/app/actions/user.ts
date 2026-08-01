@@ -33,6 +33,7 @@ export async function getUsersList() {
         full_name: prof?.full_name || u.user_metadata?.full_name || u.email || "Utilisateur",
         role: prof?.role || metaRole || (u.email === "footballclubtoro@gmail.com" ? "Super Admin" : "Admin"),
         sections: prof?.sections || u.user_metadata?.sections || [],
+        categories: u.user_metadata?.categories || [],
         created_at: u.created_at || new Date().toISOString()
       };
     });
@@ -65,19 +66,21 @@ export async function createUser(formData: FormData) {
     const rawFullName = formData.get("fullName") as string;
     const role = formData.get("role") as string;
     const rawSections = formData.get("sections") as string;
+    const rawCategories = formData.get("categories") as string;
 
     if (!email || !password || !role) {
       return { error: "Veuillez remplir l'adresse email et le mot de passe." };
     }
 
     const sections = rawSections ? JSON.parse(rawSections) : [];
+    const categories = rawCategories ? JSON.parse(rawCategories) : [];
     const fullName = rawFullName && rawFullName.trim() ? rawFullName.trim() : email;
 
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
       email: email,
       password: password,
       email_confirm: true,
-      user_metadata: { full_name: fullName, role: role, sections: sections }
+      user_metadata: { full_name: fullName, role: role, sections: sections, categories: categories }
     });
 
     if (authError) {
@@ -105,12 +108,12 @@ export async function createUser(formData: FormData) {
   }
 }
 
-export async function updateUserAccess(userId: string, role: string, sections: string[]) {
+export async function updateUserAccess(userId: string, role: string, sections: string[], categories: string[] = []) {
   try {
     if (!userId || !role) return { error: "Données utilisateur manquantes." };
 
     const { error: updateErr } = await supabaseAdmin.auth.admin.updateUserById(userId, {
-      user_metadata: { role, sections }
+      user_metadata: { role, sections, categories }
     });
 
     if (updateErr) {

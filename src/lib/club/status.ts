@@ -5,6 +5,7 @@ export const playerStatusLabel: Record<PlayerStatus, string> = {
   blesse: "Blessé",
   suspendu: "Suspendu",
   abandonne: "Abandonné",
+  alumni: "Alumni",
 };
 
 export const paymentStatusLabel: Record<PaymentStatus, string> = {

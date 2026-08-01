@@ -38,6 +38,18 @@ export interface Effectif {
   created_at?: string;
 }
 
+export interface ProgrammeMatch {
+  id: string;
+  nom: string;
+  date_programme: string;
+  date_depart?: string;
+  date_cloture?: string;
+  saison: string;
+  categorie: string;
+  joueurs: string[];
+  created_at?: string;
+}
+
 export interface Player {
   id: string;
   matricule?: string;

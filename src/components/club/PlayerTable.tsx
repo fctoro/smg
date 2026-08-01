@@ -41,6 +41,7 @@ const defaultColumns: PlayerColumnKey[] = [
 import { useClubData } from "@/context/ClubDataContext";
 import { getDynamicSeasonOptions } from "@/lib/club/season";
 import { TableBodySkeleton } from "@/components/ui/skeleton/Skeleton";
+import { fetchProgrammes } from "@/lib/club/programmes";
 
 interface PlayerTableProps {
   players: Player[];
@@ -73,9 +74,19 @@ export default function PlayerTable({
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [selectedSeason, setSelectedSeason] = useState("all");
+  const [selectedProgramme, setSelectedProgramme] = useState("all");
   const [selectedStatus, setSelectedStatus] = useState("all");
   const [currentPage, setCurrentPage] = useState(1);
   const [currentPageSize, setCurrentPageSize] = useState(pageSize);
+  const [dbProgrammes, setDbProgrammes] = useState<string[]>([]);
+
+  useEffect(() => {
+    fetchProgrammes().then((data) => {
+      if (data && data.length > 0) {
+        setDbProgrammes(data.map((p) => p.nom));
+      }
+    });
+  }, []);
 
   const visibleColumnSet = useMemo(
     () => new Set(columns.length > 0 ? columns : defaultColumns),
@@ -101,6 +112,12 @@ export default function PlayerTable({
     return allOptions.sort((a, b) => b.localeCompare(a));
   }, [players]);
 
+  const programmes = useMemo(() => {
+    const customProgrammes = players.map((player) => player.programme).filter(Boolean) as string[];
+    const allOptions = Array.from(new Set([...customProgrammes, ...dbProgrammes]));
+    return allOptions.sort();
+  }, [players, dbProgrammes]);
+
   const filteredPlayers = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
     return players
@@ -112,22 +129,24 @@ export default function PlayerTable({
           (player.categorie || "").trim().toLowerCase() === selectedCategory.trim().toLowerCase();
         const seasonMatches =
           selectedSeason === "all" || player.saison === selectedSeason;
+        const programmeMatches =
+          selectedProgramme === "all" || player.programme === selectedProgramme;
         const statusMatches =
           selectedStatus === "all" || player.statut === selectedStatus;
-        return nameMatches && categoryMatches && seasonMatches && statusMatches;
+        return nameMatches && categoryMatches && seasonMatches && programmeMatches && statusMatches;
       })
       .sort(
         (a, b) =>
           new Date(b.dateInscription).getTime() -
           new Date(a.dateInscription).getTime(),
       );
-  }, [players, searchQuery, selectedCategory, selectedSeason, selectedStatus]);
+  }, [players, searchQuery, selectedCategory, selectedSeason, selectedProgramme, selectedStatus]);
 
   const totalPages = Math.max(1, Math.ceil(filteredPlayers.length / currentPageSize));
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, selectedCategory, selectedSeason, selectedStatus, currentPageSize]);
+  }, [searchQuery, selectedCategory, selectedSeason, selectedProgramme, selectedStatus, currentPageSize]);
 
   useEffect(() => {
     if (currentPage > totalPages) {
@@ -156,7 +175,7 @@ export default function PlayerTable({
       {showToolbar || actionButton ? (
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           {showToolbar ? (
-            <div className="grid flex-1 gap-2 sm:grid-cols-2 lg:grid-cols-4 min-w-0">
+            <div className="grid flex-1 gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 min-w-0">
               <div className="min-w-0">
                 <input
                   value={searchQuery}
@@ -189,6 +208,20 @@ export default function PlayerTable({
                   {seasons.map((season) => (
                     <option key={season} value={season}>
                       Saison {season}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="min-w-0">
+                <select
+                  value={selectedProgramme}
+                  onChange={(event) => setSelectedProgramme(event.target.value)}
+                  className="h-11 w-full min-w-0 max-w-full truncate rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
+                >
+                  <option value="all">Tous les programmes</option>
+                  {programmes.map((prog) => (
+                    <option key={prog} value={prog}>
+                      {prog}
                     </option>
                   ))}
                 </select>
@@ -306,6 +339,14 @@ export default function PlayerTable({
                   Saison
                 </TableCell>
               ) : null}
+              {visibleColumnSet.has("programme") ? (
+                <TableCell
+                  isHeader
+                  className="py-3 text-start text-theme-xs font-medium text-gray-500 dark:text-gray-400"
+                >
+                  Programme
+                </TableCell>
+              ) : null}
               {visibleColumnSet.has("actions") ? (
                 <TableCell
                   isHeader
@@ -412,6 +453,11 @@ export default function PlayerTable({
                   {visibleColumnSet.has("saison") ? (
                     <TableCell className="py-3 text-theme-sm text-gray-500 dark:text-gray-400">
                       {player.saison || "-"}
+                    </TableCell>
+                  ) : null}
+                  {visibleColumnSet.has("programme") ? (
+                    <TableCell className="py-3 text-theme-sm text-gray-500 dark:text-gray-400">
+                      {player.programme || "-"}
                     </TableCell>
                   ) : null}
                   {visibleColumnSet.has("actions") ? (

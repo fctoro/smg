@@ -17,6 +17,7 @@ export type PlayerColumnKey =
   | "montant"
   | "dernierPaiement"
   | "saison"
+  | "programme"
   | "actions";
 
 export const DEFAULT_CATEGORIES = [
@@ -72,6 +73,7 @@ const defaultPlayerColumns: PlayerColumnConfig[] = [
   { key: "montant", label: "Montant", enabled: true },
   { key: "dernierPaiement", label: "Dernier paiement", enabled: true },
   { key: "saison", label: "Saison", enabled: true },
+  { key: "programme", label: "Programme", enabled: true },
   { key: "actions", label: "Actions", enabled: true },
 ];
 

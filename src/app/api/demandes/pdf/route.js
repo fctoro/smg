@@ -11,7 +11,8 @@ export const runtime = "nodejs";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+  { auth: { persistSession: false, autoRefreshToken: false } }
 );
 
 async function resolveDocumentBytes(doc) {
@@ -117,41 +118,62 @@ export async function GET(request) {
 
     const { data: msgRows, error: msgErr } = await supabase
       .from("site_messages")
-      .select("email, created_at")
+      .select("email, created_at, payload")
       .eq("id", id);
 
     if (msgErr || !msgRows || msgRows.length === 0) {
       return NextResponse.json({ error: "Message non trouve." }, { status: 404 });
     }
 
-    const { email, created_at } = msgRows[0];
+    const { email, created_at, payload: msgPayload } = msgRows[0];
 
-    const { data: allRegs, error: regErr } = await supabase
-      .from("player_registrations")
-      .select("*")
-      .eq("guardian_email", email);
+    let reg = null;
 
-    if (regErr || !allRegs || allRegs.length === 0) {
-      return NextResponse.json({ error: "Inscription correspondante non trouvee." }, { status: 404 });
+    // First: try to use payload.id (registration ID) directly — fastest and most accurate
+    const registrationId = msgPayload?.id;
+    if (registrationId) {
+      const { data: regById } = await supabase
+        .from("player_registrations")
+        .select("*")
+        .eq("id", registrationId)
+        .single();
+      if (regById) reg = regById;
     }
 
-    // Find the registration closest in time to the message
-    const targetTime = new Date(created_at).getTime();
-    let reg = allRegs[0];
-    let minDiff = Math.abs(new Date(reg.created_at).getTime() - targetTime);
+    // Fallback: search by guardian email if payload.id not available
+    if (!reg && email) {
+      const { data: allRegs, error: regErr } = await supabase
+        .from("player_registrations")
+        .select("*")
+        .eq("guardian_email", email);
 
-    for (let i = 1; i < allRegs.length; i++) {
-      const diff = Math.abs(new Date(allRegs[i].created_at).getTime() - targetTime);
-      if (diff < minDiff) {
-        minDiff = diff;
-        reg = allRegs[i];
+      if (regErr || !allRegs || allRegs.length === 0) {
+        return NextResponse.json({ error: "Inscription correspondante non trouvee." }, { status: 404 });
       }
+
+      // Find the registration closest in time to the message
+      const targetTime = new Date(created_at).getTime();
+      reg = allRegs[0];
+      let minDiff = Math.abs(new Date(reg.created_at).getTime() - targetTime);
+
+      for (let i = 1; i < allRegs.length; i++) {
+        const diff = Math.abs(new Date(allRegs[i].created_at).getTime() - targetTime);
+        if (diff < minDiff) {
+          minDiff = diff;
+          reg = allRegs[i];
+        }
+      }
+    }
+
+    if (!reg) {
+      return NextResponse.json({ error: "Inscription correspondante non trouvee." }, { status: 404 });
     }
 
     const { data: docRows, error: docErr } = await supabase
       .from("player_registration_documents")
       .select("*")
       .eq("registration_id", reg.id);
+
 
     const pdfDoc = await PDFDocument.create();
     pdfDoc.registerFontkit(fontkit);

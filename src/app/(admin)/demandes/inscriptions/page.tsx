@@ -25,10 +25,11 @@ export default function BoiteDeReception() {
   const { players } = useClubData();
   const [messages, setMessages] = useState<SiteMessage[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<"contact_general" | "inscription_joueur" | "devenir_fan" | "stagiaire">("inscription_joueur");
+  const [activeTab, setActiveTab] = useState<"inscription_joueur" | "detection">("inscription_joueur");
   const [yearFilter, setYearFilter] = useState("all");
   const [monthFilter, setMonthFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [currentPageSize, setCurrentPageSize] = useState(10);
   const { confirm, ConfirmComponent } = useConfirm();
@@ -160,6 +161,22 @@ export default function BoiteDeReception() {
       const matchTab = m.type_message === activeTab;
       if (!matchTab) return false;
 
+      if (searchQuery.trim() !== "") {
+        const query = searchQuery.toLowerCase().trim();
+        const contactName = (m.contact_nom || "").toLowerCase();
+        const contactEmail = (m.contact_email || "").toLowerCase();
+        const childName = (m.metadata?.enfant_nom || m.metadata?.child_last_name || m.metadata?.nom || "").toLowerCase();
+        const childFirstName = (m.metadata?.enfant_prenom || m.metadata?.child_first_name || m.metadata?.prenom || "").toLowerCase();
+        
+        const isMatch = contactName.includes(query) || 
+                        contactEmail.includes(query) || 
+                        childName.includes(query) || 
+                        childFirstName.includes(query) ||
+                        `${childFirstName} ${childName}`.includes(query);
+                        
+        if (!isMatch) return false;
+      }
+
       if (yearFilter !== "all") {
         const year = new Date(m.created_at).getFullYear().toString();
         if (year !== yearFilter) return false;
@@ -173,7 +190,7 @@ export default function BoiteDeReception() {
       }
       return true;
     });
-  }, [messages, activeTab, yearFilter, monthFilter, statusFilter]);
+  }, [messages, activeTab, yearFilter, monthFilter, statusFilter, searchQuery]);
 
   const toggleStatus = async (id: string, currentStatus: string, metadata?: any) => {
     const newStatus = currentStatus === "nouveau" ? "lu" : "nouveau";
@@ -205,20 +222,16 @@ export default function BoiteDeReception() {
 
   const getTabTitle = (tab: string) => {
     switch (tab) {
-      case "contact_general": return "Messages";
       case "inscription_joueur": return "Inscriptions Joueur";
-      case "devenir_fan": return "Devenir Fan";
-      case "stagiaire": return "Stagiaire";
+      case "detection": return "Détection joueur";
       default: return "";
     }
   };
 
   const getTabSubtitle = (tab: string) => {
     switch (tab) {
-      case "contact_general": return "Consultez et répondez aux messages généraux.";
       case "inscription_joueur": return "Consultez et gérez les inscriptions des nouveaux joueurs.";
-      case "devenir_fan": return "Gérez les nouvelles demandes de supporters et fans.";
-      case "stagiaire": return "Gérez les candidatures pour les stages.";
+      case "detection": return "Consultez et gérez les candidatures pour la détection de nouveaux joueurs.";
       default: return "";
     }
   };
@@ -240,56 +253,31 @@ export default function BoiteDeReception() {
     <div className="space-y-4">
       <PageBreadcrumb pageTitle="Boîte de réception" />
 
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between mb-4">
-        <div className="grid flex-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-          <select
-            className="h-11 w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
-            value={yearFilter}
-            onChange={(e) => {
-              setYearFilter(e.target.value);
-              setCurrentPage(1);
-            }}
-          >
-            <option value="all">Toutes les années</option>
-            <option value="2026">2026</option>
-            <option value="2025">2025</option>
-          </select>
-          
-          <select
-            className="h-11 w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
-            value={monthFilter}
-            onChange={(e) => {
-              setMonthFilter(e.target.value);
-              setCurrentPage(1);
-            }}
-          >
-            <option value="all">Tous les mois</option>
-            <option value="1">Janvier</option>
-            <option value="2">Février</option>
-            <option value="3">Mars</option>
-            <option value="4">Avril</option>
-            <option value="5">Mai</option>
-            <option value="6">Juin</option>
-            <option value="7">Juillet</option>
-            <option value="8">Août</option>
-            <option value="9">Septembre</option>
-            <option value="10">Octobre</option>
-            <option value="11">Novembre</option>
-            <option value="12">Décembre</option>
-          </select>
-
-          <select
-            className="h-11 w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
-            value={statusFilter}
-            onChange={(e) => {
-              setStatusFilter(e.target.value);
-              setCurrentPage(1);
-            }}
-          >
-            <option value="all">Tous les statuts</option>
-            <option value="nouveau">Nouveau</option>
-            <option value="lu">Lu</option>
-          </select>
+      {/* TABS UI (Segmented Control Style) */}
+      <div className="flex justify-start pb-4 mb-2 mt-2 overflow-x-auto hide-scrollbar">
+        <div className="inline-flex items-center gap-1 rounded-full bg-gray-100/80 p-1.5 dark:bg-gray-800/80 backdrop-blur-sm shadow-inner">
+          {["inscription_joueur", "detection"].map((tab) => {
+            const isActive = activeTab === tab;
+            const count = getCount(tab);
+            return (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab as any)}
+                className={`relative flex items-center gap-2.5 rounded-full px-6 py-2.5 text-sm font-bold transition-all duration-300 ease-out ${
+                  isActive
+                    ? "bg-white text-[#C8102E] shadow-sm ring-1 ring-black/5 dark:bg-gray-900 dark:text-red-500 dark:ring-white/10"
+                    : "text-gray-500 hover:text-gray-900 hover:bg-gray-200/50 dark:text-gray-400 dark:hover:text-white dark:hover:bg-gray-700/50"
+                }`}
+              >
+                <span className="relative z-10">{getTabTitle(tab)}</span>
+                {count > 0 && (
+                  <span className="relative z-10 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-[#C8102E] px-1.5 text-[10.5px] font-black text-white shadow-sm ring-2 ring-white dark:ring-gray-900">
+                    {count}
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -304,8 +292,6 @@ export default function BoiteDeReception() {
         return (
           <>
       <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-white/[0.03]">
-        {/* TABS REMOVED */}
-
         {/* HEADER SECTION */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
           <div>
@@ -325,6 +311,76 @@ export default function BoiteDeReception() {
               </svg>
               Exporter Excel / CSV
             </button>
+          </div>
+        </div>
+
+        {/* FILTER BLOCK MOVED INSIDE */}
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between mb-6">
+          <div className="grid flex-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="relative">
+              <input
+                type="text"
+                placeholder="Rechercher un joueur ou parent..."
+                value={searchQuery}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="h-11 w-full rounded-lg border border-gray-300 bg-white pl-10 pr-4 py-2.5 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
+              />
+              <svg className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+            </div>
+
+            <select
+              className="h-11 w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
+              value={yearFilter}
+              onChange={(e) => {
+                setYearFilter(e.target.value);
+                setCurrentPage(1);
+              }}
+            >
+              <option value="all">Toutes les années</option>
+              <option value="2026">2026</option>
+              <option value="2025">2025</option>
+            </select>
+            
+            <select
+              className="h-11 w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
+              value={monthFilter}
+              onChange={(e) => {
+                setMonthFilter(e.target.value);
+                setCurrentPage(1);
+              }}
+            >
+              <option value="all">Tous les mois</option>
+              <option value="1">Janvier</option>
+              <option value="2">Février</option>
+              <option value="3">Mars</option>
+              <option value="4">Avril</option>
+              <option value="5">Mai</option>
+              <option value="6">Juin</option>
+              <option value="7">Juillet</option>
+              <option value="8">Août</option>
+              <option value="9">Septembre</option>
+              <option value="10">Octobre</option>
+              <option value="11">Novembre</option>
+              <option value="12">Décembre</option>
+            </select>
+
+            <select
+              className="h-11 w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
+              value={statusFilter}
+              onChange={(e) => {
+                setStatusFilter(e.target.value);
+                setCurrentPage(1);
+              }}
+            >
+              <option value="all">Tous les statuts</option>
+              <option value="nouveau">Nouveau</option>
+              <option value="lu">Lu</option>
+            </select>
           </div>
         </div>
 
@@ -377,7 +433,7 @@ export default function BoiteDeReception() {
                     <td className="px-4 py-4 align-top">
                       <div className="font-medium text-gray-900 dark:text-white">
                         {msg.contact_nom}
-                        {msg.metadata?.enfant_nom && (
+                        {msg.metadata?.enfant_nom && !msg.contact_nom.includes("Enfant:") && (
                           <span className="font-normal text-gray-500 dark:text-gray-400"> (Enfant: {msg.metadata.enfant_nom})</span>
                         )}
                       </div>
@@ -390,7 +446,7 @@ export default function BoiteDeReception() {
                     </td>
                     <td className="px-4 py-4 align-top text-right">
                       <div className="flex justify-end items-center gap-3 text-gray-400">
-                        {(msg.type_message === "inscription_joueur" || msg.type_message === "stagiaire") && (
+                        {(msg.type_message === "inscription_joueur" || msg.type_message === "stagiaire" || msg.type_message === "detection") && (
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
@@ -516,24 +572,69 @@ export default function BoiteDeReception() {
                   </div>
                 </div>
 
-                <div className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-6">
-                  <div className="flex items-center gap-2.5 mb-5 border-b border-gray-100 dark:border-gray-800 pb-4">
-                    <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                    <h4 className="font-semibold text-gray-900 dark:text-white text-base">Informations Joueur</h4>
-                  </div>
-                  <div className="grid gap-y-5">
-                    <div>
-                      <span className="block text-xs font-medium text-gray-500 mb-1">Nom de l'enfant</span>
-                      <span className="block text-gray-900 dark:text-white font-medium text-sm">{selectedMessage.metadata?.enfant_nom || "N/A"}</span>
+                {selectedMessage.type_message === "detection" ? (
+                  <div className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-6">
+                    <div className="flex items-center gap-2.5 mb-5 border-b border-gray-100 dark:border-gray-800 pb-4">
+                      <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                      <h4 className="font-semibold text-gray-900 dark:text-white text-base">Informations Détection</h4>
                     </div>
-                    <div>
-                      <span className="block text-xs font-medium text-gray-500 mb-1">Message d'inscription</span>
-                      <span className="block text-gray-700 dark:text-gray-300 text-sm leading-relaxed whitespace-pre-wrap">
-                        {selectedMessage.contenu}
-                      </span>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-5 gap-x-6">
+                      <div>
+                        <span className="block text-xs font-medium text-gray-500 mb-1">Joueur</span>
+                        <span className="block text-gray-900 dark:text-white font-medium text-sm">{selectedMessage.metadata?.prenom} {selectedMessage.metadata?.nom}</span>
+                      </div>
+                      <div>
+                        <span className="block text-xs font-medium text-gray-500 mb-1">Date & Lieu de naissance</span>
+                        <span className="block text-gray-900 dark:text-white font-medium text-sm">{selectedMessage.metadata?.date_naissance} ({selectedMessage.metadata?.lieu_naissance})</span>
+                      </div>
+                      <div>
+                        <span className="block text-xs font-medium text-gray-500 mb-1">Pied Dominant</span>
+                        <span className="block text-gray-900 dark:text-white font-medium text-sm">{selectedMessage.metadata?.pied_dominant || "N/A"}</span>
+                      </div>
+                      <div>
+                        <span className="block text-xs font-medium text-gray-500 mb-1">Niveau Actuel</span>
+                        <span className="block text-gray-900 dark:text-white font-medium text-sm">{selectedMessage.metadata?.niveau_actuel || "N/A"}</span>
+                      </div>
+                      <div className="sm:col-span-2">
+                        <span className="block text-xs font-medium text-gray-500 mb-1">Expérience Compétitive</span>
+                        <span className="block text-gray-900 dark:text-white font-medium text-sm whitespace-pre-wrap">{selectedMessage.metadata?.experience_competitive || "N/A"}</span>
+                      </div>
+                      {selectedMessage.metadata?.club_actuel && (
+                        <div className="sm:col-span-2">
+                          <span className="block text-xs font-medium text-gray-500 mb-1">Club Actuel</span>
+                          <span className="block text-gray-900 dark:text-white font-medium text-sm">{selectedMessage.metadata?.club_actuel}</span>
+                        </div>
+                      )}
+                      {selectedMessage.metadata?.photo_recente_url && (
+                        <div className="sm:col-span-2 mt-2">
+                          <a href={selectedMessage.metadata.photo_recente_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 text-sm text-brand-600 hover:text-brand-700 font-medium bg-brand-50 hover:bg-brand-100 px-3 py-2 rounded-lg transition-colors">
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                            Voir la photo jointe
+                          </a>
+                        </div>
+                      )}
                     </div>
                   </div>
-                </div>
+                ) : (
+                  <div className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-6">
+                    <div className="flex items-center gap-2.5 mb-5 border-b border-gray-100 dark:border-gray-800 pb-4">
+                      <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                      <h4 className="font-semibold text-gray-900 dark:text-white text-base">Informations Joueur</h4>
+                    </div>
+                    <div className="grid gap-y-5">
+                      <div>
+                        <span className="block text-xs font-medium text-gray-500 mb-1">Nom de l'enfant</span>
+                        <span className="block text-gray-900 dark:text-white font-medium text-sm">{selectedMessage.metadata?.enfant_nom || selectedMessage.metadata?.child_last_name || "N/A"}</span>
+                      </div>
+                      <div>
+                        <span className="block text-xs font-medium text-gray-500 mb-1">Message d'inscription</span>
+                        <span className="block text-gray-700 dark:text-gray-300 text-sm leading-relaxed whitespace-pre-wrap">
+                          {selectedMessage.contenu}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div id="verification-result-container">
@@ -629,7 +730,12 @@ export default function BoiteDeReception() {
             
             <div className="overflow-y-auto p-6 space-y-4 bg-gray-50/30 dark:bg-white/[0.01]">
                <button 
-                  onClick={() => window.open(downloadTarget.type_message === "stagiaire" ? `/api/stages/pdf?id=${downloadTarget.id}` : `/api/demandes/pdf?id=${downloadTarget.id}`, "_blank")}
+                  onClick={() => window.open(
+                    downloadTarget.type_message === "stagiaire" ? `/api/stages/pdf?id=${downloadTarget.id}` : 
+                    downloadTarget.type_message === "detection" ? `/api/detections/pdf?id=${downloadTarget.id}` :
+                    `/api/demandes/pdf?id=${downloadTarget.id}`, 
+                    "_blank"
+                  )}
                   className="w-full group relative overflow-hidden p-5 bg-gradient-to-br from-brand-500 to-brand-600 dark:from-brand-600 dark:to-brand-800 rounded-2xl transition-all flex items-center gap-4 text-left shadow-lg hover:shadow-brand-500/25 hover:-translate-y-0.5"
                >
                   <div className="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 bg-white opacity-10 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-500"></div>

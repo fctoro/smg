@@ -53,6 +53,7 @@ export const updatePlayerInSupabase = async (playerId: string, data: Partial<Pla
     } else {
       updatePayload.IsDeleted = 0;
     }
+    updatePayload.StatutJoueur = data.statut;
   }
 
   // Handle new document uploads

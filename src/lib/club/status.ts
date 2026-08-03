@@ -2,6 +2,7 @@ import { EventType, PaymentStatus, PlayerStatus } from "@/types/club";
 
 export const playerStatusLabel: Record<PlayerStatus, string> = {
   actif: "Actif",
+  inactif: "Inactif",
   blesse: "Blessé",
   suspendu: "Suspendu",
   abandonne: "Abandonné",
@@ -29,7 +30,7 @@ export const colorFromPlayerStatus = (
   if (status === "blesse") {
     return "warning";
   }
-  if (status === "abandonne") {
+  if (status === "abandonne" || status === "inactif") {
     return "error";
   }
   return "info";

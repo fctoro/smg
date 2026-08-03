@@ -262,6 +262,18 @@ export default function PlayerForm({
             <input value={formValues.poste} onChange={(e) => updateField("poste", e.target.value)} className={inputClassName} />
           </div>
 
+          <div>
+            <label className="mb-1.5 block text-xs font-medium text-gray-700 dark:text-gray-300">Statut *</label>
+            <select value={formValues.statut} onChange={(e) => updateField("statut", e.target.value as PlayerStatus)} className={selectClassName}>
+              <option value="actif">Actif</option>
+              <option value="inactif">Inactif</option>
+              <option value="alumni">Alumni</option>
+              <option value="abandonne">Abandonné</option>
+              <option value="blesse">Blessé</option>
+              <option value="suspendu">Suspendu</option>
+            </select>
+          </div>
+
           <div className="sm:col-span-2">
             <label className="mb-1.5 block text-xs font-medium text-gray-700 dark:text-gray-300">Adresse domicile *</label>
             <input required value={formValues.adresse} onChange={(e) => updateField("adresse", e.target.value)} placeholder="Rue, Quartier, Ville" className={inputClassName} />

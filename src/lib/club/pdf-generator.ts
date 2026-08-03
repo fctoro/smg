@@ -10,7 +10,8 @@ export async function generateReceiptPDFBase64(
   parentNom?: string,
   parentPrenom?: string,
   parentTelephone?: string,
-  parentEmail?: string
+  parentEmail?: string,
+  parentAddress?: string
 ): Promise<string> {
   const doc = new jsPDF();
   
@@ -96,6 +97,11 @@ export async function generateReceiptPDFBase64(
   doc.text(`Tél : ${parentTelephone || "-"}`, 14, 72);
   doc.text(`Email : ${parentEmail || "-"}`, 14, 78);
   
+  if (parentAddress) {
+    const shortAddress = parentAddress.length > 45 ? parentAddress.substring(0, 42) + "..." : parentAddress;
+    doc.text(`Adresse : ${shortAddress}`, 14, 84);
+  }
+  
   doc.setFont("helvetica", "bold");
   doc.setFontSize(8);
   doc.setTextColor(headerTextColor[0], headerTextColor[1], headerTextColor[2]);
@@ -120,7 +126,7 @@ export async function generateReceiptPDFBase64(
 
   const tableStartY = Math.max(90, currentY + 5);
 
-  const tableColumn = ["Date", "Joueur (Enfant)", "Remarque", "Mode", "Montant"];
+  const tableColumn = ["Date", "Joueur (Enfant)", "Description", "Mode", "Montant"];
   const tableRows: any[] = [];
 
   const mapMode = (mode: any) => {
@@ -204,17 +210,17 @@ export async function generateReceiptPDFBase64(
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10);
   doc.setTextColor(grayMedium[0], grayMedium[1], grayMedium[2]);
-  doc.text("Sous-total", 140, finalY + 10);
+  doc.text("Sous-total", 110, finalY + 10);
   doc.text(totalPayeLabel, 196, finalY + 10, { align: 'right' });
 
   doc.setDrawColor(grayLight[0], grayLight[1], grayLight[2]);
   doc.setLineWidth(0.5);
-  doc.line(135, finalY + 15, 196, finalY + 15);
+  doc.line(100, finalY + 15, 196, finalY + 15);
   
   doc.setFont("helvetica", "bold");
   doc.setFontSize(12);
   doc.setTextColor(black[0], black[1], black[2]);
-  doc.text("TOTAL PAYÉ", 140, finalY + 22);
+  doc.text("TOTAL PAYÉ", 110, finalY + 22);
   doc.text(totalPayeLabel, 196, finalY + 22, { align: 'right' });
 
   doc.setFont("helvetica", "bold");

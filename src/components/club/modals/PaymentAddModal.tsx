@@ -315,7 +315,8 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
             parentNom,
             parentPrenom,
             selectedPlayer.parentTelephone || "",
-            selectedPlayer.parentEmail || selectedPlayer.email || ""
+            selectedPlayer.parentEmail || selectedPlayer.email || "",
+            selectedPlayer.parentAdresse || selectedPlayer.adresse || ""
           );
           
           const emailToSend = selectedPlayer.parentEmail || selectedPlayer.email;

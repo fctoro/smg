@@ -45,12 +45,16 @@ export default function RecusPage() {
         totalPayeHTG > 0 ? formatClubCurrency(totalPayeHTG, "HTG") : null
       ].filter(Boolean).join(" / ") || formatClubCurrency(0, "US");
       
+      const firstChild = players.find(player => pIds.includes(player.id));
+      const adresse = firstChild?.parentAdresse || firstChild?.adresse || "";
+      
       return {
         key: p.email ? p.email.toLowerCase().trim() : `${p.nom} ${p.prenom}`.toLowerCase().trim(),
         nom: p.nom,
         prenom: p.prenom,
         email: p.email,
         telephone: p.telephone,
+        adresse,
         playerIds: pIds,
         parentPayments: parentPayments.sort((a, b) => {
           const dateA = a.datePaiement ? new Date(a.datePaiement).getTime() : 0;
@@ -60,7 +64,7 @@ export default function RecusPage() {
         totalPaye: totalPayeLabel,
       };
     });
-  }, [parents, payments]);
+  }, [parents, payments, players]);
 
   // 2. Filtrer la liste globale
   const filteredParents = uniqueParents.filter((p) => {
@@ -173,6 +177,11 @@ export default function RecusPage() {
     doc.text(`Tél : ${parentData.telephone || "-"}`, 14, 72);
     doc.text(`Email : ${parentData.email || "-"}`, 14, 78);
     
+    if (parentData.adresse) {
+      const shortAddress = parentData.adresse.length > 45 ? parentData.adresse.substring(0, 42) + "..." : parentData.adresse;
+      doc.text(`Adresse : ${shortAddress}`, 14, 84);
+    }
+    
     // --- DROITE : Joueurs ---
     doc.setFont("helvetica", "bold");
     doc.setFontSize(8);
@@ -206,7 +215,7 @@ export default function RecusPage() {
     // ==========================================
     // TABLEAU DES VERSEMENTS (Corporate)
     // ==========================================
-    const tableColumn = ["Date", "Joueur (Enfant)", "Remarque", "Mode", "Montant"];
+    const tableColumn = ["Date", "Joueur (Enfant)", "Description", "Mode", "Montant"];
     const tableRows: any[] = [];
 
     const mapMode = (mode: any) => {
@@ -284,18 +293,18 @@ export default function RecusPage() {
     doc.setFont("helvetica", "normal");
     doc.setFontSize(10);
     doc.setTextColor(grayMedium[0], grayMedium[1], grayMedium[2]);
-    doc.text("Sous-total", 140, finalY + 10);
+    doc.text("Sous-total", 110, finalY + 10);
     doc.text(formatCurrencyPDF(parentData.totalPaye), 196, finalY + 10, { align: 'right' });
 
     // Grand Total (Simple ligne, pas de gros bloc de couleur)
     doc.setDrawColor(grayLight[0], grayLight[1], grayLight[2]);
     doc.setLineWidth(0.5);
-    doc.line(135, finalY + 15, 196, finalY + 15);
+    doc.line(100, finalY + 15, 196, finalY + 15);
     
     doc.setFont("helvetica", "bold");
     doc.setFontSize(12);
     doc.setTextColor(black[0], black[1], black[2]);
-    doc.text("TOTAL PAYÉ", 140, finalY + 22);
+    doc.text("TOTAL PAYÉ", 110, finalY + 22);
     doc.text(formatCurrencyPDF(parentData.totalPaye), 196, finalY + 22, { align: 'right' });
 
     // ==========================================

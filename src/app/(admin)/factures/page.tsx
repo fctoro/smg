@@ -78,7 +78,7 @@ export default function InvoicesPage() {
 
   const handleExportCSV = () => {
     setIsExportOpen(false);
-    const headers = ["NoFacture", "Joueur", "DateFacture", "MontantAPayer", "MontantPaye", "Statut", "DatePaiement", "Remarque"];
+    const headers = ["NoFacture", "Joueur", "DateFacture", "MontantAPayer", "MontantPaye", "Statut", "DatePaiement", "Description"];
     let csvContent = headers.join(",") + "\n";
     filteredInvoices.forEach(invoice => {
       const player = playerMap.get(invoice.playerId)!;
@@ -100,7 +100,7 @@ export default function InvoicesPage() {
   const handleExportExcel = () => {
     if (!window.confirm("Voulez-vous vraiment exporter la liste des factures au format Excel ?")) return;
     setIsExportOpen(false);
-    const headers = ["NoFacture", "Joueur", "DateFacture", "MontantAPayer", "MontantPaye", "Statut", "DatePaiement", "Remarque"];
+    const headers = ["NoFacture", "Joueur", "DateFacture", "MontantAPayer", "MontantPaye", "Statut", "DatePaiement", "Description"];
     let csvContent = "\uFEFF" + headers.join(";") + "\n";
     filteredInvoices.forEach(invoice => {
       const player = playerMap.get(invoice.playerId)!;
@@ -235,7 +235,7 @@ export default function InvoicesPage() {
                   Statut
                 </TableCell>
                 <TableCell isHeader className="py-3 text-start text-theme-xs font-medium text-gray-500 dark:text-gray-400">
-                  Remarque
+                  Description
                 </TableCell>
               </TableRow>
             </TableHeader>

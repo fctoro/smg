@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import React, { useState, useEffect, useMemo, useEffect as useReactEffect } from "react";
 import { createPortal } from "react-dom";
@@ -761,7 +761,10 @@ export default function BoiteDeReception() {
                        <span className="h-px flex-1 bg-gray-200 dark:bg-gray-700"></span>
                      </div>
                      <div className="grid gap-3">
-                     {downloadDocs.map((doc) => {
+                      {(downloadTarget.type_message === "detection"
+                        ? downloadDocs.filter(doc => doc.doc_key === "document_photo_id" || doc.doc_key === "photo_recente")
+                        : downloadDocs
+                      ).map((doc) => {
                         const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://uivlcmvofzoyzhtjntlp.supabase.co";
                         const bucket = process.env.SUPABASE_STORAGE_BUCKET || "videos";
                         const publicUrl = doc.path?.startsWith("http") ? doc.path : `${supabaseUrl}/storage/v1/object/public/${bucket}/${doc.path}`;

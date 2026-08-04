@@ -65,7 +65,7 @@ export async function GET(request) {
 
     const { data: msgRows, error: msgErr } = await supabase
       .from("site_messages")
-      .select("metadata, created_at")
+      .select("payload, created_at")
       .eq("id", id);
 
     if (msgErr || !msgRows || msgRows.length === 0) {
@@ -73,7 +73,7 @@ export async function GET(request) {
     }
 
     const msg = msgRows[0];
-    const metadata = msg.metadata || {};
+    const metadata = msg.payload || {};
 
     const pdfDoc = await PDFDocument.create();
     pdfDoc.registerFontkit(fontkit);
@@ -301,6 +301,76 @@ export async function GET(request) {
       ["Nom urgence:", metadata.urgence_nom],
       ["Téléphone urgence:", metadata.urgence_telephone],
     ]);
+
+    // Fetch photo_recente_url from detection_registrations using payload.id
+    let photoUrl = metadata.photo_recente_url || null;
+
+    if (!photoUrl && metadata.id) {
+      try {
+        const { data: detReg } = await supabase
+          .from("detection_registrations")
+          .select("photo_recente_url")
+          .eq("id", metadata.id)
+          .single();
+        if (detReg?.photo_recente_url) {
+          photoUrl = detReg.photo_recente_url;
+        }
+      } catch (e) {
+        console.warn("Could not fetch detection registration photo:", e.message);
+      }
+    }
+
+    // Also update the inline photo at the top if not already shown
+    if (photoUrl && !metadata.photo_recente_url) {
+      // The inline photo wasn't drawn — update metadata for reference
+      metadata.photo_recente_url = photoUrl;
+    }
+
+    // Append photo as full-page annex
+    if (photoUrl) {
+      try {
+        const photoBytes = await resolvePhotoBytes(photoUrl);
+        if (photoBytes) {
+          const annexPage = pdfDoc.addPage([595.28, 841.89]);
+          const pageNumber = pdfDoc.getPageCount();
+
+          annexPage.drawText("ANNEXE : PHOTO D'IDENTITÉ", {
+            x: 50,
+            y: 800,
+            size: 14,
+            font: timesBoldFont,
+            color: rgb(0.1, 0.1, 0.3),
+          });
+
+          annexPage.drawLine({
+            start: { x: 40, y: 785 },
+            end: { x: width - 40, y: 785 },
+            thickness: 1,
+            color: rgb(0.8, 0.1, 0.1),
+          });
+
+          const photoImage = await embedImage(pdfDoc, photoBytes);
+          const maxWidth = 500;
+          const maxHeight = 650;
+          let drawWidth = photoImage.width;
+          let drawHeight = photoImage.height;
+          const ratio = Math.min(maxWidth / drawWidth, maxHeight / drawHeight);
+          drawWidth *= ratio;
+          drawHeight *= ratio;
+
+          annexPage.drawImage(photoImage, {
+            x: (595.28 - drawWidth) / 2,
+            y: 841.89 - drawHeight - 120,
+            width: drawWidth,
+            height: drawHeight,
+          });
+
+          drawFooter(annexPage, pageNumber);
+        }
+      } catch (error) {
+        console.warn("Could not embed photo annex:", error.message);
+      }
+    }
 
     const pdfBytes = await pdfDoc.save();
 

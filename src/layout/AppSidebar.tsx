@@ -224,8 +224,8 @@ const AppSidebar: React.FC = () => {
     return baseOthersItems.filter((item) => item.path !== "/parametres/acces");
   }, [isSuperAdmin, userSections]);
 
-  const displayMainItems = filteredMainItems;
-  const displayOthersItems = filteredOthersItems;
+  const displayMainItems = mounted ? filteredMainItems : adminNavItems;
+  const displayOthersItems = mounted ? filteredOthersItems : baseOthersItems;
 
   const isActive = useCallback(
     (path: string) => {

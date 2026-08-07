@@ -2,7 +2,7 @@
 import React, { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { useSidebar } from "../context/SidebarContext";
 import { useUserRole } from "../context/UserRoleContext";
 import { supabase } from "@/lib/supabaseClient";
@@ -155,12 +155,16 @@ const AppSidebar: React.FC = () => {
   const { isExpanded, isMobileOpen, isHovered, setIsHovered } = useSidebar();
   const { role, isCoach, isAdmin, isSuperAdmin, userSections } = useUserRole();
   const pathname = usePathname();
-  const searchParams = useSearchParams();
+  const [searchTab, setSearchTab] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
   const [unreadCount, setUnreadCount] = useState<number>(0);
 
   useEffect(() => {
     setMounted(true);
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      setSearchTab(params.get("tab"));
+    }
 
     const fetchUnread = async () => {
       const { count } = await supabase
@@ -186,7 +190,7 @@ const AppSidebar: React.FC = () => {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [pathname]);
 
   const inCoachArea = pathname.startsWith("/coach");
 
@@ -220,10 +224,8 @@ const AppSidebar: React.FC = () => {
     return baseOthersItems.filter((item) => item.path !== "/parametres/acces");
   }, [isSuperAdmin, userSections]);
 
-  // Render default admin items during SSR & initial hydration pass for 100% HTML match (0 hydration error).
-  // Once mounted, smoothly adapt to user's specific role & permissions.
-  const displayMainItems = mounted ? filteredMainItems : adminNavItems;
-  const displayOthersItems = mounted ? filteredOthersItems : baseOthersItems;
+  const displayMainItems = filteredMainItems;
+  const displayOthersItems = filteredOthersItems;
 
   const isActive = useCallback(
     (path: string) => {
@@ -232,20 +234,18 @@ const AppSidebar: React.FC = () => {
       }
       
       if (path === "/coach") {
-        const currentTab = searchParams.get("tab");
-        return pathname === "/coach" && !currentTab;
+        return pathname === "/coach" && !searchTab;
       }
 
       if (path.includes("?tab=")) {
         const [basePath, search] = path.split("?");
         const searchParamsFromPath = new URLSearchParams(search);
         const tabToMatch = searchParamsFromPath.get("tab");
-        const currentTab = searchParams.get("tab");
-        return pathname === basePath && currentTab === tabToMatch;
+        return pathname === basePath && searchTab === tabToMatch;
       }
       return pathname === path || (path !== "/dashboard" && pathname.startsWith(`${path}/`));
     },
-    [pathname, searchParams],
+    [pathname, searchTab],
   );
 
   const renderMenuItems = (
@@ -390,6 +390,25 @@ const AppSidebar: React.FC = () => {
           </div>
         </nav>
       </div>
+
+      {(isExpanded || isHovered || isMobileOpen) && (
+        <div className="py-3 border-t border-gray-200 dark:border-gray-800 text-center">
+          <p className="text-[11px] font-medium text-gray-500 dark:text-gray-400">
+            © 2026 FC TORO
+          </p>
+          <p className="text-[10px] text-gray-400 dark:text-gray-500">
+            Conçu par{" "}
+            <a
+              href="https://www.octacore.io/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-semibold text-brand-600 hover:underline dark:text-brand-400"
+            >
+              OCTACORE
+            </a>
+          </p>
+        </div>
+      )}
     </aside>
   );
 };

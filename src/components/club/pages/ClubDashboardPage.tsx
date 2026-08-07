@@ -12,6 +12,7 @@ import { useClubData } from "@/context/ClubDataContext";
 import {
   formatClubCurrency,
   formatClubDate,
+  formatClubNumber,
   getActivePlayersCount,
   getMonthlyPaymentsSeries,
   getRecentPlayers,
@@ -178,22 +179,22 @@ export default function ClubDashboardPage() {
       <div className="col-span-12 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4 md:gap-6">
         <KpiCardClub
           title="Joueurs actifs"
-          value={activePlayers}
+          value={formatClubNumber(activePlayers)}
           icon={<GroupIcon className="size-6 text-gray-800 dark:text-white/90" />}
         />
         <KpiCardClub
           title="Parents"
-          value={parentFamilies}
+          value={formatClubNumber(parentFamilies)}
           icon={<GroupIcon className="size-6 text-brand-600 dark:text-brand-400" />}
         />
         <KpiCardClub
           title="Employés"
-          value={employeeCount}
+          value={formatClubNumber(employeeCount)}
           icon={<GroupIcon className="size-6 text-amber-600 dark:text-amber-400" />}
         />
         <KpiCardClub
           title="Alumni"
-          value={alumniCount}
+          value={formatClubNumber(alumniCount)}
           icon={<UserIcon className="size-6 text-violet-600 dark:text-violet-400" />}
         />
       </div>
@@ -201,24 +202,24 @@ export default function ClubDashboardPage() {
       <div className="col-span-12 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4 md:gap-6">
         <KpiCardClub
           title={isAllTime ? "Revenus Globaux (USD)" : `Revenus (USD) ${displayYear}`}
-          value={formatClubCurrency(currentRevenueUS)}
+          value={formatClubCurrency(currentRevenueUS, "US")}
           trend={isAllTime ? undefined : revenueTrendUS}
           icon={<DollarLineIcon className="size-6 text-emerald-500" />}
         />
         <KpiCardClub
           title={isAllTime ? "Revenus Globaux (HTG)" : `Revenus (HTG) ${displayYear}`}
-          value={`${currentRevenueHTG.toLocaleString("fr-FR")} HTG`}
+          value={formatClubCurrency(currentRevenueHTG, "HTG")}
           trend={isAllTime ? undefined : revenueTrendHTG}
           icon={<DollarLineIcon className="size-6 text-blue-500" />}
         />
         <KpiCardClub
           title="Utilisateurs"
-          value={userCount}
+          value={formatClubNumber(userCount)}
           icon={<UserCircleIcon className="size-6 text-sky-600 dark:text-sky-400" />}
         />
         <KpiCardClub
           title="Paiements"
-          value={paymentCount}
+          value={formatClubNumber(paymentCount)}
           icon={<CheckCircleIcon className="size-6 text-emerald-600 dark:text-emerald-400" />}
         />
       </div>

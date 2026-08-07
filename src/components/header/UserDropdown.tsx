@@ -10,23 +10,29 @@ import { useConfirm } from "@/hooks/useConfirm";
 
 export default function UserDropdown() {
   const [isOpen, setIsOpen] = useState(false);
-  const [userEmail, setUserEmail] = useState<string>("");
   const [mounted, setMounted] = useState(false);
-  const { isCoach, isFinance, isSuperAdmin, userCategories } = useUserRole();
+  const { userEmail: contextEmail, isCoach, isFinance, isSuperAdmin, userCategories } = useUserRole();
+  const [userEmail, setUserEmail] = useState<string>("");
   const { confirm, ConfirmComponent } = useConfirm();
 
   useEffect(() => {
     setMounted(true);
-    async function getUser() {
-      try {
-        const { data } = await supabase.auth.getUser();
-        if (data?.user?.email) {
-          setUserEmail(data.user.email);
-        }
-      } catch (e) {}
+    if (contextEmail) {
+      setUserEmail(contextEmail);
+    } else {
+      async function getUser() {
+        try {
+          const { data } = await supabase.auth.getUser();
+          if (data?.user?.email) {
+            setUserEmail(data.user.email);
+          } else if (typeof window !== "undefined") {
+            setUserEmail(localStorage.getItem("fctoro_user_email") || "");
+          }
+        } catch (e) {}
+      }
+      getUser();
     }
-    getUser();
-  }, []);
+  }, [contextEmail]);
 
   function toggleDropdown(e: React.MouseEvent<HTMLButtonElement, MouseEvent>) {
     e.stopPropagation();
@@ -62,7 +68,6 @@ export default function UserDropdown() {
     });
   };
 
-  // Always render "Administrateur" on server to match SSR, swap after mount
   const displayRoleLabel = !mounted
     ? "Administrateur"
     : isSuperAdmin
@@ -79,13 +84,8 @@ export default function UserDropdown() {
         onClick={toggleDropdown}
         className="flex items-center text-gray-700 dark:text-gray-400 dropdown-toggle"
       >
-        <span className="mr-3 relative overflow-hidden rounded-full h-11 w-11 border-2 border-brand-500/20">
-          <Image
-            width={44}
-            height={44}
-            src="/images/user/owner.jpg"
-            alt={userEmail || "Utilisateur"}
-          />
+        <span className="mr-3 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-600 text-white font-bold text-base shadow-sm border-2 border-brand-500/20 uppercase">
+          {userEmail ? userEmail.charAt(0) : "U"}
         </span>
 
         <div className="flex flex-col text-left mr-1">
@@ -96,7 +96,7 @@ export default function UserDropdown() {
             className="block text-[11px] font-semibold text-brand-600 dark:text-brand-400 leading-tight truncate max-w-[150px]"
             suppressHydrationWarning
           >
-            {displayRoleLabel} {mounted && isCoach && userCategories?.length ? `- ${userCategories.join(', ')}` : ""}
+            {displayRoleLabel} {isCoach && userCategories?.length ? `- ${userCategories.join(', ')}` : ""}
           </span>
         </div>
 
@@ -132,7 +132,7 @@ export default function UserDropdown() {
           <span className="mt-2 inline-flex flex-wrap items-center gap-1.5 rounded-full bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-700 dark:bg-brand-500/15 dark:text-brand-300" suppressHydrationWarning>
             <span className="h-1.5 w-1.5 rounded-full bg-brand-500" />
             Connecté en {displayRoleLabel}
-            {mounted && isCoach && userCategories && userCategories.length > 0 && (
+            {isCoach && userCategories && userCategories.length > 0 && (
               <span className="opacity-80">
                 ({userCategories.join(", ")})
               </span>

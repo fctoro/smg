@@ -320,13 +320,16 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
               allValuesStr.includes("quitt") ||
               allValuesStr.includes("déménag") ||
               allValuesStr.includes("demenag") ||
-              allValuesStr.includes("inactif") ||
-              d.Actif === false ||
-              d.Actif === 0 ||
               d.Abandon === true ||
               d.Abandon === 1
             ) {
               playerStatus = "abandonne";
+            } else if (
+              allValuesStr.includes("inactif") ||
+              d.Actif === false ||
+              d.Actif === 0
+            ) {
+              playerStatus = "inactif";
             } else if (allValuesStr.includes("bless")) {
               playerStatus = "blesse";
             } else if (allValuesStr.includes("suspend")) {

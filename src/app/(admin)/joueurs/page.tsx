@@ -14,6 +14,7 @@ import { fetchSiteMessageById } from "@/lib/club/supabase-demandes";
 import { Dropdown } from "@/components/ui/dropdown/Dropdown";
 import { DropdownItem } from "@/components/ui/dropdown/DropdownItem";
 import { useConfirm } from "@/hooks/useConfirm";
+import { usePermissions } from "@/hooks/usePermissions";
 
 import { PlayerViewModal } from "@/components/club/modals/PlayerViewModal";
 import { PlayerEditModal } from "@/components/club/modals/PlayerEditModal";
@@ -26,6 +27,7 @@ function PlayersPageContent() {
   const searchParams = useSearchParams();
   const { players: allPlayers, setPlayers } = useClubData();
   const { isCoach, userCategories } = useUserRole();
+  const { hasPermission, isLoaded } = usePermissions();
 
   const activePlayers = useMemo(() => allPlayers.filter(p => p.statut !== "alumni"), [allPlayers]);
   const players = useMemo(() => isCoach && userCategories && userCategories.length > 0
@@ -127,6 +129,23 @@ function PlayersPageContent() {
       isDestructive: true,
       onConfirm: async () => {
         try {
+          // Fresh permission check
+          const { data: authData } = await supabase.auth.getUser();
+          const user = authData?.user;
+          if (user) {
+            const role = (user.user_metadata?.role || "").toLowerCase();
+            const email = user.email;
+            const perms = user.user_metadata?.permissions || {};
+            
+            if (email !== "footballclubtoro@gmail.com" && role !== "super admin") {
+              const hasPerm = (perms["Joueurs"] || []).includes("delete");
+              if (!hasPerm) {
+                alert("Accès refusé : Vos droits ont été révoqués récemment. Veuillez rafraîchir la page ou vous reconnecter.");
+                return;
+              }
+            }
+          }
+
           await softDeletePlayerInSupabase(playerId);
           setPlayers((prevPlayers) =>
             prevPlayers.filter((player) => player.id !== playerId),
@@ -203,25 +222,25 @@ function PlayersPageContent() {
         players={players}
         columns={tableColumns}
         onViewPlayer={(player) => setSelectedViewPlayer(player)}
-        onEditPlayer={(player) => setSelectedEditPlayer(player)}
-        onDeletePlayer={(player) => handleDeletePlayer(player.id)}
-        actionButton={
+        onEditPlayer={hasPermission("Joueurs", "edit") ? ((player) => setSelectedEditPlayer(player)) : undefined}
+        onDeletePlayer={hasPermission("Joueurs", "delete") ? ((player) => handleDeletePlayer(player.id)) : undefined}        actionButton={
           <div className="flex items-center gap-2">
             <Link
               href="/joueurs/statuts-speciaux"
               className="inline-flex h-11 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border border-brand-200 bg-brand-50 px-3.5 text-sm font-semibold text-brand-700 shadow-theme-xs hover:bg-brand-100 dark:border-brand-500/30 dark:bg-brand-500/10 dark:text-brand-300 dark:hover:bg-brand-500/20"
             >
-              ⭐ Statuts Spéciaux
+              Statuts Speciaux
             </Link>
-            <button
-              onClick={() => setIsAddModalOpen(true)}
-              className="inline-flex h-11 items-center justify-center whitespace-nowrap rounded-lg bg-brand-500 px-4 text-sm font-medium text-white shadow-theme-xs hover:bg-brand-600"
-            >
-              + Ajouter un joueur
-            </button>
+            {hasPermission("Joueurs", "create") && (
+              <button
+                onClick={() => setIsAddModalOpen(true)}
+                className="inline-flex h-11 items-center justify-center whitespace-nowrap rounded-lg bg-brand-500 px-4 text-sm font-medium text-white shadow-theme-xs hover:bg-brand-600"
+              >
+                + Ajouter un joueur
+              </button>
+            )}
           </div>
-        }
-        exportButton={
+        }        exportButton={
           <div className="relative">
             <button
               onClick={() => setIsExportOpen(!isExportOpen)}

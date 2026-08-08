@@ -3,8 +3,9 @@
 import { TableSkeleton } from "@/components/ui/skeleton/Skeleton";
 import React, { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import { EyeIcon, EyeSlashIcon } from "@heroicons/react/24/outline";
 import { PencilIcon } from "@/icons";
-import { createUser, getUsersList, deleteUser, updateUserPassword, updateUserAccess } from "@/app/actions/user";
+import { createUser, getUsersList, deleteUser, updateUserPassword, updateUserAccess, getRoleConfig, saveRoleConfig } from "@/app/actions/user";
 import { fetchCoaches } from "@/lib/club/coachs";
 import { Coach } from "@/types/club";
 
@@ -15,6 +16,7 @@ type Profile = {
   role: string;
   sections?: string[];
   categories?: string[];
+  permissions?: Record<string, string[]>;
   created_at: string;
 };
 
@@ -59,6 +61,7 @@ export default function AccessControlPage() {
   });
 
   const [selectedSections, setSelectedSections] = useState<string[]>(rolePermissions["Admin"]);
+  const [selectedPermissions, setSelectedPermissions] = useState<Record<string, string[]>>({});
   const [availableCategories, setAvailableCategories] = useState<string[]>([]);
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
@@ -97,22 +100,32 @@ export default function AccessControlPage() {
       const data = await fetchCoaches();
       setCoaches(data);
     }
+    async function loadConfig() {
+      const config = await getRoleConfig();
+      if (config) {
+        setRolePermissions(config);
+        setSelectedSections(config["Admin"] || []);
+      }
+    }
     checkUser();
     fetchCategories();
     fetchProfiles();
     loadCoaches();
+    loadConfig();
   }, []);
 
   const handleRoleSelect = (roleId: string) => {
     setFormData(prev => ({ ...prev, role: roleId }));
     if (roleId === "Coach") {
       setSelectedSections([]);
+      setSelectedPermissions({});
       // Reset selected coach on role switch
       setSelectedCoachId("");
       setFormData(prev => ({ ...prev, email: "" }));
       setSelectedCategories([]);
     } else {
       setSelectedSections(rolePermissions[roleId] || []);
+      setSelectedPermissions({});
     }
   };
 
@@ -142,11 +155,36 @@ export default function AccessControlPage() {
   };
 
   const handleToggleSection = (section: string) => {
-    setSelectedSections(prev => 
-      prev.includes(section) 
-        ? prev.filter(s => s !== section)
-        : [...prev, section]
-    );
+    setSelectedSections(prev => {
+      const isSelected = prev.includes(section);
+      if (isSelected) {
+        setSelectedPermissions(p => {
+          const next = { ...p };
+          delete next[section];
+          return next;
+        });
+        return prev.filter(s => s !== section);
+      } else {
+        setSelectedPermissions(p => ({ ...p, [section]: ["view"] }));
+        return [...prev, section];
+      }
+    });
+  };
+
+  const handleTogglePermission = (section: string, action: string) => {
+    setSelectedPermissions(prev => {
+      const current = prev[section] || [];
+      // Always enforce "view" if any other permission is set
+      let updated = current.includes(action) 
+        ? current.filter(a => a !== action)
+        : [...current, action];
+      
+      if (updated.length > 0 && !updated.includes("view")) {
+        updated.push("view");
+      }
+      
+      return { ...prev, [section]: updated };
+    });
   };
 
   const handleToggleCategory = (category: string) => {
@@ -183,6 +221,7 @@ export default function AccessControlPage() {
     form.append("role", formData.role);
     form.append("sections", JSON.stringify(formData.role === "Coach" ? [] : selectedSections));
     form.append("categories", JSON.stringify(formData.role === "Coach" ? selectedCategories : []));
+    form.append("permissions", JSON.stringify(formData.role === "Coach" ? {} : selectedPermissions));
 
     let result;
     if (editingAccessUserId) {
@@ -198,7 +237,8 @@ export default function AccessControlPage() {
         editingAccessUserId, 
         formData.role, 
         formData.role === "Coach" ? [] : selectedSections,
-        formData.role === "Coach" ? selectedCategories : []
+        formData.role === "Coach" ? selectedCategories : [],
+        formData.role === "Coach" ? {} : selectedPermissions
       );
     } else {
       result = await createUser(form);
@@ -212,6 +252,7 @@ export default function AccessControlPage() {
       setEditingAccessUserId(null);
       setFormData({ email: "", password: "", role: "Admin" });
       setSelectedSections(rolePermissions["Admin"]);
+      setSelectedPermissions({});
       setSelectedCoachId("");
       fetchProfiles();
     }
@@ -223,6 +264,7 @@ export default function AccessControlPage() {
       setEditingAccessUserId(null);
       setFormData({ email: "", password: "", role: "Admin" });
       setSelectedSections(rolePermissions["Admin"]);
+      setSelectedPermissions({});
       return;
     }
 
@@ -230,6 +272,7 @@ export default function AccessControlPage() {
     setFormData({ email: user.email, password: "", role: user.role });
     setSelectedSections(user.role === "Coach" ? [] : (user.sections || rolePermissions[user.role] || []));
     setSelectedCategories(user.categories || []);
+    setSelectedPermissions(user.permissions || {});
   };
 
   const handleDeleteUser = async (user: Profile) => {
@@ -247,13 +290,16 @@ export default function AccessControlPage() {
     }
   };
 
-  const handleSaveRoleConfig = () => {
+  const handleSaveRoleConfig = async () => {
     setConfigSaving(true);
-    setTimeout(() => {
-      setConfigSaving(false);
+    const res = await saveRoleConfig(rolePermissions);
+    setConfigSaving(false);
+    if (res.error) {
+      setConfigMessage(`Erreur: ${res.error}`);
+    } else {
       setConfigMessage(`Permissions par défaut pour le rôle "${activeConfigRole}" sauvegardées !`);
-      setTimeout(() => setConfigMessage(null), 3000);
-    }, 600);
+    }
+    setTimeout(() => setConfigMessage(null), 3000);
   };
 
   return (
@@ -482,24 +528,60 @@ export default function AccessControlPage() {
               </div>
               
               <div className="p-5 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-y-4 gap-x-4">
-                {SECTIONS.map(section => (
-                  <label key={section} className="flex items-center gap-3 cursor-pointer group">
-                    <div className="relative flex items-center">
-                      <input 
-                        type="checkbox"
-                        checked={selectedSections.includes(section)}
-                        onChange={() => handleToggleSection(section)}
-                        className="peer h-[18px] w-[18px] cursor-pointer appearance-none rounded-[4px] border border-[#cbd5e1] bg-white checked:border-[#0f172a] checked:bg-[#0f172a] transition-all outline-none"
-                      />
-                      <svg className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-3 h-3 pointer-events-none opacity-0 peer-checked:opacity-100 text-white stroke-white" viewBox="0 0 14 10" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M1 5L4.5 8.5L13 1" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                      </svg>
+                {SECTIONS.map(section => {
+                  const isSectionSelected = selectedSections.includes(section);
+                  return (
+                    <div key={section} className="flex flex-col gap-2">
+                      <label className="flex items-center gap-3 cursor-pointer group">
+                        <div className="relative flex items-center">
+                          <input 
+                            type="checkbox"
+                            checked={isSectionSelected}
+                            onChange={() => handleToggleSection(section)}
+                            className="peer h-[18px] w-[18px] cursor-pointer appearance-none rounded-[4px] border border-[#cbd5e1] bg-white checked:border-[#0f172a] checked:bg-[#0f172a] transition-all outline-none"
+                          />
+                          <svg className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-3 h-3 pointer-events-none opacity-0 peer-checked:opacity-100 text-white stroke-white" viewBox="0 0 14 10" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M1 5L4.5 8.5L13 1" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                          </svg>
+                        </div>
+                        <span className="text-[14px] text-[#475569] group-hover:text-[#0f172a] transition-colors font-medium">
+                          {section}
+                        </span>
+                      </label>
+                      
+                      {isSectionSelected && (
+                        <div className="ml-7 flex flex-wrap gap-x-4 gap-y-2 mt-1">
+                          {[
+                            { id: 'view', label: 'Lecture' },
+                            { id: 'create', label: 'Ajout' },
+                            { id: 'edit', label: 'Modif' },
+                            { id: 'delete', label: 'Suppr' }
+                          ].map(perm => {
+                            const isPermSelected = (selectedPermissions[section] || []).includes(perm.id);
+                            return (
+                              <label key={perm.id} className="flex items-center gap-1.5 cursor-pointer group">
+                                <div className="relative flex items-center">
+                                  <input 
+                                    type="checkbox"
+                                    checked={isPermSelected}
+                                    onChange={() => handleTogglePermission(section, perm.id)}
+                                    className="peer h-3.5 w-3.5 cursor-pointer appearance-none rounded-[3px] border border-[#cbd5e1] bg-white checked:border-[#0f172a] checked:bg-[#0f172a] transition-all outline-none"
+                                  />
+                                  <svg className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-2 h-2 pointer-events-none opacity-0 peer-checked:opacity-100 text-white stroke-white" viewBox="0 0 14 10" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M1 5L4.5 8.5L13 1" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                                  </svg>
+                                </div>
+                                <span className="text-[11px] text-[#64748b] group-hover:text-[#0f172a] transition-colors">
+                                  {perm.label}
+                                </span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
-                    <span className="text-[14px] text-[#475569] group-hover:text-[#0f172a] transition-colors">
-                      {section}
-                    </span>
-                  </label>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}

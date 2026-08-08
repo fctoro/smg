@@ -472,24 +472,28 @@ export default function PlayerTable({
                         >
                           <EyeIcon className="size-5" />
                         </button>
-                        <button
-                          type="button"
-                          className="inline-flex items-center justify-center text-gray-500 transition hover:text-error-600 dark:text-gray-400 dark:hover:text-error-500"
-                          onClick={() => onDeletePlayer?.(player)}
-                          aria-label="Supprimer"
-                          title="Supprimer"
-                        >
-                          <TrashBinIcon className="size-5" />
-                        </button>
-                        <button
-                          type="button"
-                          className="inline-flex items-center justify-center text-gray-500 transition hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200"
-                          onClick={() => onEditPlayer?.(player)}
-                          aria-label="Modifier"
-                          title="Modifier"
-                        >
-                          <PencilIcon className="size-5" />
-                        </button>
+                        {onDeletePlayer && (
+                          <button
+                            type="button"
+                            className="inline-flex items-center justify-center text-gray-500 transition hover:text-error-600 dark:text-gray-400 dark:hover:text-error-500"
+                            onClick={() => onDeletePlayer(player)}
+                            aria-label="Supprimer"
+                            title="Supprimer"
+                          >
+                            <TrashBinIcon className="size-5" />
+                          </button>
+                        )}
+                        {onEditPlayer && (
+                          <button
+                            type="button"
+                            className="inline-flex items-center justify-center text-gray-500 transition hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200"
+                            onClick={() => onEditPlayer(player)}
+                            aria-label="Modifier"
+                            title="Modifier"
+                          >
+                            <PencilIcon className="size-5" />
+                          </button>
+                        )}
                       </div>
                     </TableCell>
                   ) : null}

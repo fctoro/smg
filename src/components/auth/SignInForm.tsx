@@ -72,9 +72,13 @@ export default function SignInForm() {
         if (userSections.length === 0) {
           userSections = getDefaultSectionsForRole(normalizedRole);
         }
+        
+        const userPermissions = u.user_metadata?.permissions || {};
+        
         localStorage.setItem("fctoro_user_email", uEmail);
         localStorage.setItem("fctoro_user_role", normalizedRole);
         localStorage.setItem("fctoro_user_sections", JSON.stringify(userSections));
+        localStorage.setItem("fctoro_user_permissions", JSON.stringify(userPermissions));
 
         router.replace(normalizedRole === "coach" ? "/coach" : "/dashboard");
         router.refresh();

@@ -24,7 +24,7 @@ export async function GET(request: Request, context: any) {
       .eq("id", id);
 
     if (msgErr || !msgRows || msgRows.length === 0) {
-      return NextResponse.json({ error: "Message non trouve." }, { status: 404 });
+      return NextResponse.json({ isDuplicate: false });
     }
 
     const msg = msgRows[0];

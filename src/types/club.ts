@@ -1,4 +1,4 @@
-export type PlayerStatus = "actif" | "blesse" | "suspendu" | "abandonne" | "alumni";
+export type PlayerStatus = "actif" | "inactif" | "blesse" | "suspendu" | "abandonne" | "alumni";
 
 export type PaymentStatus = "paid" | "pending" | "late";
 
@@ -306,7 +306,7 @@ export interface PayrollRecord {
 
 export interface SiteMessage {
   id: string;
-  type_message: "inscription_joueur" | "devenir_fan" | "stagiaire" | "contact_general";
+  type_message: "inscription_joueur" | "devenir_fan" | "stagiaire" | "contact_general" | "detection";
   statut: "nouveau" | "lu" | "archive" | "inscrit";
   contact_nom: string;
   contact_email: string;

@@ -16,6 +16,53 @@ const supabaseAdmin: any = process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.S
     )
   : null;
 
+export async function getRoleConfig() {
+  if (!supabaseAdmin) return null;
+  try {
+    const { data, error } = await supabaseAdmin
+      .from("site_messages")
+      .select("payload")
+      .eq("type", "role_config")
+      .limit(1)
+      .single();
+    if (error || !data) return null;
+    return data.payload;
+  } catch (err) {
+    return null;
+  }
+}
+
+export async function saveRoleConfig(config: Record<string, string[]>) {
+  if (!supabaseAdmin) return { error: "No DB connection" };
+  try {
+    const { data: existing } = await supabaseAdmin
+      .from("site_messages")
+      .select("id")
+      .eq("type", "role_config")
+      .limit(1)
+      .single();
+
+    const payload = {
+      name: "Role Config",
+      email: "system@fctoro.com",
+      type: "role_config",
+      payload: config,
+      status: "system"
+    };
+
+    if (existing?.id) {
+      const { error } = await supabaseAdmin.from("site_messages").update(payload).eq("id", existing.id);
+      if (error) return { error: error.message };
+    } else {
+      const { error } = await supabaseAdmin.from("site_messages").insert([payload]);
+      if (error) return { error: error.message };
+    }
+    return { success: true };
+  } catch (err: any) {
+    return { error: err.message };
+  }
+}
+
 export async function getUsersList() {
   try {
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.listUsers();
@@ -36,6 +83,7 @@ export async function getUsersList() {
         role: prof?.role || metaRole || (u.email === "footballclubtoro@gmail.com" ? "Super Admin" : "Admin"),
         sections: prof?.sections || u.user_metadata?.sections || [],
         categories: u.user_metadata?.categories || [],
+        permissions: u.user_metadata?.permissions || {},
         created_at: u.created_at || new Date().toISOString()
       };
     });
@@ -69,6 +117,7 @@ export async function createUser(formData: FormData) {
     const role = formData.get("role") as string;
     const rawSections = formData.get("sections") as string;
     const rawCategories = formData.get("categories") as string;
+    const rawPermissions = formData.get("permissions") as string;
 
     if (!email || !password || !role) {
       return { error: "Veuillez remplir l'adresse email et le mot de passe." };
@@ -76,13 +125,14 @@ export async function createUser(formData: FormData) {
 
     const sections = rawSections ? JSON.parse(rawSections) : [];
     const categories = rawCategories ? JSON.parse(rawCategories) : [];
+    const permissions = rawPermissions ? JSON.parse(rawPermissions) : {};
     const fullName = rawFullName && rawFullName.trim() ? rawFullName.trim() : email;
 
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
       email: email,
       password: password,
       email_confirm: true,
-      user_metadata: { full_name: fullName, role: role, sections: sections, categories: categories }
+      user_metadata: { full_name: fullName, role: role, sections: sections, categories: categories, permissions: permissions }
     });
 
     if (authError) {
@@ -110,12 +160,12 @@ export async function createUser(formData: FormData) {
   }
 }
 
-export async function updateUserAccess(userId: string, role: string, sections: string[], categories: string[] = []) {
+export async function updateUserAccess(userId: string, role: string, sections: string[], categories: string[] = [], permissions: Record<string, string[]> = {}) {
   try {
     if (!userId || !role) return { error: "Données utilisateur manquantes." };
 
     const { error: updateErr } = await supabaseAdmin.auth.admin.updateUserById(userId, {
-      user_metadata: { role, sections, categories }
+      user_metadata: { role, sections, categories, permissions }
     });
 
     if (updateErr) {

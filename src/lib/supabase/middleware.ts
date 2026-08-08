@@ -30,22 +30,18 @@ export async function updateSession(request: NextRequest) {
 
   let user = null
 
-  try {
-    if (supabase) {
+  if (supabase) {
+    try {
       const {
         data: { user: authenticatedUser },
       } = await supabase.auth.getUser()
 
       user = authenticatedUser
+    } catch (err) {
+      console.error('Supabase Middleware Error:', err);
+      // Nous ne supprimons plus les cookies agressivement ici.
+      // Cela évite les déconnexions intempestives lors de micro-coupures ou race conditions.
     }
-  } catch {
-    request.cookies
-      .getAll()
-      .filter(({ name }) => name.startsWith('sb-'))
-      .forEach(({ name }) => {
-        request.cookies.delete(name)
-        supabaseResponse.cookies.delete(name)
-      })
   }
 
   const isAuthPage = 
@@ -55,15 +51,27 @@ export async function updateSession(request: NextRequest) {
     request.nextUrl.pathname.startsWith('/reset-password')
 
   if (!user && !isAuthPage) {
-    const url = request.nextUrl.clone()
-    url.pathname = '/signin'
-    return NextResponse.redirect(url)
+    const redirectUrl = request.nextUrl.clone()
+    redirectUrl.pathname = '/signin'
+    const redirectResponse = NextResponse.redirect(redirectUrl)
+    
+    // IMPORTANT: Transférer les cookies pour ne pas perdre l'état de la session (refresh token)
+    supabaseResponse.cookies.getAll().forEach((cookie) => {
+      redirectResponse.cookies.set(cookie.name, cookie.value)
+    })
+    return redirectResponse
   }
 
   if (user && (request.nextUrl.pathname.startsWith('/signin') || request.nextUrl.pathname.startsWith('/signup') || request.nextUrl.pathname === '/')) {
-    const url = request.nextUrl.clone()
-    url.pathname = '/dashboard'
-    return NextResponse.redirect(url)
+    const redirectUrl = request.nextUrl.clone()
+    redirectUrl.pathname = '/dashboard'
+    const redirectResponse = NextResponse.redirect(redirectUrl)
+
+    // IMPORTANT: Transférer les cookies pour ne pas perdre l'état de la session
+    supabaseResponse.cookies.getAll().forEach((cookie) => {
+      redirectResponse.cookies.set(cookie.name, cookie.value)
+    })
+    return redirectResponse
   }
 
   // Strict restriction for /parametres/acces: Only Super Admin allowed
@@ -78,9 +86,14 @@ export async function updateSession(request: NextRequest) {
     const isSuperAdmin = userRole === 'super admin' || user.email === 'footballclubtoro@gmail.com';
 
     if (!isSuperAdmin) {
-      const url = request.nextUrl.clone()
-      url.pathname = '/dashboard'
-      return NextResponse.redirect(url)
+      const redirectUrl = request.nextUrl.clone()
+      redirectUrl.pathname = '/dashboard'
+      const redirectResponse = NextResponse.redirect(redirectUrl)
+
+      supabaseResponse.cookies.getAll().forEach((cookie) => {
+        redirectResponse.cookies.set(cookie.name, cookie.value)
+      })
+      return redirectResponse
     }
   }
 

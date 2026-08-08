@@ -6,7 +6,7 @@ import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import { useClubData } from "@/context/ClubDataContext";
 import { PaymentMethod, PaymentStatus, Player } from "@/types/club";
 import { getPlayerFullName } from "@/lib/club/metrics";
-import { addPaymentToSupabase, addInvoiceToSupabase, updatePlayerInSupabase } from "@/lib/club/supabase-crud";
+import { addPaymentToSupabase, addInvoiceToSupabase } from "@/lib/club/supabase-crud";
 import { validatePaymentPhotoFile, getPaymentPhotoPreviewUrl, uploadPaymentPhotoToSupabase } from "@/lib/club/payment-photo-utils";
 
 const inputClassName =
@@ -128,7 +128,7 @@ const paymentPlans: PaymentPlan[] = [
 
 export default function NewPaymentPage() {
   const router = useRouter();
-  const { players, setPayments, setPlayers } = useClubData();
+  const { players, setPayments } = useClubData();
   const [playerId, setPlayerId] = useState("");
   const [playerSearch, setPlayerSearch] = useState("");
   const [showPlayerDropdown, setShowPlayerDropdown] = useState(false);
@@ -144,13 +144,7 @@ export default function NewPaymentPage() {
   const [selectedPlan, setSelectedPlan] = useState<string>("");
   const [montantDonne, setMontantDonne] = useState<number>(0);
   const [error, setError] = useState<string>("");
-  const [playerStatus, setPlayerStatus] = useState<string>("");
-  const [customStatuses, setCustomStatuses] = useState<string[]>([
-    "Boursier",
-    "Demi-bourse",
-    "Joueur spécial"
-  ]);
-  const [newStatus, setNewStatus] = useState<string>("");
+
   const [paymentPhoto, setPaymentPhoto] = useState<File | null>(null);
   const [paymentPhotoPreview, setPaymentPhotoPreview] = useState<string | null>(null);
   const [paymentPhotoError, setPaymentPhotoError] = useState<string | null>(null);
@@ -158,7 +152,6 @@ export default function NewPaymentPage() {
   const playerOptions = useMemo(() => players, [players]);
   const searchContainerRef = useRef<HTMLDivElement>(null);
   const playerInputRef = useRef<HTMLInputElement>(null);
-
   const selectedPlayer = useMemo(
     () => players.find((p) => p.id === playerId) ?? null,
     [players, playerId]
@@ -197,13 +190,7 @@ export default function NewPaymentPage() {
     }
   }, [selectedPlayer]);
 
-  const handleAddStatus = () => {
-    if (newStatus.trim() && !customStatuses.includes(newStatus.trim())) {
-      setCustomStatuses([...customStatuses, newStatus.trim()]);
-      setPlayerStatus(newStatus.trim());
-      setNewStatus("");
-    }
-  };
+
 
   const handlePaymentPhotoChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0] ?? null;
@@ -281,9 +268,7 @@ export default function NewPaymentPage() {
         periode,
         statut,
         methode,
-        selectedPlan,
-        description,
-        playerStatus
+        description
       });
 
       // Use the final calculated amount
@@ -296,8 +281,6 @@ export default function NewPaymentPage() {
       // Only transactions explicitly marked as paid affect the balance.
       const paymentStatus: PaymentStatus = statut;
 
-      // Build the description/remark with player status
-      const statusRemark = playerStatus ? `[${playerStatus}] ` : "";
       const planRemark = selectedPlan ? `Plan: ${paymentPlans.find(p => p.id === selectedPlan)?.plan}` : "";
       const adhesionRemark = selectedPricing.includes("adhesion-ti")
         ? "Adhésion: TI TORO"
@@ -308,7 +291,7 @@ export default function NewPaymentPage() {
       const planCode = selectedPlan.toUpperCase();
       const statusCode = paymentStatus.toUpperCase();
       const paymentMarkers = `[ADHESION:${adhesionCode}] [PLAN:${planCode}] [STATUT:${statusCode}]`;
-      const finalRemarque = `${paymentMarkers} ${statusRemark}${description.trim()} ${adhesionRemark} ${planRemark}`.trim();
+      const finalRemarque = `${paymentMarkers} ${description.trim()} ${adhesionRemark} ${planRemark}`.trim();
       const paymentPhotoUrl = paymentPhoto ? await uploadPaymentPhotoToSupabase(paymentPhoto) : null;
       const paymentPhotoNote = paymentPhotoUrl ? ` [JUSTIFICATIF:${paymentPhotoUrl}]` : paymentPhoto ? ` [JUSTIFICATIF:${paymentPhoto.name}]` : "";
       const finalRemarqueWithPhoto = `${finalRemarque}${paymentPhotoNote}`.trim();
@@ -365,14 +348,7 @@ export default function NewPaymentPage() {
         ...prevPayments,
       ]);
 
-      if (playerStatus) {
-        await updatePlayerInSupabase(playerId, { statutJoueur: playerStatus });
-        setPlayers((prevPlayers) =>
-          prevPlayers.map((player) =>
-            player.id === playerId ? { ...player, statutJoueur: playerStatus } : player,
-          ),
-        );
-      }
+
       
       console.log("✅ Paiement ajouté avec succès, redirection...");
       router.push("/paiements");
@@ -385,6 +361,7 @@ export default function NewPaymentPage() {
   };
 
   const handleSelectPlayer = (player: Player) => {
+    console.log("✅ Joueur sélectionné:", player.id, getPlayerFullName(player));
     setPlayerId(player.id);
     setPlayerSearch("");
     setShowPlayerDropdown(false);
@@ -453,6 +430,14 @@ export default function NewPaymentPage() {
     return montantAvecPlan - montantDonne;
   }, [montantAvecPlan, montantDonne]);
 
+  // Auto-fill montantDonne when totalRubriques or montantAvecPlan changes
+  useEffect(() => {
+    const total = montantAvecPlan > 0 ? montantAvecPlan : totalRubriques;
+    if (total > 0) {
+      setMontantDonne(total);
+    }
+  }, [montantAvecPlan, totalRubriques]);
+
   // Convert montantDonne to HTG if needed
   const montantDonneConverti = useMemo(() => {
     if (devise === "HTG" && taux > 0 && montantDonne > 0) {
@@ -460,9 +445,46 @@ export default function NewPaymentPage() {
     }
     return montantDonne;
   }, [devise, taux, montantDonne]);
+  const getPlayerStatusInfo = (status: string | null | undefined) => {
+    const baseClassName =
+      "inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold";
 
+    if (!status?.trim()) {
+      return {
+        label: "Aucun statut",
+        className: `${baseClassName} border-gray-200 bg-gray-100 text-gray-600 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400`,
+      };
+    }
+
+    const statut = status.toLowerCase();
+    if (statut.includes("bourse") || statut.includes("boursier")) {
+      return {
+        label: "Bourse (100%)",
+        className: `${baseClassName} border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-400`,
+      };
+    }
+    if (statut.includes("demi")) {
+      return {
+        label: "Demi-bourse (50%)",
+        className: `${baseClassName} border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-500/20 dark:bg-blue-500/10 dark:text-blue-400`,
+      };
+    }
+    if (statut === "inactif" || statut === "normal" || statut === "aucun") {
+      return {
+        label: statut === "aucun" ? "Aucun statut" : status,
+        className: `${baseClassName} border-gray-200 bg-gray-100 text-gray-600 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400`,
+      };
+    }
+
+    return {
+      label: status,
+      className: `${baseClassName} border-purple-200 bg-purple-50 text-purple-700 dark:border-purple-500/20 dark:bg-purple-500/10 dark:text-purple-400`,
+    };
+  };
+
+  const playerStatusInfo = getPlayerStatusInfo(selectedPlayer?.statutJoueur);
   return (
-    <div className="space-y-6">
+      <div className="space-y-6">
       <PageBreadcrumb pageTitle="Ajouter un paiement" />
       <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03] sm:p-6">
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -495,18 +517,20 @@ export default function NewPaymentPage() {
                       Aucun joueur trouve.
                     </div>
                   ) : (
-                    filteredPlayers.map((player) => (
-                      <button
-                        type="button"
-                        key={player.id}
-                        onMouseDown={(event) => event.preventDefault()}
-                        onClick={() => handleSelectPlayer(player)}
-                        className={`flex w-full flex-col items-start px-4 py-2.5 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-800 ${
-                          player.id === playerId
-                            ? "bg-brand-50 dark:bg-brand-500/10"
-                            : ""
-                        }`}
-                      >
+                      filteredPlayers.map((player) => (
+                        <button
+                          type="button"
+                          key={player.id}
+                          onMouseDown={(event) => {
+                            event.preventDefault();
+                            handleSelectPlayer(player);
+                          }}
+                          className={`flex w-full flex-col items-start px-4 py-2.5 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-800 ${
+                            player.id === playerId
+                              ? "bg-brand-50 dark:bg-brand-500/10"
+                              : ""
+                          }`}
+                        >
                         <span className={`${player.id === playerId ? "font-bold text-black dark:text-black" : "font-medium text-gray-900 dark:text-white"}`}>
                           {getPlayerFullName(player)}
                         </span>
@@ -522,6 +546,16 @@ export default function NewPaymentPage() {
                 </div>
               )}
             </div>
+            {selectedPlayer && (
+              <div className="mt-2 flex flex-wrap items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 dark:border-gray-800 dark:bg-gray-900/60">
+                <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
+                  Statut joueur:
+                </span>
+                <span className={playerStatusInfo.className}>
+                  {playerStatusInfo.label}
+                </span>
+              </div>
+            )}
           </div>
           <div className="md:col-span-2 xl:col-span-3">
             <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
@@ -633,40 +667,7 @@ export default function NewPaymentPage() {
               />
             </div>
           ) : null}
-          <div className="md:col-span-2 xl:col-span-3">
-            <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
-              Statut du joueur
-            </label>
-            <div className="flex gap-2">
-              <select
-                value={playerStatus}
-                onChange={(event) => setPlayerStatus(event.target.value)}
-                className={selectClassName}
-              >
-                <option value="">Sélectionner un statut</option>
-                {customStatuses.map((status) => (
-                  <option key={status} value={status}>
-                    {status}
-                  </option>
-                ))}
-              </select>
-              <input
-                type="text"
-                value={newStatus}
-                onChange={(event) => setNewStatus(event.target.value)}
-                placeholder="Nouveau statut..."
-                className={inputClassName}
-                style={{ width: "200px" }}
-              />
-              <button
-                type="button"
-                onClick={handleAddStatus}
-                className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-medium text-white hover:bg-brand-600"
-              >
-                Ajouter
-              </button>
-            </div>
-          </div>
+
           <div className="md:col-span-2 xl:col-span-3">
             <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
               Description / Notes

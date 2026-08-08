@@ -58,6 +58,11 @@ const adminNavItems: NavItem[] = [
     path: "/joueurs",
   },
   {
+    icon: <TaskIcon />,
+    name: "Statuts Spéciaux",
+    path: "/joueurs/statuts-speciaux",
+  },
+  {
     icon: <GroupIcon />,
     name: "Parents",
     path: "/parents",

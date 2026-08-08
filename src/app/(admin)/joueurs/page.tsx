@@ -206,12 +206,20 @@ function PlayersPageContent() {
         onEditPlayer={(player) => setSelectedEditPlayer(player)}
         onDeletePlayer={(player) => handleDeletePlayer(player.id)}
         actionButton={
-          <button
-            onClick={() => setIsAddModalOpen(true)}
-            className="inline-flex h-11 items-center justify-center whitespace-nowrap rounded-lg bg-brand-500 px-4 text-sm font-medium text-white shadow-theme-xs hover:bg-brand-600"
-          >
-            + Ajouter un joueur
-          </button>
+          <div className="flex items-center gap-2">
+            <Link
+              href="/joueurs/statuts-speciaux"
+              className="inline-flex h-11 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border border-brand-200 bg-brand-50 px-3.5 text-sm font-semibold text-brand-700 shadow-theme-xs hover:bg-brand-100 dark:border-brand-500/30 dark:bg-brand-500/10 dark:text-brand-300 dark:hover:bg-brand-500/20"
+            >
+              ⭐ Statuts Spéciaux
+            </Link>
+            <button
+              onClick={() => setIsAddModalOpen(true)}
+              className="inline-flex h-11 items-center justify-center whitespace-nowrap rounded-lg bg-brand-500 px-4 text-sm font-medium text-white shadow-theme-xs hover:bg-brand-600"
+            >
+              + Ajouter un joueur
+            </button>
+          </div>
         }
         exportButton={
           <div className="relative">

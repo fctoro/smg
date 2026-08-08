@@ -39,7 +39,21 @@ export const updatePlayerInSupabase = async (playerId: string, data: Partial<Pla
   if (data.prenom !== undefined) updatePayload.Prenom = data.prenom;
   if (data.sexe !== undefined) updatePayload.Sexe = data.sexe === "Féminin" ? "F" : "M";
   if (data.categorie !== undefined) updatePayload.Categorie = data.categorie;
-  if (data.statutJoueur !== undefined) updatePayload.StatutJoueur = data.statutJoueur;
+  // Sauvegarder le statut dans la table séparée player_status
+  if (data.statutJoueur !== undefined) {
+    // Mettre à jour ou insérer dans player_status
+    const { error: statusError } = await supabase
+      .from('player_status')
+      .upsert({ 
+        player_id: resolveEtudiantId(playerId), 
+        status: data.statutJoueur,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'player_id' });
+    
+    if (statusError) {
+      console.error('Erreur lors de la mise à jour du statut:', statusError);
+    }
+  }
   if (data.cotisationDevise !== undefined) updatePayload.CotisationDevise = data.cotisationDevise;
   if (data.telephone !== undefined) updatePayload.Telephone = data.telephone;
   if (data.email !== undefined) updatePayload.Email = data.email;

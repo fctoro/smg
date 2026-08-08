@@ -184,7 +184,7 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
           return allData;
         };
 
-        const [etudiantsData, paiementsData, inscriptionsData, sessionsData, facturesData, employesData, evenementsData, payrollData] = await Promise.all([
+        const [etudiantsData, paiementsData, inscriptionsData, sessionsData, facturesData, employesData, evenementsData, payrollData, playerStatusData] = await Promise.all([
           fetchAll("tblEtudiants"),
           fetchAll("tblPaiements"),
           fetchAll("tblInscriptions"),
@@ -192,7 +192,8 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
           fetchAll("tblFacture"),
           fetchAll("tblEmployes"),
           fetchAll("tblEvenements").catch(() => []),
-          fetchAll("tblPayroll").catch(() => [])
+          fetchAll("tblPayroll").catch(() => []),
+          fetchAll("player_status").catch(() => [])
         ]);
 
         console.log("[DEBUG ClubDataContext] etudiantsData length:", etudiantsData?.length);
@@ -229,6 +230,14 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
           const paiements = paiementsData || [];
           const inscriptions = inscriptionsData || [];
           
+          // Créer un Map des statuts depuis player_status
+          const playerStatusMap = new Map<string, string>();
+          if (playerStatusData && playerStatusData.length > 0) {
+            playerStatusData.forEach((ps: any) => {
+              playerStatusMap.set(String(ps.player_id), ps.status);
+            });
+          }
+          
           // Filtrage global des étudiants invalides ("x", "xx", sans nom, sponsors)
           const validEtudiants = etudiantsData.filter((d: any) => {
             const nom = (d.Nom || "").toLowerCase().trim();
@@ -255,7 +264,6 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
             );
             const dernierPaiementDate = sortedPayments.length > 0 && sortedPayments[0].DateTransact 
               ? sortedPayments[0].DateTransact.split("T")[0] 
-
               : "";
 
             const studentInscriptions = inscriptions.filter((i: any) => i.EtudiantId === d.EtudiantID);
@@ -325,6 +333,11 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
               playerStatus = "suspendu";
             }
 
+            // Récupérer le statut depuis player_status (prioritaire sur StatutJoueur)
+            const playerIdStr = String(d.EtudiantID);
+            const statusFromTable = playerStatusMap.get(playerIdStr);
+            const finalStatutJoueur = statusFromTable || savedPlayerStatus || undefined;
+
             return {
               id: String(d.EtudiantID),
               matricule: matricule,
@@ -366,7 +379,7 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
                 return rawCat || "ti toro";
               })(),
               statut: playerStatus,
-              statutJoueur: savedPlayerStatus || undefined,
+              statutJoueur: finalStatutJoueur,
               cotisationDevise: d.CotisationDevise || "US",
               telephone: d.Telephone || "",
               email: d.Email || "",

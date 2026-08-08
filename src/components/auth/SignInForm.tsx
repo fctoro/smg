@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 
 const getDefaultSectionsForRole = (normalizedRole: string): string[] => {
@@ -16,6 +17,7 @@ const getDefaultSectionsForRole = (normalizedRole: string): string[] => {
 };
 
 export default function SignInForm() {
+  const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
   const [isChecked, setIsChecked] = useState(true);
   const [email, setEmail] = useState("");
@@ -38,6 +40,14 @@ export default function SignInForm() {
         setError(error.message);
         setLoading(false);
       } else if (data?.user) {
+        const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+
+        if (sessionError || !sessionData.session) {
+          setError("Connexion reussie, mais la session n'a pas ete enregistree. Rechargez la page et reessayez.");
+          setLoading(false);
+          return;
+        }
+
         const u = data.user;
         const uEmail = u.email || email;
         const uMetaRole = u.user_metadata?.role;
@@ -66,7 +76,8 @@ export default function SignInForm() {
         localStorage.setItem("fctoro_user_role", normalizedRole);
         localStorage.setItem("fctoro_user_sections", JSON.stringify(userSections));
 
-        window.location.href = normalizedRole === "coach" ? "/coach" : "/dashboard";
+        router.replace(normalizedRole === "coach" ? "/coach" : "/dashboard");
+        router.refresh();
       }
     } catch (err: any) {
       setError(err.message || "Erreur lors de la connexion.");

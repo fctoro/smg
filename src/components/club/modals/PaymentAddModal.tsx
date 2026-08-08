@@ -5,7 +5,7 @@ import { Modal } from "@/components/ui/modal";
 import { useClubData } from "@/context/ClubDataContext";
 import { PaymentMethod, PaymentStatus, Player } from "@/types/club";
 import { getPlayerFullName } from "@/lib/club/metrics";
-import { addPaymentToSupabase, addInvoiceToSupabase, updatePlayerInSupabase } from "@/lib/club/supabase-crud";
+import { addPaymentToSupabase, addInvoiceToSupabase } from "@/lib/club/supabase-crud";
 import { validatePaymentPhotoFile, getPaymentPhotoPreviewUrl, uploadPaymentPhotoToSupabase } from "@/lib/club/payment-photo-utils";
 import { calculateDiscountedAmount, serializeReductionMetadata, type PaymentReductionType } from "@/lib/club/payment-reduction-utils";
 
@@ -139,7 +139,7 @@ const adhesionOptions = pricingItems.filter((item) => item.id === "adhesion-fc" 
 const rubricOptions = pricingItems;
 
 export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
-  const { players, setPayments, setPlayers } = useClubData();
+  const { players, setPayments } = useClubData();
   const [playerId, setPlayerId] = useState("");
   const [playerSearch, setPlayerSearch] = useState("");
   const [showPlayerDropdown, setShowPlayerDropdown] = useState(false);
@@ -155,9 +155,6 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
   const [selectedPlan, setSelectedPlan] = useState<string>("");
   const [reductionType, setReductionType] = useState<PaymentReductionType>("none");
   const [customReductionPercent, setCustomReductionPercent] = useState(0);
-  const [playerStatus, setPlayerStatus] = useState("");
-  const [customStatuses, setCustomStatuses] = useState(["Boursier", "Demi-bourse", "Joueur spécial"]);
-  const [newStatus, setNewStatus] = useState("");
   const [paymentPhoto, setPaymentPhoto] = useState<File | null>(null);
   const [paymentPhotoPreview, setPaymentPhotoPreview] = useState<string | null>(null);
   const [paymentPhotoError, setPaymentPhotoError] = useState<string | null>(null);
@@ -209,8 +206,6 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
     setSelectedPlan("");
     setReductionType("none");
     setCustomReductionPercent(0);
-    setPlayerStatus("");
-    setNewStatus("");
     setPaymentPhoto(null);
     setPaymentPhotoPreview(null);
     setPaymentPhotoError(null);
@@ -241,7 +236,10 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
       const plan = paymentPlans.find((item) => item.id === selectedPlan)!;
       const selectedAdhesion = selectedPricing.find((item) => item === "adhesion-fc" || item === "adhesion-ti");
       const isTiToro = selectedAdhesion === "adhesion-ti";
-      const totalDue = (isTiToro ? plan.montantTIToro : plan.montantFCToro) * plan.nombreVersements;
+      const nonAdhesionSum = selectedPricingItems
+        .filter((item) => item.id !== "adhesion-fc" && item.id !== "adhesion-ti")
+        .reduce((sum, item) => sum + item.montant, 0);
+      const totalDue = (isTiToro ? plan.montantTIToro : plan.montantFCToro) * plan.nombreVersements + nonAdhesionSum;
       const discountedDue = calculateDiscountedAmount(totalDue, reductionType, customReductionPercent);
       const paymentAmount = devise === "HTG" ? montantDonne : montantDonne;
       const montantUS = devise === "US" ? paymentAmount : (taux > 0 ? paymentAmount / taux : 0);
@@ -251,7 +249,7 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
       const selectedRubricsLabel = selectedPricing.filter((item) => item !== "adhesion-fc" && item !== "adhesion-ti").map((item) => pricingItems.find((pricingItem) => pricingItem.id === item)?.rubrique).filter(Boolean).join(", ");
       const paymentMarkers = `[ADHESION:${adhesionCode}] [PLAN:${selectedPlan.toUpperCase()}] [STATUT:${statut.toUpperCase()}]`;
       const adhesionLabel = isTiToro ? "Adhésion: TI TORO" : "Adhésion: FC TORO";
-      const finalRemarque = `${paymentMarkers} ${reductionMetadata ? `${reductionMetadata} ` : ""}${playerStatus ? `[${playerStatus}] ` : ""}${description.trim()} ${adhesionLabel}${selectedRubricsLabel ? ` | Rubriques: ${selectedRubricsLabel}` : ""} Plan: ${plan.plan}`.trim();
+      const finalRemarque = `${paymentMarkers} ${reductionMetadata ? `${reductionMetadata} ` : ""}${description.trim()} ${adhesionLabel}${selectedRubricsLabel ? ` | Rubriques: ${selectedRubricsLabel}` : ""} Plan: ${plan.plan}`.trim();
       const paymentPhotoUrl = paymentPhoto ? await uploadPaymentPhotoToSupabase(paymentPhoto) : null;
       const paymentPhotoNote = paymentPhotoUrl ? ` [JUSTIFICATIF:${paymentPhotoUrl}]` : paymentPhoto ? ` [JUSTIFICATIF:${paymentPhoto.name}]` : "";
       const finalRemarqueWithPhoto = `${finalRemarque}${paymentPhotoNote}`.trim();
@@ -295,12 +293,6 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
         },
         ...prevPayments,
       ]);
-      if (playerStatus) {
-        await updatePlayerInSupabase(playerId, { statutJoueur: playerStatus });
-        setPlayers((prevPlayers) => prevPlayers.map((player) =>
-          player.id === playerId ? { ...player, statutJoueur: playerStatus } : player,
-        ));
-      }
       handleClose();
     } catch (error) {
       console.error(error);
@@ -345,24 +337,82 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
   const selectedPlanData = paymentPlans.find((plan) => plan.id === selectedPlan);
   const selectedAdhesion = selectedPricing.find((item) => item === "adhesion-fc" || item === "adhesion-ti");
   const isTiToro = selectedAdhesion === "adhesion-ti";
-  const totalDue = selectedPlanData
-    ? (isTiToro ? selectedPlanData.montantTIToro : selectedPlanData.montantFCToro) * selectedPlanData.nombreVersements
-    : 0;
-  const discountedDue = selectedPlanData
-    ? calculateDiscountedAmount(
-        (isTiToro ? selectedPlanData.montantTIToro : selectedPlanData.montantFCToro) * selectedPlanData.nombreVersements,
-        reductionType,
-        customReductionPercent,
-      )
-    : 0;
-  const remainingAmount = Math.max(0, discountedDue - montantDonne);
 
-  const handleAddStatus = () => {
-    const value = newStatus.trim();
-    if (value && !customStatuses.includes(value)) setCustomStatuses((current) => [...current, value]);
-    if (value) setPlayerStatus(value);
-    setNewStatus("");
+  const baseTotalDue = useMemo(() => {
+    const nonAdhesionSum = selectedPricingItems
+      .filter((item) => item.id !== "adhesion-fc" && item.id !== "adhesion-ti")
+      .reduce((sum, item) => sum + item.montant, 0);
+
+    let adhesionAmount = 0;
+    if (selectedPlanData) {
+      adhesionAmount = (isTiToro ? selectedPlanData.montantTIToro : selectedPlanData.montantFCToro) * selectedPlanData.nombreVersements;
+    } else if (selectedAdhesionItem) {
+      adhesionAmount = selectedAdhesionItem.montant;
+    }
+
+    return adhesionAmount + nonAdhesionSum;
+  }, [selectedPricingItems, selectedPlanData, isTiToro, selectedAdhesionItem]);
+
+  const discountedDue = useMemo(() => {
+    return calculateDiscountedAmount(baseTotalDue, reductionType, customReductionPercent);
+  }, [baseTotalDue, reductionType, customReductionPercent]);
+
+  const computedDue = useMemo(() => {
+    if (devise === "HTG" && taux > 0) {
+      return discountedDue * taux;
+    }
+    return discountedDue;
+  }, [discountedDue, devise, taux]);
+
+  useEffect(() => {
+    setMontantDonne(computedDue);
+  }, [computedDue]);
+
+  const remainingAmount = Math.max(0, computedDue - montantDonne);
+
+  const getPlayerStatusInfo = (status: string | null | undefined) => {
+    const baseClassName =
+      "inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold";
+
+    if (!status?.trim()) {
+      return {
+        label: "Aucun statut",
+        className: `${baseClassName} border-gray-200 bg-gray-100 text-gray-600 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400`,
+      };
+    }
+
+    const normalizedStatus = status.toLowerCase();
+
+    if (normalizedStatus.includes("demi")) {
+      return {
+        label: "Demi-bourse (50%)",
+        className: `${baseClassName} border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-500/20 dark:bg-blue-500/10 dark:text-blue-400`,
+      };
+    }
+
+    if (normalizedStatus.includes("bourse") || normalizedStatus.includes("boursier")) {
+      return {
+        label: "Bourse (100%)",
+        className: `${baseClassName} border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-400`,
+      };
+    }
+
+    if (normalizedStatus === "inactif" || normalizedStatus === "normal" || normalizedStatus === "aucun") {
+      return {
+        label: normalizedStatus === "aucun" ? "Aucun statut" : status,
+        className: `${baseClassName} border-gray-200 bg-gray-100 text-gray-600 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400`,
+      };
+    }
+
+    return {
+      label: status,
+      className: `${baseClassName} border-purple-200 bg-purple-50 text-purple-700 dark:border-purple-500/20 dark:bg-purple-500/10 dark:text-purple-400`,
+    };
   };
+
+  const playerStatusInfo = getPlayerStatusInfo(selectedPlayer?.statutJoueur);
+
+
 
   const handlePaymentPhotoChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0] ?? null;
@@ -474,6 +524,14 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
                       {selectedPlayer.matricule ? `Code: ${selectedPlayer.matricule}` : "Sans code"}
                       {` • ${selectedPlayer.categorie} • ${selectedPlayer.poste}`}
                     </p>
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <span className="text-xs font-medium text-brand-700 dark:text-brand-300">
+                        Statut joueur:
+                      </span>
+                      <span className={playerStatusInfo.className}>
+                        {playerStatusInfo.label}
+                      </span>
+                    </div>
                   </div>
                   <button
                     type="button"
@@ -544,7 +602,7 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
               </label>
               <input
                 type="number"
-                value={discountedDue}
+                value={computedDue}
                 className={inputClassName}
                 readOnly
               />
@@ -590,12 +648,12 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
             {/* Description */}
             <div className={devise === "HTG" ? "" : "md:col-span-2"}>
               <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
-                Description / Remarque
+                Description
               </label>
               <input
                 value={description}
                 onChange={(event) => setDescription(event.target.value)}
-                placeholder="Ex: Cotisation mensuelle, Boursier..."
+                placeholder="Ex: Cotisation mensuelle, frais d'inscription..."
                 className={inputClassName}
               />
             </div>
@@ -703,18 +761,6 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
                 onChange={(event) => setDatePaiement(event.target.value)}
                 className={inputClassName}
               />
-            </div>
-
-            <div>
-              <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">Statut du joueur</label>
-              <select value={playerStatus} onChange={(event) => setPlayerStatus(event.target.value)} className={selectClassName}>
-                <option value="">Sélectionner un statut</option>
-                {customStatuses.map((status) => <option key={status} value={status}>{status}</option>)}
-              </select>
-            </div>
-            <div className="flex items-end gap-2">
-              <input value={newStatus} onChange={(event) => setNewStatus(event.target.value)} placeholder="Nouveau statut..." className={inputClassName} />
-              <button type="button" onClick={handleAddStatus} className="rounded-lg bg-brand-500 px-3 py-2 text-sm text-white">Ajouter</button>
             </div>
           </div>
 

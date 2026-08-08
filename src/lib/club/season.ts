@@ -15,9 +15,23 @@ export function getCurrentSeason(date: Date = new Date()): string {
  */
 export function getSeasonCode(seasonStr?: string, date: Date = new Date()): string {
   if (seasonStr) {
-    const parts = seasonStr.split("-");
-    if (parts.length === 2 && parts[0].length === 4 && parts[1].length === 4) {
-      return `${parts[0].substring(2, 4)}${parts[1].substring(2, 4)}`;
+    const cleanSeason = String(seasonStr).trim();
+    
+    // Format complet: "2018-2019", "2018/2019", "Saison 2018-2019"
+    const matchFull = cleanSeason.match(/20(\d{2})[-/]?20(\d{2})/);
+    if (matchFull) {
+      return `${matchFull[1]}${matchFull[2]}`;
+    }
+    
+    // Format court: "1819", "2627", "2021" (pour 2020-2021)
+    if (/^\d{4}$/.test(cleanSeason)) {
+      return cleanSeason;
+    }
+    
+    // Format partiel: "18/19", "18-19"
+    const matchPartial = cleanSeason.match(/(\d{2})[-/](\d{2})/);
+    if (matchPartial) {
+      return `${matchPartial[1]}${matchPartial[2]}`;
     }
   }
   const fullSeason = getCurrentSeason(date);

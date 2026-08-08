@@ -441,7 +441,7 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
   }, [paymentPhotoPreview]);
 
   return (
-    <Modal isOpen={isOpen} onClose={handleClose} className="max-w-3xl">
+    <Modal isOpen={isOpen} onClose={handleClose} className="max-w-7xl">
       <div className="flex flex-col h-full max-h-[90vh]">
         <div className="p-5 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between sticky top-0 bg-white dark:bg-gray-900 z-10">
           <div>

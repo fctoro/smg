@@ -84,7 +84,7 @@ export const PlayerEditModal: React.FC<PlayerEditModalProps> = ({
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} className="max-w-4xl">
+    <Modal isOpen={isOpen} onClose={onClose} className="max-w-5xl">
       <div className="p-6">
         <div className="mb-6">
           <h3 className="text-xl font-bold text-gray-900 dark:text-white">

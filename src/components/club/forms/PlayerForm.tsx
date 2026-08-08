@@ -129,16 +129,16 @@ export default function PlayerForm({
   return (
     <form onSubmit={handleSubmit} className="space-y-8 pb-4">
       {/* PROGRAMME */}
-      <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-900/50">
-        <label className="mb-2 block text-sm font-bold text-gray-900 dark:text-white">
+      <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-xs dark:border-gray-800 dark:bg-gray-900/50">
+        <label className="mb-4 block text-sm font-semibold uppercase tracking-wider text-gray-800 dark:text-gray-200">
           Choix du programme *
         </label>
-        <p className="text-xs text-gray-500 mb-3">Sélectionnez le parcours souhaité pour le joueur.</p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <label className={`cursor-pointer rounded-xl border p-4 flex items-center gap-3 transition-all ${
+        <p className="-mt-3 mb-4 text-xs text-gray-500 dark:text-gray-400">Sélectionnez le parcours souhaité pour le joueur.</p>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <label className={`flex cursor-pointer items-center gap-3 rounded-lg border p-4 transition-all ${
             formValues.programme?.includes("Ti Toro") 
-              ? "border-brand-500 bg-brand-50/20 ring-2 ring-brand-500/30" 
-              : "border-gray-200 dark:border-gray-700 hover:border-gray-300"
+              ? "border-brand-500 bg-brand-50/10 ring-1 ring-brand-500" 
+              : "border-gray-200 hover:border-gray-300 dark:border-gray-700"
           }`}>
             <input
               type="radio"
@@ -154,10 +154,10 @@ export default function PlayerForm({
             </div>
           </label>
 
-          <label className={`cursor-pointer rounded-xl border p-4 flex items-center gap-3 transition-all ${
+          <label className={`flex cursor-pointer items-center gap-3 rounded-lg border p-4 transition-all ${
             !formValues.programme?.includes("Ti Toro") 
-              ? "border-brand-500 bg-brand-50/20 ring-2 ring-brand-500/30" 
-              : "border-gray-200 dark:border-gray-700 hover:border-gray-300"
+              ? "border-brand-500 bg-brand-50/10 ring-1 ring-brand-500" 
+              : "border-gray-200 hover:border-gray-300 dark:border-gray-700"
           }`}>
             <input
               type="radio"
@@ -176,12 +176,14 @@ export default function PlayerForm({
       </div>
 
       {/* SECTION 01: IDENTITE DU JOUEUR */}
-      <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-900/50 space-y-4">
-        <div className="flex items-center gap-2.5 border-b border-gray-100 dark:border-gray-800 pb-3">
-          <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand-500 text-white font-bold text-xs">01</span>
+      <div className="space-y-4 rounded-xl border border-gray-200 bg-white p-6 shadow-xs dark:border-gray-800 dark:bg-gray-900/50">
+        <div className="mb-4 flex items-center gap-3 border-b border-gray-200 pb-4 dark:border-gray-700">
+          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-gray-200 bg-gray-50 text-xs font-semibold text-gray-600 shadow-xs dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400">
+            1
+          </span>
           <div>
-            <h4 className="font-bold text-gray-900 dark:text-white text-base">Identité du joueur</h4>
-            <p className="text-xs text-gray-500">Informations personnelles de l'enfant.</p>
+            <h4 className="text-sm font-semibold uppercase tracking-wider text-gray-800 dark:text-gray-200">Identité du joueur</h4>
+            <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Informations personnelles de l'enfant.</p>
           </div>
         </div>
 
@@ -268,9 +270,6 @@ export default function PlayerForm({
               <option value="actif">Actif</option>
               <option value="inactif">Inactif</option>
               <option value="alumni">Alumni</option>
-              <option value="abandonne">Abandonné</option>
-              <option value="blesse">Blessé</option>
-              <option value="suspendu">Suspendu</option>
             </select>
           </div>
 
@@ -292,12 +291,14 @@ export default function PlayerForm({
       </div>
 
       {/* SECTION 02: PARENTS / TUTEUR */}
-      <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-900/50 space-y-4">
-        <div className="flex items-center gap-2.5 border-b border-gray-100 dark:border-gray-800 pb-3">
-          <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand-500 text-white font-bold text-xs">02</span>
+      <div className="space-y-4 rounded-xl border border-gray-200 bg-white p-6 shadow-xs dark:border-gray-800 dark:bg-gray-900/50">
+        <div className="mb-4 flex items-center gap-3 border-b border-gray-200 pb-4 dark:border-gray-700">
+          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-gray-200 bg-gray-50 text-xs font-semibold text-gray-600 shadow-xs dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400">
+            2
+          </span>
           <div>
-            <h4 className="font-bold text-gray-900 dark:text-white text-base">Parents / Tuteur</h4>
-            <p className="text-xs text-gray-500">Informations de contact pour les responsables légaux.</p>
+            <h4 className="text-sm font-semibold uppercase tracking-wider text-gray-800 dark:text-gray-200">Parents / Tuteur</h4>
+            <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Informations de contact pour les responsables légaux.</p>
           </div>
         </div>
 
@@ -325,12 +326,14 @@ export default function PlayerForm({
       </div>
 
       {/* SECTION 03: CONTACT D'URGENCE */}
-      <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-900/50 space-y-4">
-        <div className="flex items-center gap-2.5 border-b border-gray-100 dark:border-gray-800 pb-3">
-          <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-500 text-white font-bold text-xs">03</span>
+      <div className="space-y-4 rounded-xl border border-gray-200 bg-white p-6 shadow-xs dark:border-gray-800 dark:bg-gray-900/50">
+        <div className="mb-4 flex items-center gap-3 border-b border-gray-200 pb-4 dark:border-gray-700">
+          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-gray-200 bg-gray-50 text-xs font-semibold text-gray-600 shadow-xs dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400">
+            3
+          </span>
           <div>
-            <h4 className="font-bold text-gray-900 dark:text-white text-base">Contact d'urgence</h4>
-            <p className="text-xs text-gray-500">En cas d'urgence si on ne trouve pas les parents/tuteurs.</p>
+            <h4 className="text-sm font-semibold uppercase tracking-wider text-gray-800 dark:text-gray-200">Contact d'urgence</h4>
+            <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">En cas d'urgence si on ne trouve pas les parents/tuteurs.</p>
           </div>
         </div>
 
@@ -363,12 +366,14 @@ export default function PlayerForm({
       </div>
 
       {/* SECTION 04: UNIFORMES & TAILLES */}
-      <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-900/50 space-y-4">
-        <div className="flex items-center gap-2.5 border-b border-gray-100 dark:border-gray-800 pb-3">
-          <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand-500 text-white font-bold text-xs">04</span>
+      <div className="space-y-4 rounded-xl border border-gray-200 bg-white p-6 shadow-xs dark:border-gray-800 dark:bg-gray-900/50">
+        <div className="mb-4 flex items-center gap-3 border-b border-gray-200 pb-4 dark:border-gray-700">
+          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-gray-200 bg-gray-50 text-xs font-semibold text-gray-600 shadow-xs dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400">
+            4
+          </span>
           <div>
-            <h4 className="font-bold text-gray-900 dark:text-white text-base">Uniformes & Tailles</h4>
-            <p className="text-xs text-gray-500">Sélectionnez les tailles pour l'équipement fourni par le club.</p>
+            <h4 className="text-sm font-semibold uppercase tracking-wider text-gray-800 dark:text-gray-200">Uniformes & Tailles</h4>
+            <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Sélectionnez les tailles pour l'équipement fourni par le club.</p>
           </div>
         </div>
 
@@ -409,12 +414,14 @@ export default function PlayerForm({
       </div>
 
       {/* SECTION 05 & 06: PLAN ET MODE DE PAIEMENT */}
-      <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-900/50 space-y-4">
-        <div className="flex items-center gap-2.5 border-b border-gray-100 dark:border-gray-800 pb-3">
-          <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-500 text-white font-bold text-xs">05</span>
+      <div className="space-y-4 rounded-xl border border-gray-200 bg-white p-6 shadow-xs dark:border-gray-800 dark:bg-gray-900/50">
+        <div className="mb-4 flex items-center gap-3 border-b border-gray-200 pb-4 dark:border-gray-700">
+          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-gray-200 bg-gray-50 text-xs font-semibold text-gray-600 shadow-xs dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400">
+            5
+          </span>
           <div>
-            <h4 className="font-bold text-gray-900 dark:text-white text-base">Plan & Mode de Paiement</h4>
-            <p className="text-xs text-gray-500">Sélectionnez le plan de paiement et le mode de règlement.</p>
+            <h4 className="text-sm font-semibold uppercase tracking-wider text-gray-800 dark:text-gray-200">Plan & Mode de Paiement</h4>
+            <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Sélectionnez le plan de paiement et le mode de règlement.</p>
           </div>
         </div>
 

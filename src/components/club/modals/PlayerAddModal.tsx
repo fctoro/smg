@@ -62,7 +62,7 @@ export function PlayerAddModal({ isOpen, onClose }: PlayerAddModalProps) {
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} className="max-w-4xl">
+    <Modal isOpen={isOpen} onClose={onClose} className="max-w-5xl">
       <div className="flex flex-col h-full max-h-[90vh]">
         <div className="p-5 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between sticky top-0 bg-white dark:bg-gray-900 z-10">
           <div>

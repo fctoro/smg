@@ -267,14 +267,24 @@ export default function ClubDashboardPage() {
                   </p>
                 </div>
               ))}
-              <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 dark:border-rose-900/30 dark:bg-rose-900/10">
-                <div className="flex items-center gap-2">
-                  <AlertIcon className="size-4 text-rose-600 dark:text-rose-400" />
-                  <p className="text-sm font-semibold text-rose-700 dark:text-rose-300">
-                    Paiements en retard
+              <div className={`rounded-xl border p-3 ${
+                lateCurrentMonth > 0
+                  ? "border-rose-200 bg-rose-50 dark:border-rose-900/30 dark:bg-rose-900/10"
+                  : "border-success-200 bg-success-50 dark:border-success-900/30 dark:bg-success-900/10"
+              }`}>
+                <div className="flex items-center gap-3">
+                  <AlertIcon className={`shrink-0 size-5 ${
+                    lateCurrentMonth > 0 ? "text-rose-600 dark:text-rose-400" : "text-success-600 dark:text-success-400"
+                  }`} />
+                  <p className={`text-sm font-semibold ${
+                    lateCurrentMonth > 0 ? "text-rose-700 dark:text-rose-300" : "text-success-700 dark:text-success-300"
+                  }`}>
+                    {lateCurrentMonth > 0 ? "Paiements en retard" : "Aucun retard"}
                   </p>
                 </div>
-                <p className="mt-1 text-sm text-rose-600 dark:text-rose-400">
+                <p className={`mt-1 text-sm ${
+                  lateCurrentMonth > 0 ? "text-rose-600 dark:text-rose-400" : "text-success-600 dark:text-success-400"
+                }`}>
                   {lateCurrentMonth} retard(s) signalé(s) ce mois-ci.
                 </p>
               </div>

@@ -16,19 +16,25 @@ export const formatClubDate = (date: string) => {
   }).format(parsed);
 };
 
-export const formatClubCurrency = (amount: number, devise: "US" | "HTG" = "US") => {
+export const formatClubNumber = (value: number | null | undefined): string => {
+  if (value === null || value === undefined || isNaN(value)) return "0";
+  return new Intl.NumberFormat("fr-FR").format(value);
+};
+
+export const formatClubCurrency = (amount: number | null | undefined, devise: "US" | "HTG" = "US") => {
+  const safeAmount = amount && !isNaN(amount) ? amount : 0;
   if (devise === "HTG") {
     return new Intl.NumberFormat("fr-FR", {
       style: "currency",
       currency: "HTG",
       maximumFractionDigits: 0,
-    }).format(amount).replace("HTG", "Gourdes");
+    }).format(safeAmount).replace("HTG", "HTG");
   }
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: "USD",
     maximumFractionDigits: 0,
-  }).format(amount).replace("$", "US$");
+  }).format(safeAmount).replace("$", "US$");
 };
 
 export const getActivePlayersCount = (players: Player[]) =>

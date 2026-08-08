@@ -12,6 +12,7 @@ import { useClubData } from "@/context/ClubDataContext";
 import {
   formatClubCurrency,
   formatClubDate,
+  formatClubNumber,
   getActivePlayersCount,
   getMonthlyPaymentsSeries,
   getRecentPlayers,
@@ -178,22 +179,22 @@ export default function ClubDashboardPage() {
       <div className="col-span-12 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4 md:gap-6">
         <KpiCardClub
           title="Joueurs actifs"
-          value={activePlayers}
+          value={formatClubNumber(activePlayers)}
           icon={<GroupIcon className="size-6 text-gray-800 dark:text-white/90" />}
         />
         <KpiCardClub
           title="Parents"
-          value={parentFamilies}
+          value={formatClubNumber(parentFamilies)}
           icon={<GroupIcon className="size-6 text-brand-600 dark:text-brand-400" />}
         />
         <KpiCardClub
           title="Employés"
-          value={employeeCount}
+          value={formatClubNumber(employeeCount)}
           icon={<GroupIcon className="size-6 text-amber-600 dark:text-amber-400" />}
         />
         <KpiCardClub
           title="Alumni"
-          value={alumniCount}
+          value={formatClubNumber(alumniCount)}
           icon={<UserIcon className="size-6 text-violet-600 dark:text-violet-400" />}
         />
       </div>
@@ -201,24 +202,24 @@ export default function ClubDashboardPage() {
       <div className="col-span-12 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4 md:gap-6">
         <KpiCardClub
           title={isAllTime ? "Revenus Globaux (USD)" : `Revenus (USD) ${displayYear}`}
-          value={formatClubCurrency(currentRevenueUS)}
+          value={formatClubCurrency(currentRevenueUS, "US")}
           trend={isAllTime ? undefined : revenueTrendUS}
           icon={<DollarLineIcon className="size-6 text-emerald-500" />}
         />
         <KpiCardClub
           title={isAllTime ? "Revenus Globaux (HTG)" : `Revenus (HTG) ${displayYear}`}
-          value={`${currentRevenueHTG.toLocaleString("fr-FR")} HTG`}
+          value={formatClubCurrency(currentRevenueHTG, "HTG")}
           trend={isAllTime ? undefined : revenueTrendHTG}
           icon={<DollarLineIcon className="size-6 text-blue-500" />}
         />
         <KpiCardClub
           title="Utilisateurs"
-          value={userCount}
+          value={formatClubNumber(userCount)}
           icon={<UserCircleIcon className="size-6 text-sky-600 dark:text-sky-400" />}
         />
         <KpiCardClub
           title="Paiements"
-          value={paymentCount}
+          value={formatClubNumber(paymentCount)}
           icon={<CheckCircleIcon className="size-6 text-emerald-600 dark:text-emerald-400" />}
         />
       </div>
@@ -266,14 +267,24 @@ export default function ClubDashboardPage() {
                   </p>
                 </div>
               ))}
-              <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 dark:border-rose-900/30 dark:bg-rose-900/10">
-                <div className="flex items-center gap-2">
-                  <AlertIcon className="size-4 text-rose-600 dark:text-rose-400" />
-                  <p className="text-sm font-semibold text-rose-700 dark:text-rose-300">
-                    Paiements en retard
+              <div className={`rounded-xl border p-3 ${
+                lateCurrentMonth > 0
+                  ? "border-rose-200 bg-rose-50 dark:border-rose-900/30 dark:bg-rose-900/10"
+                  : "border-success-200 bg-success-50 dark:border-success-900/30 dark:bg-success-900/10"
+              }`}>
+                <div className="flex items-center gap-3">
+                  <AlertIcon className={`shrink-0 size-5 ${
+                    lateCurrentMonth > 0 ? "text-rose-600 dark:text-rose-400" : "text-success-600 dark:text-success-400"
+                  }`} />
+                  <p className={`text-sm font-semibold ${
+                    lateCurrentMonth > 0 ? "text-rose-700 dark:text-rose-300" : "text-success-700 dark:text-success-300"
+                  }`}>
+                    {lateCurrentMonth > 0 ? "Paiements en retard" : "Aucun retard"}
                   </p>
                 </div>
-                <p className="mt-1 text-sm text-rose-600 dark:text-rose-400">
+                <p className={`mt-1 text-sm ${
+                  lateCurrentMonth > 0 ? "text-rose-600 dark:text-rose-400" : "text-success-600 dark:text-success-400"
+                }`}>
                   {lateCurrentMonth} retard(s) signalé(s) ce mois-ci.
                 </p>
               </div>

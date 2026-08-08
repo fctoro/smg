@@ -3,8 +3,7 @@
 import { TableSkeleton } from "@/components/ui/skeleton/Skeleton";
 import React, { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import { EyeIcon, EyeSlashIcon } from "@heroicons/react/24/outline";
-import { PencilIcon } from "@/icons";
+import { EyeIcon, EyeCloseIcon as EyeSlashIcon, PencilIcon } from "@/icons";
 import { createUser, getUsersList, deleteUser, updateUserPassword, updateUserAccess, getRoleConfig, saveRoleConfig } from "@/app/actions/user";
 import { fetchCoaches } from "@/lib/club/coachs";
 import { Coach } from "@/types/club";

@@ -156,12 +156,16 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
         </div>
 
         {/* Content Body */}
-        <div className="p-6 overflow-y-auto custom-scrollbar space-y-8">
+        <div className="p-6 overflow-y-auto custom-scrollbar space-y-6 bg-gray-50/30 dark:bg-gray-900/50">
           {/* Section 01: Identité du joueur & Programme */}
-          <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-900">
-            <div className="flex items-center gap-2.5 mb-4 border-b border-gray-100 dark:border-gray-800 pb-3">
-              <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand-500 text-white font-bold text-xs">01</span>
-              <h4 className="font-bold text-gray-900 dark:text-white text-base">Identité du Joueur</h4>
+          <div className="rounded-xl shadow-sm border border-gray-200 bg-white p-6 dark:border-gray-800 dark:bg-gray-900">
+            <div className="flex items-center gap-3 mb-5 border-b border-gray-100 dark:border-gray-800 pb-4">
+              <div className="p-2 bg-gray-100 dark:bg-gray-800 rounded-lg">
+                <svg className="w-5 h-5 text-gray-600 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                </svg>
+              </div>
+              <h4 className="font-semibold text-gray-900 dark:text-white text-base">Identité du Joueur</h4>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
@@ -193,10 +197,14 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
           </div>
 
           {/* Section 02: Parents / Tuteur */}
-          <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-900">
-            <div className="flex items-center gap-2.5 mb-4 border-b border-gray-100 dark:border-gray-800 pb-3">
-              <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand-500 text-white font-bold text-xs">02</span>
-              <h4 className="font-bold text-gray-900 dark:text-white text-base">Parents / Tuteur Responsable</h4>
+          <div className="rounded-xl shadow-sm border border-gray-200 bg-white p-6 dark:border-gray-800 dark:bg-gray-900">
+            <div className="flex items-center gap-3 mb-5 border-b border-gray-100 dark:border-gray-800 pb-4">
+              <div className="p-2 bg-gray-100 dark:bg-gray-800 rounded-lg">
+                <svg className="w-5 h-5 text-gray-600 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                </svg>
+              </div>
+              <h4 className="font-semibold text-gray-900 dark:text-white text-base">Parents / Tuteur Responsable</h4>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
@@ -220,10 +228,14 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
           </div>
 
           {/* Section 03: Contact d'urgence */}
-          <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-900">
-            <div className="flex items-center gap-2.5 mb-4 border-b border-gray-100 dark:border-gray-800 pb-3">
-              <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-500 text-white font-bold text-xs">03</span>
-              <h4 className="font-bold text-gray-900 dark:text-white text-base">Contact d'Urgence</h4>
+          <div className="rounded-xl shadow-sm border border-gray-200 bg-white p-6 dark:border-gray-800 dark:bg-gray-900">
+            <div className="flex items-center gap-3 mb-5 border-b border-gray-100 dark:border-gray-800 pb-4">
+              <div className="p-2 bg-gray-100 dark:bg-gray-800 rounded-lg">
+                <svg className="w-5 h-5 text-gray-600 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 5.636l-3.536 3.536m0 5.656l3.536 3.536M9.172 9.172L5.636 5.636m3.536 9.192l-3.536 3.536M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-5 0a4 4 0 11-8 0 4 4 0 018 0z" />
+                </svg>
+              </div>
+              <h4 className="font-semibold text-gray-900 dark:text-white text-base">Contact d'Urgence</h4>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-5">
@@ -251,10 +263,14 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
           </div>
 
           {/* Section 04: Uniformes & Tailles */}
-          <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-900">
-            <div className="flex items-center gap-2.5 mb-4 border-b border-gray-100 dark:border-gray-800 pb-3">
-              <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand-500 text-white font-bold text-xs">04</span>
-              <h4 className="font-bold text-gray-900 dark:text-white text-base">Uniformes & Tailles</h4>
+          <div className="rounded-xl shadow-sm border border-gray-200 bg-white p-6 dark:border-gray-800 dark:bg-gray-900">
+            <div className="flex items-center gap-3 mb-5 border-b border-gray-100 dark:border-gray-800 pb-4">
+              <div className="p-2 bg-gray-100 dark:bg-gray-800 rounded-lg">
+                <svg className="w-5 h-5 text-gray-600 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                </svg>
+              </div>
+              <h4 className="font-semibold text-gray-900 dark:text-white text-base">Uniformes & Tailles</h4>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
@@ -274,10 +290,14 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
           </div>
 
           {/* Section 05 & 06: Plan & Mode de paiement */}
-          <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-900">
-            <div className="flex items-center gap-2.5 mb-4 border-b border-gray-100 dark:border-gray-800 pb-3">
-              <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-500 text-white font-bold text-xs">05</span>
-              <h4 className="font-bold text-gray-900 dark:text-white text-base">Plan & Mode de Paiement</h4>
+          <div className="rounded-xl shadow-sm border border-gray-200 bg-white p-6 dark:border-gray-800 dark:bg-gray-900">
+            <div className="flex items-center gap-3 mb-5 border-b border-gray-100 dark:border-gray-800 pb-4">
+              <div className="p-2 bg-gray-100 dark:bg-gray-800 rounded-lg">
+                <svg className="w-5 h-5 text-gray-600 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                </svg>
+              </div>
+              <h4 className="font-semibold text-gray-900 dark:text-white text-base">Plan & Mode de Paiement</h4>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
@@ -301,18 +321,25 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
           </div>
 
           {/* Section 07: Documents PDF & Pièces jointes */}
-          <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-900">
-            <div className="flex items-center gap-2.5 mb-4 border-b border-gray-100 dark:border-gray-800 pb-3">
-              <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-500 text-white font-bold text-xs">07</span>
-              <h4 className="font-bold text-gray-900 dark:text-white text-base">Documents & Pièces Jointes PDF</h4>
+          <div className="rounded-xl shadow-sm border border-gray-200 bg-white p-6 dark:border-gray-800 dark:bg-gray-900">
+            <div className="flex items-center gap-3 mb-5 border-b border-gray-100 dark:border-gray-800 pb-4">
+              <div className="p-2 bg-gray-100 dark:bg-gray-800 rounded-lg">
+                <svg className="w-5 h-5 text-gray-600 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+              </div>
+              <h4 className="font-semibold text-gray-900 dark:text-white text-base">Documents & Pièces Jointes PDF</h4>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {/* Photo d'identité */}
               <div className="p-4 rounded-xl border border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/30 flex flex-col justify-between gap-3">
                 <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-lg bg-brand-100 dark:bg-brand-900/30 text-brand-600 flex items-center justify-center shrink-0">
-                    📷
+                  <div className="h-10 w-10 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-500 flex items-center justify-center shrink-0">
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
                   </div>
                   <div>
                     <h5 className="font-semibold text-gray-900 dark:text-white text-sm">Photo d'identité</h5>
@@ -324,7 +351,7 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
                     href={resolveDocUrl(photoDoc)!}
                     target="_blank"
                     rel="noreferrer"
-                    className="inline-flex items-center justify-center gap-2 w-full py-2 px-3 rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-xs font-bold text-brand-600 hover:bg-brand-50 transition-colors shadow-xs"
+                    className="inline-flex items-center justify-center gap-2 w-full py-2 px-3 rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-xs font-bold text-gray-700 hover:bg-gray-100 transition-colors shadow-xs"
                   >
                     Voir la photo
                   </a>
@@ -336,8 +363,10 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
               {/* Acte de naissance */}
               <div className="p-4 rounded-xl border border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/30 flex flex-col justify-between gap-3">
                 <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-lg bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 flex items-center justify-center shrink-0">
-                    📄
+                  <div className="h-10 w-10 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-500 flex items-center justify-center shrink-0">
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
                   </div>
                   <div>
                     <h5 className="font-semibold text-gray-900 dark:text-white text-sm">Acte de Naissance</h5>
@@ -349,7 +378,7 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
                     href={resolveDocUrl(birthCertDoc)!}
                     target="_blank"
                     rel="noreferrer"
-                    className="inline-flex items-center justify-center gap-2 w-full py-2 px-3 rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-xs font-bold text-indigo-600 hover:bg-indigo-50 transition-colors shadow-xs"
+                    className="inline-flex items-center justify-center gap-2 w-full py-2 px-3 rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-xs font-bold text-gray-700 hover:bg-gray-100 transition-colors shadow-xs"
                   >
                     Ouvrir le document
                   </a>
@@ -361,8 +390,10 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
               {/* Carte d'identité Parent */}
               <div className="p-4 rounded-xl border border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/30 flex flex-col justify-between gap-3">
                 <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 flex items-center justify-center shrink-0">
-                    🪪
+                  <div className="h-10 w-10 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-500 flex items-center justify-center shrink-0">
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 114 0v1m-4 0a2 2 0 104 0m-5 8a2 2 0 100-4 2 2 0 000 4zm0 0c1.306 0 2.417.835 2.83 2M9 14a3.001 3.001 0 00-2.83 2M15 11h3m-3 4h2" />
+                    </svg>
                   </div>
                   <div>
                     <h5 className="font-semibold text-gray-900 dark:text-white text-sm">Carte d'Identité Parent</h5>
@@ -374,7 +405,7 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
                     href={resolveDocUrl(parentIdDoc)!}
                     target="_blank"
                     rel="noreferrer"
-                    className="inline-flex items-center justify-center gap-2 w-full py-2 px-3 rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-xs font-bold text-emerald-600 hover:bg-emerald-50 transition-colors shadow-xs"
+                    className="inline-flex items-center justify-center gap-2 w-full py-2 px-3 rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-xs font-bold text-gray-700 hover:bg-gray-100 transition-colors shadow-xs"
                   >
                     Ouvrir la pièce
                   </a>
@@ -386,10 +417,15 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
           </div>
 
           {/* Section Historique des Paiements */}
-          <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-900">
-            <h4 className="text-lg font-bold text-gray-900 dark:text-white mb-4">
-              Historique des Paiements Effectués
-            </h4>
+          <div className="rounded-xl shadow-sm border border-gray-200 bg-white p-6 dark:border-gray-800 dark:bg-gray-900">
+            <div className="flex items-center gap-3 mb-5 border-b border-gray-100 dark:border-gray-800 pb-4">
+              <div className="p-2 bg-gray-100 dark:bg-gray-800 rounded-lg">
+                <svg className="w-5 h-5 text-gray-600 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <h4 className="font-semibold text-gray-900 dark:text-white text-base">Historique des Paiements Effectués</h4>
+            </div>
             <div className="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/[0.03]">
               <div className="max-w-full overflow-x-auto">
                 <table className="w-full whitespace-nowrap text-left text-sm text-gray-600 dark:text-gray-400">

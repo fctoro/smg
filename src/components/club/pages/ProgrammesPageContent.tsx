@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import { useClubData } from "@/context/ClubDataContext";
 import { ProgrammeMatch } from "@/types/club";
 import { fetchProgrammes, deleteProgramme } from "@/lib/club/programmes";
+import { PencilIcon, TrashBinIcon } from "@/icons";
 import { ProgrammeFormModal } from "../modals/ProgrammeFormModal";
 import { useConfirm } from "@/hooks/useConfirm";
 import { TableSkeleton } from "@/components/ui/skeleton/Skeleton";
@@ -84,6 +85,21 @@ export default function ProgrammesPageContent() {
       return p && getPlayerFullName(p).toLowerCase().includes(playerSearchQuery.toLowerCase());
     });
     return matchesName && matchesSeason && matchesCategory && matchesPlayer;
+  }).sort((a, b) => {
+    // Trier par saison décroissante
+    const saisonA = a.saison || "";
+    const saisonB = b.saison || "";
+    if (saisonA !== saisonB) {
+      return saisonB.localeCompare(saisonA);
+    }
+    // Puis par date décroissante
+    const dateA = a.date_programme ? new Date(a.date_programme).getTime() : 0;
+    const dateB = b.date_programme ? new Date(b.date_programme).getTime() : 0;
+    if (dateA !== dateB) {
+      return dateB - dateA;
+    }
+    // Puis par nom
+    return (a.nom || "").localeCompare(b.nom || "");
   });
 
   const handleExportExcel = () => {
@@ -304,19 +320,25 @@ export default function ProgrammesPageContent() {
                       <td className="px-6 py-4 text-right">
                         <div className="flex items-center justify-end gap-2">
                           <button
+                            type="button"
+                            className="inline-flex items-center justify-center text-gray-500 transition hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200"
                             onClick={() => {
                               setSelectedProgramme(prog);
                               setIsModalOpen(true);
                             }}
-                            className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 shadow-sm hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700 transition-colors"
+                            aria-label="Modifier"
+                            title="Modifier"
                           >
-                            Modifier
+                            <PencilIcon className="size-5" />
                           </button>
                           <button
+                            type="button"
+                            className="inline-flex items-center justify-center text-gray-500 transition hover:text-error-600 dark:text-gray-400 dark:hover:text-error-500"
                             onClick={() => handleDelete(prog.id)}
-                            className="inline-flex items-center gap-1.5 rounded-lg border border-transparent bg-red-50 px-3 py-1.5 text-xs font-medium text-red-700 shadow-sm hover:bg-red-100 dark:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/20 transition-colors"
+                            aria-label="Supprimer"
+                            title="Supprimer"
                           >
-                            Supprimer
+                            <TrashBinIcon className="size-5" />
                           </button>
                         </div>
                       </td>

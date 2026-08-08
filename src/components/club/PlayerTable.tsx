@@ -39,7 +39,7 @@ const defaultColumns: PlayerColumnKey[] = [
 ];
 
 import { useClubData } from "@/context/ClubDataContext";
-import { getDynamicSeasonOptions } from "@/lib/club/season";
+import { getDynamicSeasonOptions, generatePlayerMatricule } from "@/lib/club/season";
 import { TableBodySkeleton } from "@/components/ui/skeleton/Skeleton";
 import { fetchProgrammes } from "@/lib/club/programmes";
 
@@ -135,11 +135,21 @@ export default function PlayerTable({
           selectedStatus === "all" || player.statut === selectedStatus;
         return nameMatches && categoryMatches && seasonMatches && programmeMatches && statusMatches;
       })
-      .sort(
-        (a, b) =>
-          new Date(b.dateInscription).getTime() -
-          new Date(a.dateInscription).getTime(),
-      );
+      .sort((a, b) => {
+        // 1. Statut Actif en premier
+        if (a.statut === "actif" && b.statut !== "actif") return -1;
+        if (a.statut !== "actif" && b.statut === "actif") return 1;
+
+        // 2. Saison la plus récente en premier (ex: 2026-2027 avant 2025-2026)
+        const saisonA = a.saison || "";
+        const saisonB = b.saison || "";
+        if (saisonA !== saisonB) {
+          return saisonB.localeCompare(saisonA);
+        }
+
+        // 3. Inscription la plus récente
+        return new Date(b.dateInscription).getTime() - new Date(a.dateInscription).getTime();
+      });
   }, [players, searchQuery, selectedCategory, selectedSeason, selectedProgramme, selectedStatus]);
 
   const totalPages = Math.max(1, Math.ceil(filteredPlayers.length / currentPageSize));
@@ -234,9 +244,7 @@ export default function PlayerTable({
                 >
                   <option value="all">Tous statuts</option>
                   <option value="actif">Actif</option>
-                  <option value="blesse">Blessé</option>
-                  <option value="suspendu">Suspendu</option>
-                  <option value="abandonne">Abandonné</option>
+                  <option value="inactif">Inactif</option>
                 </select>
               </div>
             </div>
@@ -376,7 +384,7 @@ export default function PlayerTable({
                 const safeAvatarSrc = getSafeAvatarSrc(player.photoIdentiteUrl || player.photoUrl);
                 const safeMatricule = player.matricule && !player.matricule.includes("XXXX")
                   ? player.matricule
-                  : `FCT-2526-${String(player.id).padStart(4, "0")}`;
+                  : generatePlayerMatricule(player.id, player.saison);
 
                 return (
                 <TableRow key={player.id}>

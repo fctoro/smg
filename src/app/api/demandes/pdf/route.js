@@ -3,13 +3,16 @@ import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
 import fontkit from "@pdf-lib/fontkit";
 import fs from "fs";
 import path from "path";
-import { createClient } from "@supabase/supabase-js";
+import { createClient as createSupabaseClient } from "@supabase/supabase-js";
+import { createClient as createServerClient } from "@/lib/supabase/server";
 
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
 
 export const runtime = "nodejs";
 
-const supabase = createClient(
+// We still need the service role client for some operations that might bypass RLS,
+// but we will authenticate the request first.
+const supabase = createSupabaseClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
   { auth: { persistSession: false, autoRefreshToken: false } }
@@ -109,6 +112,13 @@ function formatDate(value) {
 
 export async function GET(request) {
   try {
+    const serverClient = await createServerClient();
+    const { data: { user }, error: authError } = await serverClient.auth.getUser();
+
+    if (authError || !user) {
+      return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
+    }
+
     const { searchParams } = new URL(request.url);
     const id = searchParams.get("id");
 

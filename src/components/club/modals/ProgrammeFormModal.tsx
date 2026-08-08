@@ -111,12 +111,15 @@ export function ProgrammeFormModal({
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} className="max-w-2xl p-0">
+    <Modal isOpen={isOpen} onClose={onClose} className="max-w-5xl p-0" showCloseButton={false}>
       <div className="border-b border-gray-200 dark:border-gray-800 px-6 py-4 flex items-center justify-between">
         <h2 className="text-lg font-bold text-gray-900 dark:text-white">
           {initialData ? "Modifier le programme" : "Créer un programme"}
         </h2>
-        <button onClick={onClose} className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300">
+        <button
+          onClick={onClose}
+          className="flex h-8 w-8 items-center justify-center rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-colors dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-white"
+        >
           <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
           </svg>
@@ -138,7 +141,7 @@ export function ProgrammeFormModal({
             value={nom}
             onChange={(e) => setNom(e.target.value)}
             placeholder="ex: Programme Vacances"
-            className="w-full rounded-lg border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 p-2 text-sm"
+            className="h-11 w-full rounded-lg border border-gray-300 bg-transparent px-4 py-2.5 text-sm text-gray-800 shadow-sm placeholder:text-gray-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:text-white/90"
           />
         </div>
 
@@ -150,7 +153,7 @@ export function ProgrammeFormModal({
             <select
               value={saison}
               onChange={(e) => setSaison(e.target.value)}
-              className="w-full rounded-lg border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 p-2 text-sm"
+              className="h-11 w-full rounded-lg border border-gray-300 bg-transparent px-4 py-2.5 text-sm text-gray-800 shadow-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:text-white/90"
             >
               {seasonOptions.map((s) => (
                 <option key={s} value={s}>{s}</option>
@@ -168,7 +171,7 @@ export function ProgrammeFormModal({
               type="date"
               value={dateDepart}
               onChange={(e) => setDateDepart(e.target.value)}
-              className="w-full rounded-lg border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 p-2 text-sm"
+              className="h-11 w-full rounded-lg border border-gray-300 bg-transparent px-4 py-2.5 text-sm text-gray-800 shadow-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:text-white/90"
             />
           </div>
           <div>
@@ -179,7 +182,7 @@ export function ProgrammeFormModal({
               type="date"
               value={dateCloture}
               onChange={(e) => setDateCloture(e.target.value)}
-              className="w-full rounded-lg border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 p-2 text-sm"
+              className="h-11 w-full rounded-lg border border-gray-300 bg-transparent px-4 py-2.5 text-sm text-gray-800 shadow-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:text-white/90"
             />
           </div>
         </div>
@@ -195,7 +198,7 @@ export function ProgrammeFormModal({
               setSelectedPlayers(new Set()); // reset players on category change
             }}
             disabled={!!initialData} // prevent changing category if editing
-            className="w-full rounded-lg border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 p-2 text-sm disabled:opacity-50"
+            className="h-11 w-full rounded-lg border border-gray-300 bg-transparent px-4 py-2.5 text-sm text-gray-800 shadow-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:text-white/90 disabled:opacity-50"
           >
             {categories.map((c) => (
               <option key={c} value={c}>{c}</option>
@@ -204,19 +207,45 @@ export function ProgrammeFormModal({
         </div>
 
         <div>
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-2 gap-2">
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-              Joueurs disponibles dans {categorie} ({playersInCat.length})
-            </label>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-3 gap-2">
+            <div className="flex items-center gap-3">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                Joueurs dans {categorie} ({playersInCat.length}) 
+                {selectedPlayers.size > 0 && (
+                  <span className="ml-2 text-brand-600 dark:text-brand-400 font-semibold">
+                    • {selectedPlayers.size} sélectionné{selectedPlayers.size > 1 ? 's' : ''}
+                  </span>
+                )}
+              </label>
+              {filteredPlayers.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (selectedPlayers.size === filteredPlayers.length && filteredPlayers.every(p => selectedPlayers.has(p.id))) {
+                      // If all currently filtered players are selected, deselect them all
+                      setSelectedPlayers(new Set());
+                    } else {
+                      // Otherwise, select all currently filtered players
+                      setSelectedPlayers(new Set(filteredPlayers.map(p => p.id)));
+                    }
+                  }}
+                  className="text-xs text-brand-600 hover:text-brand-700 dark:text-brand-400 font-medium px-2 py-1 rounded bg-brand-50 hover:bg-brand-100 dark:bg-brand-900/20 dark:hover:bg-brand-900/40 transition-colors"
+                >
+                  {selectedPlayers.size === filteredPlayers.length && filteredPlayers.every(p => selectedPlayers.has(p.id)) 
+                    ? "Tout désélectionner" 
+                    : "Tout sélectionner"}
+                </button>
+              )}
+            </div>
             <div className="relative">
               <input
                 type="text"
                 placeholder="Rechercher un joueur..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full sm:w-64 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 py-1.5 pl-8 pr-3 text-sm"
+                className="h-10 w-full sm:w-64 rounded-lg border border-gray-300 bg-transparent py-2 pl-9 pr-4 text-sm text-gray-800 shadow-sm placeholder:text-gray-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:text-white/90"
               />
-              <svg className="w-4 h-4 text-gray-400 absolute left-2.5 top-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg className="w-4 h-4 text-gray-400 absolute left-3 top-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
               </svg>
             </div>

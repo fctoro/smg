@@ -27,9 +27,7 @@ export default function AdminLayout({
       <AutoLogoutListener />
       
       {/* Sidebar and Backdrop */}
-      <Suspense fallback={null}>
-        <AppSidebar />
-      </Suspense>
+      <AppSidebar />
       <Backdrop />
       {/* Main Content Area */}
       <div

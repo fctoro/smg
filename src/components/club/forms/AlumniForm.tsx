@@ -369,9 +369,7 @@ export default function AlumniForm({
             className={selectClassName}
           >
             <option value="actif">Actif</option>
-            <option value="blesse">Blessé</option>
-            <option value="suspendu">Suspendu</option>
-            <option value="abandonne">Abandonné</option>
+            <option value="inactif">Inactif</option>
             <option value="alumni">Alumni</option>
           </select>
         </div>

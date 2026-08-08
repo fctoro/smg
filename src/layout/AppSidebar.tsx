@@ -5,6 +5,7 @@ import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useSidebar } from "../context/SidebarContext";
 import { useUserRole } from "../context/UserRoleContext";
+import { useClubData } from "../context/ClubDataContext";
 import { supabase } from "@/lib/supabaseClient";
 import {
   BoxCubeIcon,
@@ -159,10 +160,18 @@ const baseOthersItems: NavItem[] = [
 const AppSidebar: React.FC = () => {
   const { isExpanded, isMobileOpen, isHovered, setIsHovered } = useSidebar();
   const { role, isCoach, isAdmin, isSuperAdmin, userSections } = useUserRole();
+  const { events } = useClubData();
   const pathname = usePathname();
   const [searchTab, setSearchTab] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
   const [unreadCount, setUnreadCount] = useState<number>(0);
+
+  const upcomingEventsCount = useMemo(() => {
+    if (!events) return 0;
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+    return events.filter(event => new Date(event.date) >= now).length;
+  }, [events]);
 
   useEffect(() => {
     setMounted(true);
@@ -279,11 +288,19 @@ const AppSidebar: React.FC = () => {
               {(isExpanded || isHovered || isMobileOpen) && (
                 <div className="flex items-center justify-between w-full pr-4">
                   <span className={`menu-item-text`}>{nav.name}</span>
-                  {nav.new && (nav.name !== "Demandes" || unreadCount > 0) && (
+                  {nav.name === "Demandes" && unreadCount > 0 ? (
                     <span className="inline-flex items-center justify-center rounded-full bg-error-50 px-2 py-0.5 text-[10px] font-medium text-error-500">
-                      {nav.name === "Demandes" ? unreadCount : "NEW"}
+                      {unreadCount}
                     </span>
-                  )}
+                  ) : nav.name === "Evenements" && upcomingEventsCount > 0 ? (
+                    <span className="inline-flex items-center justify-center rounded-full bg-error-50 px-2 py-0.5 text-[10px] font-medium text-error-500">
+                      {upcomingEventsCount}
+                    </span>
+                  ) : nav.new && nav.name !== "Demandes" ? (
+                    <span className="inline-flex items-center justify-center rounded-full bg-error-50 px-2 py-0.5 text-[10px] font-medium text-error-500">
+                      NEW
+                    </span>
+                  ) : null}
                 </div>
               )}
             </Link>

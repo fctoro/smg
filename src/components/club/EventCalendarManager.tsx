@@ -15,7 +15,7 @@ import {
 import { Modal } from "@/components/ui/modal";
 import { useModal } from "@/hooks/useModal";
 import Badge from "@/components/ui/badge/Badge";
-import { ClubEvent, EventCalendarColor, Player } from "@/types/club";
+import { ClubEvent, EventCalendarColor, Player, EventType } from "@/types/club";
 import { eventTypeLabel, colorFromEventType } from "@/lib/club/status";
 import { formatClubDate } from "@/lib/club/metrics";
 import {
@@ -38,6 +38,8 @@ interface EventFormState {
   startDate: string;
   endDate: string;
   lieu: string;
+  type: EventType | string;
+  customType?: string;
   calendarColor: EventCalendarColor;
 }
 
@@ -46,6 +48,8 @@ const defaultFormState: EventFormState = {
   startDate: "",
   endDate: "",
   lieu: "",
+  type: "reunion",
+  customType: "",
   calendarColor: "Primary",
 };
 
@@ -69,6 +73,7 @@ export default function EventCalendarManager({
   players,
 }: EventCalendarManagerProps) {
   const [formState, setFormState] = useState<EventFormState>(defaultFormState);
+  const [activeTab, setActiveTab] = useState<"upcoming" | "history">("upcoming");
   const calendarRef = useRef<FullCalendar>(null);
   const { isOpen, openModal, closeModal } = useModal();
 
@@ -95,6 +100,19 @@ export default function EventCalendarManager({
     [events],
   );
 
+  const filteredEvents = useMemo(() => {
+    const now = new Date();
+    // Midnight to avoid issues with time today
+    now.setHours(0, 0, 0, 0);
+    return sortedEvents.filter(event => {
+      const eventDate = new Date(event.date);
+      if (activeTab === "upcoming") {
+        return eventDate >= now;
+      }
+      return eventDate < now;
+    });
+  }, [sortedEvents, activeTab]);
+
 const resetForm = () => {
     setFormState(defaultFormState);
   };
@@ -110,12 +128,15 @@ const resetForm = () => {
   };
 
   const openEditModal = (event: ClubEvent) => {
+    const isStandardType = ["match", "entrainement", "reunion"].includes(event.type);
     setFormState({
       id: event.id,
       titre: event.titre,
       startDate: toInputDate(event.date),
       endDate: toInputDate(event.date),
       lieu: event.lieu,
+      type: isStandardType ? event.type : "autre",
+      customType: isStandardType ? "" : event.type,
       calendarColor: event.calendarColor ?? eventTypeToCalendarColor(event.type),
     });
     openModal();
@@ -138,7 +159,7 @@ const resetForm = () => {
     }
 
     const eventDate = `${formState.startDate}T18:00:00`;
-    const eventType = calendarColorToType[formState.calendarColor];
+    const eventType = formState.type === "autre" ? (formState.customType || "Autre") : formState.type;
 
     try {
       if (formState.id) {
@@ -263,29 +284,66 @@ const resetForm = () => {
       </div>
 
       <div className="rounded-2xl border border-gray-200 bg-white px-4 pb-3 pt-4 dark:border-gray-800 dark:bg-white/[0.03] sm:px-6">
-        <h3 className="mb-4 text-lg font-semibold text-gray-800 dark:text-white/90">
-          Liste des evenements
-        </h3>
+        {/* TABS UI */}
+        <div className="flex justify-start pb-4 mb-2 mt-2 overflow-x-auto hide-scrollbar">
+          <div className="inline-flex items-center gap-1 rounded-full bg-gray-100/80 p-1.5 dark:bg-gray-800/80 backdrop-blur-sm shadow-inner">
+            {[
+              { id: "upcoming", label: "Évènements prévus" },
+              { id: "history", label: "Historique" }
+            ].map((tab) => {
+              const isActive = activeTab === tab.id;
+              
+              const now = new Date();
+              now.setHours(0, 0, 0, 0);
+              const count = sortedEvents.filter(event => {
+                const eventDate = new Date(event.date);
+                return tab.id === "upcoming" ? eventDate >= now : eventDate < now;
+              }).length;
+
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id as "upcoming" | "history")}
+                  className={`relative flex items-center gap-2.5 rounded-full px-6 py-2.5 text-sm font-bold transition-all duration-300 ease-out ${
+                    isActive
+                      ? "bg-white text-[#C8102E] shadow-sm ring-1 ring-black/5 dark:bg-gray-900 dark:text-red-500 dark:ring-white/10"
+                      : "text-gray-500 hover:text-gray-900 hover:bg-gray-200/50 dark:text-gray-400 dark:hover:text-white dark:hover:bg-gray-700/50"
+                  }`}
+                >
+                  <span className="relative z-10">{tab.label}</span>
+                  <span className="relative z-10 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-[#C8102E] px-1.5 text-[10.5px] font-black text-white shadow-sm ring-2 ring-white dark:ring-gray-900">
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
         <div className="space-y-3">
-          {sortedEvents.map((event) => (
-            <div
-              key={event.id}
-              className="flex flex-col gap-3 rounded-xl border border-gray-200 p-4 dark:border-gray-700 sm:flex-row sm:items-center sm:justify-between"
-            >
+          {filteredEvents.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-10 text-center">
+              <p className="text-gray-500 dark:text-gray-400">
+                Aucun évènement à afficher dans cette catégorie pour le moment.
+              </p>
+            </div>
+          ) : (
+            filteredEvents.map((event) => (
+              <div
+                key={event.id}
+                className="flex flex-col gap-3 rounded-xl border border-gray-200 p-4 dark:border-gray-700 sm:flex-row sm:items-center sm:justify-between"
+              >
               <div>
                 <div className="flex flex-wrap items-center gap-2">
                   <h4 className="font-medium text-gray-800 dark:text-white/90">
                     {event.titre}
                   </h4>
-                  <Badge size="sm" color={colorFromEventType(event.type)}>
-                    {eventTypeLabel[event.type]}
+                  <Badge size="sm" color={colorFromEventType(event.type as EventType)}>
+                    {eventTypeLabel[event.type as EventType] || event.type}
                   </Badge>
                 </div>
                 <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
                   {formatClubDate(event.date)} - {event.lieu}
-                </p>
-                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                  Participants: {event.participants.length}
                 </p>
               </div>
               <div className="flex items-center gap-2">
@@ -305,7 +363,8 @@ const resetForm = () => {
                 </button>
               </div>
             </div>
-          ))}
+          ))
+          )}
         </div>
       </div>
 
@@ -340,41 +399,62 @@ const resetForm = () => {
 
             <div>
               <label className="mb-4 block text-sm font-medium text-gray-700 dark:text-gray-400">
-                Event Color
+                Type d'évènement
               </label>
               <div className="flex flex-wrap items-center gap-5">
-                {calendarColors.map((calendarColor) => (
+                {[
+                  { id: "match", label: "Match", color: "Danger" },
+                  { id: "entrainement", label: "Entraînement", color: "Success" },
+                  { id: "reunion", label: "Réunion", color: "Primary" },
+                  { id: "autre", label: "Autres", color: "Warning" }
+                ].map((option) => (
                   <label
-                    key={calendarColor}
-                    className="inline-flex items-center gap-2 text-lg text-gray-800 dark:text-white/90"
+                    key={option.id}
+                    className="inline-flex items-center gap-2 text-lg text-gray-800 dark:text-white/90 cursor-pointer"
                   >
                     <span className="relative">
                       <input
                         type="radio"
                         className="sr-only"
-                        name="event-color"
-                        checked={formState.calendarColor === calendarColor}
+                        name="event-type"
+                        checked={formState.type === option.id}
                         onChange={() =>
                           setFormState((prev) => ({
                             ...prev,
-                            calendarColor,
+                            type: option.id as EventType,
+                            calendarColor: option.color as EventCalendarColor,
                           }))
                         }
                       />
                       <span className="flex h-6 w-6 items-center justify-center rounded-full border border-gray-300 dark:border-gray-700">
                         <span
-                          className={`h-3 w-3 rounded-full bg-brand-500 ${
-                            formState.calendarColor === calendarColor
+                          className={`h-3 w-3 rounded-full ${
+                            option.color === "Danger" ? "bg-error-500" : option.color === "Success" ? "bg-success-500" : option.color === "Warning" ? "bg-warning-500" : "bg-brand-500"
+                          } ${
+                            formState.type === option.id
                               ? "block"
                               : "hidden"
                           }`}
                         ></span>
                       </span>
                     </span>
-                    {calendarColor}
+                    {option.label}
                   </label>
                 ))}
               </div>
+              {formState.type === "autre" && (
+                <div className="mt-4">
+                  <input
+                    type="text"
+                    placeholder="Précisez le type d'évènement"
+                    value={formState.customType}
+                    onChange={(e) =>
+                      setFormState((prev) => ({ ...prev, customType: e.target.value }))
+                    }
+                    className={inputClassName}
+                  />
+                </div>
+              )}
             </div>
 
             <div>

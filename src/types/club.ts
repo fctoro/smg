@@ -2,7 +2,7 @@ export type PlayerStatus = "actif" | "inactif" | "blesse" | "suspendu" | "abando
 
 export type PaymentStatus = "paid" | "pending" | "late";
 
-export type EventType = "match" | "entrainement" | "reunion";
+export type EventType = "match" | "entrainement" | "reunion" | (string & {});
 
 export type EventCalendarColor = "Danger" | "Success" | "Primary" | "Warning";
 

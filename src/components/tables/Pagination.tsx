@@ -65,7 +65,9 @@ const Pagination: React.FC<PaginationProps> = ({
             className="h-10 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 shadow-theme-xs focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300"
           >
             {pageSizeOptions.map(opt => (
-              <option key={opt} value={opt}>{opt}</option>
+              <option key={opt} value={opt}>
+                {opt >= 10000 ? "Tous" : opt}
+              </option>
             ))}
           </select>
           <span className="text-sm text-gray-500 dark:text-gray-400">par page</span>

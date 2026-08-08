@@ -14,12 +14,16 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import Link from "next/link";
+
 import { useClubData } from "@/context/ClubDataContext";
 import { formatClubCurrency, formatClubDate, getPlayerFullName } from "@/lib/club/metrics";
 import { updatePaymentInSupabase } from "@/lib/club/supabase-crud";
 import { calculateDiscountedAmount, parseReductionFromRemark } from "@/lib/club/payment-reduction-utils";
 import { ImageModal } from "@/components/club/modals/ImageModal";
 import { extractPhotoUrlFromRemark } from "@/lib/club/payment-photo-utils";
+import { BellIcon } from "@/icons";
+import { ActiveBellIcon } from "@/icons/ActiveBellIcon";
+import { CustomReminderMessageModal } from "@/components/club/modals/CustomReminderMessageModal";
 
 interface PaymentPlan {
   id: string;
@@ -72,6 +76,14 @@ export default function PaymentsPage() {
   const [editError, setEditError] = useState("");
   const [selectedPaymentImage, setSelectedPaymentImage] = useState<string | null>(null);
   const [isImageModalOpen, setIsImageModalOpen] = useState(false);
+  const [isReminderDropdownOpen, setIsReminderDropdownOpen] = useState(false);
+
+  // Nouveaux etats pour les rappels
+  const [reminderMode, setReminderMode] = useState<"none" | "mensuel" | "semestriel" | "custom">("none");
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [isSendingReminders, setIsSendingReminders] = useState(false);
+  const [isCustomMessageModalOpen, setIsCustomMessageModalOpen] = useState(false);
+  const [customMessageText, setCustomMessageText] = useState("");
 
   const playerMap = useMemo(
     () => new Map(players.map((player) => [player.id, player])),
@@ -204,16 +216,6 @@ export default function PaymentsPage() {
     }
   };
 
-  const getPaymentPlanLabel = (remark?: string) =>
-    remark?.match(/\[PLAN:\s*(ANNUEL|SEMESTRIEL|MENSUEL)\]/i)?.[1] ||
-    remark?.match(/plan\s*:\s*(annuel|semestriel|mensuel)/i)?.[1] ||
-    "Plan manquant";
-
-  const getPaymentStatusLabel = (payment: (typeof payments)[number]) => {
-    const marker = payment.remarque?.match(/\[STATUT:\s*(PAID|PENDING|LATE)\]/i)?.[1];
-    return marker?.toLowerCase() || payment.statut;
-  };
-
   const filteredPayments = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
     return payments
@@ -231,6 +233,117 @@ export default function PaymentsPage() {
         return dateB - dateA;
       });
   }, [payments, playerMap, searchQuery, deviseFilter, selectedSeason]);
+
+  // ----- Logique de Rappel en Masse -----
+  const targetPlayers = useMemo(() => {
+    const playersMap = new Map<string, { player: (typeof players)[number]; email: string; parentName: string }>();
+    filteredPayments.forEach((p) => {
+      const player = playerMap.get(p.playerId);
+      if (player && !playersMap.has(player.id)) {
+        const targetEmail = player.parentEmail || player.email;
+        if (targetEmail) {
+          playersMap.set(player.id, {
+            player,
+            email: targetEmail,
+            parentName: player.parentNomPrenom || getPlayerFullName(player),
+          });
+        }
+      }
+    });
+    return Array.from(playersMap.values());
+  }, [filteredPayments, playerMap]);
+
+  const allSelected = targetPlayers.length > 0 && selectedIds.size === targetPlayers.length;
+
+  const toggleSelectAll = () => {
+    if (allSelected) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(targetPlayers.map((tp) => tp.player.id)));
+    }
+  };
+
+  const togglePlayerSelect = (id: string) => {
+    const newSet = new Set(selectedIds);
+    if (newSet.has(id)) {
+      newSet.delete(id);
+    } else {
+      newSet.add(id);
+    }
+    setSelectedIds(newSet);
+  };
+
+  const handleStartReminder = (mode: "mensuel" | "semestriel" | "custom") => {
+    setIsReminderDropdownOpen(false);
+    if (mode === "semestriel") {
+      alert("Le texte pour le plan semestriel n'est pas encore défini.");
+      return;
+    }
+    if (mode === "custom") {
+      setIsCustomMessageModalOpen(true);
+    } else {
+      setReminderMode(mode);
+      setSelectedIds(new Set());
+    }
+  };
+
+  const handleSendReminders = async () => {
+    if (selectedIds.size === 0) return;
+    
+    if (!window.confirm(`Confirmez-vous l'envoi de ${selectedIds.size} rappel(s) ?`)) return;
+
+    setIsSendingReminders(true);
+    const selectedList = targetPlayers.filter(tp => selectedIds.has(tp.player.id));
+    
+    let successCount = 0;
+    let errorCount = 0;
+
+    for (const tp of selectedList) {
+      try {
+        const payload: any = {
+          email: tp.email,
+          playerName: getPlayerFullName(tp.player),
+          recipientName: tp.parentName,
+        };
+        if (reminderMode === "custom") {
+          payload.customMessage = customMessageText;
+          payload.customSubject = "Message Important du FC TORO";
+        }
+        // TODO: Gérer semestriel plus tard si nécessaire
+
+        const response = await fetch("/api/send-reminder", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        
+        if (response.ok) {
+          successCount++;
+        } else {
+          errorCount++;
+        }
+      } catch (err) {
+        errorCount++;
+      }
+    }
+
+    setIsSendingReminders(false);
+    alert(`Envoi terminé : ${successCount} succès, ${errorCount} erreurs.`);
+    setReminderMode("none");
+    setSelectedIds(new Set());
+  };
+
+  const getPaymentPlanLabel = (remark?: string) =>
+    remark?.match(/\[PLAN:\s*(ANNUEL|SEMESTRIEL|MENSUEL)\]/i)?.[1] ||
+    remark?.match(/plan\s*:\s*(annuel|semestriel|mensuel)/i)?.[1] ||
+    "Plan manquant";
+
+  const getPaymentStatusLabel = (payment: (typeof payments)[number]) => {
+    const marker = payment.remarque?.match(/\[STATUT:\s*(PAID|PENDING|LATE)\]/i)?.[1];
+    return marker?.toLowerCase() || payment.statut;
+  };
+
+
 
   const totalPages = Math.max(1, Math.ceil(filteredPayments.length / currentPageSize));
   const currentPageSafe = Math.min(currentPage, totalPages);
@@ -346,45 +459,113 @@ export default function PaymentsPage() {
               {filteredPayments.length} paiement(s)
             </p>
           </div>
-          <div className="relative shrink-0">
-            <button
-              onClick={() => setIsExportOpen(!isExportOpen)}
-              className="inline-flex h-10 items-center justify-center gap-2 whitespace-nowrap rounded-lg bg-[#107C41] px-4 text-sm font-medium text-white shadow-theme-xs hover:bg-[#0c5e31] transition-colors"
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                <path d="M14 2v6h6"></path>
-                <path d="M8 13h2"></path>
-                <path d="M14 13h2"></path>
-                <path d="M8 17h2"></path>
-                <path d="M14 17h2"></path>
-              </svg>
-              Exporter Excel / CSV
-            </button>
-            <Dropdown
-              isOpen={isExportOpen}
-              onClose={() => setIsExportOpen(false)}
-              className="absolute right-0 top-full mt-1 w-40"
-            >
-              <DropdownItem
-                onItemClick={handleExportExcel}
-                className="cursor-pointer"
-              >
-                Excel
-              </DropdownItem>
-              <DropdownItem
-                onItemClick={handleExportCSV}
-                className="cursor-pointer"
-              >
-                CSV
-              </DropdownItem>
-            </Dropdown>
+          <div className="flex items-center gap-3 relative">
+            {reminderMode !== "none" ? (
+              <>
+                <button
+                  onClick={() => {
+                    setReminderMode("none");
+                    setSelectedIds(new Set());
+                  }}
+                  disabled={isSendingReminders}
+                  className="inline-flex h-10 items-center justify-center gap-2 whitespace-nowrap rounded-lg bg-white border border-gray-200 px-4 text-sm font-medium text-gray-700 shadow-theme-xs hover:bg-gray-50 disabled:opacity-50 transition-colors"
+                >
+                  Annuler
+                </button>
+                <button
+                  onClick={handleSendReminders}
+                  disabled={isSendingReminders || selectedIds.size === 0}
+                  className="inline-flex h-10 items-center justify-center gap-2 whitespace-nowrap rounded-lg bg-brand-500 px-4 text-sm font-medium text-white shadow-theme-xs hover:bg-brand-600 disabled:opacity-50 transition-colors"
+                >
+                  {isSendingReminders ? "Envoi..." : `Envoyer les rappels (${selectedIds.size})`}
+                </button>
+              </>
+            ) : (
+              <>
+                <div className="relative">
+                  <button
+                    onClick={() => setIsReminderDropdownOpen(!isReminderDropdownOpen)}
+                    className="inline-flex h-10 items-center justify-center gap-2 whitespace-nowrap rounded-lg bg-white border border-gray-200 dark:border-gray-800 dark:bg-gray-900 px-4 text-sm font-medium text-gray-700 dark:text-gray-300 shadow-theme-xs hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                  >
+                    <ActiveBellIcon className="w-5 h-5 text-brand-500" />
+                    Rappel
+                  </button>
+                  <Dropdown
+                    isOpen={isReminderDropdownOpen}
+                    onClose={() => setIsReminderDropdownOpen(false)}
+                    className="absolute right-0 top-full mt-1 w-56"
+                  >
+                    <DropdownItem
+                      onItemClick={() => handleStartReminder("mensuel")}
+                      className="cursor-pointer"
+                    >
+                      Rappel Plan mensuel
+                    </DropdownItem>
+                    <DropdownItem
+                      onItemClick={() => handleStartReminder("semestriel")}
+                      className="cursor-pointer text-gray-400"
+                    >
+                      Rappel Plan semestriel
+                    </DropdownItem>
+                    <DropdownItem
+                      onItemClick={() => handleStartReminder("custom")}
+                      className="cursor-pointer"
+                    >
+                      Rappel pour autre Cas
+                    </DropdownItem>
+                  </Dropdown>
+                </div>
+                <button
+                  onClick={() => setIsExportOpen(!isExportOpen)}
+                  className="inline-flex h-10 items-center justify-center gap-2 whitespace-nowrap rounded-lg bg-[#107C41] px-4 text-sm font-medium text-white shadow-theme-xs hover:bg-[#0c5e31] transition-colors"
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                    <path d="M14 2v6h6"></path>
+                    <path d="M8 13h2"></path>
+                    <path d="M14 13h2"></path>
+                    <path d="M8 17h2"></path>
+                    <path d="M14 17h2"></path>
+                  </svg>
+                  Exporter Excel / CSV
+                </button>
+                <Dropdown
+                  isOpen={isExportOpen}
+                  onClose={() => setIsExportOpen(false)}
+                  className="absolute right-0 top-full mt-1 w-40"
+                >
+                  <DropdownItem
+                    onItemClick={handleExportExcel}
+                    className="cursor-pointer"
+                  >
+                    Excel
+                  </DropdownItem>
+                  <DropdownItem
+                    onItemClick={handleExportCSV}
+                    className="cursor-pointer"
+                  >
+                    CSV
+                  </DropdownItem>
+                </Dropdown>
+              </>
+            )}
           </div>
         </div>
         <div className="max-w-full overflow-x-auto">
           <Table>
             <TableHeader className="border-y border-gray-100 dark:border-gray-800">
               <TableRow>
+                {reminderMode !== "none" && (
+                  <TableCell isHeader className="py-3 text-start w-10">
+                    <input
+                      type="checkbox"
+                      checked={allSelected}
+                      onChange={toggleSelectAll}
+                      disabled={isSendingReminders}
+                      className="w-4 h-4 rounded border-gray-300 text-brand-500 focus:ring-brand-500 disabled:opacity-50"
+                    />
+                  </TableCell>
+                )}
                 <TableCell isHeader className="py-3 text-start text-theme-xs font-medium text-gray-500 dark:text-gray-400">
                   Joueur
                 </TableCell>
@@ -421,8 +602,22 @@ export default function PaymentsPage() {
                 pagedPayments.map((payment) => {
                   const player = playerMap.get(payment.playerId)!;
                   const balance = calculateBalance(payment);
+                  const isSelectable = !!(player.parentEmail || player.email);
                   return (
                     <TableRow key={payment.id}>
+                      {reminderMode !== "none" && (
+                        <TableCell className="py-3">
+                          {isSelectable && (
+                            <input
+                              type="checkbox"
+                              checked={selectedIds.has(player.id)}
+                              onChange={() => togglePlayerSelect(player.id)}
+                              disabled={isSendingReminders}
+                              className="w-4 h-4 rounded border-gray-300 text-brand-500 focus:ring-brand-500 disabled:opacity-50"
+                            />
+                          )}
+                        </TableCell>
+                      )}
                       <TableCell className="py-3 text-theme-sm text-gray-800 dark:text-white/90">
                         <span className="font-semibold">{getPlayerFullName(player)}</span>
                       </TableCell>
@@ -566,6 +761,7 @@ export default function PaymentsPage() {
           totalPages={totalPages}
           onPageChange={setCurrentPage}
           pageSize={currentPageSize}
+          pageSizeOptions={[10, 25, 50, 100, 10000]}
           onPageSizeChange={(size) => {
             setCurrentPageSize(size);
             setCurrentPage(1);
@@ -580,13 +776,23 @@ export default function PaymentsPage() {
 
       <ImageModal
         isOpen={isImageModalOpen}
-        onClose={() => {
-          setIsImageModalOpen(false);
-          setSelectedPaymentImage(null);
-        }}
-        imageUrl={selectedPaymentImage}
+        onClose={() => setIsImageModalOpen(false)}
+        imageUrl={selectedPaymentImage || ""}
         title="Justificatif de paiement"
       />
+
+      {isCustomMessageModalOpen && (
+        <CustomReminderMessageModal
+          isOpen={isCustomMessageModalOpen}
+          onClose={() => setIsCustomMessageModalOpen(false)}
+          onSubmit={(msg) => {
+            setCustomMessageText(msg);
+            setIsCustomMessageModalOpen(false);
+            setReminderMode("custom");
+            setSelectedIds(new Set());
+          }}
+        />
+      )}
     </div>
   );
 }

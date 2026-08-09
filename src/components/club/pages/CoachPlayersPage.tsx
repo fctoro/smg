@@ -6,6 +6,7 @@ import { useUserRole } from "@/context/UserRoleContext";
 import { Player, Effectif } from "@/types/club";
 import { getPlayerFullName } from "@/lib/club/metrics";
 import { CoachPlayerStatusModal } from "../modals/CoachPlayerStatusModal";
+import { PlayerViewModal } from "../modals/PlayerViewModal";
 import { RosterFormModal } from "../modals/RosterFormModal";
 import { fetchEffectifsByCoach, deleteEffectif } from "@/lib/club/effectifs";
 import { convertRostersToCSV, downloadCSV } from "@/lib/club/rosterExport";
@@ -14,11 +15,17 @@ import Link from "next/link";
 
 import { TableSkeleton, CardSkeleton } from "@/components/ui/skeleton/Skeleton";
 import Pagination from "@/components/tables/Pagination";
+import PlayerTable from "@/components/club/PlayerTable";
+import { PencilIcon, TrashBinIcon } from "@/icons";
+import Badge from "@/components/ui/badge/Badge";
+import { colorFromPlayerStatus, playerStatusLabel } from "@/lib/club/status";
+import { generatePlayerMatricule } from "@/lib/club/season";
 
 export default function CoachPlayersPage() {
   const { players: allPlayers, setPlayers, hydrated } = useClubData();
   const { userCategories, userEmail } = useUserRole();
   const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
+  const [selectedViewPlayer, setSelectedViewPlayer] = useState<Player | null>(null);
   
   // Tabs
   const [activeTab, setActiveTab] = useState<"liste" | "effectifs">("liste");
@@ -196,21 +203,6 @@ export default function CoachPlayersPage() {
             </button>
           </div>
         )}
-
-        {/* Controls when in liste tab */}
-        {activeTab === "liste" && coachPlayers.length > 0 && (
-          <div className="flex items-center gap-3">
-            <button
-              onClick={handleExportPlayers}
-              className="inline-flex h-9 items-center justify-center rounded-lg border border-transparent bg-emerald-500 px-4 text-sm font-medium text-white shadow-sm hover:bg-emerald-600 dark:bg-emerald-600 dark:hover:bg-emerald-700 transition-colors"
-            >
-              <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-              </svg>
-              Exporter Excel / CSV
-            </button>
-          </div>
-        )}
       </div>
 
       {/* Tabs */}
@@ -240,136 +232,30 @@ export default function CoachPlayersPage() {
       </div>
 
       {activeTab === "liste" && (
-        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
-          {categoriesToDisplay.length === 0 ? (
-            <div className="rounded-xl border border-gray-200 bg-white p-8 text-center shadow-sm dark:border-gray-800 dark:bg-gray-900">
-              <p className="text-gray-500 dark:text-gray-400">
-                Aucune Catégorie ne vous a été assignée. Veuillez contacter un administrateur.
-              </p>
-            </div>
-          ) : (
-            <>
-              {/* Category Tabs */}
-              <div className="flex flex-wrap gap-3">
-                {categoriesToDisplay.map((category) => {
-                  const isActive = selectedCategory === category;
-                  const count = (playersByCategory[category] || []).length;
-                  return (
-                    <button
-                      key={category}
-                      onClick={() => setSelectedCategory(category)}
-                      className={`flex items-center gap-3 rounded-full px-5 py-2.5 text-sm font-semibold transition-all
-                        ${isActive 
-                          ? "bg-white text-brand-600 shadow-sm border border-brand-200 dark:bg-gray-800 dark:border-brand-500/30 dark:text-brand-400" 
-                          : "bg-gray-50 text-gray-500 border border-transparent hover:bg-gray-100 dark:bg-gray-900/50 dark:text-gray-400 dark:hover:bg-gray-800"}`}
-                    >
-                      <span>{category}</span>
-                      <span className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold text-white
-                        ${isActive ? "bg-brand-500" : "bg-gray-300 dark:bg-gray-700"}`}>
-                        {count}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* Single Table for Selected Category */}
-              {(() => {
-                const category = selectedCategory;
-                const playersInCat = playersByCategory[category] || [];
-                
-                return (
-                  <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-900">
-                    <div className="border-b border-gray-200 bg-gray-50 px-6 py-4 dark:border-gray-800 dark:bg-gray-900/50 flex items-center justify-between">
-                      <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-                        Catégorie {category}
-                      </h2>
-                      <span className="rounded-full bg-gray-200 px-3 py-1 text-xs font-medium text-gray-700 dark:bg-gray-800 dark:text-gray-300">
-                        {playersInCat.length} joueur(s)
-                      </span>
-                    </div>
-
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left text-sm text-gray-500 dark:text-gray-400">
-                      <thead className="bg-gray-50/50 text-xs uppercase text-gray-700 dark:bg-gray-800/50 dark:text-gray-400">
-                        <tr>
-                          <th className="px-6 py-4 font-medium">Nom du Joueur</th>
-                          <th className="px-6 py-4 font-medium">Poste</th>
-                          <th className="px-6 py-4 font-medium">Statut</th>
-                          <th className="px-6 py-4 font-medium text-right">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-200 dark:divide-gray-800">
-                        {playersInCat.length === 0 ? (
-                          <tr>
-                            <td colSpan={4} className="px-6 py-8 text-center text-gray-500">
-                              Aucun joueur enregistré dans cette Catégorie.
-                            </td>
-                          </tr>
-                        ) : (() => {
-                          const currentPage = pagePerCategory[category] || 1;
-                          const totalPages = Math.ceil(playersInCat.length / playersPerPage);
-                          const startIndex = (currentPage - 1) * playersPerPage;
-                          const paginatedPlayers = playersInCat.slice(startIndex, startIndex + playersPerPage);
-
-                          return paginatedPlayers.map((player) => (
-                            <tr key={player.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
-                              <td className="px-6 py-4 font-medium text-gray-900 dark:text-white">
-                                {getPlayerFullName(player)}
-                              </td>
-                              <td className="px-6 py-4">
-                                {player.poste || "-"}
-                              </td>
-                              <td className="px-6 py-4">
-                                <span
-                                  className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${
-                                    player.statut === "actif"
-                                      ? "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-400"
-                                      : player.statut === "blesse"
-                                      ? "bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400"
-                                      : player.statut === "suspendu"
-                                      ? "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400"
-                                      : "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400"
-                                  }`}
-                                >
-                                  {player.statut || "Non défini"}
-                                </span>
-                              </td>
-                              <td className="px-6 py-4 text-right">
-                                <button
-                                  onClick={() => setSelectedPlayer(player)}
-                                  className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700 transition-colors"
-                                >
-                                  Modifier
-                                </button>
-                              </td>
-                            </tr>
-                          ));
-                        })()}
-                      </tbody>
-                    </table>
-                  </div>
-                  
-                  {/* Pagination controls */}
-                  {playersInCat.length > playersPerPage && (
-                    <div className="border-t border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 px-6 py-4 flex items-center justify-between">
-                      <p className="text-sm text-gray-700 dark:text-gray-300">
-                        Affichage de <span className="font-medium">{((pagePerCategory[category] || 1) - 1) * playersPerPage + 1}</span> à <span className="font-medium">{Math.min((pagePerCategory[category] || 1) * playersPerPage, playersInCat.length)}</span> sur <span className="font-medium">{playersInCat.length}</span> joueurs
-                      </p>
-                      <Pagination
-                        currentPage={pagePerCategory[category] || 1}
-                        totalPages={Math.ceil(playersInCat.length / playersPerPage)}
-                        onPageChange={(page) => handlePageChange(category, page)}
-                        pageSize={playersPerPage}
-                        onPageSizeChange={(size) => setPlayersPerPage(size)}
-                      />
-                    </div>
-                  )}
-                </div>
-              );
-              })()}
-            </>
-          )}
+        <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+          <PlayerTable
+            players={coachPlayers}
+            columns={["avatarNom", "poste", "sexe", "statut", "categorie", "saison", "actions"]}
+            title="Effectif Joueurs"
+            showToolbar={true}
+            pageSize={10}
+            exportButton={
+              coachPlayers.length > 0 ? (
+                <button
+                  onClick={handleExportPlayers}
+                  className="inline-flex h-9 items-center justify-center rounded-lg border border-transparent bg-emerald-500 px-4 text-sm font-medium text-white shadow-sm hover:bg-emerald-600 dark:bg-emerald-600 dark:hover:bg-emerald-700 transition-colors"
+                >
+                  <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                  </svg>
+                  Exporter Excel / CSV
+                </button>
+              ) : undefined
+            }
+            onViewPlayer={(player) => setSelectedViewPlayer(player)}
+            onEditPlayer={(player) => setSelectedPlayer(player)}
+            emptyMessage="Aucun joueur trouvé pour vos catégories assignées."
+          />
         </div>
       )}
 
@@ -415,7 +301,7 @@ export default function CoachPlayersPage() {
                   <div className="flex gap-2 border-t border-gray-100 dark:border-gray-800 pt-4 mt-4">
                     <button
                       onClick={() => handleExportRoster(roster)}
-                      className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-emerald-500 border border-transparent rounded-lg hover:bg-emerald-600 dark:bg-emerald-600 dark:hover:bg-emerald-700 transition-colors shadow-sm"
+                      className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-emerald-600 border border-transparent rounded-lg hover:bg-emerald-700 transition-colors shadow-xs"
                     >
                       <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
@@ -427,14 +313,16 @@ export default function CoachPlayersPage() {
                         setSelectedRoster(roster);
                         setIsRosterModalOpen(true);
                       }}
-                      className="flex-1 inline-flex items-center justify-center px-3 py-1.5 text-xs font-bold text-gray-900 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 dark:bg-gray-800 dark:border-gray-600 dark:text-white dark:hover:bg-gray-700 transition-colors shadow-sm"
+                      className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-200 transition-colors shadow-xs"
                     >
+                      <PencilIcon className="w-4 h-4 text-gray-500" />
                       Modifier
                     </button>
                     <button
                       onClick={() => handleDeleteRoster(roster.id)}
-                      className="inline-flex items-center justify-center px-3 py-1.5 text-xs font-bold text-white bg-red-500 border border-transparent rounded-lg hover:bg-red-600 dark:bg-red-600 dark:hover:bg-red-700 transition-colors shadow-sm"
+                      className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium text-red-600 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 dark:bg-red-900/30 dark:border-red-800 dark:text-red-400 transition-colors shadow-xs"
                     >
+                      <TrashBinIcon className="w-4 h-4 text-red-500" />
                       Supprimer
                     </button>
                   </div>
@@ -450,6 +338,13 @@ export default function CoachPlayersPage() {
         onClose={() => setSelectedPlayer(null)}
         player={selectedPlayer}
         onSuccess={handleSuccessUpdate}
+      />
+
+      <PlayerViewModal
+        isOpen={!!selectedViewPlayer}
+        onClose={() => setSelectedViewPlayer(null)}
+        player={selectedViewPlayer}
+        hideParentsAndDocs={true}
       />
 
       <RosterFormModal

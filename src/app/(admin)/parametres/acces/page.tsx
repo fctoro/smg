@@ -3,10 +3,11 @@
 import { TableSkeleton } from "@/components/ui/skeleton/Skeleton";
 import React, { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import { EyeIcon, EyeCloseIcon as EyeSlashIcon, PencilIcon } from "@/icons";
+import { EyeIcon, EyeCloseIcon as EyeSlashIcon, PencilIcon, TrashBinIcon } from "@/icons";
 import { createUser, getUsersList, deleteUser, updateUserPassword, updateUserAccess, getRoleConfig, saveRoleConfig } from "@/app/actions/user";
 import { fetchCoaches } from "@/lib/club/coachs";
 import { Coach } from "@/types/club";
+import { ToastNotification } from "@/components/ui/toast/ToastNotification";
 
 type Profile = {
   id: string;
@@ -255,7 +256,8 @@ export default function AccessControlPage() {
       setMessage({ text: result.error, type: "error" });
     } else {
       const action = editingAccessUserId ? "mis à jour" : "créé";
-      setMessage({ text: `Compte ${formData.role} ${action} avec succès avec ${selectedSections.length} section(s) attribuée(s) !`, type: "success" });
+      const countText = formData.role === "Coach" ? `${selectedCategories.length} catégorie(s)` : `${selectedSections.length} section(s)`;
+      setMessage({ text: `Compte ${formData.role} ${action} avec succès avec ${countText} attribuée(s) !`, type: "success" });
       setEditingAccessUserId(null);
       setFormData({ email: "", password: "", role: "Admin" });
       setSelectedSections(rolePermissions["Admin"]);
@@ -291,9 +293,9 @@ export default function AccessControlPage() {
 
     const res = await deleteUser(user.id);
     if (res?.error) {
-      alert(`Erreur: ${res.error}`);
+      setMessage({ text: `Erreur: ${res.error}`, type: "error" });
     } else {
-      alert(`Le compte ${user.email} a été supprimé avec succès.`);
+      setMessage({ text: `Le compte ${user.email} a été supprimé avec succès.`, type: "success" });
       fetchProfiles();
     }
   };
@@ -303,15 +305,17 @@ export default function AccessControlPage() {
     const res = await saveRoleConfig(rolePermissions);
     setConfigSaving(false);
     if (res.error) {
-      setConfigMessage(`Erreur: ${res.error}`);
+      setMessage({ text: `Erreur: ${res.error}`, type: "error" });
     } else {
-      setConfigMessage(`Permissions par défaut pour le rôle "${activeConfigRole}" sauvegardées !`);
+      setMessage({ text: `Permissions par défaut pour le rôle "${activeConfigRole}" sauvegardées !`, type: "success" });
     }
-    setTimeout(() => setConfigMessage(null), 3000);
   };
 
   return (
     <div className="max-w-4xl mx-auto p-4 md:p-8 space-y-8 font-sans">
+      {message && (
+        <ToastNotification message={message.text} type={message.type} onClose={() => setMessage(null)} />
+      )}
       {/* Header */}
       <div>
         <h1 className="text-[28px] font-bold text-[#0f172a] tracking-tight mb-1">
@@ -368,15 +372,13 @@ export default function AccessControlPage() {
                       </div>
                     </div>
 
-                    {/* Actions buttons: Edit Password & Delete */}
+                    {/* Actions buttons: Edit Access & Delete */}
                     <div className="flex items-center gap-2 self-end sm:self-auto pt-2 sm:pt-0">
                       <button
                         onClick={() => handleEditAccess(profile)}
-                        className="px-3 py-1.5 rounded-lg border border-[#e2e8f0] text-[13px] font-medium text-[#334155] hover:bg-[#f8fafc] hover:border-[#cbd5e1] transition-colors flex items-center gap-2"
+                        className="px-3 py-1.5 rounded-lg border border-[#e2e8f0] text-[13px] font-medium text-[#334155] hover:bg-[#f8fafc] hover:border-[#cbd5e1] transition-colors flex items-center gap-1.5"
                       >
-                        <span className="inline-flex items-center justify-center w-5 h-5 text-[#64748b]">
-                          <PencilIcon className="w-4 h-4" />
-                        </span>
+                        <PencilIcon className="w-4 h-4 text-gray-500" />
                         {editingAccessUserId === profile.id ? "Annuler" : "Modifier"}
                       </button>
                       {!isYou && (
@@ -385,9 +387,7 @@ export default function AccessControlPage() {
                           className="px-3 py-1.5 rounded-lg border border-red-200 text-[13px] font-medium text-red-600 bg-red-50/50 hover:bg-red-100 hover:border-red-300 transition-colors flex items-center gap-1.5"
                           title="Supprimer ce compte (Super Admin uniquement)"
                         >
-                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
+                          <TrashBinIcon className="w-4 h-4 text-red-500" />
                           Supprimer
                         </button>
                       )}

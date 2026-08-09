@@ -1,0 +1,6 @@
+[2026-08-09T19:54:40.760Z] createUser called
+Email: kenslyeugene@gmail.com, Role: Coach
+createUser auth done. authError: false
+upserting profile for user c9a2b582-e2d0-4606-84fd-ca3a6f1ce7c6
+revalidating path
+done

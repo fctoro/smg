@@ -84,7 +84,11 @@ export default function SignInForm() {
         window.location.href = normalizedRole === "coach" ? "/coach" : "/dashboard";
       }
     } catch (err: any) {
-      setError(err.message || "Erreur lors de la connexion.");
+      if (err.message === "Invalid login credentials") {
+        setError("Ce compte n'existe pas ou le mot de passe est incorrect.");
+      } else {
+        setError(err.message || "Erreur lors de la connexion.");
+      }
       setLoading(false);
     }
   };

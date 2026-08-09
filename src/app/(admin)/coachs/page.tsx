@@ -16,6 +16,7 @@ export default function CoachsPage() {
   const [coaches, setCoaches] = useState<Coach[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const { confirm, ConfirmComponent } = useConfirm();
   const [toast, setToast] = useState<{ message: string; type?: "success" | "error" | "info" } | null>(null);
 
   const loadCoaches = async () => {

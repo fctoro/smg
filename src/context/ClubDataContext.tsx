@@ -562,25 +562,31 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
         }
 
         if (employesData) {
-          const fetchedEmployees: Employee[] = employesData.map((e: any) => ({
-            id: String(e.EmployeId),
-            employeId: e.EmployeId,
-            nom: e.Nom || "",
-            prenom: e.Prenom || "",
-            sexe: e.Sexe || "",
-            fonction: e.Fonction || e.Profession || "Employé",
-            role: e.Fonction || e.Profession || "Employé",
-            salaire: e.Salaire || null,
-            dateEmbauche: e.DateEmbauche ? e.DateEmbauche.split("T")[0] : "",
-            dateDebut: e.DateEmbauche ? e.DateEmbauche.split("T")[0] : "",
-            telephone: e.Telephone || "",
-            email: e.Email || "",
-            adresse: e.Adresse || "",
-            niveauEtude: e.NiveauEtude || "",
-            profession: e.Profession || "",
-            photoUrl: e.Photo || "/images/user/silhouette.svg",
-            desactive: e.Desactive === 1 || e.Desactive === true,
-          }));
+          const fetchedEmployees: Employee[] = employesData
+            .filter((e: any) => {
+              const isDesactive = e.Desactive === 1 || e.Desactive === true || String(e.Desactive).toLowerCase() === "true";
+              const isDeleted = e.IsDeleted === 1 || e.IsDeleted === true || String(e.IsDeleted).toLowerCase() === "true";
+              return !isDesactive && !isDeleted;
+            })
+            .map((e: any) => ({
+              id: String(e.EmployeId),
+              employeId: e.EmployeId,
+              nom: e.Nom || "",
+              prenom: e.Prenom || "",
+              sexe: e.Sexe || "",
+              fonction: e.Fonction || e.Profession || "Employé",
+              role: e.Fonction || e.Profession || "Employé",
+              salaire: e.Salaire || null,
+              dateEmbauche: e.DateEmbauche ? e.DateEmbauche.split("T")[0] : "",
+              dateDebut: e.DateEmbauche ? e.DateEmbauche.split("T")[0] : "",
+              telephone: e.Telephone || "",
+              email: e.Email || "",
+              adresse: e.Adresse || "",
+              niveauEtude: e.NiveauEtude || "",
+              profession: e.Profession || "",
+              photoUrl: e.Photo || "/images/user/silhouette.svg",
+              desactive: false,
+            }));
           setEmployees(fetchedEmployees);
           setStaff(fetchedEmployees);
         } else {

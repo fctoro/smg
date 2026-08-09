@@ -498,24 +498,24 @@ export default function StatutsSpeciauxPage() {
 
                     {/* Actions */}
                     <td className="px-4 py-3 text-right">
-                      <div className="flex items-center justify-end gap-2">
+                      <div className="flex items-center justify-end gap-3">
                         <button
+                          type="button"
                           onClick={() => handleOpenAddModal(player)}
-                          className="rounded-lg p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-white"
+                          className="inline-flex items-center justify-center text-gray-500 transition hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200 cursor-pointer"
+                          aria-label="Modifier"
                           title="Modifier le statut"
                         >
-                          <span className="w-4 h-4 flex items-center justify-center">
-                            <PencilIcon />
-                          </span>
+                          <PencilIcon className="size-5" />
                         </button>
                         <button
+                          type="button"
                           onClick={() => handleRemoveStatus(player)}
-                          className="rounded-lg p-1.5 text-red-500 hover:bg-red-50 hover:text-red-700 dark:hover:bg-red-500/10"
+                          className="inline-flex items-center justify-center text-error-500 transition hover:text-error-600 dark:text-error-500 dark:hover:text-error-400 cursor-pointer"
+                          aria-label="Retirer le statut"
                           title="Retirer le statut spécial"
                         >
-                          <span className="w-4 h-4 flex items-center justify-center">
-                            <TrashBinIcon />
-                          </span>
+                          <TrashBinIcon className="size-5" />
                         </button>
                       </div>
                     </td>

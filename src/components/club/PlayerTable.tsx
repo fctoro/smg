@@ -473,33 +473,33 @@ export default function PlayerTable({
                       <div className="flex items-center gap-3">
                         <button
                           type="button"
-                          className="inline-flex items-center justify-center text-gray-500 transition hover:text-brand-500 dark:text-gray-400 dark:hover:text-brand-400"
+                          className="inline-flex items-center justify-center text-gray-500 transition hover:text-brand-500 dark:text-gray-400 dark:hover:text-brand-400 cursor-pointer"
                           onClick={() => onViewPlayer?.(player)}
                           aria-label="Voir"
                           title="Voir"
                         >
                           <EyeIcon className="size-5" />
                         </button>
-                        {onDeletePlayer && (
-                          <button
-                            type="button"
-                            className="inline-flex items-center justify-center text-gray-500 transition hover:text-error-600 dark:text-gray-400 dark:hover:text-error-500"
-                            onClick={() => onDeletePlayer(player)}
-                            aria-label="Supprimer"
-                            title="Supprimer"
-                          >
-                            <TrashBinIcon className="size-5" />
-                          </button>
-                        )}
                         {onEditPlayer && (
                           <button
                             type="button"
-                            className="inline-flex items-center justify-center text-gray-500 transition hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200"
+                            className="inline-flex items-center justify-center text-gray-500 transition hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200 cursor-pointer"
                             onClick={() => onEditPlayer(player)}
                             aria-label="Modifier"
                             title="Modifier"
                           >
                             <PencilIcon className="size-5" />
+                          </button>
+                        )}
+                        {onDeletePlayer && (
+                          <button
+                            type="button"
+                            className="inline-flex items-center justify-center text-error-500 transition hover:text-error-600 dark:text-error-500 dark:hover:text-error-400 cursor-pointer"
+                            onClick={() => onDeletePlayer(player)}
+                            aria-label="Supprimer"
+                            title="Supprimer"
+                          >
+                            <TrashBinIcon className="size-5" />
                           </button>
                         )}
                       </div>

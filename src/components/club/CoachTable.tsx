@@ -148,20 +148,23 @@ export default function CoachTable({ coaches, onDelete, actionButton }: CoachTab
                   </td>
                   <td className="px-6 py-4">{coach.sexe || "-"}</td>
                   <td className="px-6 py-4 text-right">
-                    <div className="flex justify-end gap-2">
+                    <div className="flex items-center justify-end gap-3">
                       <Link
                         href={`/coachs/${coach.id}/modifier`}
-                        className="text-gray-400 hover:text-brand-500"
+                        className="inline-flex items-center justify-center text-gray-500 transition hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200 cursor-pointer"
+                        aria-label="Modifier"
                         title="Modifier"
                       >
-                        <PencilIcon className="h-5 w-5" />
+                        <PencilIcon className="size-5" />
                       </Link>
                       <button
+                        type="button"
                         onClick={() => onDelete(coach)}
-                        className="text-gray-400 hover:text-error-500"
+                        className="inline-flex items-center justify-center text-error-500 transition hover:text-error-600 dark:text-error-500 dark:hover:text-error-400 cursor-pointer"
+                        aria-label="Supprimer"
                         title="Supprimer"
                       >
-                        <TrashBinIcon className="h-5 w-5" />
+                        <TrashBinIcon className="size-5" />
                       </button>
                     </div>
                   </td>

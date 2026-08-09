@@ -301,7 +301,7 @@ export default function AlumniPage() {
                             <div className="flex items-center gap-3">
                               <button
                                 type="button"
-                                className="inline-flex items-center justify-center text-gray-500 transition hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200"
+                                className="inline-flex items-center justify-center text-gray-500 transition hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200 cursor-pointer"
                                 onClick={() => setSelectedEditAlumni(entry)}
                                 aria-label="Modifier"
                                 title="Modifier"
@@ -310,7 +310,7 @@ export default function AlumniPage() {
                               </button>
                               <button
                                 type="button"
-                                className="inline-flex items-center justify-center text-gray-500 transition hover:text-error-600 dark:text-gray-400 dark:hover:text-error-500"
+                                className="inline-flex items-center justify-center text-error-500 transition hover:text-error-600 dark:text-error-500 dark:hover:text-error-400 cursor-pointer"
                                 onClick={() => handleDelete(entry.id)}
                                 aria-label="Supprimer"
                                 title="Supprimer"

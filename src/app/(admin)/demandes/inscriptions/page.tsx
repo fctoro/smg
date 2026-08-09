@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import React, { useState, useEffect, useMemo, useEffect as useReactEffect } from "react";
 import { createPortal } from "react-dom";
@@ -488,7 +488,7 @@ export default function BoiteDeReception() {
                         </button>
                         <button 
                           onClick={() => handleDelete(msg.id, msg.metadata)} 
-                          className="hover:text-error-500 transition-colors" 
+                          className="text-error-500 hover:text-error-600 transition-colors cursor-pointer" 
                           title="Supprimer"
                         >
                           <TrashBinIcon />

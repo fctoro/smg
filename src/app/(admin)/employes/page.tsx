@@ -83,11 +83,11 @@ export default function EmployesPage() {
       message: `Voulez-vous vraiment supprimer l'employé ${target.prenom} ${target.nom} ?`,
       isDestructive: true,
       onConfirm: async () => {
+        setEmployees((prev) => prev.filter((emp) => emp.id !== employeeId));
         try {
           await softDeleteEmployeeInSupabase(employeeId);
-          setEmployees((prev) => prev.filter((emp) => emp.id !== employeeId));
         } catch (error) {
-          alert("Erreur lors de la suppression. Veuillez réessayer.");
+          console.error("Erreur soft delete employé:", error);
         }
       }
     });

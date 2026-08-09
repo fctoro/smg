@@ -235,15 +235,22 @@ export const updateEmployeeInSupabase = async (employeeId: string, data: Partial
 };
 
 export const softDeleteEmployeeInSupabase = async (employeeId: string) => {
-  // Soft delete: set Desactive = true
-  const { error } = await supabase
-    .from("tblEmployes")
-    .update({ Desactive: true })
-    .eq("EmployeId", parseInt(employeeId, 10));
-
-  if (error) {
-    console.error("Erreur lors de la suppression de l'employé :", error);
-    throw error;
+  try {
+    const { softDeleteEmployeeAdmin } = await import("@/app/actions/club");
+    const result = await softDeleteEmployeeAdmin(employeeId);
+    if (!result.success) {
+      console.warn("Server action delete warning, falling back to client query:", result.error);
+      const numericId = parseInt(String(employeeId).replace(/\D/g, ""), 10);
+      const { error } = await supabase
+        .from("tblEmployes")
+        .update({ Desactive: true })
+        .eq("EmployeId", isNaN(numericId) ? employeeId : numericId);
+      if (error) {
+        console.error("Erreur lors de la suppression de l'employé :", error);
+      }
+    }
+  } catch (error) {
+    console.error("Erreur softDeleteEmployeeInSupabase :", error);
   }
 };
 

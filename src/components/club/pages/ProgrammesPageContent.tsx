@@ -5,7 +5,7 @@ import { useClubData } from "@/context/ClubDataContext";
 import { ProgrammeMatch } from "@/types/club";
 import { fetchProgrammes, deleteProgramme } from "@/lib/club/programmes";
 import { PencilIcon, TrashBinIcon } from "@/icons";
-import { ProgrammeFormModal } from "../modals/ProgrammeFormModal";
+import { ProgrammeFormModal, getPlayerAge } from "../modals/ProgrammeFormModal";
 import { useConfirm } from "@/hooks/useConfirm";
 import { TableSkeleton } from "@/components/ui/skeleton/Skeleton";
 import { DEFAULT_CATEGORIES } from "@/config/dashboard.config";
@@ -25,6 +25,7 @@ export default function ProgrammesPageContent() {
   const [playerSearchQuery, setPlayerSearchQuery] = useState("");
   const [selectedSeason, setSelectedSeason] = useState("all");
   const [selectedCategory, setSelectedCategory] = useState("all");
+  const [selectedAgeFilter, setSelectedAgeFilter] = useState("all");
   const [isExportOpen, setIsExportOpen] = useState(false);
 
   const { confirm, ConfirmComponent } = useConfirm();
@@ -67,10 +68,11 @@ export default function ProgrammesPageContent() {
     );
   }
 
-  // Get categories logic
+  // Get categories logic (including custom categories from programmes)
   const customCats = players.map(p => p.categorie).filter(Boolean);
-  const combined = [...DEFAULT_CATEGORIES, ...customCats];
-  const categories = Array.from(new Set(combined.map(c => c.trim())));
+  const programmeCats = programmes.map(p => p.categorie).filter(Boolean);
+  const combined = [...DEFAULT_CATEGORIES, ...customCats, ...programmeCats];
+  const categories = Array.from(new Set(combined.map(c => c.trim()))).sort();
 
   const seasons = getDynamicSeasonOptions();
 
@@ -84,7 +86,24 @@ export default function ProgrammesPageContent() {
       const p = players.find(p => p.id === playerId);
       return p && getPlayerFullName(p).toLowerCase().includes(playerSearchQuery.toLowerCase());
     });
-    return matchesName && matchesSeason && matchesCategory && matchesPlayer;
+
+    const matchesAge = selectedAgeFilter === "all" || (prog.joueurs || []).some(playerId => {
+      const p = players.find(p => p.id === playerId);
+      if (!p) return false;
+      const age = getPlayerAge(p);
+      if (age === null) return false;
+      if (selectedAgeFilter === "5-6") return age >= 5 && age <= 6;
+      if (selectedAgeFilter === "7-8") return age >= 7 && age <= 8;
+      if (selectedAgeFilter === "9-10") return age >= 9 && age <= 10;
+      if (selectedAgeFilter === "11-12") return age >= 11 && age <= 12;
+      if (selectedAgeFilter === "13-14") return age >= 13 && age <= 14;
+      if (selectedAgeFilter === "15-16") return age >= 15 && age <= 16;
+      if (selectedAgeFilter === "17-18") return age >= 17 && age <= 18;
+      if (selectedAgeFilter === "19+") return age >= 19;
+      return true;
+    });
+
+    return matchesName && matchesSeason && matchesCategory && matchesPlayer && matchesAge;
   }).sort((a, b) => {
     // Trier par saison décroissante
     const saisonA = a.saison || "";
@@ -178,7 +197,7 @@ export default function ProgrammesPageContent() {
       </div>
 
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <div className="grid flex-1 gap-2 sm:grid-cols-2 lg:grid-cols-4 min-w-0">
+        <div className="grid flex-1 gap-2 sm:grid-cols-2 lg:grid-cols-5 min-w-0">
           <div className="min-w-0">
             <input
               value={playerSearchQuery}
@@ -199,6 +218,23 @@ export default function ProgrammesPageContent() {
                   {name}
                 </option>
               ))}
+            </select>
+          </div>
+          <div className="min-w-0">
+            <select
+              value={selectedAgeFilter}
+              onChange={(event) => setSelectedAgeFilter(event.target.value)}
+              className="h-11 w-full min-w-0 max-w-full truncate rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
+            >
+              <option value="all">Tous les âges</option>
+              <option value="5-6">5 - 6 ans</option>
+              <option value="7-8">7 - 8 ans (ex: U8)</option>
+              <option value="9-10">9 - 10 ans (ex: U10)</option>
+              <option value="11-12">11 - 12 ans (ex: U12)</option>
+              <option value="13-14">13 - 14 ans (ex: U14)</option>
+              <option value="15-16">15 - 16 ans (ex: U16)</option>
+              <option value="17-18">17 - 18 ans (ex: U18)</option>
+              <option value="19+">19 ans et + (Senior)</option>
             </select>
           </div>
           <div className="min-w-0">
@@ -318,10 +354,10 @@ export default function ProgrammesPageContent() {
                         </span>
                       </td>
                       <td className="px-6 py-4 text-right">
-                        <div className="flex items-center justify-end gap-2">
+                        <div className="flex items-center justify-end gap-3">
                           <button
                             type="button"
-                            className="inline-flex items-center justify-center text-gray-500 transition hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200"
+                            className="inline-flex items-center justify-center text-gray-500 transition hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200 cursor-pointer"
                             onClick={() => {
                               setSelectedProgramme(prog);
                               setIsModalOpen(true);
@@ -333,7 +369,7 @@ export default function ProgrammesPageContent() {
                           </button>
                           <button
                             type="button"
-                            className="inline-flex items-center justify-center text-gray-500 transition hover:text-error-600 dark:text-gray-400 dark:hover:text-error-500"
+                            className="inline-flex items-center justify-center text-error-500 transition hover:text-error-600 dark:text-error-500 dark:hover:text-error-400 cursor-pointer"
                             onClick={() => handleDelete(prog.id)}
                             aria-label="Supprimer"
                             title="Supprimer"

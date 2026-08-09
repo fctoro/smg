@@ -255,10 +255,39 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
           
           console.log("[DEBUG ClubDataContext] validEtudiants length:", validEtudiants?.length);
 
-          const fetchedPlayers: Player[] = validEtudiants.map((d: any) => {
-            const studentPayments = paiements.filter((p: any) => p.EtudiantId === d.EtudiantID);
+          // Regroupement et déduplication des joueurs par nom et prénom
+          const nameGroups = new Map<string, any[]>();
+          validEtudiants.forEach((d: any) => {
+            const normNom = (d.Nom || "").trim().toLowerCase().replace(/\s+/g, " ");
+            const normPrenom = (d.Prenom || "").trim().toLowerCase().replace(/\s+/g, " ");
+            const key = `${normNom}_${normPrenom}`;
+            if (!nameGroups.has(key)) {
+              nameGroups.set(key, []);
+            }
+            nameGroups.get(key)!.push(d);
+          });
+
+          const fetchedPlayers: Player[] = [];
+
+          nameGroups.forEach((group) => {
+            // Trier le groupe pour trouver l'entrée d'origine (la première inscription / création)
+            const sortedGroup = [...group].sort((a, b) => {
+              const dateA = a.DtCreation ? new Date(a.DtCreation).getTime() : Infinity;
+              const dateB = b.DtCreation ? new Date(b.DtCreation).getTime() : Infinity;
+              if (dateA !== dateB && !isNaN(dateA) && !isNaN(dateB)) {
+                return dateA - dateB;
+              }
+              const idA = Number(a.EtudiantID) || 0;
+              const idB = Number(b.EtudiantID) || 0;
+              return idA - idB;
+            });
+
+            // Récupérer tous les IDs liés à cette même personne
+            const allGroupIds = group.map((g) => g.EtudiantID);
+
+            // Agrégation de tous les paiements des doublons
+            const studentPayments = paiements.filter((p: any) => allGroupIds.includes(p.EtudiantId));
             const totalPaid = studentPayments.reduce((sum: number, p: any) => sum + (p.MntPayeUS || p.MntPayeGd || 0), 0);
-            
             const sortedPayments = [...studentPayments].sort((a: any, b: any) => 
               new Date(b.DateTransact || 0).getTime() - new Date(a.DateTransact || 0).getTime()
             );
@@ -266,27 +295,28 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
               ? sortedPayments[0].DateTransact.split("T")[0] 
               : "";
 
-            const studentInscriptions = inscriptions.filter((i: any) => i.EtudiantId === d.EtudiantID);
-            const sortedInscriptions = [...studentInscriptions].sort((a: any, b: any) =>
+            // Agrégation de toutes les inscriptions des doublons
+            const studentInscriptions = inscriptions.filter((i: any) => allGroupIds.includes(i.EtudiantId));
+            
+            // Inscriptions triées par date croissante (pour identifier la PREMIÈRE saison d'entrée)
+            const sortedInscriptionsAsc = [...studentInscriptions].sort((a: any, b: any) =>
+              new Date(a.DateInscription || 0).getTime() - new Date(b.DateInscription || 0).getTime()
+            );
+            let firstSeasonStr = sortedInscriptionsAsc.length > 0 ? sessionsMap.get(sortedInscriptionsAsc[0].SessionId) : "";
+
+            // Inscriptions triées par date décroissante (pour la saison actuelle d'affichage)
+            const sortedInscriptionsDesc = [...studentInscriptions].sort((a: any, b: any) =>
               new Date(b.DateInscription || 0).getTime() - new Date(a.DateInscription || 0).getTime()
             );
-            const latestSessionId = sortedInscriptions.length > 0 ? sortedInscriptions[0].SessionId : null;
-            const playerSaison = latestSessionId != null ? sessionsMap.get(latestSessionId) : "";
+            let latestSeasonStr = sortedInscriptionsDesc.length > 0 ? sessionsMap.get(sortedInscriptionsDesc[0].SessionId) : "";
 
-            // Génération de la nomenclature matricule (ex: FCT-1213-0001)
-            let sCode = "";
+            // Priorité à l'entrée possédant explicitement une saison initiale "2022-2023" ou la plus ancienne
+            const recordWithSeason2223 = sortedGroup.find(g => g.Saison && String(g.Saison).includes("2022-2023"));
+            const primaryRecord = recordWithSeason2223 || sortedGroup[0];
 
-            if (playerSaison) {
-              // On essaie d'extraire depuis le nom de la saison (ex: "2018-2019")
-              const parts = playerSaison.split("-");
-              if (parts.length === 2 && parts[0].length === 4 && parts[1].length === 4) {
-                sCode = parts[0].substring(2, 4) + parts[1].substring(2, 4);
-              }
-            }
-
-            // Fallback: Si pas de saison, on se base sur la date de création du joueur
-            if (!sCode && d.DtCreation) {
-              const dt = new Date(d.DtCreation);
+            let entrySeason = firstSeasonStr || primaryRecord.Saison || "";
+            if (!entrySeason && primaryRecord.DtCreation) {
+              const dt = new Date(primaryRecord.DtCreation);
               if (!isNaN(dt.getTime())) {
                 const y = dt.getFullYear();
                 const m = dt.getMonth() + 1;
@@ -298,59 +328,67 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
                   startYear = y - 1;
                   endYear = y;
                 }
-                sCode = `${String(startYear).substring(2, 4)}${String(endYear).substring(2, 4)}`;
+                entrySeason = `${startYear}-${endYear}`;
               }
             }
 
-            // Ultime secours si aucune date disponible : saison courante (ex: 2526)
-            if (!sCode) {
-              sCode = getSeasonCode();
-            }
+            // Génération du matricule PERMANENT basé sur la 1ère saison d'entrée (ex: FCT-2223-4129)
+            const matricule = generatePlayerMatricule(primaryRecord.EtudiantID, entrySeason);
 
-            const matricule = generatePlayerMatricule(d.EtudiantID, playerSaison);
+            // Fusion des champs d'information
+            const photoUrl = group.find(g => g.PhotoUrl && !g.PhotoUrl.includes("silhouette"))?.PhotoUrl || primaryRecord.PhotoUrl || "/images/user/silhouette.svg";
+            const poste = group.find(g => g.Poste || g.poste)?.Poste || group.find(g => g.poste)?.poste || "Joueur";
+            const sexe = group.find(g => g.Sexe === "F") ? "Féminin" : "Masculin";
+            const telephone = group.find(g => g.Telephone)?.Telephone || "";
+            const email = group.find(g => g.Email)?.Email || "";
+            const dateNaissance = group.find(g => g.DateNaissance)?.DateNaissance || "";
+            const adresse = group.find(g => g.Adresse)?.Adresse || "";
 
             // Détermination du statut réel du joueur
-            const savedPlayerStatus = String(d.StatutJoueur || "").trim();
+            const savedPlayerStatus = String(primaryRecord.StatutJoueur || "").trim().toLowerCase();
             let playerStatus: PlayerStatus = "actif";
-            const allValuesStr = (JSON.stringify(Object.values(d)) + JSON.stringify(studentInscriptions)).toLowerCase();
-            if (d.EstAlumni === true || d.EstAlumni === 1 || d.EstAlumni === "true" || d.EstAlumni === "1" || allValuesStr.includes("alumni")) {
+
+            const isAlumni = group.some(g => g.EstAlumni === true || g.EstAlumni === 1 || String(g.EstAlumni).toLowerCase() === "true" || String(g.StatutJoueur).toLowerCase() === "alumni");
+            const isAbandon = group.some(g => g.Abandon === true || g.Abandon === 1 || String(g.Abandon).toLowerCase() === "true" || String(g.StatutJoueur).toLowerCase().includes("abandon"));
+            const isInactive = group.some(g => g.Actif === false || g.Actif === 0 || String(g.Actif).toLowerCase() === "false" || String(g.StatutJoueur).toLowerCase().includes("inactif"));
+            const isBlesse = group.some(g => String(g.StatutJoueur).toLowerCase().includes("bless"));
+            const isSuspendu = group.some(g => String(g.StatutJoueur).toLowerCase().includes("suspend"));
+
+            if (isAlumni) {
               playerStatus = "alumni";
-            } else if (
-              allValuesStr.includes("abandon") ||
-              allValuesStr.includes("quitt") ||
-              allValuesStr.includes("déménag") ||
-              allValuesStr.includes("demenag") ||
-              d.Abandon === true ||
-              d.Abandon === 1
-            ) {
+            } else if (isAbandon) {
               playerStatus = "abandonne";
-            } else if (
-              allValuesStr.includes("inactif") ||
-              d.Actif === false ||
-              d.Actif === 0
-            ) {
+            } else if (isInactive) {
               playerStatus = "inactif";
-            } else if (allValuesStr.includes("bless")) {
+            } else if (isBlesse) {
               playerStatus = "blesse";
-            } else if (allValuesStr.includes("suspend")) {
+            } else if (isSuspendu) {
               playerStatus = "suspendu";
+            } else if (savedPlayerStatus && ["actif", "inactif", "blesse", "suspendu", "abandonne", "alumni"].includes(savedPlayerStatus)) {
+              playerStatus = savedPlayerStatus as PlayerStatus;
             }
 
-            // Récupérer le statut depuis player_status (prioritaire sur StatutJoueur)
-            const playerIdStr = String(d.EtudiantID);
-            const statusFromTable = playerStatusMap.get(playerIdStr);
-            const finalStatutJoueur = statusFromTable || savedPlayerStatus || undefined;
+            let finalStatutJoueur = savedPlayerStatus || undefined;
+            for (const id of allGroupIds) {
+              const st = playerStatusMap.get(String(id));
+              if (st) {
+                finalStatutJoueur = st;
+                break;
+              }
+            }
 
-            return {
-              id: String(d.EtudiantID),
+            const currentDisplaySeason = latestSeasonStr || primaryRecord.Saison || entrySeason || "";
+
+            fetchedPlayers.push({
+              id: String(primaryRecord.EtudiantID),
               matricule: matricule,
-              nom: d.Nom || "",
-              prenom: d.Prenom || "",
-              photoUrl: d.PhotoUrl || "/images/user/silhouette.svg",
-              poste: d.Poste || d.poste || "Joueur",
-              sexe: d.Sexe === "F" ? "Féminin" : "Masculin", 
+              nom: primaryRecord.Nom || "",
+              prenom: primaryRecord.Prenom || "",
+              photoUrl,
+              poste,
+              sexe,
               categorie: (() => {
-                const rawCat = (d.Categorie || d.categorie || d.Category || d.category || "").toString().trim();
+                const rawCat = (group.find(g => g.Categorie || g.categorie || g.Category || g.category)?.Categorie || primaryRecord.Categorie || "").toString().trim();
                 const lowerCat = rawCat.toLowerCase();
 
                 if (rawCat && lowerCat !== "ti toro" && lowerCat !== "titoro" && lowerCat !== "default") {
@@ -361,8 +399,8 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
                   return rawCat;
                 }
 
-                if (d.DateNaissance) {
-                  const dt = new Date(d.DateNaissance);
+                if (dateNaissance) {
+                  const dt = new Date(dateNaissance);
                   if (!isNaN(dt.getTime())) {
                     const birthYear = dt.getFullYear();
                     const currentYear = new Date().getFullYear();
@@ -379,21 +417,21 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
                   }
                 }
 
-                return rawCat || "ti toro";
+                return rawCat || "Senior";
               })(),
               statut: playerStatus,
               statutJoueur: finalStatutJoueur,
-              cotisationDevise: d.CotisationDevise || "US",
-              telephone: d.Telephone || "",
-              email: d.Email || "",
-              dateInscription: d.DtCreation ? d.DtCreation.split("T")[0] : new Date().toISOString().split("T")[0],
-              dateNaissance: d.DateNaissance ? d.DateNaissance.split("T")[0] : "",
-              adresse: d.Adresse || "",
+              cotisationDevise: primaryRecord.CotisationDevise || "US",
+              telephone,
+              email,
+              dateInscription: primaryRecord.DtCreation ? primaryRecord.DtCreation.split("T")[0] : new Date().toISOString().split("T")[0],
+              dateNaissance: dateNaissance ? dateNaissance.split("T")[0] : "",
+              adresse,
               cotisationMontant: totalPaid,
               cotisationStatut: totalPaid > 0 ? "paid" : "pending",
               dernierPaiement: dernierPaiementDate,
-              saison: playerSaison || d.Saison || "",
-            };
+              saison: currentDisplaySeason,
+            });
           });
 
           const fetchedParents: Parent[] = validEtudiants

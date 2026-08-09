@@ -56,6 +56,39 @@ export async function softDeletePlayerAdmin(etudiantId: number) {
   return { success: true, data };
 }
 
+export async function softDeleteEmployeeAdmin(employeeId: number | string) {
+  if (!supabaseAdmin) {
+    return { success: false, error: "Service role Supabase indisponible." };
+  }
+
+  const numericId = typeof employeeId === "number" ? employeeId : parseInt(String(employeeId).replace(/\D/g, ""), 10);
+  const targetId = isNaN(numericId) ? employeeId : numericId;
+
+  let { data, error } = await supabaseAdmin
+    .from("tblEmployes")
+    .update({ Desactive: true })
+    .eq("EmployeId", targetId)
+    .select("EmployeId")
+    .single();
+
+  if (error) {
+    const res = await supabaseAdmin
+      .from("tblEmployes")
+      .update({ Desactive: 1 })
+      .eq("EmployeId", targetId)
+      .select("EmployeId")
+      .single();
+    error = res.error;
+    data = res.data;
+  }
+
+  if (error) {
+    return { success: false, error: error.message };
+  }
+
+  return { success: true, data };
+}
+
 export async function insertPaymentAdmin(paymentPayload: Record<string, any>) {
   if (!supabaseAdmin) {
     return { success: false, error: "Service role Supabase indisponible." };

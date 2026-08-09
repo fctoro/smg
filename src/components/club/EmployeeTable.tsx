@@ -269,21 +269,21 @@ export default function EmployeeTable({
                       <div className="flex items-center gap-3">
                         <button
                           type="button"
-                          className="inline-flex items-center justify-center text-gray-500 transition hover:text-error-600 dark:text-gray-400 dark:hover:text-error-500"
-                          onClick={() => onDeleteEmployee?.(emp)}
-                          aria-label="Supprimer"
-                          title="Supprimer"
-                        >
-                          <TrashBinIcon className="size-5" />
-                        </button>
-                        <button
-                          type="button"
-                          className="inline-flex items-center justify-center text-gray-500 transition hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200"
+                          className="inline-flex items-center justify-center text-gray-500 transition hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200 cursor-pointer"
                           onClick={() => onEditEmployee?.(emp)}
                           aria-label="Modifier"
                           title="Modifier"
                         >
                           <PencilIcon className="size-5" />
+                        </button>
+                        <button
+                          type="button"
+                          className="inline-flex items-center justify-center text-error-500 transition hover:text-error-600 dark:text-error-500 dark:hover:text-error-400 cursor-pointer"
+                          onClick={() => onDeleteEmployee?.(emp)}
+                          aria-label="Supprimer"
+                          title="Supprimer"
+                        >
+                          <TrashBinIcon className="size-5" />
                         </button>
                       </div>
                     </TableCell>

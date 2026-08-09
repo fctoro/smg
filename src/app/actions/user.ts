@@ -111,8 +111,11 @@ async function upsertProfile(profile: Record<string, any>) {
 
 export async function createUser(formData: FormData) {
   try {
+    const fs = require('fs');
+    fs.appendFileSync('server_action.log', `[${new Date().toISOString()}] createUser called\n`);
     const email = formData.get("email") as string;
     const password = formData.get("password") as string;
+    fs.appendFileSync('server_action.log', `Email: ${email}, Role: ${formData.get("role")}\n`);
     const rawFullName = formData.get("fullName") as string;
     const role = formData.get("role") as string;
     const rawSections = formData.get("sections") as string;
@@ -134,12 +137,15 @@ export async function createUser(formData: FormData) {
       email_confirm: true,
       user_metadata: { full_name: fullName, role: role, sections: sections, categories: categories, permissions: permissions }
     });
+    fs.appendFileSync('server_action.log', `createUser auth done. authError: ${!!authError}\n`);
 
     if (authError) {
+      fs.appendFileSync('server_action.log', `authError message: ${authError.message}\n`);
       return { error: authError.message };
     }
 
     if (authData.user) {
+      fs.appendFileSync('server_action.log', `upserting profile for user ${authData.user.id}\n`);
       const { error: profileError } = await upsertProfile({
         id: authData.user.id,
         full_name: fullName,
@@ -149,13 +155,18 @@ export async function createUser(formData: FormData) {
 
       if (profileError) {
         console.error("Profile upsert error:", profileError);
+        fs.appendFileSync('server_action.log', `profileError: ${JSON.stringify(profileError)}\n`);
       }
     }
 
+    fs.appendFileSync('server_action.log', `revalidating path\n`);
     revalidatePath("/parametres/acces");
+    fs.appendFileSync('server_action.log', `done\n`);
     return { success: true };
     
   } catch (err: any) {
+    const fs = require('fs');
+    fs.appendFileSync('server_action.log', `Catch block hit: ${err?.message}\n${err?.stack}\n`);
     return { error: err.message || "Une erreur inattendue est survenue." };
   }
 }

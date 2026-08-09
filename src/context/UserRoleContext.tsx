@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect } from "react";
+import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { usePathname } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 
@@ -29,6 +29,7 @@ interface UserRoleContextType {
   userCategories: string[];
   setRole: (role: UserRole) => void;
   toggleRole: () => void;
+  refreshRole: () => Promise<void>;
 }
 
 const getDefaultSectionsForRole = (normalizedRole: string): string[] => {
@@ -91,72 +92,109 @@ export const UserRoleProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const pathname = usePathname();
 
-  useEffect(() => {
-    async function syncUserRole() {
-      try {
-        const { data } = await supabase.auth.getUser();
-        if (data?.user) {
-          const email = data.user.email || "";
-          setUserEmail(email);
-          localStorage.setItem("fctoro_user_email", email);
+  const syncUserRole = useCallback(async () => {
+    try {
+      const { data } = await supabase.auth.getUser();
+      if (data?.user) {
+        const email = data.user.email || "";
+        setUserEmail(email);
+        localStorage.setItem("fctoro_user_email", email);
 
-          // 1. Primary check: Super Admin
-          if (email === "footballclubtoro@gmail.com") {
-            setRoleState("super admin");
-            setUserSections(ALL_SECTIONS);
-            localStorage.setItem("fctoro_user_role", "super admin");
-            localStorage.setItem("fctoro_user_sections", JSON.stringify(ALL_SECTIONS));
-            return;
-          }
-
-          // 2. Check metadata role and sections
-          const metaRole = data.user.user_metadata?.role;
-          const metaSections = data.user.user_metadata?.sections;
-          if (metaRole) {
-            const normalized = metaRole.toLowerCase() as UserRole;
-            setRoleState(normalized);
-            localStorage.setItem("fctoro_user_role", normalized);
-            const activeSections = Array.isArray(metaSections)
-              ? metaSections
-              : getDefaultSectionsForRole(normalized);
-            setUserSections(activeSections);
-            localStorage.setItem("fctoro_user_sections", JSON.stringify(activeSections));
-            
-            const metaCategories = data.user.user_metadata?.categories;
-            if (Array.isArray(metaCategories)) {
-               setUserCategories(metaCategories);
-            }
-            return;
-          }
-
-          // 3. Fallback check profiles table
-          const { data: profile } = await supabase
-            .from("profiles")
-            .select("role, sections")
-            .eq("id", data.user.id)
-            .single();
-
-          if (profile?.role) {
-            const normalized = profile.role.toLowerCase() as UserRole;
-            setRoleState(normalized);
-            localStorage.setItem("fctoro_user_role", normalized);
-            const activeSections = (Array.isArray(profile.sections) && profile.sections.length > 0)
-              ? profile.sections
-              : getDefaultSectionsForRole(normalized);
-            setUserSections(activeSections);
-            localStorage.setItem("fctoro_user_sections", JSON.stringify(activeSections));
-            return;
-          }
-
-          setRoleState("admin");
+        // 1. Primary check: Super Admin
+        if (email === "footballclubtoro@gmail.com") {
+          setRoleState("super admin");
+          setUserSections(ALL_SECTIONS);
+          localStorage.setItem("fctoro_user_role", "super admin");
+          localStorage.setItem("fctoro_user_sections", JSON.stringify(ALL_SECTIONS));
+          return;
         }
-      } catch (e) {
-        // Keep initial state
-      }
-    }
 
-    syncUserRole();
+        // 2. Check metadata role and sections
+        const metaRole = data.user.user_metadata?.role;
+        const metaSections = data.user.user_metadata?.sections;
+        if (metaRole) {
+          const normalized = metaRole.toLowerCase() as UserRole;
+          setRoleState(normalized);
+          localStorage.setItem("fctoro_user_role", normalized);
+          const activeSections = Array.isArray(metaSections)
+            ? metaSections
+            : getDefaultSectionsForRole(normalized);
+          setUserSections(activeSections);
+          localStorage.setItem("fctoro_user_sections", JSON.stringify(activeSections));
+          
+          const metaCategories = data.user.user_metadata?.categories;
+          if (Array.isArray(metaCategories)) {
+             setUserCategories(metaCategories);
+          }
+          return;
+        }
+
+        // 3. Fallback check profiles table
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("role, sections")
+          .eq("id", data.user.id)
+          .single();
+
+        if (profile?.role) {
+          const normalized = profile.role.toLowerCase() as UserRole;
+          setRoleState(normalized);
+          localStorage.setItem("fctoro_user_role", normalized);
+          const activeSections = (Array.isArray(profile.sections) && profile.sections.length > 0)
+            ? profile.sections
+            : getDefaultSectionsForRole(normalized);
+          setUserSections(activeSections);
+          localStorage.setItem("fctoro_user_sections", JSON.stringify(activeSections));
+          return;
+        }
+
+        setRoleState("admin");
+      }
+    } catch (e) {
+      // Keep initial state
+    }
   }, []);
+
+  useEffect(() => {
+    syncUserRole();
+
+    const { data: authListener } = supabase.auth.onAuthStateChange((event: any, session: any) => {
+      if (event === "SIGNED_IN" || event === "USER_UPDATED") {
+        syncUserRole();
+      } else if (event === "SIGNED_OUT") {
+        setRoleState("admin");
+        setUserSections(ALL_SECTIONS);
+        setUserCategories([]);
+        setUserEmail("");
+        if (typeof window !== "undefined") {
+          localStorage.removeItem("fctoro_user_role");
+          localStorage.removeItem("fctoro_user_sections");
+          localStorage.removeItem("fctoro_user_categories");
+          localStorage.removeItem("fctoro_user_email");
+        }
+      }
+    });
+
+    const profilesChannel = supabase
+      .channel('user-role-sync')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'profiles' },
+        (payload: any) => {
+          supabase.auth.getUser().then(({ data }) => {
+            if (data?.user && (payload.new?.id === data.user.id || payload.old?.id === data.user.id)) {
+              syncUserRole();
+            }
+          });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      authListener?.subscription?.unsubscribe();
+      supabase.removeChannel(profilesChannel);
+    };
+  }, [syncUserRole]);
 
   const setRole = (newRole: UserRole) => {
     setRoleState(newRole);
@@ -188,6 +226,7 @@ export const UserRoleProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         userCategories,
         setRole,
         toggleRole,
+        refreshRole: syncUserRole,
       }}
     >
       {children}

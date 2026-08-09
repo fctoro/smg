@@ -295,6 +295,8 @@ export default function CoachTacticsPage({ planId, effectifId }: { planId?: stri
     setSavedPlans(getSavedPlans());
   }, [savedAt]);
 
+  const [isPlanLoaded, setIsPlanLoaded] = useState(false);
+
   useEffect(() => {
     if (effectifId) {
       fetchEffectifById(effectifId).then(data => {
@@ -305,8 +307,10 @@ export default function CoachTacticsPage({ planId, effectifId }: { planId?: stri
             const plan = getTacticalPlan(data.tactique_id);
             if (plan) {
               setFormationId(plan.formationId);
+              setAssignments(plan.assignments);
             }
           }
+          setIsPlanLoaded(true);
         }
       });
     } else if (planId) {
@@ -316,15 +320,20 @@ export default function CoachTacticsPage({ planId, effectifId }: { planId?: stri
         setPlanName(plan.name);
         setAssignments(plan.assignments);
       }
+      setIsPlanLoaded(true);
+    } else {
+      setIsPlanLoaded(true);
     }
-  }, [planId]);
+  }, [planId, effectifId]);
 
   const availablePlayers = useMemo(
     () => {
-      const activePlayers = [...players].filter((player) => player.statut === "actif");
+      // Allow players that are either active OR part of the current effectif roster
+      const rosterIds = new Set(effectif?.joueurs || []);
+      const validPlayers = [...players].filter((player) => player.statut === "actif" || rosterIds.has(player.id));
       const uniquePlayers = [];
       const seen = new Set();
-      for (const p of activePlayers) {
+      for (const p of validPlayers) {
         if (!seen.has(p.id)) {
           seen.add(p.id);
           uniquePlayers.push(p);
@@ -332,15 +341,17 @@ export default function CoachTacticsPage({ planId, effectifId }: { planId?: stri
       }
       return uniquePlayers.sort(byPlayerName);
     },
-    [players],
+    [players, effectif],
   );
 
   const unavailablePlayers = useMemo(
-    () =>
-      [...players]
-        .filter((player) => player.statut !== "actif")
-        .sort(byPlayerName),
-    [players],
+    () => {
+      const rosterIds = new Set(effectif?.joueurs || []);
+      return [...players]
+        .filter((player) => player.statut !== "actif" && !rosterIds.has(player.id))
+        .sort(byPlayerName);
+    },
+    [players, effectif],
   );
 
   const selectedFormation = useMemo(
@@ -356,22 +367,27 @@ export default function CoachTacticsPage({ planId, effectifId }: { planId?: stri
   );
 
   useEffect(() => {
+    // Only auto-assign if the plan is loaded AND we don't have existing assignments
+    if (!isPlanLoaded || Object.keys(assignments).length > 0) return;
+
     if (effectif) {
-      // Build assignments from effectif players
-      const rosterPlayerIds = effectif.joueurs || [];
-      const newAssignments: Record<string, string> = {};
-      const starters = rosterPlayerIds.slice(0, 11);
-      
-      starters.forEach((pid, index) => {
-        if (slots[index]) {
-          newAssignments[slots[index].id] = pid;
-        }
-      });
-      setAssignments(newAssignments);
+      // Build assignments from effectif players only if no tactique was loaded
+      if (!effectif.tactique_id) {
+        const rosterPlayerIds = effectif.joueurs || [];
+        const newAssignments: Record<string, string> = {};
+        const starters = rosterPlayerIds.slice(0, 11);
+        
+        starters.forEach((pid, index) => {
+          if (slots[index]) {
+            newAssignments[slots[index].id] = pid;
+          }
+        });
+        setAssignments(newAssignments);
+      }
     } else if (!planId) {
       setAssignments(buildAutoAssignments(slots, players));
     }
-  }, [slots, players, effectif, planId]);
+  }, [slots, players, effectif, planId, isPlanLoaded, assignments]);
 
   const playerById = useMemo(
     () => new Map(players.map((player) => [player.id, player])),

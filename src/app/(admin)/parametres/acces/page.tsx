@@ -111,6 +111,17 @@ export default function AccessControlPage() {
     fetchProfiles();
     loadCoaches();
     loadConfig();
+
+    const channel = supabase
+      .channel('access-profiles-sync')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => {
+        fetchProfiles();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const handleRoleSelect = (roleId: string) => {

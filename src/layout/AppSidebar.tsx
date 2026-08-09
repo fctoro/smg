@@ -2,7 +2,7 @@
 import React, { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { useSidebar } from "../context/SidebarContext";
 import { useUserRole } from "../context/UserRoleContext";
 import { useClubData } from "../context/ClubDataContext";
@@ -162,7 +162,8 @@ const AppSidebar: React.FC = () => {
   const { role, isCoach, isAdmin, isSuperAdmin, userSections } = useUserRole();
   const { events } = useClubData();
   const pathname = usePathname();
-  const [searchTab, setSearchTab] = useState<string | null>(null);
+  const searchParams = useSearchParams();
+  const searchTab = searchParams.get("tab");
   const [mounted, setMounted] = useState(false);
   const [unreadCount, setUnreadCount] = useState<number>(0);
 
@@ -175,10 +176,6 @@ const AppSidebar: React.FC = () => {
 
   useEffect(() => {
     setMounted(true);
-    if (typeof window !== "undefined") {
-      const params = new URLSearchParams(window.location.search);
-      setSearchTab(params.get("tab"));
-    }
 
     const fetchUnread = async () => {
       const { count } = await supabase

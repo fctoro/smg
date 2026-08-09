@@ -13,11 +13,13 @@ import { softDeleteEmployeeInSupabase } from "@/lib/club/supabase-crud";
 
 import { EmployeeEditModal } from "@/components/club/modals/EmployeeEditModal";
 import { EmployeeAddModal } from "@/components/club/modals/EmployeeAddModal";
+import { ToastNotification } from "@/components/ui/toast/ToastNotification";
 import { Employee } from "@/types/club";
 
 export default function EmployesPage() {
   const router = useRouter();
   const { employees, setEmployees } = useClubData();
+  const [toast, setToast] = useState<{ message: string; type?: "success" | "error" | "info" } | null>(null);
   const [isExportOpen, setIsExportOpen] = useState(false);
   const { confirm, ConfirmComponent } = useConfirm();
 
@@ -84,6 +86,8 @@ export default function EmployesPage() {
       isDestructive: true,
       onConfirm: async () => {
         setEmployees((prev) => prev.filter((emp) => emp.id !== employeeId));
+        setToast({ message: `Employé ${target.prenom} ${target.nom} supprimé avec succès !`, type: "success" });
+        setTimeout(() => setToast(null), 3000);
         try {
           await softDeleteEmployeeInSupabase(employeeId);
         } catch (error) {
@@ -159,6 +163,7 @@ export default function EmployesPage() {
       />
       
       <ConfirmComponent />
+      {toast && <ToastNotification message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
     </div>
   );
 }

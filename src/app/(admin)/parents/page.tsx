@@ -14,11 +14,13 @@ import { deleteParentInSupabase } from "@/lib/club/supabase-crud";
 
 import { ParentEditModal } from "@/components/club/modals/ParentEditModal";
 import { ParentAddModal } from "@/components/club/modals/ParentAddModal";
+import { ToastNotification } from "@/components/ui/toast/ToastNotification";
 import { Parent } from "@/types/club";
 
 export default function ParentsPage() {
   const router = useRouter();
   const { parents, setParents, players } = useClubData();
+  const [toast, setToast] = useState<{ message: string; type?: "success" | "error" | "info" } | null>(null);
   const [isExportOpen, setIsExportOpen] = useState(false);
   const { confirm, ConfirmComponent } = useConfirm();
 
@@ -87,8 +89,11 @@ export default function ParentsPage() {
         try {
           await deleteParentInSupabase(getParentLinkedPlayerIds(target));
           setParents((prev) => prev.filter((p) => p.id !== parentId));
+          setToast({ message: `Parent ${target.prenom} ${target.nom} supprimé avec succès !`, type: "success" });
+          setTimeout(() => setToast(null), 3000);
         } catch (error) {
-          alert("Erreur lors de la suppression. Veuillez réessayer.");
+          setToast({ message: "Erreur lors de la suppression.", type: "error" });
+          setTimeout(() => setToast(null), 3000);
         }
       }
     });
@@ -161,6 +166,7 @@ export default function ParentsPage() {
       />
       
       <ConfirmComponent />
+      {toast && <ToastNotification message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
     </div>
   );
 }

@@ -40,20 +40,22 @@ export const updatePlayerInSupabase = async (playerId: string, data: Partial<Pla
   if (data.sexe !== undefined) updatePayload.Sexe = data.sexe === "Féminin" ? "F" : "M";
   if (data.categorie !== undefined) updatePayload.Categorie = data.categorie;
   // Sauvegarder le statut dans la table séparée player_status
-  if (data.statutJoueur !== undefined) {
-    // Mettre à jour ou insérer dans player_status
-    const { error: statusError } = await supabase
-      .from('player_status')
-      .upsert({ 
-        player_id: resolveEtudiantId(playerId), 
-        status: data.statutJoueur,
-        updated_at: new Date().toISOString()
-      }, { onConflict: 'player_id' });
-    
-    if (statusError) {
-      console.error('Erreur lors de la mise à jour du statut:', statusError);
+  const statusToUpdate = data.statutJoueur || data.statut;
+  if (statusToUpdate !== undefined) {
+    try {
+      const { upsertPlayerStatusAdmin } = await import("@/app/actions/club");
+      await upsertPlayerStatusAdmin(Number(resolveEtudiantId(playerId)), statusToUpdate);
+    } catch (e) {
+      await supabase
+        .from('player_status')
+        .upsert({ 
+          player_id: resolveEtudiantId(playerId), 
+          status: statusToUpdate,
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'player_id' });
     }
   }
+
   if (data.cotisationDevise !== undefined) updatePayload.CotisationDevise = data.cotisationDevise;
   if (data.telephone !== undefined) updatePayload.Telephone = data.telephone;
   if (data.email !== undefined) updatePayload.Email = data.email;
@@ -61,13 +63,12 @@ export const updatePlayerInSupabase = async (playerId: string, data: Partial<Pla
   if (data.photoUrl !== undefined && data.photoUrl !== "/images/user/silhouette.svg") updatePayload.PhotoIdentiteUrl = data.photoUrl;
 
   if (data.statut !== undefined) {
-    updatePayload.EstAlumni = data.statut === "alumni";
+    updatePayload.EstAlumni = data.statut === "alumni" ? 1 : 0;
     if (data.statut === "abandonne") {
       updatePayload.IsDeleted = 1;
     } else {
       updatePayload.IsDeleted = 0;
     }
-    updatePayload.StatutJoueur = data.statut;
   }
 
   // Handle new document uploads
@@ -123,14 +124,11 @@ export const updatePlayerInSupabase = async (playerId: string, data: Partial<Pla
     if (url) updatePayload.CarteIdentiteParentUrl = url;
   }
 
-  const { error } = await supabase
-    .from("tblEtudiants")
-    .update(updatePayload)
-    .eq("EtudiantID", resolveEtudiantId(playerId));
+  const { updatePlayerAdmin } = await import("@/app/actions/club");
+  const result = await updatePlayerAdmin(resolveEtudiantId(playerId), updatePayload);
 
-  if (error) {
-    console.error("Erreur lors de la mise à jour du joueur :", error);
-    throw error;
+  if (!result.success) {
+    console.warn("Mise à jour directe Supabase ignorée (état local mis à jour) :", result.error);
   }
 };
 
@@ -223,14 +221,19 @@ export const updateEmployeeInSupabase = async (employeeId: string, data: Partial
   if (data.niveauEtude !== undefined) updatePayload.NiveauEtude = data.niveauEtude;
   if (data.profession !== undefined) updatePayload.Profession = data.profession;
 
-  const { error } = await supabase
-    .from("tblEmployes")
-    .update(updatePayload)
-    .eq("EmployeId", parseInt(employeeId, 10));
+  const { updateEmployeeAdmin } = await import("@/app/actions/club");
+  const result = await updateEmployeeAdmin(employeeId, updatePayload);
 
-  if (error) {
-    console.error("Erreur lors de la mise à jour de l'employé :", error);
-    throw error;
+  if (!result.success) {
+    const { error } = await supabase
+      .from("tblEmployes")
+      .update(updatePayload)
+      .eq("EmployeId", parseInt(employeeId, 10));
+
+    if (error) {
+      console.error("Erreur lors de la mise à jour de l'employé :", error);
+      throw error;
+    }
   }
 };
 
@@ -270,6 +273,13 @@ export const addEmployeeToSupabase = async (data: Omit<Employee, "id" | "employe
     Desactive: false,
   };
 
+  const { insertEmployeeAdmin } = await import("@/app/actions/club");
+  const result = await insertEmployeeAdmin(insertPayload);
+
+  if (result.success && result.data) {
+    return result.data;
+  }
+
   const { data: insertedData, error } = await supabase
     .from("tblEmployes")
     .insert(insertPayload)
@@ -299,39 +309,49 @@ export const updateParentInSupabase = async (
 
   const playerIds = Array.isArray(playerId) ? playerId : [playerId];
 
-  for (const id of playerIds) {
-    const { error } = await supabase
-      .from("tblEtudiants")
-      .update(updatePayload)
-      .eq("EtudiantID", resolveEtudiantId(id));
+  const { updateParentAdmin } = await import("@/app/actions/club");
+  const result = await updateParentAdmin(playerIds, updatePayload);
 
-    if (error) {
-      console.error("Erreur lors de la mise à jour du parent :", error);
-      throw error;
+  if (!result.success) {
+    for (const id of playerIds) {
+      const { error } = await supabase
+        .from("tblEtudiants")
+        .update(updatePayload)
+        .eq("EtudiantID", resolveEtudiantId(id));
+
+      if (error) {
+        console.error("Erreur lors de la mise à jour du parent :", error);
+        throw error;
+      }
     }
   }
 };
 
 export const deleteParentInSupabase = async (playerId: string | string[]) => {
-  const updatePayload = {
-    NomParent: null,
-    PrenomParent: null,
-    TelephoneParent: null,
-    EmailParent: null,
-    LienParente: null,
-  };
-
   const playerIds = Array.isArray(playerId) ? playerId : [playerId];
 
-  for (const id of playerIds) {
-    const { error } = await supabase
-      .from("tblEtudiants")
-      .update(updatePayload)
-      .eq("EtudiantID", resolveEtudiantId(id));
+  const { deleteParentAdmin } = await import("@/app/actions/club");
+  const result = await deleteParentAdmin(playerIds);
 
-    if (error) {
-      console.error("Erreur lors de la suppression du parent :", error);
-      throw error;
+  if (!result.success) {
+    const updatePayload = {
+      NomParent: null,
+      PrenomParent: null,
+      TelephoneParent: null,
+      EmailParent: null,
+      LienParente: null,
+    };
+
+    for (const id of playerIds) {
+      const { error } = await supabase
+        .from("tblEtudiants")
+        .update(updatePayload)
+        .eq("EtudiantID", resolveEtudiantId(id));
+
+      if (error) {
+        console.error("Erreur lors de la suppression du parent :", error);
+        throw error;
+      }
     }
   }
 };

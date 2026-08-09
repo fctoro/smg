@@ -19,6 +19,7 @@ import { usePermissions } from "@/hooks/usePermissions";
 import { PlayerViewModal } from "@/components/club/modals/PlayerViewModal";
 import { PlayerEditModal } from "@/components/club/modals/PlayerEditModal";
 import { PlayerAddModal } from "@/components/club/modals/PlayerAddModal";
+import { ToastNotification } from "@/components/ui/toast/ToastNotification";
 import { Player } from "@/types/club";
 import { supabase } from "@/lib/supabaseClient";
 
@@ -35,6 +36,7 @@ function PlayersPageContent() {
     : activePlayers, [isCoach, userCategories, activePlayers]);
 
   const [isExportOpen, setIsExportOpen] = useState(false);
+  const [toast, setToast] = useState<{ message: string; type?: "success" | "error" | "info" } | null>(null);
   const { enabledPlayerColumns } = useDashboardConfig();
   const { confirm, ConfirmComponent } = useConfirm();
 
@@ -150,8 +152,11 @@ function PlayersPageContent() {
           setPlayers((prevPlayers) =>
             prevPlayers.filter((player) => player.id !== playerId),
           );
+          setToast({ message: `Joueur ${getPlayerFullName(target)} supprimé avec succès !`, type: "success" });
+          setTimeout(() => setToast(null), 3000);
         } catch (error) {
-          alert("Erreur lors de la suppression. Veuillez réessayer.");
+          setToast({ message: "Erreur lors de la suppression.", type: "error" });
+          setTimeout(() => setToast(null), 3000);
         }
       }
     });
@@ -296,6 +301,7 @@ function PlayersPageContent() {
         onClose={() => setIsAddModalOpen(false)}
       />
       <ConfirmComponent />
+      {toast && <ToastNotification message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
     </div>
   );
 }

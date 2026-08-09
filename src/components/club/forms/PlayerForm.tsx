@@ -290,6 +290,122 @@ export default function PlayerForm({
         </div>
       </div>
 
+      {/* SECTION DOCUMENTS ADMINISTRATIFS (FACULTATIF) */}
+      <div className="space-y-4 rounded-xl border border-gray-200 bg-white p-6 shadow-xs dark:border-gray-800 dark:bg-gray-900/50">
+        <div className="mb-4 flex items-center justify-between border-b border-gray-200 pb-4 dark:border-gray-700">
+          <div className="flex items-center gap-3">
+            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-gray-200 bg-gray-50 text-xs font-semibold text-gray-600 shadow-xs dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400">
+              📄
+            </span>
+            <div>
+              <h4 className="text-sm font-semibold uppercase tracking-wider text-gray-800 dark:text-gray-200">
+                Documents administratifs (Facultatif)
+              </h4>
+              <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                Téléversez l'acte de naissance et la pièce d'identité des parents (PDF, JPG, PNG).
+              </p>
+            </div>
+          </div>
+          <span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
+            Optionnel
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Acte de naissance */}
+          <div className="p-4 rounded-xl border border-dashed border-gray-300 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/30 flex flex-col justify-between gap-3">
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <h5 className="text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wider">
+                  Acte de naissance
+                </h5>
+                {formValues.acteNaissanceUrl && (
+                  <a
+                    href={formValues.acteNaissanceUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-brand-600 dark:text-brand-400 hover:underline font-semibold flex items-center gap-1"
+                  >
+                    Voir le document ↗
+                  </a>
+                )}
+              </div>
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                {formValues.acteNaissanceUrl ? "Document joint." : "Copie de l'acte de naissance ou passeport (PDF/Image)."}
+              </p>
+            </div>
+
+            <label className="cursor-pointer shrink-0 rounded-lg border border-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 text-xs font-semibold px-3 py-2 shadow-xs transition-colors flex items-center justify-center gap-2">
+              <svg className="w-4 h-4 text-brand-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+              {formValues.acteNaissanceUrl ? "Remplacer l'acte de naissance" : "Ajouter l'acte de naissance"}
+              <input
+                type="file"
+                accept="image/*,application/pdf"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    const reader = new FileReader();
+                    reader.onloadend = () => {
+                      updateField("acteNaissanceUrl", reader.result as string);
+                    };
+                    reader.readAsDataURL(file);
+                  }
+                }}
+                className="hidden"
+              />
+            </label>
+          </div>
+
+          {/* Carte d'identité parent / tuteur */}
+          <div className="p-4 rounded-xl border border-dashed border-gray-300 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/30 flex flex-col justify-between gap-3">
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <h5 className="text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wider">
+                  Pièce d'identité du parent / tuteur
+                </h5>
+                {formValues.carteIdentiteParentUrl && (
+                  <a
+                    href={formValues.carteIdentiteParentUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-brand-600 dark:text-brand-400 hover:underline font-semibold flex items-center gap-1"
+                  >
+                    Voir le document ↗
+                  </a>
+                )}
+              </div>
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                {formValues.carteIdentiteParentUrl ? "Document joint." : "CIN, NIF ou Passeport du responsable légal."}
+              </p>
+            </div>
+
+            <label className="cursor-pointer shrink-0 rounded-lg border border-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 text-xs font-semibold px-3 py-2 shadow-xs transition-colors flex items-center justify-center gap-2">
+              <svg className="w-4 h-4 text-brand-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+              {formValues.carteIdentiteParentUrl ? "Remplacer la pièce d'identité" : "Ajouter la pièce d'identité du parent"}
+              <input
+                type="file"
+                accept="image/*,application/pdf"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    const reader = new FileReader();
+                    reader.onloadend = () => {
+                      updateField("carteIdentiteParentUrl", reader.result as string);
+                    };
+                    reader.readAsDataURL(file);
+                  }
+                }}
+                className="hidden"
+              />
+            </label>
+          </div>
+        </div>
+      </div>
+
       {/* SECTION 02: PARENTS / TUTEUR */}
       <div className="space-y-4 rounded-xl border border-gray-200 bg-white p-6 shadow-xs dark:border-gray-800 dark:bg-gray-900/50">
         <div className="mb-4 flex items-center gap-3 border-b border-gray-200 pb-4 dark:border-gray-700">

@@ -16,6 +16,12 @@ export async function fetchProgrammes(): Promise<ProgrammeMatch[]> {
 }
 
 export async function createProgramme(programme: Omit<ProgrammeMatch, "id" | "created_at">): Promise<ProgrammeMatch | null> {
+  const { createProgrammeAdmin } = await import("@/app/actions/club");
+  const adminRes = await createProgrammeAdmin(programme);
+  if (adminRes.success && adminRes.data) {
+    return adminRes.data as ProgrammeMatch;
+  }
+
   const { data, error } = await supabase
     .from("programmes_match")
     .insert([programme])
@@ -31,6 +37,12 @@ export async function createProgramme(programme: Omit<ProgrammeMatch, "id" | "cr
 }
 
 export async function updateProgramme(id: string, updates: Partial<ProgrammeMatch>): Promise<ProgrammeMatch | null> {
+  const { updateProgrammeAdmin } = await import("@/app/actions/club");
+  const adminRes = await updateProgrammeAdmin(id, updates);
+  if (adminRes.success && adminRes.data) {
+    return adminRes.data as ProgrammeMatch;
+  }
+
   const { data, error } = await supabase
     .from("programmes_match")
     .update(updates)
@@ -47,6 +59,12 @@ export async function updateProgramme(id: string, updates: Partial<ProgrammeMatc
 }
 
 export async function deleteProgramme(id: string): Promise<boolean> {
+  const { deleteProgrammeAdmin } = await import("@/app/actions/club");
+  const adminRes = await deleteProgrammeAdmin(id);
+  if (adminRes.success) {
+    return true;
+  }
+
   const { error } = await supabase
     .from("programmes_match")
     .delete()

@@ -10,12 +10,13 @@ import { fetchCoaches, deleteCoach } from "@/lib/club/coachs";
 
 import { TableSkeleton } from "@/components/ui/skeleton/Skeleton";
 import { CoachAddModal } from "@/components/club/modals/CoachAddModal";
+import { ToastNotification } from "@/components/ui/toast/ToastNotification";
 
 export default function CoachsPage() {
   const [coaches, setCoaches] = useState<Coach[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const { confirm, ConfirmComponent } = useConfirm();
+  const [toast, setToast] = useState<{ message: string; type?: "success" | "error" | "info" } | null>(null);
 
   const loadCoaches = async () => {
     setIsLoading(true);
@@ -35,8 +36,11 @@ export default function CoachsPage() {
       onConfirm: async () => {
         const { error } = await deleteCoach(coach.id);
         if (error) {
-          alert(`Erreur: ${error}`);
+          setToast({ message: `Erreur lors de la suppression: ${error}`, type: "error" });
+          setTimeout(() => setToast(null), 3000);
         } else {
+          setToast({ message: `Coach ${coach.prenom} ${coach.nom} supprimé avec succès !`, type: "success" });
+          setTimeout(() => setToast(null), 3000);
           loadCoaches();
         }
       },
@@ -46,6 +50,7 @@ export default function CoachsPage() {
   return (
     <div className="space-y-6">
       <ConfirmComponent />
+      {toast && <ToastNotification message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
       <PageBreadcrumb pageTitle="Gestion des Coachs" />
 
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">

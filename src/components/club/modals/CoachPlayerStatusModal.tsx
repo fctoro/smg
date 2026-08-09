@@ -12,6 +12,7 @@ interface CoachPlayerStatusModalProps {
 }
 
 const STATUS_OPTIONS = ["Actif", "Blessé", "Suspendu", "Inactif", "En test"];
+const POSTE_OPTIONS = ["Joueur", "Gardien", "Défenseur", "Milieu", "Attaquant"];
 
 export function CoachPlayerStatusModal({
   isOpen,
@@ -20,12 +21,14 @@ export function CoachPlayerStatusModal({
   onSuccess,
 }: CoachPlayerStatusModalProps) {
   const [status, setStatus] = useState(player?.statut || "Actif");
+  const [poste, setPoste] = useState(player?.poste || "Joueur");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Update local state when player changes
   React.useEffect(() => {
     if (player) {
       setStatus(player.statut || "Actif");
+      setPoste(player.poste || "Joueur");
     }
   }, [player]);
 
@@ -35,13 +38,13 @@ export function CoachPlayerStatusModal({
     e.preventDefault();
     setIsSubmitting(true);
     try {
-      // Update only the status field
-      await updatePlayerInSupabase(player.id, { statut: status as any });
-      onSuccess({ ...player, statut: status as any });
+      // Update the status and poste fields in the database
+      await updatePlayerInSupabase(player.id, { statut: status as any, poste });
+      onSuccess({ ...player, statut: status as any, poste });
       onClose();
     } catch (error) {
-      console.error("Error updating player status:", error);
-      alert("Erreur lors de la mise à jour du statut. Veuillez réessayer.");
+      console.error("Error updating player status and poste:", error);
+      alert("Erreur lors de la mise à jour du joueur. Veuillez réessayer.");
     } finally {
       setIsSubmitting(false);
     }
@@ -51,10 +54,10 @@ export function CoachPlayerStatusModal({
     <Modal isOpen={isOpen} onClose={onClose} className="max-w-md p-6">
       <div className="mb-6">
         <h2 className="text-xl font-bold text-gray-900 dark:text-white">
-          Modifier le statut du joueur
+          Modifier le joueur
         </h2>
         <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-          Mise à jour rapide pour {getPlayerFullName(player)}
+          Mise à jour pour {getPlayerFullName(player)}
         </p>
       </div>
 
@@ -69,6 +72,23 @@ export function CoachPlayerStatusModal({
             className="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm text-gray-800 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
           >
             {STATUS_OPTIONS.map((opt) => (
+              <option key={opt} value={opt}>
+                {opt}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
+            Nouveau Poste
+          </label>
+          <select
+            value={poste}
+            onChange={(e) => setPoste(e.target.value)}
+            className="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm text-gray-800 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
+          >
+            {POSTE_OPTIONS.map((opt) => (
               <option key={opt} value={opt}>
                 {opt}
               </option>

@@ -108,6 +108,7 @@ export interface ClubEvent {
   type: EventType;
   calendarColor?: EventCalendarColor;
   participants: string[];
+  created_by?: string;
 }
 
 export interface Payment {

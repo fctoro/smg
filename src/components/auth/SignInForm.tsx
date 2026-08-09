@@ -53,10 +53,10 @@ export default function SignInForm() {
         const uMetaRole = u.user_metadata?.role;
         const uMetaSections = u.user_metadata?.sections;
 
-        let userRole = uMetaRole || (uEmail === "footballclubtoro@gmail.com" ? "Super Admin" : "Admin");
+        let userRole = uMetaRole || (uEmail.toLowerCase() === "footballclubtoro@gmail.com" ? "Super Admin" : "Admin");
         let userSections = Array.isArray(uMetaSections) && uMetaSections.length > 0 ? uMetaSections : [];
 
-        if (!uMetaRole && uEmail !== "footballclubtoro@gmail.com") {
+        if (!uMetaRole && uEmail.toLowerCase() !== "footballclubtoro@gmail.com") {
           const { data: prof } = await supabase
             .from("profiles")
             .select("role, sections")
@@ -80,8 +80,8 @@ export default function SignInForm() {
         localStorage.setItem("fctoro_user_sections", JSON.stringify(userSections));
         localStorage.setItem("fctoro_user_permissions", JSON.stringify(userPermissions));
 
-        router.replace(normalizedRole === "coach" ? "/coach" : "/dashboard");
-        router.refresh();
+        // Hard redirect to ensure UserRoleContext and Layout are fully re-initialized
+        window.location.href = normalizedRole === "coach" ? "/coach" : "/dashboard";
       }
     } catch (err: any) {
       setError(err.message || "Erreur lors de la connexion.");

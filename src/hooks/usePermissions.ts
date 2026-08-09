@@ -28,7 +28,7 @@ export function usePermissions() {
 
   const hasPermission = (section: string, action: PermissionAction): boolean => {
     // Super Admin overrides everything
-    if (email === "footballclubtoro@gmail.com" || role === "super admin") {
+    if (email?.toLowerCase() === "footballclubtoro@gmail.com" || role === "super admin") {
       return true;
     }
 

@@ -101,7 +101,7 @@ export const UserRoleProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         localStorage.setItem("fctoro_user_email", email);
 
         // 1. Primary check: Super Admin
-        if (email === "footballclubtoro@gmail.com") {
+        if (email.toLowerCase() === "footballclubtoro@gmail.com") {
           setRoleState("super admin");
           setUserSections(ALL_SECTIONS);
           localStorage.setItem("fctoro_user_role", "super admin");
@@ -109,9 +109,52 @@ export const UserRoleProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           return;
         }
 
-        // 2. Check metadata role and sections
-        const metaRole = data.user.user_metadata?.role;
-        const metaSections = data.user.user_metadata?.sections;
+        // 2. Fetch from profiles table (Source of Truth for role)
+        const { data: profile, error } = await supabase
+          .from("profiles")
+          .select("role")
+          .eq("id", data.user.id)
+          .single();
+
+        if (profile?.role) {
+          const normalized = profile.role.toLowerCase() as UserRole;
+          setRoleState(normalized);
+          localStorage.setItem("fctoro_user_role", normalized);
+          
+          // Fetch sections from user_metadata instead of profiles since profiles doesn't have sections column
+          const metaSections = data.user.user_metadata?.sections;
+          const activeSections = (Array.isArray(metaSections) && metaSections.length > 0)
+            ? metaSections
+            : getDefaultSectionsForRole(normalized);
+            
+          setUserSections(activeSections);
+          localStorage.setItem("fctoro_user_sections", JSON.stringify(activeSections));
+          
+          // Fetch categories from metadata
+          const metaCategories = data.user.user_metadata?.categories;
+          if (Array.isArray(metaCategories)) {
+             setUserCategories(metaCategories);
+          }
+          return;
+        }
+
+        // 3. Fallback check metadata role and sections (if profile not found)
+        let metaRole = data.user.user_metadata?.role;
+        let metaSections = data.user.user_metadata?.sections;
+        
+        // If profile is missing, let's create it so they are tracked in the database
+        if (metaRole) {
+          const { error: insertError } = await supabase.from("profiles").insert([{
+            id: data.user.id,
+            full_name: data.user.user_metadata?.full_name || data.user.email,
+            role: metaRole
+          }]);
+          
+          if (!insertError) {
+             // Let's refetch or just use the inserted data
+          }
+        }
+
         if (metaRole) {
           const normalized = metaRole.toLowerCase() as UserRole;
           setRoleState(normalized);
@@ -126,25 +169,6 @@ export const UserRoleProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           if (Array.isArray(metaCategories)) {
              setUserCategories(metaCategories);
           }
-          return;
-        }
-
-        // 3. Fallback check profiles table
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("role, sections")
-          .eq("id", data.user.id)
-          .single();
-
-        if (profile?.role) {
-          const normalized = profile.role.toLowerCase() as UserRole;
-          setRoleState(normalized);
-          localStorage.setItem("fctoro_user_role", normalized);
-          const activeSections = (Array.isArray(profile.sections) && profile.sections.length > 0)
-            ? profile.sections
-            : getDefaultSectionsForRole(normalized);
-          setUserSections(activeSections);
-          localStorage.setItem("fctoro_user_sections", JSON.stringify(activeSections));
           return;
         }
 
@@ -181,7 +205,8 @@ export const UserRoleProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         'postgres_changes',
         { event: '*', schema: 'public', table: 'profiles' },
         (payload: any) => {
-          supabase.auth.getUser().then(({ data }) => {
+          supabase.auth.getUser().then((res: any) => {
+            const data = res.data;
             if (data?.user && (payload.new?.id === data.user.id || payload.old?.id === data.user.id)) {
               syncUserRole();
             }
@@ -208,10 +233,19 @@ export const UserRoleProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     setRole(nextRole);
   };
 
-  const isSuperAdmin = role === "super admin" || userEmail === "footballclubtoro@gmail.com";
+  const isSuperAdmin = role === "super admin" || userEmail?.toLowerCase() === "footballclubtoro@gmail.com";
   const isCoach = role === "coach";
   const isFinance = role === "finance";
   const isAdmin = role === "admin" && !isSuperAdmin;
+
+  const [isMounted, setIsMounted] = useState(false);
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  if (!isMounted) {
+    return null; // Prevent SSR flash of incorrect UI role
+  }
 
   return (
     <UserRoleContext.Provider

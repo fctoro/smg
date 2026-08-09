@@ -30,6 +30,8 @@ interface EventCalendarManagerProps {
   events: ClubEvent[];
   setEvents: Dispatch<SetStateAction<ClubEvent[]>>;
   players: Player[];
+  userEmail?: string | null;
+  isSuperAdmin?: boolean;
 }
 
 interface EventFormState {
@@ -71,26 +73,37 @@ export default function EventCalendarManager({
   events,
   setEvents,
   players,
+  userEmail,
+  isSuperAdmin,
 }: EventCalendarManagerProps) {
   const [formState, setFormState] = useState<EventFormState>(defaultFormState);
   const [activeTab, setActiveTab] = useState<"upcoming" | "history">("upcoming");
   const calendarRef = useRef<FullCalendar>(null);
   const { isOpen, openModal, closeModal } = useModal();
 
-  const eventInputs = useMemo<EventInput[]>(
-    () =>
-      events.map((event) => ({
-        id: event.id,
-        title: event.titre,
-        start: event.date,
-        extendedProps: {
-          type: event.type,
-          lieu: event.lieu,
-          calendarColor: event.calendarColor ?? eventTypeToCalendarColor(event.type),
-        },
-      })),
-    [events],
-  );
+  const filteredEvents = useMemo(() => {
+    if (!userEmail) return events;
+    return events.filter(e => !e.created_by || e.created_by === userEmail);
+  }, [events, userEmail]);
+
+  const calendarEvents: EventInput[] = useMemo(() => {
+    return filteredEvents.map((event) => ({
+      id: event.id,
+      title: event.titre,
+      start: event.date,
+      allDay: event.type !== "Réunion", // Make everything allDay except meetings for now unless they have specific times
+      backgroundColor: calendarColorClass(event.calendarColor || eventTypeToCalendarColor(event.type)).replace(
+        "bg-",
+        "",
+      ), // Simplistic way, in real app, better to pass hex codes to FullCalendar
+      extendedProps: {
+        lieu: event.lieu,
+        type: event.type,
+        calendarColor: event.calendarColor || eventTypeToCalendarColor(event.type),
+        participants: event.participants,
+      },
+    }));
+  }, [filteredEvents]);
 
   const sortedEvents = useMemo(
     () =>
@@ -100,7 +113,7 @@ export default function EventCalendarManager({
     [events],
   );
 
-  const filteredEvents = useMemo(() => {
+  const filteredUpcomingHistory = useMemo(() => {
     const now = new Date();
     // Midnight to avoid issues with time today
     now.setHours(0, 0, 0, 0);
@@ -190,6 +203,7 @@ const resetForm = () => {
           type: eventType,
           calendarColor: formState.calendarColor,
           participants: [],
+          created_by: userEmail || undefined,
         };
         const insertedData = await addEventToSupabase(dataToInsert);
 
@@ -274,7 +288,7 @@ const resetForm = () => {
               center: "title",
               right: "dayGridMonth,timeGridWeek,listWeek",
             }}
-            events={eventInputs}
+            events={calendarEvents}
             selectable
             select={handleDateSelect}
             eventClick={handleEventClick}
@@ -320,15 +334,18 @@ const resetForm = () => {
           </div>
         </div>
 
-        <div className="space-y-3">
-          {filteredEvents.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-10 text-center">
-              <p className="text-gray-500 dark:text-gray-400">
-                Aucun évènement à afficher dans cette catégorie pour le moment.
-              </p>
+        <div className="space-y-4 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
+          {filteredUpcomingHistory.length === 0 ? (
+            <div className="text-center py-10">
+              <div className="w-16 h-16 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg className="w-8 h-8 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+              </div>
+              <p className="text-gray-500 dark:text-gray-400">Aucun événement {activeTab === "upcoming" ? "à venir" : "passé"}</p>
             </div>
           ) : (
-            filteredEvents.map((event) => (
+            filteredUpcomingHistory.map((event) => (
               <div
                 key={event.id}
                 className="flex flex-col gap-3 rounded-xl border border-gray-200 p-4 dark:border-gray-700 sm:flex-row sm:items-center sm:justify-between"

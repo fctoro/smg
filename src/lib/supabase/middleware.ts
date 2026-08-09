@@ -28,7 +28,15 @@ export async function updateSession(request: NextRequest) {
       })
     : null
 
-  let user = null
+  // FIX: Prevent consuming refresh tokens on Next.js prefetch requests
+  if (
+    request.headers.get('x-middleware-prefetch') === '1' ||
+    request.headers.get('purpose') === 'prefetch'
+  ) {
+    return supabaseResponse;
+  }
+
+  let user = null;
 
   if (supabase) {
     try {
@@ -82,8 +90,8 @@ export async function updateSession(request: NextRequest) {
       .eq('id', user.id)
       .single()
 
-    const userRole = (profile?.role || '').toLowerCase();
-    const isSuperAdmin = userRole === 'super admin' || user.email === 'footballclubtoro@gmail.com';
+    const userRole = (profile?.role || user.user_metadata?.role || '').toLowerCase();
+    const isSuperAdmin = userRole === 'super admin' || user.email?.toLowerCase() === 'footballclubtoro@gmail.com';
 
     if (!isSuperAdmin) {
       const redirectUrl = request.nextUrl.clone()

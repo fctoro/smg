@@ -13,6 +13,7 @@ import { useConfirm } from "@/hooks/useConfirm";
 import Link from "next/link";
 
 import { TableSkeleton, CardSkeleton } from "@/components/ui/skeleton/Skeleton";
+import Pagination from "@/components/tables/Pagination";
 
 export default function CoachPlayersPage() {
   const { players: allPlayers, setPlayers, hydrated } = useClubData();
@@ -21,6 +22,7 @@ export default function CoachPlayersPage() {
   
   // Tabs
   const [activeTab, setActiveTab] = useState<"liste" | "effectifs">("liste");
+  const [selectedCategory, setSelectedCategory] = useState<string>("");
 
   // Rosters State
   const [rosters, setRosters] = useState<Effectif[]>([]);
@@ -28,6 +30,14 @@ export default function CoachPlayersPage() {
   const [isRosterModalOpen, setIsRosterModalOpen] = useState(false);
   const [selectedRoster, setSelectedRoster] = useState<Effectif | null>(null);
   const [rosterPeriodFilter, setRosterPeriodFilter] = useState("all");
+
+  // Pagination
+  const [pagePerCategory, setPagePerCategory] = useState<Record<string, number>>({});
+  const [playersPerPage, setPlayersPerPage] = useState(10);
+
+  const handlePageChange = (category: string, newPage: number) => {
+    setPagePerCategory(prev => ({ ...prev, [category]: newPage }));
+  };
 
   const { confirm, ConfirmComponent } = useConfirm();
 
@@ -45,6 +55,14 @@ export default function CoachPlayersPage() {
     setRosters(data);
     setLoadingRosters(false);
   };
+
+  const categoriesToDisplay = userCategories || [];
+
+  useEffect(() => {
+    if (categoriesToDisplay.length > 0 && !selectedCategory) {
+      setSelectedCategory(categoriesToDisplay[0]);
+    }
+  }, [categoriesToDisplay, selectedCategory]);
 
   if (!hydrated) {
     return (
@@ -69,8 +87,6 @@ export default function CoachPlayersPage() {
     acc[cat].push(player);
     return acc;
   }, {} as Record<string, Player[]>);
-
-  const categoriesToDisplay = userCategories || [];
 
   const handleSuccessUpdate = (updatedPlayer: Player) => {
     setPlayers((prev) =>
@@ -110,6 +126,27 @@ export default function CoachPlayersPage() {
     const playersMap = coachPlayers.reduce((acc, p) => { acc[p.id] = p; return acc; }, {} as Record<string, Player>);
     const csvContent = convertRostersToCSV(filteredRosters, playersMap);
     downloadCSV(csvContent, `Effectifs_${rosterPeriodFilter === "all" ? "ToutesPeriodes" : rosterPeriodFilter}.csv`);
+  };
+
+  const handleExportPlayers = () => {
+    const playersToExport = selectedCategory && playersByCategory[selectedCategory] 
+      ? playersByCategory[selectedCategory] 
+      : coachPlayers;
+      
+    const headers = ["Nom", "Poste", "Statut", "Sexe", "Catégorie", "Date de naissance"];
+    const rows = playersToExport.map(p => [
+      getPlayerFullName(p),
+      p.poste || "",
+      p.statut || "",
+      p.sexe || "",
+      p.categorie || "",
+      p.dateNaissance || ""
+    ]);
+    const csvContent = [
+      headers.join(","),
+      ...rows.map(row => row.map(cell => `"${cell}"`).join(","))
+    ].join("\n");
+    downloadCSV(csvContent, `Joueurs_${selectedCategory || 'Coach'}.csv`);
   };
 
   return (
@@ -159,6 +196,21 @@ export default function CoachPlayersPage() {
             </button>
           </div>
         )}
+
+        {/* Controls when in liste tab */}
+        {activeTab === "liste" && coachPlayers.length > 0 && (
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleExportPlayers}
+              className="inline-flex h-9 items-center justify-center rounded-lg border border-transparent bg-emerald-500 px-4 text-sm font-medium text-white shadow-sm hover:bg-emerald-600 dark:bg-emerald-600 dark:hover:bg-emerald-700 transition-colors"
+            >
+              <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+              Exporter Excel / CSV
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Tabs */}
@@ -188,7 +240,7 @@ export default function CoachPlayersPage() {
       </div>
 
       {activeTab === "liste" && (
-        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
+        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
           {categoriesToDisplay.length === 0 ? (
             <div className="rounded-xl border border-gray-200 bg-white p-8 text-center shadow-sm dark:border-gray-800 dark:bg-gray-900">
               <p className="text-gray-500 dark:text-gray-400">
@@ -196,19 +248,46 @@ export default function CoachPlayersPage() {
               </p>
             </div>
           ) : (
-            categoriesToDisplay.map((category) => {
-              const playersInCat = playersByCategory[category] || [];
+            <>
+              {/* Category Tabs */}
+              <div className="flex flex-wrap gap-3">
+                {categoriesToDisplay.map((category) => {
+                  const isActive = selectedCategory === category;
+                  const count = (playersByCategory[category] || []).length;
+                  return (
+                    <button
+                      key={category}
+                      onClick={() => setSelectedCategory(category)}
+                      className={`flex items-center gap-3 rounded-full px-5 py-2.5 text-sm font-semibold transition-all
+                        ${isActive 
+                          ? "bg-white text-brand-600 shadow-sm border border-brand-200 dark:bg-gray-800 dark:border-brand-500/30 dark:text-brand-400" 
+                          : "bg-gray-50 text-gray-500 border border-transparent hover:bg-gray-100 dark:bg-gray-900/50 dark:text-gray-400 dark:hover:bg-gray-800"}`}
+                    >
+                      <span>{category}</span>
+                      <span className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold text-white
+                        ${isActive ? "bg-brand-500" : "bg-gray-300 dark:bg-gray-700"}`}>
+                        {count}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
 
-              return (
-                <div key={category} className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-900">
-                  <div className="border-b border-gray-200 bg-gray-50 px-6 py-4 dark:border-gray-800 dark:bg-gray-900/50 flex items-center justify-between">
-                    <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-                      Catégorie {category}
-                    </h2>
-                    <span className="rounded-full bg-gray-200 px-3 py-1 text-xs font-medium text-gray-700 dark:bg-gray-800 dark:text-gray-300">
-                      {playersInCat.length} joueur(s)
-                    </span>
-                  </div>
+              {/* Single Table for Selected Category */}
+              {(() => {
+                const category = selectedCategory;
+                const playersInCat = playersByCategory[category] || [];
+                
+                return (
+                  <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-900">
+                    <div className="border-b border-gray-200 bg-gray-50 px-6 py-4 dark:border-gray-800 dark:bg-gray-900/50 flex items-center justify-between">
+                      <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+                        Catégorie {category}
+                      </h2>
+                      <span className="rounded-full bg-gray-200 px-3 py-1 text-xs font-medium text-gray-700 dark:bg-gray-800 dark:text-gray-300">
+                        {playersInCat.length} joueur(s)
+                      </span>
+                    </div>
 
                   <div className="overflow-x-auto">
                     <table className="w-full text-left text-sm text-gray-500 dark:text-gray-400">
@@ -227,8 +306,13 @@ export default function CoachPlayersPage() {
                               Aucun joueur enregistré dans cette Catégorie.
                             </td>
                           </tr>
-                        ) : (
-                          playersInCat.map((player) => (
+                        ) : (() => {
+                          const currentPage = pagePerCategory[category] || 1;
+                          const totalPages = Math.ceil(playersInCat.length / playersPerPage);
+                          const startIndex = (currentPage - 1) * playersPerPage;
+                          const paginatedPlayers = playersInCat.slice(startIndex, startIndex + playersPerPage);
+
+                          return paginatedPlayers.map((player) => (
                             <tr key={player.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
                               <td className="px-6 py-4 font-medium text-gray-900 dark:text-white">
                                 {getPlayerFullName(player)}
@@ -260,14 +344,31 @@ export default function CoachPlayersPage() {
                                 </button>
                               </td>
                             </tr>
-                          ))
-                        )}
+                          ));
+                        })()}
                       </tbody>
                     </table>
                   </div>
+                  
+                  {/* Pagination controls */}
+                  {playersInCat.length > playersPerPage && (
+                    <div className="border-t border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 px-6 py-4 flex items-center justify-between">
+                      <p className="text-sm text-gray-700 dark:text-gray-300">
+                        Affichage de <span className="font-medium">{((pagePerCategory[category] || 1) - 1) * playersPerPage + 1}</span> à <span className="font-medium">{Math.min((pagePerCategory[category] || 1) * playersPerPage, playersInCat.length)}</span> sur <span className="font-medium">{playersInCat.length}</span> joueurs
+                      </p>
+                      <Pagination
+                        currentPage={pagePerCategory[category] || 1}
+                        totalPages={Math.ceil(playersInCat.length / playersPerPage)}
+                        onPageChange={(page) => handlePageChange(category, page)}
+                        pageSize={playersPerPage}
+                        onPageSizeChange={(size) => setPlayersPerPage(size)}
+                      />
+                    </div>
+                  )}
                 </div>
               );
-            })
+              })()}
+            </>
           )}
         </div>
       )}

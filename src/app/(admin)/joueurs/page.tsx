@@ -137,7 +137,7 @@ function PlayersPageContent() {
             const email = user.email;
             const perms = user.user_metadata?.permissions || {};
             
-            if (email !== "footballclubtoro@gmail.com" && role !== "super admin") {
+            if (email?.toLowerCase() !== "footballclubtoro@gmail.com" && role !== "super admin") {
               const hasPerm = (perms["Joueurs"] || []).includes("delete");
               if (!hasPerm) {
                 alert("Accès refusé : Vos droits ont été révoqués récemment. Veuillez rafraîchir la page ou vous reconnecter.");

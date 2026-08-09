@@ -127,11 +127,6 @@ const coachNavItems: NavItem[] = [
     path: "/coach",
   },
   {
-    icon: <TableIcon />,
-    name: "Classement",
-    path: "/coach?tab=classement",
-  },
-  {
     icon: <UserCircleIcon />,
     name: "Tactiques & Terrain",
     path: "/coach?tab=tactiques",
@@ -140,11 +135,6 @@ const coachNavItems: NavItem[] = [
     icon: <GroupIcon />,
     name: "Effectif Joueurs",
     path: "/coach?tab=effectif",
-  },
-  {
-    icon: <CalenderIcon />,
-    name: "Calendrier Matchs",
-    path: "/coach?tab=calendrier",
   },
 ];
 
@@ -218,7 +208,9 @@ const AppSidebar: React.FC = () => {
     };
     if (isCoach) {
       // Coach: always show coach items first, then any extra admin sections granted by super admin
-      const grantedAdminSections = adminNavItems.filter(checkAccess);
+      const grantedAdminSections = adminNavItems
+        .filter(checkAccess)
+        .filter((adminItem) => !coachNavItems.some((coachItem) => coachItem.name === adminItem.name));
       return [...coachNavItems, ...grantedAdminSections];
     }
     return adminNavItems.filter(checkAccess);
@@ -313,6 +305,8 @@ const AppSidebar: React.FC = () => {
     ? "Espace Coach"
     : isCoach
     ? "Compte Coach"
+    : isSuperAdmin
+    ? "Compte Super Admin"
     : isAdmin
     ? "Compte Admin"
     : "Club Dashboard";

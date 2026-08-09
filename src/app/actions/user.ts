@@ -57,6 +57,31 @@ export async function saveRoleConfig(config: Record<string, string[]>) {
       const { error } = await supabaseAdmin.from("site_messages").insert([payload]);
       if (error) return { error: error.message };
     }
+
+    // Apply the new config to all existing users for each role
+    const { data: authData, error: authError } = await supabaseAdmin.auth.admin.listUsers();
+    if (!authError && authData?.users) {
+      for (const user of authData.users) {
+        const userRole = user.user_metadata?.role;
+        // Also check if they have an active profile role
+        const { data: profile } = await supabaseAdmin.from("profiles").select("role").eq("id", user.id).maybeSingle();
+        const effectiveRole = profile?.role || userRole;
+        
+        if (effectiveRole) {
+          const roleKey = Object.keys(config).find(k => k.toLowerCase() === effectiveRole.toLowerCase());
+          if (roleKey) {
+            const roleSections = config[roleKey];
+            await supabaseAdmin.auth.admin.updateUserById(user.id, {
+              user_metadata: {
+                ...user.user_metadata,
+                sections: roleSections
+              }
+            });
+          }
+        }
+      }
+    }
+
     return { success: true };
   } catch (err: any) {
     return { error: err.message };
@@ -80,7 +105,7 @@ export async function getUsersList() {
         id: u.id,
         email: u.email || "",
         full_name: prof?.full_name || u.user_metadata?.full_name || u.email || "Utilisateur",
-        role: prof?.role || metaRole || (u.email === "footballclubtoro@gmail.com" ? "Super Admin" : "Admin"),
+        role: prof?.role || metaRole || (u.email?.toLowerCase() === "footballclubtoro@gmail.com" ? "Super Admin" : "Admin"),
         sections: prof?.sections || u.user_metadata?.sections || [],
         categories: u.user_metadata?.categories || [],
         permissions: u.user_metadata?.permissions || {},

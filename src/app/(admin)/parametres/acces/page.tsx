@@ -126,16 +126,13 @@ export default function AccessControlPage() {
 
   const handleRoleSelect = (roleId: string) => {
     setFormData(prev => ({ ...prev, role: roleId }));
+    setSelectedSections(rolePermissions[roleId] || []);
+    setSelectedPermissions({});
     if (roleId === "Coach") {
-      setSelectedSections([]);
-      setSelectedPermissions({});
       // Reset selected coach on role switch
       setSelectedCoachId("");
       setFormData(prev => ({ ...prev, email: "" }));
       setSelectedCategories([]);
-    } else {
-      setSelectedSections(rolePermissions[roleId] || []);
-      setSelectedPermissions({});
     }
   };
 
@@ -229,9 +226,9 @@ export default function AccessControlPage() {
     form.append("email", formData.email);
     form.append("password", formData.password);
     form.append("role", formData.role);
-    form.append("sections", JSON.stringify(formData.role === "Coach" ? [] : selectedSections));
+    form.append("sections", JSON.stringify(selectedSections));
     form.append("categories", JSON.stringify(formData.role === "Coach" ? selectedCategories : []));
-    form.append("permissions", JSON.stringify(formData.role === "Coach" ? {} : selectedPermissions));
+    form.append("permissions", JSON.stringify(selectedPermissions));
 
     let result;
     if (editingAccessUserId) {
@@ -246,9 +243,9 @@ export default function AccessControlPage() {
       result = await updateUserAccess(
         editingAccessUserId, 
         formData.role, 
-        formData.role === "Coach" ? [] : selectedSections,
+        selectedSections,
         formData.role === "Coach" ? selectedCategories : [],
-        formData.role === "Coach" ? {} : selectedPermissions
+        selectedPermissions
       );
     } else {
       result = await createUser(form);
@@ -280,7 +277,8 @@ export default function AccessControlPage() {
 
     setEditingAccessUserId(user.id);
     setFormData({ email: user.email, password: "", role: user.role });
-    setSelectedSections(user.role === "Coach" ? [] : (user.sections || rolePermissions[user.role] || []));
+    const hasSections = Array.isArray(user.sections) && user.sections.length > 0;
+    setSelectedSections(hasSections ? user.sections! : (rolePermissions[user.role] || []));
     setSelectedCategories(user.categories || []);
     setSelectedPermissions(user.permissions || {});
   };
@@ -526,9 +524,8 @@ export default function AccessControlPage() {
           </div>
 
           {/* Sections accessibles personnalisées */}
-          {formData.role !== "Coach" && (
-            <div className="mt-8 border border-[#e2e8f0] rounded-xl overflow-hidden">
-              <div className="px-5 py-4 flex items-center justify-between border-b border-[#f1f5f9] bg-[#f8fafc]">
+          <div className="mt-8 border border-[#e2e8f0] rounded-xl overflow-hidden">
+            <div className="px-5 py-4 flex items-center justify-between border-b border-[#f1f5f9] bg-[#f8fafc]">
                 <h3 className="text-[14px] font-semibold text-[#334155]">
                   Sections affichées pour ce compte ({formData.role})
                 </h3>
@@ -594,7 +591,6 @@ export default function AccessControlPage() {
                 })}
               </div>
             </div>
-          )}
 
           {formData.role === "Coach" && (
             <div className="mt-8 border border-[#e2e8f0] rounded-xl overflow-hidden">

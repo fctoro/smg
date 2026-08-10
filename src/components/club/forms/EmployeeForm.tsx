@@ -21,6 +21,8 @@ const defaultValues: EmployeeFormValues = {
   prenom: "",
   sexe: "M",
   fonction: "Employé",
+  typeSalaire: "fixe",
+  tauxParSeance: null,
   salaire: null,
   dateEmbauche: "",
   telephone: "",
@@ -164,18 +166,49 @@ export default function EmployeeForm({
 
         <div>
           <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
-            Salaire (HTG / USD)
+            Type de Salaire
           </label>
-          <input
-            type="number"
-            value={formValues.salaire ?? ""}
-            onChange={(event) =>
-              updateField("salaire", event.target.value ? parseFloat(event.target.value) : null)
-            }
-            className={inputClassName}
-            placeholder="Ex: 25000"
-          />
+          <select
+            value={formValues.typeSalaire || "fixe"}
+            onChange={(event) => updateField("typeSalaire", event.target.value as "fixe" | "variable")}
+            className={selectClassName}
+          >
+            <option value="fixe">Salaire Fixe (Mensuel)</option>
+            <option value="variable">Salaire Variable (Par séance / prestation)</option>
+          </select>
         </div>
+
+        {formValues.typeSalaire === "variable" ? (
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
+              Tarif / Taux par Séance (HTG / USD)
+            </label>
+            <input
+              type="number"
+              value={formValues.tauxParSeance ?? ""}
+              onChange={(event) =>
+                updateField("tauxParSeance", event.target.value ? parseFloat(event.target.value) : null)
+              }
+              className={inputClassName}
+              placeholder="Ex: 1500"
+            />
+          </div>
+        ) : (
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
+              Salaire Fixe Mensuel (HTG / USD)
+            </label>
+            <input
+              type="number"
+              value={formValues.salaire ?? ""}
+              onChange={(event) =>
+                updateField("salaire", event.target.value ? parseFloat(event.target.value) : null)
+              }
+              className={inputClassName}
+              placeholder="Ex: 25000"
+            />
+          </div>
+        )}
 
         <div>
           <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">

@@ -126,10 +126,14 @@ const generateMockPayrollRecords = (empList: any[]): PayrollRecord[] => {
           fonction: emp.fonction || emp.Fonction || emp.role || emp.Profession || "Employé FC Toro",
           mois: mKey,
           salaireBase: baseSalary,
+          typeSalaire: "fixe",
           bonus: bonus,
           deductions: deductions,
           prelevementPourcentage,
           prelevementMontant,
+          vacancesPayees: 0,
+          congeSansSolde: 0,
+          cumulPaiements: net,
           netAPayer: net,
           devise: empDevise,
           statut: isPending ? "en_attente" : "paye",
@@ -482,52 +486,8 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
           );
         }
 
-        if (paiementsData && paiementsData.length > 0) {
-          const fetchedPayments: Payment[] = paiementsData
-            .map((p: any): Payment => {
-              const montantUS = p.MntPayeUS || 0;
-              const montantHTG = p.MntPayeGd || 0;
-              const montant = montantUS || montantHTG || 0;
-              const devise: "US" | "HTG" = montantHTG > 0 ? "HTG" : "US";
-              const remarque = p.Remarque || p.Description || "";
-              const statusMatch = remarque.match(/\[STATUT:(PAID|PENDING|LATE)\]/i);
-              const storedStatus = String(p.Statut || statusMatch?.[1] || "paid")
-                .normalize("NFD")
-                .replace(/[\u0300-\u036f]/g, "")
-                .toLowerCase()
-                .trim();
-              const statut: Payment["statut"] =
-                storedStatus === "pending" || storedStatus === "en_attente" || storedStatus === "en attente"
-                  ? "pending"
-                  : storedStatus === "late" || storedStatus === "en_retard" || storedStatus === "en retard"
-                    ? "late"
-                    : "paid";
-
-              return {
-                id: String(p.Id),
-                playerId: String(p.EtudiantId),
-                montant,
-                montantUS,
-                montantHTG,
-                devise,
-                taux: p.TauxChange || p.Taux || p.taux || undefined,
-                statut,
-                periode: p.Periode || (p.DateTransact ? p.DateTransact.substring(0, 7) : new Date().toISOString().substring(0, 7)),
-                methode: (p.ModePaiement || "especes") as any,
-                datePaiement: p.DateTransact ? p.DateTransact.split("T")[0] : undefined,
-                remarque,
-              };
-            })
-            .filter((p: Payment) => p.montant > 0 || p.montantUS > 0 || p.montantHTG > 0);
-          setPayments(fetchedPayments);
-        } else {
-          setPayments(
-            parseStoredArray<Payment>(
-              window.localStorage.getItem(STORAGE_KEYS.payments),
-              []
-            )
-          );
-        }
+        // Reset global payments state to empty array as requested
+        setPayments([]);
 
         if (facturesData && facturesData.length > 0) {
           const fetchedInvoices: Invoice[] = facturesData.map((f: any) => {
@@ -636,10 +596,18 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
               fonction: p.Fonction || p.fonction || (emp ? (emp.Fonction || emp.Profession) : ""),
               mois: p.Mois || p.mois || "",
               salaireBase: baseSalary,
+              typeSalaire: p.TypeSalaire || p.typesalaire || p.type_salaire || "fixe",
+              nombreSeances: p.NombreSeances || p.nombreseances || p.nombre_seances || 0,
+              tauxParSeance: p.TauxParSeance || p.tauxparseance || p.taux_par_seance || 0,
               bonus: bonus,
               deductions: deductions,
               prelevementPourcentage,
               prelevementMontant,
+              prelevementAvance: p.PrelevementAvance || p.prelevementavance || p.prelevement_avance || 0,
+              prelevementType: p.PrelevementType || p.prelevementtype || p.prelevement_type || "taxe",
+              vacancesPayees: p.VacancesPayees || p.vacancespayees || p.vacances_payees || 0,
+              congeSansSolde: p.CongeSansSolde || p.congesanssolde || p.conge_sans_solde || 0,
+              cumulPaiements: p.CumulPaiements || p.cumulpaiements || p.cumul_paiements || fallbackNet,
               netAPayer: p.NetAPayer || p.netapayer || p.net_a_payer || fallbackNet,
               devise: (p.Devise || p.devise || (emp?.Devise || emp?.devise) || (baseSalary >= 1000 ? "HTG" : "US")) as "US" | "HTG",
               statut: p.Statut || p.statut || "en_attente",

@@ -160,6 +160,8 @@ export interface Employee {
   prenom: string;
   sexe?: string;
   fonction: string;
+  typeSalaire?: "fixe" | "variable";
+  tauxParSeance?: number | null;
   salaire?: number | null;
   devise?: "US" | "HTG";
   dateEmbauche?: string;
@@ -267,6 +269,8 @@ export interface EmployeeFormValues {
   prenom: string;
   sexe?: string;
   fonction: string;
+  typeSalaire?: "fixe" | "variable";
+  tauxParSeance?: number | null;
   salaire?: number | null;
   devise?: "US" | "HTG";
   dateEmbauche?: string;
@@ -292,11 +296,19 @@ export interface PayrollRecord {
   fonction: string;
   mois: string;
   salaireBase: number;
+  typeSalaire: "fixe" | "variable";
+  nombreSeances?: number;
+  tauxParSeance?: number;
   bonus: number;
   deductions: number;
   prelevementPourcentage?: number;
   prelevementMontant?: number;
+  prelevementAvance?: number;
+  prelevementType?: "taxe" | "credit" | "avance" | "pret";
+  vacancesPayees: number;
+  congeSansSolde: number;
   netAPayer: number;
+  cumulPaiements: number;
   devise?: "US" | "HTG";
   statut: "paye" | "en_attente" | "annule";
   datePaiement?: string;

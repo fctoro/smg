@@ -206,6 +206,11 @@ export const addPlayerToSupabase = async (data: Omit<Player & { photoIdentiteUrl
 
 // --- EMPLOYEES (tblEmployes) ---
 
+const isMissingEmployeeColumnError = (error: any) => {
+  const message = String(error?.message || error || "").toLowerCase();
+  return error?.code === "PGRST204" || message.includes("tauxparseance") || message.includes("typesalaire");
+};
+
 export const updateEmployeeInSupabase = async (employeeId: string, data: Partial<Employee>) => {
   const updatePayload: any = {};
   
@@ -216,19 +221,36 @@ export const updateEmployeeInSupabase = async (employeeId: string, data: Partial
   if (data.email !== undefined) updatePayload.Email = data.email;
   if (data.adresse !== undefined) updatePayload.Adresse = data.adresse;
   if (data.fonction !== undefined) updatePayload.Fonction = data.fonction;
+  if (data.typeSalaire !== undefined) updatePayload.TypeSalaire = data.typeSalaire;
+  if (data.tauxParSeance !== undefined) updatePayload.TauxParSeance = data.tauxParSeance;
   if (data.salaire !== undefined) updatePayload.Salaire = data.salaire;
   if (data.dateEmbauche !== undefined) updatePayload.DateEmbauche = data.dateEmbauche;
   if (data.niveauEtude !== undefined) updatePayload.NiveauEtude = data.niveauEtude;
   if (data.profession !== undefined) updatePayload.Profession = data.profession;
 
   const { updateEmployeeAdmin } = await import("@/app/actions/club");
-  const result = await updateEmployeeAdmin(employeeId, updatePayload);
+  let result = await updateEmployeeAdmin(employeeId, updatePayload);
+
+  if (!result.success && isMissingEmployeeColumnError(result.error)) {
+    delete updatePayload.TypeSalaire;
+    delete updatePayload.TauxParSeance;
+    result = await updateEmployeeAdmin(employeeId, updatePayload);
+  }
 
   if (!result.success) {
-    const { error } = await supabase
+    let { error } = await supabase
       .from("tblEmployes")
       .update(updatePayload)
       .eq("EmployeId", parseInt(employeeId, 10));
+
+    if (error && isMissingEmployeeColumnError(error)) {
+      delete updatePayload.TypeSalaire;
+      delete updatePayload.TauxParSeance;
+      ({ error } = await supabase
+        .from("tblEmployes")
+        .update(updatePayload)
+        .eq("EmployeId", parseInt(employeeId, 10)));
+    }
 
     if (error) {
       console.error("Erreur lors de la mise à jour de l'employé :", error);
@@ -258,7 +280,7 @@ export const softDeleteEmployeeInSupabase = async (employeeId: string) => {
 };
 
 export const addEmployeeToSupabase = async (data: Omit<Employee, "id" | "employeId">) => {
-  const insertPayload = {
+  const insertPayload: any = {
     Nom: data.nom,
     Prenom: data.prenom,
     Sexe: data.sexe === "Féminin" ? "F" : "M",
@@ -266,25 +288,57 @@ export const addEmployeeToSupabase = async (data: Omit<Employee, "id" | "employe
     Email: data.email,
     Adresse: data.adresse,
     Fonction: data.fonction,
+    TypeSalaire: data.typeSalaire || "fixe",
+    TauxParSeance: data.tauxParSeance || null,
     Salaire: data.salaire,
     DateEmbauche: data.dateEmbauche || null,
     NiveauEtude: data.niveauEtude,
     Profession: data.profession,
-    Desactive: false,
+    Desactive: 0,
   };
 
   const { insertEmployeeAdmin } = await import("@/app/actions/club");
-  const result = await insertEmployeeAdmin(insertPayload);
+  let result = await insertEmployeeAdmin(insertPayload);
+
+  if (!result.success && isMissingEmployeeColumnError(result.error)) {
+    delete insertPayload.TypeSalaire;
+    delete insertPayload.TauxParSeance;
+    result = await insertEmployeeAdmin(insertPayload);
+  }
+
+  if (!result.success && String(result.error).includes("22P02")) {
+    insertPayload.Desactive = false;
+    result = await insertEmployeeAdmin(insertPayload);
+  }
 
   if (result.success && result.data) {
     return result.data;
   }
 
-  const { data: insertedData, error } = await supabase
+  let { data: insertedData, error } = await supabase
     .from("tblEmployes")
     .insert(insertPayload)
     .select("EmployeId")
     .single();
+
+  if (error && (error.code === "22P02" || String(error.message).includes("22P02"))) {
+    insertPayload.Desactive = false;
+    ({ data: insertedData, error } = await supabase
+      .from("tblEmployes")
+      .insert(insertPayload)
+      .select("EmployeId")
+      .single());
+  }
+
+  if (error && isMissingEmployeeColumnError(error)) {
+    delete insertPayload.TypeSalaire;
+    delete insertPayload.TauxParSeance;
+    ({ data: insertedData, error } = await supabase
+      .from("tblEmployes")
+      .insert(insertPayload)
+      .select("EmployeId")
+      .single());
+  }
 
   if (error) {
     console.error("Erreur lors de l'ajout de l'employé :", error);
@@ -658,10 +712,18 @@ export const addPayrollToSupabase = async (data: Omit<import("@/types/club").Pay
     Fonction: data.fonction,
     Mois: data.mois,
     SalaireBase: data.salaireBase,
+    TypeSalaire: data.typeSalaire || "fixe",
+    NombreSeances: data.nombreSeances || 0,
+    TauxParSeance: data.tauxParSeance || 0,
     Bonus: data.bonus,
     Deductions: data.deductions,
     PrelevementPourcentage: data.prelevementPourcentage,
     PrelevementMontant: data.prelevementMontant,
+    PrelevementAvance: data.prelevementAvance || 0,
+    PrelevementType: data.prelevementType || "taxe",
+    VacancesPayees: data.vacancesPayees || 0,
+    CongeSansSolde: data.congeSansSolde || 0,
+    CumulPaiements: data.cumulPaiements || 0,
     NetAPayer: data.netAPayer,
     Devise: data.devise || "HTG",
     Statut: data.statut,
@@ -680,6 +742,14 @@ export const addPayrollToSupabase = async (data: Omit<import("@/types/club").Pay
   if (error && isMissingPrelevementColumnError(error)) {
     delete insertPayload.PrelevementPourcentage;
     delete insertPayload.PrelevementMontant;
+    delete insertPayload.PrelevementAvance;
+    delete insertPayload.PrelevementType;
+    delete insertPayload.TypeSalaire;
+    delete insertPayload.NombreSeances;
+    delete insertPayload.TauxParSeance;
+    delete insertPayload.VacancesPayees;
+    delete insertPayload.CongeSansSolde;
+    delete insertPayload.CumulPaiements;
     ({ data: insertedData, error } = await supabase
       .from("tblPayroll")
       .insert(insertPayload)
@@ -720,10 +790,18 @@ export const updatePayrollInSupabase = async (id: string, data: Partial<import("
   if (data.datePaiement !== undefined) updatePayload.DatePaiement = data.datePaiement;
   if (data.modePaiement !== undefined) updatePayload.ModePaiement = data.modePaiement;
   if (data.salaireBase !== undefined) updatePayload.SalaireBase = data.salaireBase;
+  if (data.typeSalaire !== undefined) updatePayload.TypeSalaire = data.typeSalaire;
+  if (data.nombreSeances !== undefined) updatePayload.NombreSeances = data.nombreSeances;
+  if (data.tauxParSeance !== undefined) updatePayload.TauxParSeance = data.tauxParSeance;
   if (data.bonus !== undefined) updatePayload.Bonus = data.bonus;
   if (data.deductions !== undefined) updatePayload.Deductions = data.deductions;
   if (data.prelevementPourcentage !== undefined) updatePayload.PrelevementPourcentage = data.prelevementPourcentage;
   if (data.prelevementMontant !== undefined) updatePayload.PrelevementMontant = data.prelevementMontant;
+  if (data.prelevementAvance !== undefined) updatePayload.PrelevementAvance = data.prelevementAvance;
+  if (data.prelevementType !== undefined) updatePayload.PrelevementType = data.prelevementType;
+  if (data.vacancesPayees !== undefined) updatePayload.VacancesPayees = data.vacancesPayees;
+  if (data.congeSansSolde !== undefined) updatePayload.CongeSansSolde = data.congeSansSolde;
+  if (data.cumulPaiements !== undefined) updatePayload.CumulPaiements = data.cumulPaiements;
   if (data.netAPayer !== undefined) updatePayload.NetAPayer = data.netAPayer;
   if (data.notes !== undefined) updatePayload.Notes = data.notes;
   if (pieceJointeUrl !== undefined) updatePayload.PieceJointe = pieceJointeUrl;
@@ -736,6 +814,14 @@ export const updatePayrollInSupabase = async (id: string, data: Partial<import("
   if (error && isMissingPrelevementColumnError(error)) {
     delete updatePayload.PrelevementPourcentage;
     delete updatePayload.PrelevementMontant;
+    delete updatePayload.PrelevementAvance;
+    delete updatePayload.PrelevementType;
+    delete updatePayload.TypeSalaire;
+    delete updatePayload.NombreSeances;
+    delete updatePayload.TauxParSeance;
+    delete updatePayload.VacancesPayees;
+    delete updatePayload.CongeSansSolde;
+    delete updatePayload.CumulPaiements;
     ({ error } = await supabase
       .from("tblPayroll")
       .update(updatePayload)

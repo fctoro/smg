@@ -112,11 +112,6 @@ const adminNavItems: NavItem[] = [
     new: true,
     sections: ["Paiements"],
   },
-  {
-    icon: <DocsIcon />,
-    name: "Factures",
-    path: "/factures",
-  },
 ];
 
 // Dedicated Coach Portal items

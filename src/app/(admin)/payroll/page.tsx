@@ -9,6 +9,7 @@ import {
   updatePayrollInSupabase,
   deletePayrollInSupabase,
 } from "@/lib/club/supabase-crud";
+import { ConfirmModal } from "@/components/ui/modal/ConfirmModal";
 
 // Professional SVG Icons
 const Icons = {
@@ -128,6 +129,7 @@ export default function PayrollPage() {
   const [selectedSlip, setSelectedSlip] = useState<PayrollRecord | null>(null);
   const [editingPayrollId, setEditingPayrollId] = useState<string | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
+  const [deletingRecord, setDeletingRecord] = useState<PayrollRecord | null>(null);
 
   // Modal form state
   const [formData, setFormData] = useState<{
@@ -135,9 +137,16 @@ export default function PayrollPage() {
     annee: string;
     mois: string;
     salaireBase: number;
+    typeSalaire: "fixe" | "variable";
+    nombreSeances: number;
+    tauxParSeance: number;
     bonus: number;
     deductions: number;
     prelevementPourcentage: number;
+    prelevementType: "taxe" | "credit" | "avance" | "pret";
+    vacancesPayees: number;
+    congeSansSolde: number;
+    cumulPaiements: number;
     devise: "US" | "HTG";
     statut: "paye" | "en_attente";
     modePaiement: "virement" | "especes" | "chèque" | "mobile";
@@ -148,9 +157,16 @@ export default function PayrollPage() {
     annee: "2026",
     mois: "07",
     salaireBase: 500,
+    typeSalaire: "fixe",
+    nombreSeances: 0,
+    tauxParSeance: 0,
     bonus: 0,
     deductions: 0,
     prelevementPourcentage: 2,
+    prelevementType: "taxe",
+    vacancesPayees: 0,
+    congeSansSolde: 0,
+    cumulPaiements: 0,
     devise: "HTG",
     statut: "paye",
     modePaiement: "virement",
@@ -208,10 +224,27 @@ export default function PayrollPage() {
     const targetEmp = employees.find((emp) => emp.id === formData.employeId);
     if (!targetEmp) return;
 
-    const prelevementMontant = calculatePrelevement(formData.salaireBase, formData.prelevementPourcentage);
-    const totalDeductions = formData.deductions + prelevementMontant;
-    const net = formData.salaireBase + formData.bonus - totalDeductions;
+    // Calculate gross base salary based on fixed vs variable per session
+    const grossBaseSalary =
+      formData.typeSalaire === "variable"
+        ? formData.nombreSeances * formData.tauxParSeance
+        : formData.salaireBase;
+
+    const prelevementMontant = calculatePrelevement(grossBaseSalary, formData.prelevementPourcentage);
+    
+    // Deductions: 2% tax + Specific prelevements (advances/loans) + unpaid leave deduction
+    const totalDeductions = prelevementMontant + formData.deductions + formData.congeSansSolde;
+    
+    // Net Pay = Gross + Bonus + Paid Vacations - Total Deductions
+    const net = grossBaseSalary + formData.bonus + formData.vacancesPayees - totalDeductions;
     const targetMois = `${formData.annee}-${formData.mois}`;
+
+    // Calculate cumulative payments for this employee
+    const existingEmpRecords = payrollRecords.filter(
+      (r) => r.employeId === targetEmp.id && r.id !== editingPayrollId && r.statut === "paye"
+    );
+    const prevCumul = existingEmpRecords.reduce((sum, r) => sum + r.netAPayer, 0);
+    const cumulPaiements = prevCumul + (formData.statut === "paye" ? Math.max(0, net) : 0);
 
     const recordData: Omit<PayrollRecord, "id"> = {
       employeId: targetEmp.id,
@@ -219,11 +252,19 @@ export default function PayrollPage() {
       employePrenom: targetEmp.prenom,
       fonction: targetEmp.fonction || targetEmp.role || "Employé",
       mois: targetMois,
-      salaireBase: formData.salaireBase,
+      salaireBase: grossBaseSalary,
+      typeSalaire: formData.typeSalaire,
+      nombreSeances: formData.nombreSeances,
+      tauxParSeance: formData.tauxParSeance,
       bonus: formData.bonus,
       deductions: totalDeductions,
       prelevementPourcentage: formData.prelevementPourcentage,
       prelevementMontant,
+      prelevementAvance: formData.deductions,
+      prelevementType: formData.prelevementType,
+      vacancesPayees: formData.vacancesPayees,
+      congeSansSolde: formData.congeSansSolde,
+      cumulPaiements,
       netAPayer: net,
       devise: formData.devise,
       statut: formData.statut,
@@ -257,10 +298,18 @@ export default function PayrollPage() {
           fonction: recordData.fonction,
           mois: recordData.mois,
           salaireBase: recordData.salaireBase,
+          typeSalaire: recordData.typeSalaire,
+          nombreSeances: recordData.nombreSeances,
+          tauxParSeance: recordData.tauxParSeance,
           bonus: recordData.bonus,
           deductions: recordData.deductions,
           prelevementPourcentage: recordData.prelevementPourcentage,
           prelevementMontant: recordData.prelevementMontant,
+          prelevementAvance: recordData.prelevementAvance,
+          prelevementType: recordData.prelevementType,
+          vacancesPayees: recordData.vacancesPayees,
+          congeSansSolde: recordData.congeSansSolde,
+          cumulPaiements: recordData.cumulPaiements,
           netAPayer: recordData.netAPayer,
           statut: recordData.statut,
           datePaiement: normalizedDatePaiement as string | undefined,
@@ -280,9 +329,16 @@ export default function PayrollPage() {
         annee: "2026",
         mois: "07",
         salaireBase: 500,
+        typeSalaire: "fixe",
+        nombreSeances: 0,
+        tauxParSeance: 0,
         bonus: 0,
         deductions: 0,
         prelevementPourcentage: 2,
+        prelevementType: "taxe",
+        vacancesPayees: 0,
+        congeSansSolde: 0,
+        cumulPaiements: 0,
         devise: "HTG",
         statut: "paye",
         modePaiement: "virement",
@@ -295,7 +351,7 @@ export default function PayrollPage() {
   };
 
   const handleToggleStatus = async (id: string) => {
-    const target = payrollRecords.find((r) => r.id === id);
+    const target = payrollRecords.find((r) => String(r.id) === String(id));
     if (!target) return;
 
     const nextStatut = target.statut === "paye" ? "en_attente" : "paye";
@@ -303,7 +359,7 @@ export default function PayrollPage() {
 
     setPayrollRecords((prev) =>
       prev.map((rec) => {
-        if (rec.id === id) {
+        if (String(rec.id) === String(id)) {
           return {
             ...rec,
             statut: nextStatut,
@@ -314,9 +370,9 @@ export default function PayrollPage() {
       })
     );
 
-    if (!id.startsWith("pay-")) {
+    if (!String(id).startsWith("pay-")) {
       try {
-        await updatePayrollInSupabase(id, {
+        await updatePayrollInSupabase(String(id), {
           statut: nextStatut,
           datePaiement: nextDatePaiement,
         });
@@ -326,18 +382,24 @@ export default function PayrollPage() {
     }
   };
 
-  const handleDeleteRecord = async (id: string) => {
-    if (window.confirm("Voulez-vous vraiment supprimer cette fiche de paie ?")) {
-      setPayrollRecords((prev) => prev.filter((r) => r.id !== id));
+  const handleDeleteRecord = (record: PayrollRecord) => {
+    setDeletingRecord(record);
+  };
 
-      if (!id.startsWith("pay-")) {
-        try {
-          await deletePayrollInSupabase(id);
-        } catch (err) {
-          console.error("Erreur suppression paie :", err);
-        }
+  const handleConfirmDelete = async () => {
+    if (!deletingRecord) return;
+    const rawId = deletingRecord.id;
+    const strId = String(rawId);
+    setPayrollRecords((prev) => prev.filter((r) => String(r.id) !== strId));
+
+    if (!strId.startsWith("pay-")) {
+      try {
+        await deletePayrollInSupabase(strId);
+      } catch (err) {
+        console.error("Erreur suppression paie :", err);
       }
     }
+    setDeletingRecord(null);
   };
 
   const handlePrintSlip = (record: PayrollRecord) => {
@@ -356,11 +418,18 @@ export default function PayrollPage() {
     setFormData({
       employeId: record.employeId,
       annee: year || currentYearStr,
-      mois: month || "01",
+      mois: month || "07",
       salaireBase: record.salaireBase,
-      bonus: record.bonus,
-      deductions: Math.max(0, record.deductions - prelevementMontant),
+      typeSalaire: record.typeSalaire || "fixe",
+      nombreSeances: record.nombreSeances || 0,
+      tauxParSeance: record.tauxParSeance || 0,
+      bonus: record.bonus || 0,
+      deductions: record.prelevementAvance || Math.max(0, record.deductions - prelevementMontant - (record.congeSansSolde || 0)),
       prelevementPourcentage,
+      prelevementType: record.prelevementType || "taxe",
+      vacancesPayees: record.vacancesPayees || 0,
+      congeSansSolde: record.congeSansSolde || 0,
+      cumulPaiements: record.cumulPaiements || 0,
       devise: record.devise || "HTG",
       statut: record.statut === "paye" ? "paye" : "en_attente",
       modePaiement: record.modePaiement,
@@ -603,7 +672,7 @@ export default function PayrollPage() {
                           <Icons.Printer />
                         </button>
                         <button
-                          onClick={() => handleDeleteRecord(record.id)}
+                          onClick={() => handleDeleteRecord(record)}
                           title="Supprimer"
                           className="rounded-lg p-2 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40"
                         >
@@ -685,9 +754,14 @@ export default function PayrollPage() {
                     const emp = employees.find((x) => x.id === empId);
                     const empSal = emp?.salaire || 500;
                     const empDev: "US" | "HTG" = emp?.devise || (empSal >= 1000 ? "HTG" : "US");
+                    const isCoach = (emp?.fonction || emp?.role || "").toLowerCase().includes("coach");
+                    const defaultType = emp?.typeSalaire || (isCoach ? "variable" : "fixe");
+                    const defaultTaux = emp?.tauxParSeance || 0;
                     setFormData((prev) => ({
                       ...prev,
                       employeId: empId,
+                      typeSalaire: defaultType,
+                      tauxParSeance: defaultTaux,
                       salaireBase: empSal,
                       prelevementPourcentage: prev.prelevementPourcentage || 2,
                       devise: empDev,
@@ -704,25 +778,80 @@ export default function PayrollPage() {
                 </select>
               </div>
 
-              {/* Currency Selector */}
-              <div>
-                <label className="mb-1 block text-xs font-semibold text-gray-700 dark:text-gray-300">
-                  Devise du Salaire
-                </label>
-                <select
-                  value={formData.devise}
-                  onChange={(e) => setFormData({ ...formData, devise: e.target.value as "US" | "HTG" })}
-                  className="w-full rounded-xl border border-gray-300 bg-white p-2.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
-                >
-                  <option value="HTG">Gourdes Haïtiennes (HTG / Gdes)</option>
-                  <option value="US">Dollars Américains (USD / $)</option>
-                </select>
-              </div>
-
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="mb-1 block text-xs font-semibold text-gray-700 dark:text-gray-300">
-                    Salaire Base ({formData.devise === "HTG" ? "Gdes" : "$"})
+                    Type de Rémunération
+                  </label>
+                  <select
+                    value={formData.typeSalaire}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        typeSalaire: e.target.value as "fixe" | "variable",
+                      })
+                    }
+                    className="w-full rounded-xl border border-gray-300 bg-white p-2.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                  >
+                    <option value="fixe">Salaire Fixe Mensuel</option>
+                    <option value="variable">Salaire Variable / Par séance (Coachs)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-gray-700 dark:text-gray-300">
+                    Devise du Salaire
+                  </label>
+                  <select
+                    value={formData.devise}
+                    onChange={(e) => setFormData({ ...formData, devise: e.target.value as "US" | "HTG" })}
+                    className="w-full rounded-xl border border-gray-300 bg-white p-2.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                  >
+                    <option value="HTG">Gourdes Haïtiennes (HTG / Gdes)</option>
+                    <option value="US">Dollars Américains (USD / $)</option>
+                  </select>
+                </div>
+              </div>
+
+              {formData.typeSalaire === "variable" ? (
+                <div className="grid grid-cols-2 gap-3 rounded-xl border border-amber-200 bg-amber-50/50 p-3 dark:border-amber-900/40 dark:bg-amber-950/20">
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-gray-700 dark:text-gray-300">
+                      Nombre de séances effectuées
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={formData.nombreSeances}
+                      onChange={(e) =>
+                        setFormData({ ...formData, nombreSeances: Number(e.target.value) })
+                      }
+                      className="w-full rounded-xl border border-gray-300 bg-white p-2.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                      placeholder="Ex: 12"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-gray-700 dark:text-gray-300">
+                      Taux par séance ({formData.devise === "HTG" ? "Gdes" : "$"})
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={formData.tauxParSeance}
+                      onChange={(e) =>
+                        setFormData({ ...formData, tauxParSeance: Number(e.target.value) })
+                      }
+                      className="w-full rounded-xl border border-gray-300 bg-white p-2.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                      placeholder="Ex: 1500"
+                    />
+                  </div>
+                  <div className="col-span-2 text-xs font-bold text-amber-900 dark:text-amber-300">
+                    Sous-total séances (Brut) = {formatAmountWithDevise(formData.nombreSeances * formData.tauxParSeance, formData.devise)}
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-gray-700 dark:text-gray-300">
+                    Salaire Fixe de Base ({formData.devise === "HTG" ? "Gdes" : "$"})
                   </label>
                   <input
                     type="number"
@@ -735,9 +864,12 @@ export default function PayrollPage() {
                     className="w-full rounded-xl border border-gray-300 p-2.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
                   />
                 </div>
+              )}
+
+              <div className="grid grid-cols-3 gap-3">
                 <div>
                   <label className="mb-1 block text-xs font-semibold text-gray-700 dark:text-gray-300">
-                    Bonus ({formData.devise === "HTG" ? "Gdes" : "$"})
+                    Primes / Bonus ({formData.devise === "HTG" ? "Gdes" : "$"})
                   </label>
                   <input
                     type="number"
@@ -749,52 +881,144 @@ export default function PayrollPage() {
                 </div>
                 <div>
                   <label className="mb-1 block text-xs font-semibold text-gray-700 dark:text-gray-300">
-                    Autres retenues ({formData.devise === "HTG" ? "Gdes" : "$"})
+                    Vacances Payées ({formData.devise === "HTG" ? "Gdes" : "$"})
                   </label>
                   <input
                     type="number"
                     min="0"
-                    value={formData.deductions}
+                    value={formData.vacancesPayees}
                     onChange={(e) =>
-                      setFormData({ ...formData, deductions: Number(e.target.value) })
+                      setFormData({ ...formData, vacancesPayees: Number(e.target.value) })
+                    }
+                    className="w-full rounded-xl border border-gray-300 p-2.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-gray-700 dark:text-gray-300">
+                    Congé Sans Solde ({formData.devise === "HTG" ? "Gdes" : "$"})
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={formData.congeSansSolde}
+                    onChange={(e) =>
+                      setFormData({ ...formData, congeSansSolde: Number(e.target.value) })
                     }
                     className="w-full rounded-xl border border-gray-300 p-2.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
                   />
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3 rounded-xl border border-gray-200 bg-gray-50 p-3 dark:border-gray-800 dark:bg-gray-800/40">
-                <div>
-                  <label className="mb-1 block text-xs font-semibold text-gray-700 dark:text-gray-300">
-                    Prelevement (%)
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={formData.prelevementPourcentage}
-                    onChange={(e) =>
-                      setFormData({ ...formData, prelevementPourcentage: Number(e.target.value) })
-                    }
-                    className="w-full rounded-xl border border-gray-300 bg-white p-2.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs font-semibold text-gray-700 dark:text-gray-300">
-                    Montant retire automatiquement
-                  </label>
-                  <div className="flex h-[42px] items-center rounded-xl border border-gray-200 bg-white px-3 text-sm font-bold text-rose-600 dark:border-gray-700 dark:bg-gray-900 dark:text-rose-400">
-                    -{formatAmountWithDevise(calculatePrelevement(formData.salaireBase, formData.prelevementPourcentage), formData.devise)}
+              {/* Deductions & Prelevements Section */}
+              <div className="rounded-xl border border-gray-200 bg-gray-50 p-3 space-y-3 dark:border-gray-800 dark:bg-gray-800/40">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-gray-700 dark:text-gray-300">
+                      Taxe / Retenue (%)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={formData.prelevementPourcentage}
+                      onChange={(e) =>
+                        setFormData({ ...formData, prelevementPourcentage: Number(e.target.value) })
+                      }
+                      className="w-full rounded-xl border border-gray-300 bg-white p-2.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-gray-700 dark:text-gray-300">
+                      Montant Taxe 2%
+                    </label>
+                    <div className="flex h-[42px] items-center rounded-xl border border-gray-200 bg-white px-3 text-sm font-bold text-rose-600 dark:border-gray-700 dark:bg-gray-900 dark:text-rose-400">
+                      -{formatAmountWithDevise(
+                        calculatePrelevement(
+                          formData.typeSalaire === "variable"
+                            ? formData.nombreSeances * formData.tauxParSeance
+                            : formData.salaireBase,
+                          formData.prelevementPourcentage
+                        ),
+                        formData.devise
+                      )}
+                    </div>
                   </div>
                 </div>
-                <div className="col-span-2 text-xs font-semibold text-gray-600 dark:text-gray-300">
-                  Total retenues: {formatAmountWithDevise(
-                    formData.deductions + calculatePrelevement(formData.salaireBase, formData.prelevementPourcentage),
-                    formData.devise,
-                  )} | Net a payer: {formatAmountWithDevise(
-                    formData.salaireBase + formData.bonus - formData.deductions - calculatePrelevement(formData.salaireBase, formData.prelevementPourcentage),
-                    formData.devise,
-                  )}
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-gray-700 dark:text-gray-300">
+                      Prélèvement (Prêt / Avance / Compte à crédit)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={formData.deductions}
+                      onChange={(e) =>
+                        setFormData({ ...formData, deductions: Number(e.target.value) })
+                      }
+                      className="w-full rounded-xl border border-gray-300 bg-white p-2.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                      placeholder="Ex: 5000 (Avance)"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-gray-700 dark:text-gray-300">
+                      Type de Prélèvement
+                    </label>
+                    <select
+                      value={formData.prelevementType}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          prelevementType: e.target.value as "taxe" | "credit" | "avance" | "pret",
+                        })
+                      }
+                      className="w-full rounded-xl border border-gray-300 bg-white p-2.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                    >
+                      <option value="avance">Avance sur salaire</option>
+                      <option value="pret">Remboursement Prêt</option>
+                      <option value="credit">Compte à crédit</option>
+                      <option value="taxe">Taxe / Autre</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="pt-2 border-t border-gray-200 dark:border-gray-700 text-xs font-semibold text-gray-700 dark:text-gray-300 flex justify-between">
+                  <span>
+                    Total Retenues :{" "}
+                    <strong className="text-rose-600 dark:text-rose-400">
+                      {formatAmountWithDevise(
+                        calculatePrelevement(
+                          formData.typeSalaire === "variable"
+                            ? formData.nombreSeances * formData.tauxParSeance
+                            : formData.salaireBase,
+                          formData.prelevementPourcentage
+                        ) + formData.deductions + formData.congeSansSolde,
+                        formData.devise
+                      )}
+                    </strong>
+                  </span>
+                  <span>
+                    NET À PAYER :{" "}
+                    <strong className="text-emerald-600 dark:text-emerald-400 text-sm">
+                      {formatAmountWithDevise(
+                        (formData.typeSalaire === "variable"
+                          ? formData.nombreSeances * formData.tauxParSeance
+                          : formData.salaireBase) +
+                          formData.bonus +
+                          formData.vacancesPayees -
+                          (calculatePrelevement(
+                            formData.typeSalaire === "variable"
+                              ? formData.nombreSeances * formData.tauxParSeance
+                              : formData.salaireBase,
+                            formData.prelevementPourcentage
+                          ) +
+                            formData.deductions +
+                            formData.congeSansSolde),
+                        formData.devise
+                      )}
+                    </strong>
+                  </span>
                 </div>
               </div>
 
@@ -947,7 +1171,7 @@ export default function PayrollPage() {
             <table className="mb-6 w-full border text-left text-xs">
               <thead>
                 <tr className="border-b bg-gray-100">
-                  <th className="p-2.5 font-bold">Description</th>
+                  <th className="p-2.5 font-bold">Rubrique / Description</th>
                   <th className="p-2.5 text-right font-bold">
                     Montant ({selectedSlip.devise === "HTG" ? "Gdes" : "$"})
                   </th>
@@ -955,36 +1179,87 @@ export default function PayrollPage() {
               </thead>
               <tbody className="divide-y">
                 <tr>
-                  <td className="p-2.5">Salaire de Base</td>
+                  <td className="p-2.5">
+                    Salaire Brut Base
+                    {selectedSlip.typeSalaire === "variable" && selectedSlip.nombreSeances ? (
+                      <span className="block text-[11px] text-gray-500">
+                        (Salaire variable : {selectedSlip.nombreSeances} séance(s) × {formatAmountWithDevise(selectedSlip.tauxParSeance || 0, selectedSlip.devise)})
+                      </span>
+                    ) : (
+                      <span className="block text-[11px] text-gray-500">(Salaire fixe mensuel)</span>
+                    )}
+                  </td>
                   <td className="p-2.5 text-right font-medium">
                     {formatAmountWithDevise(selectedSlip.salaireBase, selectedSlip.devise)}
                   </td>
                 </tr>
+
+                {selectedSlip.bonus > 0 && (
+                  <tr>
+                    <td className="p-2.5">Primes / Extra / Bonus</td>
+                    <td className="p-2.5 text-right font-medium text-emerald-600">
+                      +{formatAmountWithDevise(selectedSlip.bonus, selectedSlip.devise)}
+                    </td>
+                  </tr>
+                )}
+
+                {selectedSlip.vacancesPayees > 0 && (
+                  <tr>
+                    <td className="p-2.5">Vacances Payées</td>
+                    <td className="p-2.5 text-right font-medium text-emerald-600">
+                      +{formatAmountWithDevise(selectedSlip.vacancesPayees, selectedSlip.devise)}
+                    </td>
+                  </tr>
+                )}
+
                 <tr>
-                  <td className="p-2.5">Primes / Extra</td>
-                  <td className="p-2.5 text-right font-medium text-emerald-600">
-                    +{formatAmountWithDevise(selectedSlip.bonus, selectedSlip.devise)}
+                  <td className="p-2.5">
+                    Retenue légale / Taxe sur masse salariale ({selectedSlip.prelevementPourcentage ?? 2}%)
                   </td>
-                </tr>
-                <tr>
-                  <td className="p-2.5">Prelevement {selectedSlip.prelevementPourcentage ?? 2}%</td>
                   <td className="p-2.5 text-right font-medium text-rose-600">
                     -{formatAmountWithDevise(getPrelevementAmount(selectedSlip), selectedSlip.devise)}
                   </td>
                 </tr>
-                <tr>
-                  <td className="p-2.5">Autres retenues</td>
-                  <td className="p-2.5 text-right font-medium text-rose-600">
-                    -{formatAmountWithDevise(
-                      Math.max(0, selectedSlip.deductions - getPrelevementAmount(selectedSlip)),
-                      selectedSlip.devise,
-                    )}
+
+                {(selectedSlip.prelevementAvance || 0) > 0 && (
+                  <tr>
+                    <td className="p-2.5">
+                      Prélèvement sur salaire (
+                      {selectedSlip.prelevementType === "avance"
+                        ? "Avance sur salaire"
+                        : selectedSlip.prelevementType === "pret"
+                          ? "Remboursement Prêt"
+                          : selectedSlip.prelevementType === "credit"
+                            ? "Compte à crédit"
+                            : "Prélèvement divers"}
+                      )
+                    </td>
+                    <td className="p-2.5 text-right font-medium text-rose-600">
+                      -{formatAmountWithDevise(selectedSlip.prelevementAvance || 0, selectedSlip.devise)}
+                    </td>
+                  </tr>
+                )}
+
+                {selectedSlip.congeSansSolde > 0 && (
+                  <tr>
+                    <td className="p-2.5">Déduction Congé sans solde</td>
+                    <td className="p-2.5 text-right font-medium text-rose-600">
+                      -{formatAmountWithDevise(selectedSlip.congeSansSolde, selectedSlip.devise)}
+                    </td>
+                  </tr>
+                )}
+
+                <tr className="border-t bg-gray-50 font-bold">
+                  <td className="p-2.5 text-sm">MONTANT NET À PAYER</td>
+                  <td className="p-2.5 text-right text-sm font-extrabold text-brand-700">
+                    {formatAmountWithDevise(selectedSlip.netAPayer, selectedSlip.devise)}
                   </td>
                 </tr>
-                <tr className="border-t bg-gray-50 font-bold">
-                  <td className="p-2.5 text-sm">NET À PAYER</td>
-                  <td className="p-2.5 text-right text-sm font-extrabold">
-                    {formatAmountWithDevise(selectedSlip.netAPayer, selectedSlip.devise)}
+
+                <tr className="border-t bg-gray-100/70 font-semibold text-gray-700">
+                  <td className="p-2.5 text-xs uppercase">CUMUL DES PAIEMENTS (Historique versé)</td>
+                  <td className="p-2.5 text-right text-xs font-bold">
+                    {formatAmountWithDevise(selectedSlip.cumulPaiements || selectedSlip.netAPayer, selectedSlip.devise)}
                   </td>
                 </tr>
               </tbody>
@@ -1003,6 +1278,18 @@ export default function PayrollPage() {
           </div>
         </div>
       )}
+
+      {/* Custom Delete Confirmation Modal */}
+      <ConfirmModal
+        isOpen={Boolean(deletingRecord)}
+        onClose={() => setDeletingRecord(null)}
+        onConfirm={handleConfirmDelete}
+        title="Supprimer la fiche de paie"
+        message={`Êtes-vous sûr de vouloir supprimer la fiche de paie de ${deletingRecord?.employePrenom} ${deletingRecord?.employeNom} (${deletingRecord ? formatMonthYearDisplay(deletingRecord.mois) : ""}) ? Cette action est irréversible.`}
+        confirmText="Supprimer"
+        cancelText="Annuler"
+        isDestructive
+      />
     </div>
   );
 }

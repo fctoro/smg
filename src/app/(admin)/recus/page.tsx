@@ -8,10 +8,41 @@ import { getParentLinkedPlayerIds } from "@/lib/club/parents";
 import { FC_TORO_LOGO } from "@/lib/club/pdfAssets";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import { Dropdown } from "@/components/ui/dropdown";
+import { DropdownItem } from "@/components/ui/dropdown/DropdownItem";
+import Pagination from "@/components/tables/Pagination";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { TableBodySkeleton } from "@/components/ui/skeleton/Skeleton";
+import { Player } from "@/types/club";
 
 export default function RecusPage() {
-  const { parents, players, payments } = useClubData();
+  const { parents, players, payments, hydrated } = useClubData();
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedSeason, setSelectedSeason] = useState("all");
+  const [selectedChildrenCount, setSelectedChildrenCount] = useState("all");
+  const [activeTab, setActiveTab] = useState<"all" | "paid" | "unpaid">("all");
+  const [isExportOpen, setIsExportOpen] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [currentPageSize, setCurrentPageSize] = useState(10);
+
+  const playerMap = useMemo(
+    () => new Map(players.map((player) => [player.id, player])),
+    [players],
+  );
+
+  const seasons = useMemo(
+    () =>
+      [...new Set(players.map((player) => player.saison).filter(Boolean))].sort(
+        (a, b) => (b || "").localeCompare(a || ""),
+      ),
+    [players],
+  );
 
   // 1. Regrouper les parents uniques
   const uniqueParents = useMemo(() => {
@@ -35,7 +66,7 @@ export default function RecusPage() {
       });
     });
 
-    return Array.from(map.values()).map(p => {
+    return Array.from(map.values()).map((p, index) => {
       const pIds = Array.from(p.playerIds);
       const parentPayments = payments.filter((pay) => pIds.includes(pay.playerId));
       const totalPayeUSD = parentPayments.filter(p => p.devise !== "HTG").reduce((sum, pay) => sum + (pay.montant || 0), 0);
@@ -47,9 +78,15 @@ export default function RecusPage() {
       
       const firstChild = players.find(player => pIds.includes(player.id));
       const adresse = firstChild?.parentAdresse || firstChild?.adresse || "";
-      
+
+      const initials = (p.nom.charAt(0) + p.prenom.charAt(0)).toUpperCase() || "PT";
+      const randomDigits = Math.floor(Math.random() * 90000) + 10000;
+      const receiptNo = `RP-FCT-${initials}-${randomDigits}`;
+
       return {
         key: p.email ? p.email.toLowerCase().trim() : `${p.nom} ${p.prenom}`.toLowerCase().trim(),
+        seqNo: index + 1,
+        receiptNo,
         nom: p.nom,
         prenom: p.prenom,
         email: p.email,
@@ -61,51 +98,134 @@ export default function RecusPage() {
           const dateB = b.datePaiement ? new Date(b.datePaiement).getTime() : 0;
           return dateB - dateA;
         }),
+        totalPayeUSD,
+        totalPayeHTG,
         totalPaye: totalPayeLabel,
       };
     });
   }, [parents, payments, players]);
 
   // 2. Filtrer la liste globale
-  const filteredParents = uniqueParents.filter((p) => {
-    const fullName = `${p.nom} ${p.prenom}`.toLowerCase();
-    const query = searchQuery.toLowerCase();
-    return fullName.includes(query) || p.email.toLowerCase().includes(query) || p.telephone.includes(query);
-  });
+  const filteredParents = useMemo(() => {
+    return uniqueParents.filter((p) => {
+      const fullName = `${p.nom} ${p.prenom}`.toLowerCase();
+      const query = searchQuery.trim().toLowerCase();
+      
+      // Filtrer par recherche textuelle (parent, email, téléphone ou enfants)
+      const linkedPlayerNames = p.playerIds
+        .map((playerId) => playerMap.get(playerId))
+        .filter(Boolean)
+        .map((player) => getPlayerFullName(player as Player).toLowerCase())
+        .join(" ");
 
+      const queryMatch = !query || fullName.includes(query) || p.email.toLowerCase().includes(query) || p.telephone.includes(query) || linkedPlayerNames.includes(query);
+      if (!queryMatch) return false;
+
+      // Filter par Onglet (Tous, Avec paiements, Sans paiement)
+      if (activeTab === "paid" && p.parentPayments.length === 0) return false;
+      if (activeTab === "unpaid" && p.parentPayments.length > 0) return false;
+
+      // Filter par Nombre d'enfants
+      const count = p.playerIds.length;
+      if (selectedChildrenCount === "1" && count !== 1) return false;
+      if (selectedChildrenCount === ">1" && count <= 1) return false;
+
+      // Filter par Saison
+      if (selectedSeason !== "all") {
+        const hasSeasonMatch = p.playerIds.some((playerId) => {
+          const player = playerMap.get(playerId);
+          return player && player.saison === selectedSeason;
+        });
+        if (!hasSeasonMatch) return false;
+      }
+
+      return true;
+    });
+  }, [uniqueParents, searchQuery, activeTab, selectedChildrenCount, selectedSeason, playerMap]);
+
+  // Pagination
+  const totalPages = Math.max(1, Math.ceil(filteredParents.length / currentPageSize));
+  const currentPageSafe = Math.min(currentPage, totalPages);
+  const pagedParents = filteredParents.slice(
+    (currentPageSafe - 1) * currentPageSize,
+    currentPageSafe * currentPageSize,
+  );
+
+  // Fonctions d'exportation CSV et Excel
+  const handleExportCSV = () => {
+    setIsExportOpen(false);
+    const headers = ["N° Reçu", "Parent", "Téléphone", "Email", "Enfants Inscrits", "Nombre Paiements", "Total Payé"];
+    let csvContent = headers.join(",") + "\n";
+    filteredParents.forEach(p => {
+      const linkedNames = p.playerIds.map(id => {
+        const pl = playerMap.get(id);
+        return pl ? getPlayerFullName(pl) : "";
+      }).filter(Boolean).join(" ; ");
+
+      const row = [p.receiptNo, `${p.nom} ${p.prenom}`, p.telephone || "", p.email || "", linkedNames, String(p.parentPayments.length), p.totalPaye];
+      const csvRow = row.map(field => `"${(field || "").toString().replace(/"/g, '""')}"`);
+      csvContent += csvRow.join(",") + "\n";
+    });
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute("download", "recus_parents.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleExportExcel = () => {
+    if (!window.confirm("Voulez-vous vraiment exporter la liste des reçus parents au format Excel ?")) return;
+    setIsExportOpen(false);
+    const headers = ["N° Reçu", "Parent", "Téléphone", "Email", "Enfants Inscrits", "Nombre Paiements", "Total Payé"];
+    let csvContent = "\uFEFF" + headers.join(";") + "\n";
+    filteredParents.forEach(p => {
+      const linkedNames = p.playerIds.map(id => {
+        const pl = playerMap.get(id);
+        return pl ? getPlayerFullName(pl) : "";
+      }).filter(Boolean).join(" ; ");
+
+      const row = [p.receiptNo, `${p.nom} ${p.prenom}`, p.telephone || "", p.email || "", linkedNames, String(p.parentPayments.length), p.totalPaye];
+      const csvRow = row.map(field => `"${(field || "").toString().replace(/"/g, '""')}"`);
+      csvContent += csvRow.join(";") + "\n";
+    });
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute("download", "recus_parents_excel.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  // Generation de Reçu PDF
   const handleGeneratePDF = (parentData: any) => {
-    if (!parentData || parentData.parentPayments.length === 0) {
-      alert("Ce parent n'a effectué aucun paiement.");
-      return;
-    }
+    if (!parentData) return;
 
     const doc = new jsPDF();
     const parentFullName = `${parentData.nom} ${parentData.prenom}`;
-    const initials = (parentData.nom.charAt(0) + parentData.prenom.charAt(0)).toUpperCase();
-    const randomDigits = Math.floor(Math.random() * 90000) + 10000;
-    const receiptNo = `RP-FCTORO-${initials}-${randomDigits}`;
+    const receiptNo = parentData.receiptNo || `RP-FCTORO-0001`;
     
     const formatCurrencyPDF = (amountStr: string) => {
       return amountStr;
     };
 
-    // Corporate Monochrome Palette (Minimal color)
+    // Corporate Monochrome Palette
     const grayDark: [number, number, number] = [31, 41, 55];    // Charcoal
     const grayMedium: [number, number, number] = [107, 114, 128]; // Mid Gray
     const grayLight: [number, number, number] = [229, 231, 235];  // Light Gray
     const white: [number, number, number] = [255, 255, 255];
     const black: [number, number, number] = [0, 0, 0];
 
-    // ==========================================
-    // EN-TÊTE : Logo (gauche) & Infos Document (droite)
-    // ==========================================
     try {
       doc.addImage(FC_TORO_LOGO, 'PNG', 14, 15, 25, 25);
     } catch (e) {
       console.warn("Erreur chargement logo PDF", e);
     }
     
-    // Company Name next to Logo
     doc.setFont("helvetica", "bold");
     doc.setFontSize(18);
     doc.setTextColor(grayDark[0], grayDark[1], grayDark[2]);
@@ -118,24 +238,19 @@ export default function RecusPage() {
     doc.text("7 Rue Rigaud, Pétion-Ville, Haïti", 43, 34);
     doc.text("+509 2817-8676 | footballclubtoro@gmail.com", 43, 39);
     
-    // Website link (clickable)
-    doc.setTextColor(82, 107, 132); // Gris bleu
+    doc.setTextColor(82, 107, 132);
     doc.textWithLink("www.fctoro.com", 43, 44, { url: "https://www.fctoro.com" });
 
-    // ==========================================
-    // REÇU TITLE & META INFOS (Alignés à droite)
-    // ==========================================
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(28);
+    doc.setFontSize(22);
     doc.setTextColor(grayDark[0], grayDark[1], grayDark[2]);
-    doc.text("REÇU", 196, 26, { align: 'right' });
+    doc.text("RP PARENTS", 196, 26, { align: 'right' });
 
-    // FIX OVERLAP: Align labels and values cleanly
     doc.setFontSize(10);
     
     doc.setFont("helvetica", "normal");
     doc.setTextColor(grayMedium[0], grayMedium[1], grayMedium[2]);
-    doc.text("N° de reçu :", 155, 34, { align: 'right' });
+    doc.text("N° Rapport :", 155, 34, { align: 'right' });
     
     doc.setFont("helvetica", "bold");
     doc.setTextColor(grayDark[0], grayDark[1], grayDark[2]);
@@ -149,18 +264,13 @@ export default function RecusPage() {
     doc.setTextColor(grayDark[0], grayDark[1], grayDark[2]);
     doc.text(new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' }), 196, 39, { align: 'right' });
 
-    // Ligne séparatrice fine
     doc.setDrawColor(grayLight[0], grayLight[1], grayLight[2]);
     doc.setLineWidth(0.5);
     doc.line(14, 48, 196, 48);
 
-    // ==========================================
-    // INFO PARENT (Gauche) & JOUEURS (Droite)
-    // ==========================================
-    const headerTextColor: [number, number, number] = [82, 107, 132]; // Gris bleu du screenshot
+    const headerTextColor: [number, number, number] = [82, 107, 132];
     const headerLineColor: [number, number, number] = [226, 232, 240];
 
-    // --- GAUCHE : Parent ---
     doc.setFont("helvetica", "bold");
     doc.setFontSize(8);
     doc.setTextColor(headerTextColor[0], headerTextColor[1], headerTextColor[2]);
@@ -182,7 +292,6 @@ export default function RecusPage() {
       doc.text(`Adresse : ${shortAddress}`, 14, 84);
     }
     
-    // --- DROITE : Joueurs ---
     doc.setFont("helvetica", "bold");
     doc.setFontSize(8);
     doc.setTextColor(headerTextColor[0], headerTextColor[1], headerTextColor[2]);
@@ -212,9 +321,6 @@ export default function RecusPage() {
 
     const tableStartY = Math.max(90, currentY + 5);
 
-    // ==========================================
-    // TABLEAU DES VERSEMENTS (Corporate)
-    // ==========================================
     const tableColumn = ["Date", "Joueur (Enfant)", "Description", "Mode", "Montant"];
     const tableRows: any[] = [];
 
@@ -250,19 +356,31 @@ export default function RecusPage() {
       return cleaned || "Paiement de cotisation";
     };
 
-    parentData.parentPayments.forEach((p: any) => {
-      const joueurObj = players.find(player => player.id === p.playerId);
-      const joueurNom = joueurObj ? getPlayerFullName(joueurObj) : "Inconnu";
-      
-      const pData = [
-        String(formatClubDate(p.datePaiement ?? "")),
+    if (parentData.parentPayments.length === 0) {
+      const firstChild = players.find(player => parentData.playerIds.includes(player.id));
+      const joueurNom = firstChild ? getPlayerFullName(firstChild) : "Aucun enfant associé";
+      tableRows.push([
+        "-",
         joueurNom,
-        cleanRemarkForPDF(p.remarque),
-        String(mapMode(p.methode)),
-        String(formatCurrencyPDF(p.montant)),
-      ];
-      tableRows.push(pData);
-    });
+        "Aucun versement enregistré",
+        "-",
+        formatClubCurrency(0, "US"),
+      ]);
+    } else {
+      parentData.parentPayments.forEach((p: any) => {
+        const joueurObj = players.find(player => player.id === p.playerId);
+        const joueurNom = joueurObj ? getPlayerFullName(joueurObj) : "Inconnu";
+        
+        const pData = [
+          String(formatClubDate(p.datePaiement ?? "")),
+          joueurNom,
+          cleanRemarkForPDF(p.remarque),
+          String(mapMode(p.methode)),
+          String(formatCurrencyPDF(p.montant)),
+        ];
+        tableRows.push(pData);
+      });
+    }
 
     autoTable(doc, {
       head: [tableColumn],
@@ -293,13 +411,10 @@ export default function RecusPage() {
         }
       },
       didDrawCell: function (data: any) {
-        // Dessiner manuellement les lignes horizontales pour l'en-tête (contourne les limites du theme plain)
         if (data.section === 'head') {
           doc.setDrawColor(headerLineColor[0], headerLineColor[1], headerLineColor[2]);
           doc.setLineWidth(0.3);
-          // Ligne du haut
           doc.line(data.cell.x, data.cell.y, data.cell.x + data.cell.width, data.cell.y);
-          // Ligne du bas
           doc.line(data.cell.x, data.cell.y + data.cell.height, data.cell.x + data.cell.width, data.cell.y + data.cell.height);
         }
       }
@@ -307,16 +422,12 @@ export default function RecusPage() {
 
     const finalY = (doc as any).lastAutoTable.finalY || tableStartY;
 
-    // ==========================================
-    // FOOTER SECTION (Totals)
-    // ==========================================
     doc.setFont("helvetica", "normal");
     doc.setFontSize(10);
     doc.setTextColor(grayMedium[0], grayMedium[1], grayMedium[2]);
     doc.text("Sous-total", 110, finalY + 10);
     doc.text(formatCurrencyPDF(parentData.totalPaye), 196, finalY + 10, { align: 'right' });
 
-    // Grand Total (Simple ligne, pas de gros bloc de couleur)
     doc.setDrawColor(grayLight[0], grayLight[1], grayLight[2]);
     doc.setLineWidth(0.5);
     doc.line(100, finalY + 15, 196, finalY + 15);
@@ -327,126 +438,251 @@ export default function RecusPage() {
     doc.text("TOTAL PAYÉ", 110, finalY + 22);
     doc.text(formatCurrencyPDF(parentData.totalPaye), 196, finalY + 22, { align: 'right' });
 
-    // ==========================================
-    // SIGNATURE & TERMES
-    // ==========================================
     doc.setFont("helvetica", "bold");
     doc.setFontSize(9);
     doc.setTextColor(grayDark[0], grayDark[1], grayDark[2]);
     doc.text("Merci de votre confiance.", 14, finalY + 15);
-    
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(8);
-    doc.setTextColor(grayMedium[0], grayMedium[1], grayMedium[2]);
-    doc.text("Ce reçu confirme les paiements pour l'inscription de votre/vos", 14, finalY + 20);
-    doc.text("enfant(s) au sein du FC TORO. Document officiel valide", 14, finalY + 24);
-    doc.text("sans signature physique.", 14, finalY + 28);
 
     doc.setFont("helvetica", "normal");
     doc.setFontSize(9);
     doc.setTextColor(grayMedium[0], grayMedium[1], grayMedium[2]);
-    doc.text("Signature autorisée", 14, finalY + 45);
-    doc.line(14, finalY + 55, 60, finalY + 55);
+    doc.text("Signature autorisée", 14, finalY + 35);
+    doc.line(14, finalY + 45, 60, finalY + 45);
 
-    // ==========================================
-    // BOTTOM BANNER
-    // ==========================================
-    
-    doc.setFont("helvetica", "italic");
-    doc.setFontSize(8);
-    doc.setTextColor(grayMedium[0], grayMedium[1], grayMedium[2]);
-
-    doc.save(`Recu_${parentFullName.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`);
+    doc.save(`Rapport_Parents_${parentFullName.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`);
   };
 
   return (
     <div className="space-y-6">
-      <PageBreadcrumb pageTitle="Reçus de Paiement (Comptes Parents)" />
+      <PageBreadcrumb pageTitle="RP Parents" />
 
-      <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03] sm:p-6">
-        <div className="mb-6 flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
-          <div>
-            <h3 className="text-lg font-semibold text-gray-800 dark:text-white/90">
-              Liste des Comptes Parents
-            </h3>
-            <p className="mt-1 text-sm text-gray-500">
-              Gérez les comptes financiers globaux et téléchargez les reçus consolidés par famille.
-            </p>
-          </div>
-          <div className="w-full sm:w-72">
+      {/* Barre d'outils et Filtres */}
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="grid flex-1 gap-2 grid-cols-1 sm:grid-cols-3 min-w-0">
+          <div className="min-w-0">
             <input
               type="text"
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setCurrentPage(1);
+              }}
               placeholder="Rechercher (nom, email...)"
-              className="h-11 w-full rounded-lg border border-gray-300 bg-transparent px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs placeholder:text-gray-400 focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
+              className="h-11 w-full min-w-0 max-w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs placeholder:text-gray-400 focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
             />
+          </div>
+          <div className="min-w-0">
+            <select
+              value={selectedChildrenCount}
+              onChange={(event) => {
+                setSelectedChildrenCount(event.target.value);
+                setCurrentPage(1);
+              }}
+              className="h-11 w-full min-w-0 max-w-full truncate rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
+            >
+              <option value="all">Tous (nombre d'enfants)</option>
+              <option value="1">1 enfant</option>
+              <option value=">1">Plus d'1 enfant</option>
+            </select>
+          </div>
+          <div className="min-w-0">
+            <select
+              value={selectedSeason}
+              onChange={(event) => {
+                setSelectedSeason(event.target.value);
+                setCurrentPage(1);
+              }}
+              className="h-11 w-full min-w-0 max-w-full truncate rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
+            >
+              <option value="all">Toutes les saisons</option>
+              {seasons.map((season) => (
+                <option key={season} value={season}>
+                  Saison {season}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </div>
+
+      {/* Conteneur principal de la table */}
+      <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03] sm:p-6">
+        <div className="mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h3 className="text-lg font-semibold text-gray-800 dark:text-white/90">
+              Liste des RP Parents
+            </h3>
+            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+              {filteredParents.length} compte(s) parent(s) trouvé(s)
+            </p>
+          </div>
+
+          {/* Bouton d'exportation Excel / CSV */}
+          <div className="relative shrink-0">
+            <button
+              onClick={() => setIsExportOpen(!isExportOpen)}
+              className="inline-flex h-10 items-center justify-center gap-2 whitespace-nowrap rounded-lg bg-[#107C41] px-4 text-sm font-medium text-white shadow-theme-xs hover:bg-[#0c5e31] transition-colors cursor-pointer"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                <path d="M14 2v6h6"></path>
+                <path d="M8 13h2"></path>
+                <path d="M14 13h2"></path>
+                <path d="M8 17h2"></path>
+                <path d="M14 17h2"></path>
+              </svg>
+              Exporter Excel / CSV
+            </button>
+            <Dropdown
+              isOpen={isExportOpen}
+              onClose={() => setIsExportOpen(false)}
+              className="absolute right-0 top-full mt-1 w-40 z-30"
+            >
+              <DropdownItem
+                onItemClick={handleExportExcel}
+                className="cursor-pointer"
+              >
+                Excel
+              </DropdownItem>
+              <DropdownItem
+                onItemClick={handleExportCSV}
+                className="cursor-pointer"
+              >
+                CSV
+              </DropdownItem>
+            </Dropdown>
           </div>
         </div>
 
-        <div className="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/[0.03]">
-          <div className="max-w-full overflow-x-auto">
-            <table className="w-full text-left text-sm text-gray-600 dark:text-gray-400 table-auto">
-              <thead className="bg-gray-50 text-gray-800 dark:bg-white/[0.02] dark:text-white/90 border-b border-gray-200 dark:border-gray-800">
-                <tr>
-                  <th className="px-5 py-3.5 font-semibold">Parent</th>
-                  <th className="px-5 py-3.5 font-semibold">Contact</th>
-                  <th className="px-5 py-3.5 font-semibold text-center whitespace-nowrap">Enfants Inscrits</th>
-                  <th className="px-5 py-3.5 font-semibold text-right whitespace-nowrap">Total Payé (USD)</th>
-                  <th className="px-5 py-3.5 font-semibold text-center whitespace-nowrap w-24">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
-                {filteredParents.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="px-5 py-8 text-center text-gray-500">
-                      Aucun compte parent trouvé.
-                    </td>
-                  </tr>
-                ) : (
-                  filteredParents.map((parentData) => (
-                    <tr key={parentData.key} className="hover:bg-gray-50/50 dark:hover:bg-white/[0.02] transition-colors">
-                      <td className="px-5 py-4">
-                        <span className="font-semibold text-gray-900 dark:text-white">
-                          {parentData.nom} {parentData.prenom}
-                        </span>
-                      </td>
-                      <td className="px-5 py-4">
-                        <div className="flex flex-col text-sm">
-                          <span className="font-medium text-gray-800 dark:text-gray-200">{parentData.telephone || "Aucun tél"}</span>
-                          <span className="text-xs text-gray-500 truncate max-w-[220px]">{parentData.email || "Aucun email"}</span>
-                        </div>
-                      </td>
-                      <td className="px-5 py-4 text-center">
-                        <span className="inline-flex items-center rounded-full bg-brand-50 px-3 py-1 text-xs font-semibold text-brand-700 dark:bg-brand-500/10 dark:text-brand-400">
-                          {parentData.playerIds.length}
-                        </span>
-                      </td>
-                      <td className="px-5 py-4 text-right font-bold text-gray-900 dark:text-white">
-                        {parentData.totalPaye}
-                      </td>
-                      <td className="px-5 py-4 text-center">
-                        <button
-                          onClick={() => handleGeneratePDF(parentData)}
-                          disabled={parentData.parentPayments.length === 0}
-                          className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-xs font-bold text-white transition-all 
-                            ${parentData.parentPayments.length === 0 
-                              ? "bg-gray-200 text-gray-400 cursor-not-allowed dark:bg-gray-800 dark:text-gray-600" 
-                              : "bg-brand-500 hover:bg-brand-600 shadow-sm hover:shadow-brand-500/20 active:scale-95 cursor-pointer"}`}
-                          title={parentData.parentPayments.length === 0 ? "Aucun paiement à générer" : "Télécharger le reçu consolidé"}
-                        >
-                          <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+        {/* Onglets de filtrage par statut de paiement */}
+        <div className="flex items-center gap-2 border-b border-gray-200 dark:border-gray-800 pb-3 mb-4 overflow-x-auto">
+          <button
+            onClick={() => { setActiveTab("all"); setCurrentPage(1); }}
+            className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors cursor-pointer whitespace-nowrap ${
+              activeTab === "all"
+                ? "bg-brand-500 text-white shadow-sm"
+                : "bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+            }`}
+          >
+            Tous ({uniqueParents.length})
+          </button>
+          <button
+            onClick={() => { setActiveTab("paid"); setCurrentPage(1); }}
+            className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors cursor-pointer whitespace-nowrap ${
+              activeTab === "paid"
+                ? "bg-brand-500 text-white shadow-sm"
+                : "bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+            }`}
+          >
+            Avec paiements ({uniqueParents.filter(p => p.parentPayments.length > 0).length})
+          </button>
+          <button
+            onClick={() => { setActiveTab("unpaid"); setCurrentPage(1); }}
+            className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors cursor-pointer whitespace-nowrap ${
+              activeTab === "unpaid"
+                ? "bg-brand-500 text-white shadow-sm"
+                : "bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+            }`}
+          >
+            Sans versement ({uniqueParents.filter(p => p.parentPayments.length === 0).length})
+          </button>
+        </div>
+
+        {/* Tableau stylisé */}
+        <div className="max-w-full overflow-x-auto">
+          <Table>
+            <TableHeader className="border-y border-gray-100 dark:border-gray-800">
+              <TableRow>
+                <TableCell isHeader className="py-3 text-start text-theme-xs font-medium text-gray-500 dark:text-gray-400">
+                  N° Rapport
+                </TableCell>
+                <TableCell isHeader className="py-3 text-start text-theme-xs font-medium text-gray-500 dark:text-gray-400">
+                  Parent
+                </TableCell>
+                <TableCell isHeader className="py-3 text-start text-theme-xs font-medium text-gray-500 dark:text-gray-400">
+                  Contact
+                </TableCell>
+                <TableCell isHeader className="py-3 text-center text-theme-xs font-medium text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                  Enfants Inscrits
+                </TableCell>
+                <TableCell isHeader className="py-3 text-right text-theme-xs font-medium text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                  Total Payé
+                </TableCell>
+                <TableCell isHeader className="py-3 text-center text-theme-xs font-medium text-gray-500 dark:text-gray-400 w-28 whitespace-nowrap">
+                  Action
+                </TableCell>
+              </TableRow>
+            </TableHeader>
+            <TableBody className="divide-y divide-gray-100 dark:divide-gray-800">
+              {!hydrated ? (
+                <TableBodySkeleton rows={6} columns={6} />
+              ) : pagedParents.length === 0 ? (
+                <TableRow>
+                  <td colSpan={6} className="py-8 text-center text-theme-sm text-gray-500 dark:text-gray-400">
+                    Aucun compte parent trouvé pour ces critères.
+                  </td>
+                </TableRow>
+              ) : (
+                pagedParents.map((parentData) => (
+                  <TableRow key={parentData.key} className="hover:bg-gray-50/50 dark:hover:bg-white/[0.02] transition-colors">
+                    <TableCell className="py-3 text-theme-sm font-mono font-medium text-brand-600 dark:text-brand-400">
+                      {parentData.receiptNo}
+                    </TableCell>
+                    <TableCell className="py-3 text-theme-sm text-gray-900 dark:text-white font-semibold">
+                      <div className="flex items-center gap-2.5">
+                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-50 text-brand-600 dark:bg-brand-500/10 dark:text-brand-400">
+                          <svg className="size-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                           </svg>
-                          Télécharger PDF
-                        </button>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+                        </div>
+                        <span>{parentData.nom} {parentData.prenom}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell className="py-3 text-theme-sm text-gray-500 dark:text-gray-400">
+                      <div className="flex flex-col text-xs">
+                        <span className="font-medium text-gray-800 dark:text-gray-200">{parentData.telephone || "Aucun tél"}</span>
+                        <span className="text-gray-500 truncate max-w-[200px]">{parentData.email || "Aucun email"}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell className="py-3 text-theme-sm text-center">
+                      <span className="inline-flex items-center rounded-full bg-brand-50 px-3 py-1 text-xs font-semibold text-brand-700 dark:bg-brand-500/10 dark:text-brand-400">
+                        {parentData.playerIds.length} enfant(s)
+                      </span>
+                    </TableCell>
+                    <TableCell className="py-3 text-theme-sm text-right font-bold text-gray-900 dark:text-white">
+                      {parentData.totalPaye}
+                    </TableCell>
+                    <TableCell className="py-3 text-theme-sm text-center">
+                      <button
+                        onClick={() => handleGeneratePDF(parentData)}
+                        className="inline-flex items-center justify-center text-brand-500 hover:text-brand-600 dark:text-brand-400 dark:hover:text-brand-300 transition cursor-pointer p-1.5 rounded-lg hover:bg-brand-50 dark:hover:bg-brand-500/10"
+                        aria-label="Télécharger le reçu PDF"
+                        title="Télécharger le reçu (PDF)"
+                      >
+                        <svg className="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                      </button>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </div>
+
+        {/* Pagination à la fin du tableau */}
+        <div className="mt-4 flex justify-end">
+          <Pagination
+            currentPage={currentPageSafe}
+            totalPages={totalPages}
+            onPageChange={setCurrentPage}
+            pageSize={currentPageSize}
+            onPageSizeChange={(size) => {
+              setCurrentPageSize(size);
+              setCurrentPage(1);
+            }}
+          />
         </div>
       </div>
     </div>

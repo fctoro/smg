@@ -107,7 +107,7 @@ const adminNavItems: NavItem[] = [
   },
   {
     icon: <DocsIcon />,
-    name: "Reçus PDF",
+    name: "RP Parents",
     path: "/recus",
     new: true,
     sections: ["Paiements"],
@@ -404,15 +404,22 @@ const AppSidebar: React.FC = () => {
           <p className="text-[11px] font-medium text-gray-500 dark:text-gray-400">
             © 2026 FC TORO
           </p>
-          <p className="flex items-center text-[10px] text-gray-400 dark:text-gray-500">
-            Conçu par{" "}
+          <p className="flex items-center justify-center gap-1 text-[10px] text-gray-400 dark:text-gray-500">
+            <span>Conçu par</span>
             <a
               href="https://www.octacore.io/"
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center hover:opacity-80 transition-opacity ml-1"
+              className="inline-flex items-center hover:opacity-80 transition-opacity"
             >
-              <img src="/images/logo/octacore-logo.png" alt="OCTACORE" className="h-2.5 w-auto" />
+              <Image
+                src="/images/logo/octacore-logo.png"
+                alt="OCTACORE"
+                width={80}
+                height={16}
+                className="h-3.5 w-auto object-contain"
+                unoptimized
+              />
             </a>
           </p>
         </div>

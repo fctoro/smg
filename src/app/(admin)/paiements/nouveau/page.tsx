@@ -128,7 +128,12 @@ const paymentPlans: PaymentPlan[] = [
 
 export default function NewPaymentPage() {
   const router = useRouter();
-  const { players, setPayments } = useClubData();
+  const { players, setPayments, rubriques } = useClubData();
+
+  const pricingItems = useMemo(() => {
+    return (rubriques || []).filter((item) => item.actif !== false);
+  }, [rubriques]);
+
   const [playerId, setPlayerId] = useState("");
   const [playerSearch, setPlayerSearch] = useState("");
   const [showPlayerDropdown, setShowPlayerDropdown] = useState(false);

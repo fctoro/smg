@@ -23,9 +23,17 @@ import {
   StaffMember,
   Invoice,
   PayrollRecord,
+  PricingItem,
 } from "@/types/club";
 import { supabase } from "@/lib/supabaseClient";
 import { groupParentsByFamily } from "@/lib/club/parents";
+import {
+  fetchRubriquesFromSupabase,
+  addRubriqueToSupabase,
+  updateRubriqueInSupabase,
+  deleteRubriqueInSupabase,
+  DEFAULT_PRICING_ITEMS,
+} from "@/lib/club/supabase-crud";
 
 type SetState<T> = React.Dispatch<React.SetStateAction<T>>;
 
@@ -48,6 +56,11 @@ interface ClubDataContextValue {
   setInvoices: SetState<Invoice[]>;
   payrollRecords: PayrollRecord[];
   setPayrollRecords: SetState<PayrollRecord[]>;
+  rubriques: PricingItem[];
+  setRubriques: SetState<PricingItem[]>;
+  addRubrique: (data: Omit<PricingItem, "id"> & { id?: string }) => Promise<PricingItem>;
+  updateRubrique: (id: string, data: Partial<PricingItem>) => Promise<void>;
+  deleteRubrique: (id: string) => Promise<void>;
   hydrated: boolean;
 }
 
@@ -157,6 +170,7 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
   const [payments, setPayments] = useState<Payment[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [payrollRecords, setPayrollRecords] = useState<PayrollRecord[]>([]);
+  const [rubriques, setRubriques] = useState<PricingItem[]>(DEFAULT_PRICING_ITEMS);
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
@@ -627,6 +641,10 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
         }
 
         setPayrollRecords(fetchedPayroll);
+
+        // Fetch Rubriques
+        const loadedRubriques = await fetchRubriquesFromSupabase();
+        setRubriques(loadedRubriques);
       } catch (err) {
         console.error("Erreur lors de la récupération des données", err);
       }
@@ -653,7 +671,6 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
     safeSetItem(STORAGE_KEYS.staff, employees);
   }, [hydrated, employees]);
 
-
   useEffect(() => {
     if (!hydrated) return;
     safeSetItem(STORAGE_KEYS.events, events);
@@ -673,6 +690,29 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
     if (!hydrated) return;
     safeSetItem(STORAGE_KEYS.payrollRecords, payrollRecords);
   }, [hydrated, payrollRecords]);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    safeSetItem("club-data-rubriques-v1", rubriques);
+  }, [hydrated, rubriques]);
+
+  const addRubrique = async (data: Omit<PricingItem, "id"> & { id?: string }) => {
+    const created = await addRubriqueToSupabase(data);
+    setRubriques((prev) => [...prev.filter((r) => r.id !== created.id), created]);
+    return created;
+  };
+
+  const updateRubrique = async (id: string, data: Partial<PricingItem>) => {
+    await updateRubriqueInSupabase(id, data);
+    setRubriques((prev) =>
+      prev.map((r) => (r.id === id ? { ...r, ...data } : r))
+    );
+  };
+
+  const deleteRubrique = async (id: string) => {
+    await deleteRubriqueInSupabase(id);
+    setRubriques((prev) => prev.filter((r) => r.id !== id));
+  };
 
   const alumni = useMemo(() => players.filter(p => p.statut === "alumni"), [players]);
 
@@ -697,6 +737,11 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
         setInvoices,
         payrollRecords,
         setPayrollRecords,
+        rubriques,
+        setRubriques,
+        addRubrique,
+        updateRubrique,
+        deleteRubrique,
         hydrated,
       }}
     >

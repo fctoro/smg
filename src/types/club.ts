@@ -14,6 +14,19 @@ export type MatchFormResult = "W" | "D" | "L";
 
 export type MatchState = "FT" | "A venir";
 
+export interface PricingItem {
+  id: string;
+  rubrique: string;
+  montant: number;
+  devise: "US" | "HTG";
+  precision: string;
+  categorie?: string;
+  estAdhesion?: boolean;
+  actif?: boolean;
+}
+
+export type Rubrique = PricingItem;
+
 export interface Coach {
   id: string;
   nom: string;

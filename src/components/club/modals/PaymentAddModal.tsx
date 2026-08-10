@@ -136,11 +136,19 @@ interface PaymentAddModalProps {
   onClose: () => void;
 }
 
-const adhesionOptions = pricingItems.filter((item) => item.id === "adhesion-fc" || item.id === "adhesion-ti");
-const rubricOptions = pricingItems;
-
 export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
-  const { players, setPayments } = useClubData();
+  const { players, setPayments, rubriques } = useClubData();
+
+  const rubricOptions = useMemo(() => {
+    return (rubriques || []).filter((item) => item.actif !== false);
+  }, [rubriques]);
+
+  const adhesionOptions = useMemo(() => {
+    return rubricOptions.filter(
+      (item) => item.estAdhesion || item.id === "adhesion-fc" || item.id === "adhesion-ti"
+    );
+  }, [rubricOptions]);
+
   const [playerId, setPlayerId] = useState("");
   const [playerSearch, setPlayerSearch] = useState("");
   const [showPlayerDropdown, setShowPlayerDropdown] = useState(false);
@@ -247,7 +255,7 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
       const montantHTG = devise === "HTG" ? paymentAmount : 0;
       const adhesionCode = isTiToro ? "TI_TORO" : "FC_TORO";
       const reductionMetadata = serializeReductionMetadata(reductionType, customReductionPercent);
-      const selectedRubricsLabel = selectedPricing.filter((item) => item !== "adhesion-fc" && item !== "adhesion-ti").map((item) => pricingItems.find((pricingItem) => pricingItem.id === item)?.rubrique).filter(Boolean).join(", ");
+      const selectedRubricsLabel = selectedPricing.filter((item) => item !== "adhesion-fc" && item !== "adhesion-ti").map((item) => rubricOptions.find((pricingItem) => pricingItem.id === item)?.rubrique).filter(Boolean).join(", ");
       const paymentMarkers = `[ADHESION:${adhesionCode}] [PLAN:${selectedPlan.toUpperCase()}] [STATUT:${statut.toUpperCase()}]`;
       const adhesionLabel = isTiToro ? "Adhésion: TI TORO" : "Adhésion: FC TORO";
       const finalRemarque = `${paymentMarkers} ${reductionMetadata ? `${reductionMetadata} ` : ""}${description.trim()} ${adhesionLabel}${selectedRubricsLabel ? ` | Rubriques: ${selectedRubricsLabel}` : ""} Plan: ${plan.plan}`.trim();

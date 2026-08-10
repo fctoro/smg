@@ -847,3 +847,164 @@ export const deletePayrollInSupabase = async (id: string) => {
     throw error;
   }
 };
+
+// --- RUBRIQUES (tblRubriques) ---
+
+export const DEFAULT_PRICING_ITEMS: import("@/types/club").PricingItem[] = [
+  {
+    id: "inscription",
+    rubrique: "Frais d'inscription / réinscription",
+    montant: 75,
+    devise: "US",
+    precision: "Applicables à tous les joueurs, nouveaux et anciens",
+    estAdhesion: false,
+    actif: true,
+  },
+  {
+    id: "adhesion-fc",
+    rubrique: "Adhésion annuelle - FC TORO",
+    montant: 1350,
+    devise: "US",
+    precision: "Catégories École de Football / Académie / Élite, hors uniformes",
+    categorie: "FC TORO",
+    estAdhesion: true,
+    actif: true,
+  },
+  {
+    id: "adhesion-ti",
+    rubrique: "Adhésion annuelle - TI TORO",
+    montant: 1000,
+    devise: "US",
+    precision: "Catégorie Ti Toro / U6-U8, hors uniformes",
+    categorie: "TI TORO",
+    estAdhesion: true,
+    actif: true,
+  },
+  {
+    id: "uniforme-jeux1",
+    rubrique: "Uniforme – Jeux 1",
+    montant: 80,
+    devise: "US",
+    precision: "Jeux Entrainement - Obligatoire",
+    estAdhesion: false,
+    actif: true,
+  },
+  {
+    id: "uniforme-jeux2",
+    rubrique: "Uniforme – Jeux 2",
+    montant: 100,
+    devise: "US",
+    precision: "Jeux Match 1 - Obligatoire",
+    estAdhesion: false,
+    actif: true,
+  },
+  {
+    id: "uniforme-jeux3",
+    rubrique: "Uniforme – Jeux 3",
+    montant: 100,
+    devise: "US",
+    precision: "Jeux Match 2 - Obligatoire",
+    estAdhesion: false,
+    actif: true,
+  },
+  {
+    id: "tracksuit",
+    rubrique: "Tracksuit",
+    montant: 150,
+    devise: "US",
+    precision: "Jacket & Jogger – Facultatif",
+    estAdhesion: false,
+    actif: true,
+  },
+  {
+    id: "backpack",
+    rubrique: "Backpack",
+    montant: 90,
+    devise: "US",
+    precision: "Sac à dos – Facultatif",
+    estAdhesion: false,
+    actif: true,
+  },
+];
+
+export const fetchRubriquesFromSupabase = async (): Promise<import("@/types/club").PricingItem[]> => {
+  try {
+    const { data, error } = await supabase
+      .from("tblRubriques")
+      .select("*")
+      .order("created_at", { ascending: true });
+
+    if (error) {
+      console.warn("Table tblRubriques introuvable ou erreur Supabase, utilisation des rubriques par défaut:", error.message);
+      return DEFAULT_PRICING_ITEMS;
+    }
+
+    if (!data || data.length === 0) {
+      return DEFAULT_PRICING_ITEMS;
+    }
+
+    return data.map((item: any) => ({
+      id: String(item.id),
+      rubrique: String(item.rubrique || ""),
+      montant: Number(item.montant || 0),
+      devise: (item.devise === "HTG" ? "HTG" : "US") as "US" | "HTG",
+      precision: String(item.precision || ""),
+      categorie: item.categorie ? String(item.categorie) : undefined,
+      estAdhesion: Boolean(item.est_adhesion),
+      actif: item.actif !== undefined ? Boolean(item.actif) : true,
+    }));
+  } catch (err) {
+    console.warn("Exception lors du chargement de tblRubriques, utilisation des valeurs par défaut:", err);
+    return DEFAULT_PRICING_ITEMS;
+  }
+};
+
+export const addRubriqueToSupabase = async (data: Omit<import("@/types/club").PricingItem, "id"> & { id?: string }) => {
+  const rubriqueId = data.id || `rubrique-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+  const payload = {
+    id: rubriqueId,
+    rubrique: data.rubrique,
+    montant: data.montant,
+    devise: data.devise,
+    precision: data.precision || "",
+    categorie: data.categorie || "",
+    est_adhesion: Boolean(data.estAdhesion),
+    actif: data.actif !== undefined ? Boolean(data.actif) : true,
+  };
+
+  const { error } = await supabase.from("tblRubriques").insert(payload);
+  if (error) {
+    console.warn("Erreur Supabase lors de l'ajout de rubrique :", error.message);
+  }
+
+  return {
+    id: rubriqueId,
+    ...data,
+    precision: data.precision || "",
+    actif: data.actif !== undefined ? data.actif : true,
+  };
+};
+
+export const updateRubriqueInSupabase = async (id: string, data: Partial<import("@/types/club").PricingItem>) => {
+  const payload: any = {};
+  if (data.rubrique !== undefined) payload.rubrique = data.rubrique;
+  if (data.montant !== undefined) payload.montant = data.montant;
+  if (data.devise !== undefined) payload.devise = data.devise;
+  if (data.precision !== undefined) payload.precision = data.precision;
+  if (data.categorie !== undefined) payload.categorie = data.categorie;
+  if (data.estAdhesion !== undefined) payload.est_adhesion = data.estAdhesion;
+  if (data.actif !== undefined) payload.actif = data.actif;
+
+  const { error } = await supabase.from("tblRubriques").update(payload).eq("id", id);
+  if (error) {
+    console.warn("Erreur Supabase lors de la modification de rubrique :", error.message);
+  }
+};
+
+export const deleteRubriqueInSupabase = async (id: string) => {
+  const { error } = await supabase.from("tblRubriques").delete().eq("id", id);
+  if (error) {
+    console.warn("Erreur Supabase lors de la suppression de rubrique :", error.message);
+  }
+};
+

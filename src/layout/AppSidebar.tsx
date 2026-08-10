@@ -112,6 +112,12 @@ const adminNavItems: NavItem[] = [
     new: true,
     sections: ["Paiements"],
   },
+  {
+    icon: <TaskIcon />,
+    name: "Rubriques",
+    path: "/rubriques",
+    sections: ["Paiements", "Finance", "Paramètres"],
+  },
 ];
 
 // Dedicated Coach Portal items

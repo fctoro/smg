@@ -441,7 +441,9 @@ export default function PayrollPage() {
 
   return (
     <div className="space-y-6">
-      <PageBreadcrumb pageTitle="Payroll / Gestion Historique des Salaires" />
+      <div className="print:hidden">
+        <PageBreadcrumb pageTitle="Payroll / Gestion Historique des Salaires" />
+      </div>
 
       {/* KPI Section with Professional Icons */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 print:hidden">
@@ -1137,38 +1139,47 @@ export default function PayrollPage() {
       {/* Printable Pay Slip Template */}
       {selectedSlip && (
         <div className="hidden print:block print:p-8">
-          <div className="mx-auto max-w-2xl rounded-xl border border-gray-300 p-8 text-black">
-            <div className="mb-6 flex items-center justify-between border-b pb-4">
-              <div>
-                <h1 className="text-2xl font-bold uppercase text-brand-600">FC TORO</h1>
-                <p className="text-xs font-medium">Académie de Football SMG FC TORO</p>
-                <p className="text-xs text-gray-600">Port-au-Prince, Haïti</p>
+          <div className="mx-auto max-w-2xl bg-white p-10 text-gray-800 print:shadow-none">
+            {/* Header */}
+            <div className="mb-8 flex items-start justify-between border-b border-gray-200 pb-6">
+              <div className="flex items-center gap-4">
+                <img src="/images/logo/fc-toro.png" alt="FC TORO Logo" className="h-[72px] w-auto" />
+                <div>
+                  <h1 className="text-[26px] font-black uppercase tracking-tight text-slate-800">FC TORO</h1>
+                  <p className="mt-1 text-[11px] font-medium text-gray-500">Football Club</p>
+                  <p className="text-[11px] text-gray-500">7 Rue Rigaud, Pétion-Ville, Haïti</p>
+                  <p className="text-[11px] text-gray-500">+509 2817-8676 | footballclubtoro@gmail.com</p>
+                  <p className="text-[11px] text-gray-500">www.fctoro.com</p>
+                </div>
               </div>
               <div className="text-right">
-                <h2 className="text-xl font-bold uppercase">BULLETIN DE PAIE</h2>
-                <p className="text-xs font-semibold">Période: {formatMonthYearDisplay(selectedSlip.mois)}</p>
-                <p className="text-xs text-gray-600">Réf: {selectedSlip.id}</p>
-              </div>
-            </div>
-
-            <div className="mb-6 grid grid-cols-2 gap-4 rounded-lg bg-gray-50 p-4 text-xs">
-              <div>
-                <p className="font-bold text-gray-700 uppercase">Informations Employé</p>
-                <p className="mt-1 text-sm font-bold">
+                <h2 className="mb-3 text-[20px] font-black uppercase tracking-wide text-slate-800">BULLETIN DE PAIE</h2>
+                <p className="text-[13px] font-bold text-gray-800">
                   {selectedSlip.employePrenom} {selectedSlip.employeNom}
                 </p>
-                <p>Fonction: {selectedSlip.fonction}</p>
-                <p>ID Employé: {selectedSlip.employeId}</p>
-              </div>
-              <div className="text-right">
-                <p className="font-bold text-gray-700 uppercase">Règlement</p>
-                <p className="mt-1">Date: {selectedSlip.datePaiement || "En attente"}</p>
-                <p>Mode: {selectedSlip.modePaiement}</p>
-                <p>Statut: {selectedSlip.statut === "paye" ? "PAYÉ" : "EN ATTENTE"}</p>
+                <p className="text-[11px] text-gray-500">Fonction: {selectedSlip.fonction}</p>
+                <p className="text-[11px] text-gray-500">ID Employé: {String(selectedSlip.employeId).replace(/\D/g, '') || selectedSlip.employeId}</p>
               </div>
             </div>
 
-            <table className="mb-6 w-full border text-left text-xs">
+            {/* Middle Section */}
+            <div className="mb-8 flex justify-between border-b border-gray-200 pb-6 text-[13px] font-bold text-gray-800">
+              <div>
+                <p>
+                  Période: <span className="uppercase">{formatMonthYearDisplay(selectedSlip.mois)}</span>
+                </p>
+                <p className="mt-2">Réf: {String(selectedSlip.id).replace(/\D/g, '') || selectedSlip.id}</p>
+              </div>
+              <div className="text-right">
+                <p>Date de paiement: {selectedSlip.datePaiement || "En attente"}</p>
+                <p className="mt-2">
+                  Mode: <span className="capitalize">{selectedSlip.modePaiement}</span>
+                </p>
+              </div>
+            </div>
+
+            {/* Table Section */}
+            <table className="mb-12 w-full text-left text-[13px] text-gray-800">
               <thead>
                 <tr className="border-b bg-gray-100">
                   <th className="p-2.5 font-bold">Rubrique / Description</th>
@@ -1177,7 +1188,7 @@ export default function PayrollPage() {
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y">
+              <tbody className="divide-y divide-gray-100">
                 <tr>
                   <td className="p-2.5">
                     Salaire Brut Base
@@ -1265,16 +1276,19 @@ export default function PayrollPage() {
               </tbody>
             </table>
 
-            <div className="mt-12 flex justify-between border-t pt-8 text-xs">
-              <div>
-                <p className="font-semibold">Signature Employé:</p>
-                <div className="mt-8 w-40 border-b"></div>
+            {/* Signatures */}
+            <div className="mt-20 flex justify-between text-[12px] font-bold text-gray-800">
+              <div className="w-56">
+                <p>Signature de l'Employé</p>
+                <div className="mt-12 border-b-2 border-gray-200"></div>
               </div>
-              <div className="text-right">
-                <p className="font-semibold">Pour la Direction FC TORO:</p>
-                <div className="ml-auto mt-8 w-40 border-b"></div>
+              <div className="w-56 text-right">
+                <p>Pour la Direction FC TORO</p>
+                <div className="mt-12 border-b-2 border-gray-200"></div>
               </div>
             </div>
+
+
           </div>
         </div>
       )}

@@ -268,7 +268,7 @@ export const softDeleteEmployeeInSupabase = async (employeeId: string) => {
       const numericId = parseInt(String(employeeId).replace(/\D/g, ""), 10);
       const { error } = await supabase
         .from("tblEmployes")
-        .update({ Desactive: true })
+        .update({ Desactive: 1 })
         .eq("EmployeId", isNaN(numericId) ? employeeId : numericId);
       if (error) {
         console.error("Erreur lors de la suppression de l'employé :", error);

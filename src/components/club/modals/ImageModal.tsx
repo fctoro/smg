@@ -14,7 +14,7 @@ export function ImageModal({ isOpen, onClose, imageUrl, title = "Image" }: Image
   if (!isOpen || !imageUrl) return null;
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} className="max-w-4xl">
+    <Modal isOpen={isOpen} onClose={onClose} className="max-w-4xl" showCloseButton={false}>
       <div className="flex flex-col h-full">
         <div className="flex items-center justify-between border-b border-gray-100 dark:border-gray-800 p-5">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white">

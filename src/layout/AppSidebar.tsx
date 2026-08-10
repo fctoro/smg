@@ -404,15 +404,15 @@ const AppSidebar: React.FC = () => {
           <p className="text-[11px] font-medium text-gray-500 dark:text-gray-400">
             © 2026 FC TORO
           </p>
-          <p className="text-[10px] text-gray-400 dark:text-gray-500">
+          <p className="flex items-center text-[10px] text-gray-400 dark:text-gray-500">
             Conçu par{" "}
             <a
               href="https://www.octacore.io/"
               target="_blank"
               rel="noopener noreferrer"
-              className="font-semibold text-brand-600 hover:underline dark:text-brand-400"
+              className="inline-flex items-center hover:opacity-80 transition-opacity ml-1"
             >
-              OCTACORE
+              <img src="/images/logo/octacore-logo.png" alt="OCTACORE" className="h-2.5 w-auto" />
             </a>
           </p>
         </div>

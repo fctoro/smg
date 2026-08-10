@@ -316,6 +316,22 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
             selectedPlayer.parentAdresse || selectedPlayer.adresse || ""
           );
 
+          // Open the generated PDF in a new tab automatically
+          try {
+            const base64Data = receiptBase64.includes("base64,") ? receiptBase64.split("base64,")[1] : receiptBase64;
+            const byteCharacters = atob(base64Data);
+            const byteNumbers = new Array(byteCharacters.length);
+            for (let i = 0; i < byteCharacters.length; i++) {
+                byteNumbers[i] = byteCharacters.charCodeAt(i);
+            }
+            const byteArray = new Uint8Array(byteNumbers);
+            const blob = new Blob([byteArray], {type: 'application/pdf'});
+            const blobUrl = URL.createObjectURL(blob);
+            window.open(blobUrl, '_blank');
+          } catch (pdfErr) {
+            console.error("Erreur lors de l'ouverture du PDF :", pdfErr);
+          }
+
           const emailToSend = selectedPlayer.parentEmail || selectedPlayer.email;
           if (emailToSend) {
             const mntStr = devise === "HTG" ? `${montantDonne} HTG` : `${montantDonne} USD`;

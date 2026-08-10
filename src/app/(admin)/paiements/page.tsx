@@ -17,12 +17,13 @@ import Link from "next/link";
 
 import { useClubData } from "@/context/ClubDataContext";
 import { formatClubCurrency, formatClubDate, getPlayerFullName } from "@/lib/club/metrics";
-import { updatePaymentInSupabase } from "@/lib/club/supabase-crud";
+import { updatePaymentInSupabase, deletePaymentInSupabase } from "@/lib/club/supabase-crud";
 import { calculateDiscountedAmount, parseReductionFromRemark } from "@/lib/club/payment-reduction-utils";
 import { ImageModal } from "@/components/club/modals/ImageModal";
 import { extractPhotoUrlFromRemark } from "@/lib/club/payment-photo-utils";
-import { BellIcon } from "@/icons";
+import { BellIcon, PencilIcon, TrashBinIcon } from "@/icons";
 import { ActiveBellIcon } from "@/icons/ActiveBellIcon";
+import { ConfirmModal } from "@/components/ui/modal/ConfirmModal";
 import { CustomReminderMessageModal } from "@/components/club/modals/CustomReminderMessageModal";
 
 interface PaymentPlan {
@@ -84,6 +85,7 @@ export default function PaymentsPage() {
   const [isSendingReminders, setIsSendingReminders] = useState(false);
   const [isCustomMessageModalOpen, setIsCustomMessageModalOpen] = useState(false);
   const [customMessageText, setCustomMessageText] = useState("");
+  const [paymentToDelete, setPaymentToDelete] = useState<string | null>(null);
 
   const playerMap = useMemo(
     () => new Map(players.map((player) => [player.id, player])),
@@ -213,6 +215,23 @@ export default function PaymentsPage() {
       setEditError(error instanceof Error ? error.message : "Impossible d'enregistrer la modification.");
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleDeletePayment = (id: string) => {
+    setPaymentToDelete(id);
+  };
+
+  const confirmDeletePayment = async () => {
+    if (!paymentToDelete) return;
+    try {
+      await deletePaymentInSupabase(paymentToDelete);
+      setPayments((current) => current.filter((p) => p.id !== paymentToDelete));
+    } catch (error) {
+      alert("Erreur lors de la suppression du paiement.");
+      console.error(error);
+    } finally {
+      setPaymentToDelete(null);
     }
   };
 
@@ -579,10 +598,13 @@ export default function PaymentsPage() {
                   Balance
                 </TableCell>
                 <TableCell isHeader className="py-3 text-start text-theme-xs font-medium text-gray-500 dark:text-gray-400">
-                  Action
+                  Informations
                 </TableCell>
                 <TableCell isHeader className="py-3 text-start text-theme-xs font-medium text-gray-500 dark:text-gray-400">
-                  Informations
+                  Justificatif
+                </TableCell>
+                <TableCell isHeader className="py-3 text-start text-theme-xs font-medium text-gray-500 dark:text-gray-400">
+                  Action
                 </TableCell>
               </TableRow>
             </TableHeader>
@@ -644,22 +666,6 @@ export default function PaymentsPage() {
                           <span className="text-gray-400">-</span>
                         )}
                       </TableCell>
-                      <TableCell className="py-3 text-theme-sm">
-                        {balance > 0 && payment.statut === "paid" && (
-                          <button
-                            type="button"
-                            onClick={() => openEditModal(payment)}
-                            className="rounded-lg bg-red-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-600"
-                          >
-                            Modifier
-                          </button>
-                        )}
-                        {balance < 0 && (
-                          <span className="text-xs text-gray-500">
-                            Payé en trop
-                          </span>
-                        )}
-                      </TableCell>
                       <TableCell className="py-3 text-theme-sm text-gray-500 dark:text-gray-400">
                         <span className="block truncate max-w-[200px]" title={payment.remarque}>
                           {payment.remarque || "-"}
@@ -673,23 +679,60 @@ export default function PaymentsPage() {
                           const photoUrl = extractPhotoUrlFromRemark(payment.remarque);
                           if (!photoUrl) return <span className="text-gray-400">-</span>;
                           return (
-                            <button
-                              onClick={() => {
-                                setSelectedPaymentImage(photoUrl);
-                                setIsImageModalOpen(true);
-                              }}
-                              className="flex items-center gap-1 text-brand-500 hover:text-brand-600"
-                              title="Voir le justificatif"
-                            >
-                              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-                                <circle cx="8.5" cy="8.5" r="1.5"></circle>
-                                <polyline points="21 15 16 10 5 21"></polyline>
-                              </svg>
-                              Justificatif
-                            </button>
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => {
+                                  setSelectedPaymentImage(photoUrl);
+                                  setIsImageModalOpen(true);
+                                }}
+                                className="relative flex h-12 w-12 items-center justify-center overflow-hidden rounded border border-gray-200 bg-gray-50 hover:border-brand-500 hover:opacity-90 transition-all focus:outline-none"
+                                title="Voir le justificatif en grand"
+                              >
+                                <img
+                                  src={photoUrl}
+                                  alt="Justificatif"
+                                  className="h-full w-full object-cover"
+                                />
+                              </button>
+                            </div>
                           );
                         })()}
+                      </TableCell>
+                      <TableCell className="py-3 text-theme-sm">
+                        <div className="flex items-center gap-3">
+                          <Link
+                            href={`/paiements/modifier/${payment.id}`}
+                            className="inline-flex items-center justify-center text-gray-500 transition hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200 cursor-pointer"
+                            aria-label="Modifier"
+                            title="Modifier"
+                          >
+                            <PencilIcon className="size-5" />
+                          </Link>
+                          <button
+                            type="button"
+                            className="inline-flex items-center justify-center text-error-500 transition hover:text-error-600 dark:text-error-500 dark:hover:text-error-400 cursor-pointer"
+                            onClick={() => handleDeletePayment(payment.id)}
+                            aria-label="Supprimer"
+                            title="Supprimer"
+                          >
+                            <TrashBinIcon className="size-5" />
+                          </button>
+                          {balance > 0 && payment.statut === "paid" && (
+                            <button
+                              type="button"
+                              onClick={() => openEditModal(payment)}
+                              className="rounded-lg bg-red-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-600"
+                              title="Ajouter un solde"
+                            >
+                              Solde
+                            </button>
+                          )}
+                        </div>
+                        {balance < 0 && (
+                          <span className="text-xs text-gray-500 mt-1 block">
+                            Payé en trop
+                          </span>
+                        )}
                       </TableCell>
                     </TableRow>
                   );
@@ -793,6 +836,17 @@ export default function PaymentsPage() {
           }}
         />
       )}
+
+      <ConfirmModal
+        isOpen={paymentToDelete !== null}
+        onClose={() => setPaymentToDelete(null)}
+        onConfirm={confirmDeletePayment}
+        title="Supprimer le paiement"
+        message="Voulez-vous vraiment supprimer ce paiement ? Cette action est irréversible."
+        confirmText="Supprimer"
+        cancelText="Annuler"
+        isDestructive={true}
+      />
     </div>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, use } from "react";
 import { useRouter } from "next/navigation";
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import { useClubData } from "@/context/ClubDataContext";
@@ -15,7 +15,8 @@ const inputClassName =
 const selectClassName =
   "h-11 w-full rounded-lg border border-gray-300 bg-transparent px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90";
 
-export default function ModifyPaymentPage({ params }: { params: { id: string } }) {
+export default function ModifyPaymentPage({ params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = use(params);
   const router = useRouter();
   const { payments, players, setPayments } = useClubData();
   const [playerId, setPlayerId] = useState("");
@@ -49,7 +50,7 @@ export default function ModifyPaymentPage({ params }: { params: { id: string } }
 
   useEffect(() => {
     // Load existing payment data
-    const payment = payments.find(p => p.id === params.id);
+    const payment = payments.find(p => p.id === resolvedParams.id);
     if (payment) {
       setPlayerId(payment.playerId);
       setMontant(payment.montant);
@@ -62,7 +63,7 @@ export default function ModifyPaymentPage({ params }: { params: { id: string } }
       setDatePaiement(payment.datePaiement || "");
     }
     setLoading(false);
-  }, [params.id, payments]);
+  }, [resolvedParams.id, payments]);
 
   const handlePaymentPhotoChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0] ?? null;
@@ -128,11 +129,11 @@ export default function ModifyPaymentPage({ params }: { params: { id: string } }
         datePaiement: statut === "paid" ? datePaiement || undefined : undefined,
       };
 
-      await updatePaymentInSupabase(params.id, paymentData);
+      await updatePaymentInSupabase(resolvedParams.id, paymentData);
 
       setPayments((prevPayments) =>
         prevPayments.map((payment) =>
-          payment.id === params.id ? { ...payment, ...paymentData } : payment,
+          payment.id === resolvedParams.id ? { ...payment, ...paymentData } : payment,
         ),
       );
 

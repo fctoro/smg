@@ -230,6 +230,26 @@ export default function RecusPage() {
       return String(mode || "-");
     };
 
+    const cleanRemarkForPDF = (remark: string) => {
+      if (!remark) return "Paiement de cotisation";
+      let cleaned = remark.replace(/\[.*?\]\s*/g, '').trim();
+      
+      cleaned = cleaned.replace(/\s*\|\s*/g, '\n\n');
+      cleaned = cleaned.replace(/\s*Plan:\s*/g, '\n\nPlan : ');
+      
+      if (cleaned.includes('Rubriques:')) {
+        cleaned = cleaned.replace(/Rubriques:\s*/, 'Rubriques :\n• ');
+        let parts = cleaned.split('Rubriques :');
+        if (parts.length > 1) {
+          let rubriquesPart = parts[1];
+          rubriquesPart = rubriquesPart.replace(/,\s*/g, '\n• ');
+          cleaned = parts[0] + 'Rubriques :' + rubriquesPart;
+        }
+      }
+
+      return cleaned || "Paiement de cotisation";
+    };
+
     parentData.parentPayments.forEach((p: any) => {
       const joueurObj = players.find(player => player.id === p.playerId);
       const joueurNom = joueurObj ? getPlayerFullName(joueurObj) : "Inconnu";
@@ -237,7 +257,7 @@ export default function RecusPage() {
       const pData = [
         String(formatClubDate(p.datePaiement ?? "")),
         joueurNom,
-        p.remarque || "Paiement de cotisation",
+        cleanRemarkForPDF(p.remarque),
         String(mapMode(p.methode)),
         String(formatCurrencyPDF(p.montant)),
       ];
@@ -261,11 +281,11 @@ export default function RecusPage() {
       },
       bodyStyles: { textColor: grayDark },
       columnStyles: {
-        0: { cellWidth: 30, halign: 'left' },
-        1: { cellWidth: 50, halign: 'left' },
+        0: { cellWidth: 25, halign: 'left' },
+        1: { cellWidth: 40, halign: 'left' },
         2: { cellWidth: 'auto', halign: 'left' },
-        3: { cellWidth: 30, halign: 'left' },
-        4: { cellWidth: 35, fontStyle: 'bold', halign: 'right' }
+        3: { cellWidth: 20, halign: 'left' },
+        4: { cellWidth: 25, fontStyle: 'bold', halign: 'right' }
       },
       didParseCell: function (data: any) {
         if (data.section === 'head' && data.column.index === 4) {

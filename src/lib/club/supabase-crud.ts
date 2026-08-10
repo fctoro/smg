@@ -246,7 +246,7 @@ export const softDeleteEmployeeInSupabase = async (employeeId: string) => {
       const numericId = parseInt(String(employeeId).replace(/\D/g, ""), 10);
       const { error } = await supabase
         .from("tblEmployes")
-        .update({ Desactive: true })
+        .update({ Desactive: 1 })
         .eq("EmployeId", isNaN(numericId) ? employeeId : numericId);
       if (error) {
         console.error("Erreur lors de la suppression de l'employé :", error);
@@ -270,7 +270,7 @@ export const addEmployeeToSupabase = async (data: Omit<Employee, "id" | "employe
     DateEmbauche: data.dateEmbauche || null,
     NiveauEtude: data.niveauEtude,
     Profession: data.profession,
-    Desactive: false,
+    Desactive: 0,
   };
 
   const { insertEmployeeAdmin } = await import("@/app/actions/club");

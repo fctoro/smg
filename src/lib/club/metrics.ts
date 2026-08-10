@@ -71,9 +71,17 @@ import { parseDateLocal } from "./date";
 export const getRecentPlayers = (players: Player[], limit = 6) =>
   [...players]
     .sort((a, b) => {
-      const da = parseDateLocal(a.dateInscription) || new Date(0);
-      const db = parseDateLocal(b.dateInscription) || new Date(0);
-      return db.getTime() - da.getTime();
+      const da = parseDateLocal(a.dateInscription);
+      const db = parseDateLocal(b.dateInscription);
+      const ta = da ? da.getTime() : 0;
+      const tb = db ? db.getTime() : 0;
+
+      if (tb !== ta) {
+        return tb - ta;
+      }
+      const numA = parseInt(a.id, 10) || 0;
+      const numB = parseInt(b.id, 10) || 0;
+      return numB - numA;
     })
     .slice(0, limit);
 

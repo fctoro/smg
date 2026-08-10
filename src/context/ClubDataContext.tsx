@@ -248,7 +248,9 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
             const prenom = (d.Prenom || "").toLowerCase().trim();
             
             if (!nom) return false; // Pas de nom = invalide
-            if (d.IsDeleted === 1 || d.IsDeleted === true || String(d.IsDeleted).toLowerCase() === "true") return false; // Exclusion des joueurs supprimés logiquement
+            if (nom.includes("eugene") && prenom.includes("kensly")) return false;
+            if (nom.includes("kensly") && prenom.includes("eugene")) return false;
+            if (d.IsDeleted === 1 || d.IsDeleted === true || String(d.IsDeleted).toLowerCase() === "true") return false;
             if (nom.includes("sponsor")) return false; // Exclusion des sponsors
             if (/^x+$/i.test(nom)) return false; // Exclusion de "x", "xx", "xxx"...
             if (nom === "test") return false;
@@ -428,7 +430,7 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
               cotisationDevise: primaryRecord.CotisationDevise || "US",
               telephone,
               email,
-              dateInscription: primaryRecord.DtCreation ? primaryRecord.DtCreation.split("T")[0] : new Date().toISOString().split("T")[0],
+              dateInscription: primaryRecord.DtCreation ? primaryRecord.DtCreation.split("T")[0] : (primaryRecord.Saison ? `${primaryRecord.Saison.substring(0, 4)}-09-01` : ""),
               dateNaissance: dateNaissance ? dateNaissance.split("T")[0] : "",
               adresse,
               cotisationMontant: totalPaid,

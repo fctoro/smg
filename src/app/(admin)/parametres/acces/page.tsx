@@ -72,10 +72,6 @@ export default function AccessControlPage() {
 
   const [editingAccessUserId, setEditingAccessUserId] = useState<string | null>(null);
 
-  const [activeConfigRole, setActiveConfigRole] = useState<string>("Admin");
-  const [configSaving, setConfigSaving] = useState(false);
-  const [configMessage, setConfigMessage] = useState<string | null>(null);
-
   useEffect(() => {
     async function checkUser() {
       try {
@@ -100,18 +96,10 @@ export default function AccessControlPage() {
       const data = await fetchCoaches();
       setCoaches(data);
     }
-    async function loadConfig() {
-      const config = await getRoleConfig();
-      if (config) {
-        setRolePermissions(config);
-        setSelectedSections(config["Admin"] || []);
-      }
-    }
     checkUser();
     fetchCategories();
     fetchProfiles();
     loadCoaches();
-    loadConfig();
 
     const channel = supabase
       .channel('access-profiles-sync')
@@ -203,16 +191,6 @@ export default function AccessControlPage() {
     );
   };
 
-  const handleToggleRoleConfigSection = (section: string) => {
-    setRolePermissions(prev => {
-      const current = prev[activeConfigRole] || [];
-      const updated = current.includes(section)
-        ? current.filter(s => s !== section)
-        : [...current, section];
-      return { ...prev, [activeConfigRole]: updated };
-    });
-  };
-
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
@@ -300,16 +278,7 @@ export default function AccessControlPage() {
     }
   };
 
-  const handleSaveRoleConfig = async () => {
-    setConfigSaving(true);
-    const res = await saveRoleConfig(rolePermissions);
-    setConfigSaving(false);
-    if (res.error) {
-      setMessage({ text: `Erreur: ${res.error}`, type: "error" });
-    } else {
-      setMessage({ text: `Permissions par défaut pour le rôle "${activeConfigRole}" sauvegardées !`, type: "success" });
-    }
-  };
+
 
   return (
     <div className="max-w-4xl mx-auto p-4 md:p-8 space-y-8 font-sans">
@@ -644,87 +613,7 @@ export default function AccessControlPage() {
         </form>
       </div>
 
-      {/* Configuration globale des types de comptes et leurs accès */}
-      <div className="bg-white rounded-xl border border-[#e2e8f0] overflow-hidden shadow-sm">
-        <div className="px-6 pt-6 pb-2 border-b border-[#f1f5f9] flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <h2 className="text-[15px] font-bold text-[#0f172a]">
-              CONFIGURATION DES DROITS PAR TYPE DE COMPTE
-            </h2>
-            <p className="text-[13px] text-[#64748b] mt-0.5">
-              Définissez les accès par défaut pour chaque catégorie d'utilisateur.
-            </p>
-          </div>
 
-          {/* Role selector tabs for config */}
-          <div className="flex gap-2 bg-[#f8fafc] p-1 rounded-lg border border-[#e2e8f0]">
-            {ACCOUNT_TYPES.map(type => (
-              <button
-                key={type.id}
-                onClick={() => setActiveConfigRole(type.id)}
-                className={`px-3 py-1.5 rounded-md text-[13px] font-semibold transition-all ${
-                  activeConfigRole === type.id
-                    ? "bg-[#0f172a] text-white shadow-sm"
-                    : "text-[#64748b] hover:text-[#0f172a]"
-                }`}
-              >
-                {type.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="p-6 space-y-6">
-          {configMessage && (
-            <div className="p-4 rounded-lg text-sm font-medium bg-[#f0fdf4] text-[#15803d] border border-[#bbf7d0]">
-              {configMessage}
-            </div>
-          )}
-
-          <div className="flex items-center justify-between">
-            <h3 className="text-[14px] font-semibold text-[#334155]">
-              Sections autorisées par défaut pour : <span className="text-[#0f172a] font-bold">{activeConfigRole}</span>
-            </h3>
-            <span className="text-[12px] text-[#94a3b8]">
-              {(rolePermissions[activeConfigRole] || []).length} / {SECTIONS.length} modules
-            </span>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-y-4 gap-x-4 p-5 bg-[#f8fafc] rounded-xl border border-[#e2e8f0]">
-            {SECTIONS.map(section => {
-              const isChecked = (rolePermissions[activeConfigRole] || []).includes(section);
-              return (
-                <label key={section} className="flex items-center gap-3 cursor-pointer group">
-                  <div className="relative flex items-center">
-                    <input 
-                      type="checkbox"
-                      checked={isChecked}
-                      onChange={() => handleToggleRoleConfigSection(section)}
-                      className="peer h-[18px] w-[18px] cursor-pointer appearance-none rounded-[4px] border border-[#cbd5e1] bg-white checked:border-[#0f172a] checked:bg-[#0f172a] transition-all outline-none"
-                    />
-                    <svg className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-3 h-3 pointer-events-none opacity-0 peer-checked:opacity-100 text-white stroke-white" viewBox="0 0 14 10" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      <path d="M1 5L4.5 8.5L13 1" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                    </svg>
-                  </div>
-                  <span className={`text-[14px] transition-colors ${isChecked ? "font-medium text-[#0f172a]" : "text-[#94a3b8]"}`}>
-                    {section}
-                  </span>
-                </label>
-              );
-            })}
-          </div>
-
-          <div className="flex items-center justify-end">
-            <button
-              onClick={handleSaveRoleConfig}
-              disabled={configSaving}
-              className="bg-[#0f172a] text-white hover:bg-[#1e293b] px-5 py-2.5 rounded-lg text-[14px] font-semibold transition-colors disabled:opacity-50 shadow-sm"
-            >
-              {configSaving ? "Enregistrement..." : `Sauvegarder les accès ${activeConfigRole}`}
-            </button>
-          </div>
-        </div>
-      </div>
     </div>
   );
 }

@@ -6,6 +6,7 @@ import { PlayerFormValues, Player } from "@/types/club";
 import { useClubData } from "@/context/ClubDataContext";
 import { createPlayerFromForm } from "@/lib/club/player-form";
 import { addPlayerToSupabase } from "@/lib/club/supabase-crud";
+import { syncPlayerProgrammes } from "@/lib/club/programmes";
 import { DEFAULT_CATEGORIES } from "@/config/dashboard.config";
 import { ToastNotification } from "@/components/ui/toast/ToastNotification";
 
@@ -32,16 +33,20 @@ export function PlayerAddModal({ isOpen, onClose }: PlayerAddModalProps) {
       
       const inserted = await addPlayerToSupabase(newPlayerLocal);
       if (inserted && inserted.EtudiantID) {
-        const currentSeasonStr = getCurrentSeason();
-        const matriculeCode = generatePlayerMatricule(inserted.EtudiantID, currentSeasonStr);
+        const chosenSeasonStr = values.saison || getCurrentSeason();
+        const matriculeCode = generatePlayerMatricule(inserted.EtudiantID, chosenSeasonStr);
         
         const newPlayer: Player = { 
           ...newPlayerLocal, 
           id: String(inserted.EtudiantID),
-          saison: currentSeasonStr,
+          saison: chosenSeasonStr,
           matricule: matriculeCode,
         };
         setPlayers((prevPlayers) => [newPlayer, ...prevPlayers]);
+        
+        if (values.programmesAssignesIds && values.programmesAssignesIds.length > 0) {
+          await syncPlayerProgrammes(String(inserted.EtudiantID), values.programmesAssignesIds);
+        }
         
         setSuccessMessage(
           newPlayerLocal.statut === "alumni" 

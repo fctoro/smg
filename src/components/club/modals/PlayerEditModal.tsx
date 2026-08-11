@@ -7,6 +7,7 @@ import { normalizePlayerFormValues, toPlayerFormValues } from "@/lib/club/player
 import { DEFAULT_CATEGORIES } from "@/config/dashboard.config";
 import { updatePlayerInSupabase } from "@/lib/club/supabase-crud";
 import { supabase } from "@/lib/supabaseClient";
+import { syncPlayerProgrammes } from "@/lib/club/programmes";
 import { ToastNotification } from "@/components/ui/toast/ToastNotification";
 
 interface PlayerEditModalProps {
@@ -59,6 +60,10 @@ export const PlayerEditModal: React.FC<PlayerEditModalProps> = ({
         ),
       );
       
+      if (values.programmesAssignesIds) {
+        await syncPlayerProgrammes(player.id, values.programmesAssignesIds);
+      }
+
       // Clear the draft once submitted successfully
       sessionStorage.removeItem(`draft_${player.id}`);
       
@@ -108,6 +113,7 @@ export const PlayerEditModal: React.FC<PlayerEditModalProps> = ({
             categories={categories}
             highlightFields={highlightFields}
             draftKey={player.id}
+            playerId={player.id}
           />
         </div>
       </div>

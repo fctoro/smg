@@ -10,6 +10,7 @@ import { PlayerFormValues } from "@/types/club";
 import { normalizePlayerFormValues, toPlayerFormValues } from "@/lib/club/player-form";
 import { DEFAULT_CATEGORIES } from "@/config/dashboard.config";
 import { updatePlayerInSupabase } from "@/lib/club/supabase-crud";
+import { syncPlayerProgrammes } from "@/lib/club/programmes";
 
 export default function EditPlayerPage() {
   const router = useRouter();
@@ -61,6 +62,11 @@ export default function EditPlayerPage() {
             : player,
         ),
       );
+      
+      if (values.programmesAssignesIds) {
+        await syncPlayerProgrammes(playerId, values.programmesAssignesIds);
+      }
+
       router.push("/joueurs");
     } catch (error) {
       alert("Erreur lors de la modification. Veuillez réessayer.");
@@ -77,6 +83,7 @@ export default function EditPlayerPage() {
           onCancel={() => router.push("/joueurs")}
           onSubmit={handleSubmit}
           submitLabel="Mettre a jour"
+          playerId={playerId}
         />
       </div>
     </div>

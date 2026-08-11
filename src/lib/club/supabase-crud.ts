@@ -61,6 +61,7 @@ export const updatePlayerInSupabase = async (playerId: string, data: Partial<Pla
   if (data.email !== undefined) updatePayload.Email = data.email;
   if (data.dateNaissance !== undefined) updatePayload.DateNaissance = data.dateNaissance;
   if (data.photoUrl !== undefined && data.photoUrl !== "/images/user/silhouette.svg") updatePayload.PhotoIdentiteUrl = data.photoUrl;
+  if (data.saison !== undefined) updatePayload.Saison = data.saison;
 
   if (data.statut !== undefined) {
     updatePayload.EstAlumni = data.statut === "alumni" ? 1 : 0;
@@ -156,6 +157,7 @@ export const addPlayerToSupabase = async (data: Omit<Player & { photoIdentiteUrl
     DtCreation: new Date().toISOString(),
     IsDeleted: data.statut === "abandonne" ? 1 : 0,
     EstAlumni: data.statut === "alumni",
+    Saison: data.saison || null,
   };
 
   const handleDocUpload = async (base64Str: string, docType: string) => {

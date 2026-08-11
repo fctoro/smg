@@ -77,3 +77,34 @@ export async function deleteProgramme(id: string): Promise<boolean> {
 
   return true;
 }
+
+export async function syncPlayerProgrammes(playerId: string, newProgrammeIds: string[]): Promise<void> {
+  const allProgrammes = await fetchProgrammes();
+  
+  const currentProgrammeIds = allProgrammes
+    .filter(p => p.joueurs?.includes(playerId))
+    .map(p => p.id);
+
+  const toAdd = newProgrammeIds.filter(id => !currentProgrammeIds.includes(id));
+  const toRemove = currentProgrammeIds.filter(id => !newProgrammeIds.includes(id));
+
+  for (const id of toAdd) {
+    const prog = allProgrammes.find(p => p.id === id);
+    if (prog) {
+      const joueurs = prog.joueurs || [];
+      if (!joueurs.includes(playerId)) {
+        await updateProgramme(id, { joueurs: [...joueurs, playerId] });
+      }
+    }
+  }
+
+  for (const id of toRemove) {
+    const prog = allProgrammes.find(p => p.id === id);
+    if (prog) {
+      const joueurs = prog.joueurs || [];
+      if (joueurs.includes(playerId)) {
+        await updateProgramme(id, { joueurs: joueurs.filter(jId => jId !== playerId) });
+      }
+    }
+  }
+}

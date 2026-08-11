@@ -1,8 +1,10 @@
 "use client";
 
 import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { PaymentStatus, PlayerFormValues, PlayerStatus } from "@/types/club";
+import { PaymentStatus, PlayerFormValues, PlayerStatus, ProgrammeMatch } from "@/types/club";
 import { normalizePlayerFormValues } from "@/lib/club/player-form";
+import { fetchProgrammes } from "@/lib/club/programmes";
+import { getCurrentSeason, getDynamicSeasonOptions } from "@/lib/club/season";
 
 interface PlayerFormProps {
   initialValues?: Partial<PlayerFormValues>;
@@ -12,6 +14,7 @@ interface PlayerFormProps {
   submitLabel?: string;
   highlightFields?: string[];
   draftKey?: string;
+  playerId?: string;
 }
 
 const inputClassName =
@@ -57,6 +60,8 @@ const defaultValues: PlayerFormValues = {
 
   planPaiement: "PLAN #1 (Annuel)",
   modePaiementChoisi: "Transfert bancaire",
+  programmesAssignesIds: [],
+  saison: getCurrentSeason(),
 };
 
 export default function PlayerForm({
@@ -67,11 +72,43 @@ export default function PlayerForm({
   submitLabel = "Enregistrer",
   highlightFields = [],
   draftKey,
+  playerId,
 }: PlayerFormProps) {
   const [formValues, setFormValues] = useState<PlayerFormValues>({
     ...defaultValues,
     ...initialValues,
   });
+
+  const [allProgrammes, setAllProgrammes] = useState<ProgrammeMatch[]>([]);
+  const [searchProgramme, setSearchProgramme] = useState("");
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    fetchProgrammes().then((data) => {
+      setAllProgrammes(data);
+      if (playerId) {
+        const assignedIds = data.filter(p => p.joueurs?.includes(playerId)).map(p => p.id);
+        setFormValues(prev => ({
+          ...prev,
+          programmesAssignesIds: prev.programmesAssignesIds && prev.programmesAssignesIds.length > 0 ? prev.programmesAssignesIds : assignedIds
+        }));
+      }
+    });
+  }, [playerId]);
+
+  const handleAddProgramme = (id: string) => {
+    const current = formValues.programmesAssignesIds || [];
+    if (!current.includes(id)) {
+      updateField("programmesAssignesIds", [...current, id]);
+    }
+    setSearchProgramme("");
+    searchInputRef.current?.focus();
+  };
+
+  const handleRemoveProgramme = (id: string) => {
+    const current = formValues.programmesAssignesIds || [];
+    updateField("programmesAssignesIds", current.filter((pId) => pId !== id));
+  };
 
   useEffect(() => {
     let savedDraft = null;
@@ -131,9 +168,9 @@ export default function PlayerForm({
       {/* PROGRAMME */}
       <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-xs dark:border-gray-800 dark:bg-gray-900/50">
         <label className="mb-4 block text-sm font-semibold uppercase tracking-wider text-gray-800 dark:text-gray-200">
-          Choix du programme *
+          Choix de la catégorie *
         </label>
-        <p className="-mt-3 mb-4 text-xs text-gray-500 dark:text-gray-400">Sélectionnez le parcours souhaité pour le joueur.</p>
+        <p className="-mt-3 mb-4 text-xs text-gray-500 dark:text-gray-400">Sélectionnez la catégorie souhaitée pour le joueur.</p>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <label className={`flex cursor-pointer items-center gap-3 rounded-lg border p-4 transition-all ${
             formValues.programme?.includes("Ti Toro") 
@@ -172,6 +209,27 @@ export default function PlayerForm({
               <span className="block text-xs text-gray-500">6 ans et plus</span>
             </div>
           </label>
+        </div>
+      </div>
+
+      {/* SAISON D'INSCRIPTION */}
+      <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-xs dark:border-gray-800 dark:bg-gray-900/50">
+        <label className="mb-4 block text-sm font-semibold uppercase tracking-wider text-gray-800 dark:text-gray-200">
+          Saison d'inscription *
+        </label>
+        <p className="-mt-3 mb-4 text-xs text-gray-500 dark:text-gray-400">
+          Sélectionnez la saison durant laquelle ce joueur a été inscrit. La saison courante est sélectionnée par défaut.
+        </p>
+        <div className="max-w-md">
+          <select 
+            value={formValues.saison || ""} 
+            onChange={(e) => updateField("saison", e.target.value)} 
+            className={selectClassName}
+          >
+            {getDynamicSeasonOptions(3, 1).map((s) => (
+              <option key={s} value={s}>{s}</option>
+            ))}
+          </select>
         </div>
       </div>
 
@@ -271,6 +329,48 @@ export default function PlayerForm({
               <option value="inactif">Inactif</option>
               <option value="alumni">Alumni</option>
             </select>
+          </div>
+
+          <div className="sm:col-span-2">
+            <label className="mb-1.5 block text-xs font-medium text-gray-700 dark:text-gray-300">Programmes assignés</label>
+            <div className="relative">
+              <input 
+                ref={searchInputRef}
+                type="text" 
+                value={searchProgramme}
+                onChange={e => setSearchProgramme(e.target.value)}
+                placeholder="Rechercher et ajouter un programme..."
+                className={inputClassName}
+              />
+              {searchProgramme && (
+                 <div className="absolute z-10 w-full mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                    {allProgrammes
+                      .filter(p => p.nom?.toLowerCase().includes(searchProgramme.toLowerCase()) && !(formValues.programmesAssignesIds || []).includes(p.id))
+                      .map(p => (
+                       <button type="button" key={p.id} onClick={() => handleAddProgramme(p.id)} className="w-full text-left px-4 py-2 text-sm hover:bg-brand-50 dark:hover:bg-brand-900/20 text-gray-700 dark:text-gray-300">
+                         {p.nom} {p.saison ? `(${p.saison})` : ""}
+                       </button>
+                    ))}
+                    {allProgrammes.filter(p => p.nom?.toLowerCase().includes(searchProgramme.toLowerCase()) && !(formValues.programmesAssignesIds || []).includes(p.id)).length === 0 && (
+                      <div className="px-4 py-3 text-sm text-gray-500">Aucun autre programme trouvé.</div>
+                    )}
+                 </div>
+              )}
+            </div>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {(formValues.programmesAssignesIds || []).map(id => {
+                const prog = allProgrammes.find(p => p.id === id);
+                if (!prog) return null;
+                return (
+                  <span key={id} className="inline-flex items-center gap-1.5 rounded-full bg-brand-100 px-3 py-1 text-xs font-medium text-brand-800 dark:bg-brand-900/30 dark:text-brand-300">
+                    {prog.nom}
+                    <button type="button" onClick={() => handleRemoveProgramme(id)} className="text-brand-600 hover:text-brand-900 dark:text-brand-400 dark:hover:text-brand-200">
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
+                  </span>
+                )
+              })}
+            </div>
           </div>
 
           <div className="sm:col-span-2">

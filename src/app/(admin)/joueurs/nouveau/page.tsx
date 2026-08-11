@@ -10,6 +10,7 @@ import { PlayerFormValues } from "@/types/club";
 import { createPlayerFromForm } from "@/lib/club/player-form";
 import { DEFAULT_CATEGORIES } from "@/config/dashboard.config";
 import { addPlayerToSupabase } from "@/lib/club/supabase-crud";
+import { syncPlayerProgrammes } from "@/lib/club/programmes";
 import { supabase } from "@/lib/supabaseClient";
 
 function NewPlayerFormContent() {
@@ -93,6 +94,11 @@ function NewPlayerFormContent() {
       if (inserted && inserted.EtudiantID) {
         const newPlayer = { ...newPlayerLocal, id: String(inserted.EtudiantID) };
         setPlayers((prevPlayers) => [newPlayer, ...prevPlayers]);
+        
+        if (values.programmesAssignesIds && values.programmesAssignesIds.length > 0) {
+          await syncPlayerProgrammes(String(inserted.EtudiantID), values.programmesAssignesIds);
+        }
+
         // Also archive the message if it came from one
         const demandeId = searchParams.get("demandeId");
         if (demandeId) {

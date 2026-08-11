@@ -266,6 +266,8 @@ export interface PlayerFormValues {
 
   planPaiement?: string;
   modePaiementChoisi?: string;
+  programmesAssignesIds?: string[];
+  saison?: string;
 }
 
 export interface ParentFormValues {

@@ -1,4 +1,5 @@
 import { Player, PlayerFormValues } from "@/types/club";
+import { getCurrentSeason } from "./season";
 
 export const normalizePlayerFormValues = (
   values: PlayerFormValues,
@@ -46,6 +47,7 @@ export const normalizePlayerFormValues = (
 
   planPaiement: values.planPaiement || "PLAN #1 (Annuel)",
   modePaiementChoisi: values.modePaiementChoisi || "Transfert bancaire",
+  saison: values.saison || getCurrentSeason(),
 });
 
 export const toPlayerFormValues = (player: Player): PlayerFormValues => ({
@@ -90,6 +92,7 @@ export const toPlayerFormValues = (player: Player): PlayerFormValues => ({
 
     planPaiement: player.planPaiement,
     modePaiementChoisi: player.modePaiementChoisi,
+    saison: player.saison,
   }),
 });
 

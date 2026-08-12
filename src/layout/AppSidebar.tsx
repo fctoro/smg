@@ -59,6 +59,18 @@ const adminNavItems: NavItem[] = [
     path: "/joueurs",
   },
   {
+    icon: <DollarLineIcon />,
+    name: "Paiements",
+    path: "/paiements",
+  },
+  {
+    icon: <DocsIcon />,
+    name: "RP Parents",
+    path: "/recus",
+    new: true,
+    sections: ["Paiements"],
+  },
+  {
     icon: <TaskIcon />,
     name: "Statuts Spéciaux",
     path: "/joueurs/statuts-speciaux",
@@ -99,18 +111,6 @@ const adminNavItems: NavItem[] = [
     name: "Programmes",
     path: "/programmes",
     new: true,
-  },
-  {
-    icon: <DollarLineIcon />,
-    name: "Paiements",
-    path: "/paiements",
-  },
-  {
-    icon: <DocsIcon />,
-    name: "RP Parents",
-    path: "/recus",
-    new: true,
-    sections: ["Paiements"],
   },
   {
     icon: <TaskIcon />,

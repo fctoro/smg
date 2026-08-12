@@ -22,7 +22,7 @@ export async function insertPlayerAdmin(insertPayload: any) {
     .insert(insertPayload)
     .select("EtudiantID")
     .single();
-
+ 
   if (error) {
     return { success: false, error: error.message };
   }

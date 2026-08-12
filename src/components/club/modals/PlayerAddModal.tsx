@@ -17,7 +17,7 @@ interface PlayerAddModalProps {
 
 export function PlayerAddModal({ isOpen, onClose }: PlayerAddModalProps) {
   const { players, setPlayers } = useClubData();
-  const [successMessage, setSuccessMessage] = useState("");
+  const [toast, setToast] = useState<{ message: string; type?: "success" | "error" | "info" } | null>(null);
   
   const categories = useMemo(
     () => [...new Set([...DEFAULT_CATEGORIES, ...players.map((player) => player.categorie)])],
@@ -48,22 +48,23 @@ export function PlayerAddModal({ isOpen, onClose }: PlayerAddModalProps) {
           await syncPlayerProgrammes(String(inserted.EtudiantID), values.programmesAssignesIds);
         }
         
-        setSuccessMessage(
-          newPlayerLocal.statut === "alumni" 
+        setToast({
+          message: newPlayerLocal.statut === "alumni" 
             ? `Joueur enregistré dans alumni avec succès ! (Code: ${matriculeCode})` 
-            : `Joueur enregistré avec succès ! (Code: ${matriculeCode})`
-        );
+            : `Joueur enregistré avec succès ! (Code: ${matriculeCode})`,
+          type: "success"
+        });
         
         setTimeout(() => {
-          setSuccessMessage("");
+          setToast(null);
           onClose();
         }, 3000);
       } else {
-        alert("Erreur lors de la création. Aucune ID retournée.");
+        setToast({ message: "Erreur lors de la création. Aucune ID retournée.", type: "error" });
       }
     } catch (error) {
       console.error(error);
-      alert("Erreur lors de la création. Veuillez réessayer.");
+      setToast({ message: "Erreur lors de la création. Veuillez réessayer.", type: "error" });
     }
   };
 
@@ -81,8 +82,8 @@ export function PlayerAddModal({ isOpen, onClose }: PlayerAddModalProps) {
           </div>
         </div>
         
-        {successMessage && (
-          <ToastNotification message={successMessage} onClose={() => setSuccessMessage("")} />
+        {toast && (
+          <ToastNotification message={toast.message} type={toast.type} onClose={() => setToast(null)} />
         )}
 
         <div className="max-h-[70vh] overflow-y-auto pr-2 px-1 -mx-1 mt-5 custom-scrollbar">

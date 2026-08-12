@@ -63,6 +63,14 @@ export const updatePlayerInSupabase = async (playerId: string, data: Partial<Pla
   if (data.photoUrl !== undefined && data.photoUrl !== "/images/user/silhouette.svg") updatePayload.PhotoIdentiteUrl = data.photoUrl;
   if (data.saison !== undefined) updatePayload.Saison = data.saison;
 
+  if (data.urgenceNomPrenom !== undefined) updatePayload.UrgenceNomPrenom = data.urgenceNomPrenom;
+  if (data.urgenceLien !== undefined) updatePayload.UrgenceLien = data.urgenceLien;
+  if (data.urgenceTelephone !== undefined) updatePayload.UrgenceTelephone = data.urgenceTelephone;
+  if (data.urgenceEmail !== undefined) updatePayload.UrgenceEmail = data.urgenceEmail;
+  if (data.urgenceAdresse !== undefined) updatePayload.UrgenceAdresse = data.urgenceAdresse;
+  if (data.tailleHaut !== undefined) updatePayload.TailleHaut = data.tailleHaut;
+  if (data.tailleShort !== undefined) updatePayload.TailleShort = data.tailleShort;
+
   if (data.statut !== undefined) {
     updatePayload.EstAlumni = data.statut === "alumni" ? 1 : 0;
     if (data.statut === "abandonne") {
@@ -126,7 +134,19 @@ export const updatePlayerInSupabase = async (playerId: string, data: Partial<Pla
   }
 
   const { updatePlayerAdmin } = await import("@/app/actions/club");
-  const result = await updatePlayerAdmin(resolveEtudiantId(playerId), updatePayload);
+  let result = await updatePlayerAdmin(resolveEtudiantId(playerId), updatePayload);
+
+  if (!result.success && (result.error?.includes("PGRST204") || result.error?.toLowerCase().includes("column"))) {
+    delete updatePayload.UrgenceNomPrenom;
+    delete updatePayload.UrgenceLien;
+    delete updatePayload.UrgenceTelephone;
+    delete updatePayload.UrgenceEmail;
+    delete updatePayload.UrgenceAdresse;
+    delete updatePayload.TailleHaut;
+    delete updatePayload.TailleShort;
+    delete updatePayload.Saison;
+    result = await updatePlayerAdmin(resolveEtudiantId(playerId), updatePayload);
+  }
 
   if (!result.success) {
     console.warn("Mise à jour directe Supabase ignorée (état local mis à jour) :", result.error);
@@ -158,6 +178,13 @@ export const addPlayerToSupabase = async (data: Omit<Player & { photoIdentiteUrl
     IsDeleted: data.statut === "abandonne" ? 1 : 0,
     EstAlumni: data.statut === "alumni",
     Saison: data.saison || null,
+    UrgenceNomPrenom: data.urgenceNomPrenom || null,
+    UrgenceLien: data.urgenceLien || null,
+    UrgenceTelephone: data.urgenceTelephone || null,
+    UrgenceEmail: data.urgenceEmail || null,
+    UrgenceAdresse: data.urgenceAdresse || null,
+    TailleHaut: data.tailleHaut || null,
+    TailleShort: data.tailleShort || null,
   };
 
   const handleDocUpload = async (base64Str: string, docType: string) => {
@@ -196,8 +223,20 @@ export const addPlayerToSupabase = async (data: Omit<Player & { photoIdentiteUrl
   if (data.carteIdentiteParentUrl) insertPayload.CarteIdentiteParentUrl = await handleDocUpload(data.carteIdentiteParentUrl, "carte");
 
   const { insertPlayerAdmin } = await import("@/app/actions/club");
-  const result = await insertPlayerAdmin(insertPayload);
+  let result = await insertPlayerAdmin(insertPayload);
   
+  if (!result.success && (result.error?.includes("PGRST204") || result.error?.toLowerCase().includes("column"))) {
+    delete insertPayload.UrgenceNomPrenom;
+    delete insertPayload.UrgenceLien;
+    delete insertPayload.UrgenceTelephone;
+    delete insertPayload.UrgenceEmail;
+    delete insertPayload.UrgenceAdresse;
+    delete insertPayload.TailleHaut;
+    delete insertPayload.TailleShort;
+    delete insertPayload.Saison;
+    result = await insertPlayerAdmin(insertPayload);
+  }
+
   if (!result.success) {
     console.error("Erreur lors de l'ajout du joueur :", result.error);
     throw new Error(result.error);

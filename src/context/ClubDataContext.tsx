@@ -451,6 +451,13 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
               cotisationStatut: totalPaid > 0 ? "paid" : "pending",
               dernierPaiement: dernierPaiementDate,
               saison: currentDisplaySeason,
+              urgenceNomPrenom: primaryRecord.UrgenceNomPrenom || "",
+              urgenceLien: primaryRecord.UrgenceLien || "",
+              urgenceTelephone: primaryRecord.UrgenceTelephone || "",
+              urgenceEmail: primaryRecord.UrgenceEmail || "",
+              urgenceAdresse: primaryRecord.UrgenceAdresse || "",
+              tailleHaut: primaryRecord.TailleHaut || "M",
+              tailleShort: primaryRecord.TailleShort || "M",
             });
           });
 

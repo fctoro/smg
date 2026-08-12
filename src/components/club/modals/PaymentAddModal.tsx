@@ -9,6 +9,7 @@ import { addPaymentToSupabase, addInvoiceToSupabase } from "@/lib/club/supabase-
 import { validatePaymentPhotoFile, getPaymentPhotoPreviewUrl, uploadPaymentPhotoToSupabase } from "@/lib/club/payment-photo-utils";
 import { calculateDiscountedAmount, serializeReductionMetadata, type PaymentReductionType } from "@/lib/club/payment-reduction-utils";
 import { generateReceiptPDFBase64 } from "@/lib/club/pdf-generator";
+import { ToastNotification } from "@/components/ui/toast/ToastNotification";
 
 const inputClassName =
   "h-11 w-full rounded-lg border border-gray-300 bg-transparent px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs placeholder:text-gray-400 focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90";
@@ -168,6 +169,7 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
   const [paymentPhotoPreview, setPaymentPhotoPreview] = useState<string | null>(null);
   const [paymentPhotoError, setPaymentPhotoError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [toast, setToast] = useState<{ message: string; type?: "success" | "error" | "info" } | null>(null);
 
   const searchContainerRef = useRef<HTMLDivElement>(null);
 
@@ -227,16 +229,16 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
 
   const handleSubmit = async () => {
     if (!playerId || !periode || montantDonne <= 0 || (devise === "HTG" && taux <= 0)) {
-      alert("Veuillez remplir le joueur, la période et le montant payé.");
+      setToast({ message: "Veuillez remplir le joueur, la période et le montant payé.", type: "error" });
       return;
     }
     const hasAdhesion = selectedPricing.some((item) => item === "adhesion-fc" || item === "adhesion-ti");
     if (!hasAdhesion) {
-      alert("Veuillez sélectionner une adhésion FC TORO ou TI TORO.");
+      setToast({ message: "Veuillez sélectionner une adhésion FC TORO ou TI TORO.", type: "error" });
       return;
     }
     if (!selectedPlan) {
-      alert("Veuillez sélectionner un plan de paiement.");
+      setToast({ message: "Veuillez sélectionner un plan de paiement.", type: "error" });
       return;
     }
 
@@ -276,20 +278,25 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
         datePaiement: statut === "paid" ? datePaiement || undefined : undefined,
       };
 
-      await addInvoiceToSupabase({
-        noFacture: `FAC-${Date.now()}`,
-        playerId,
-        sessionId: "1",
-        remarque: finalRemarque,
-        montantAPayer: discountedDue,
-        montantPaye: paymentAmount,
-        montantUS,
-        montantHTG,
-        devise,
-        statut,
-        dateFacture: new Date().toISOString(),
-        datePaiement: dataToInsert.datePaiement,
-      });
+      try {
+        await addInvoiceToSupabase({
+          noFacture: `FAC-${Date.now()}`,
+          playerId,
+          sessionId: "1",
+          remarque: finalRemarque,
+          montantAPayer: discountedDue,
+          montantPaye: paymentAmount,
+          montantUS,
+          montantHTG,
+          devise,
+          statut,
+          dateFacture: new Date().toISOString(),
+          datePaiement: dataToInsert.datePaiement,
+        });
+      } catch (invoiceErr) {
+        console.warn("Erreur lors de la création de la facture (tblFacture n'existe peut-être pas):", invoiceErr);
+        // On continue quand même pour ne pas bloquer le paiement
+      }
       const inserted = await addPaymentToSupabase(dataToInsert);
       if (!inserted) {
         throw new Error("Paiement non créé.");
@@ -364,7 +371,7 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
       handleClose();
     } catch (error) {
       console.error(error);
-      alert("Erreur lors de l'ajout du paiement. Veuillez réessayer.");
+      setToast({ message: "Erreur lors de l'ajout du paiement. Veuillez réessayer.", type: "error" });
     } finally {
       setIsSubmitting(false);
     }
@@ -524,6 +531,10 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
             </p>
           </div>
         </div>
+
+        {toast && (
+          <ToastNotification message={toast.message} type={toast.type} onClose={() => setToast(null)} />
+        )}
 
         <div className="p-6 overflow-y-auto custom-scrollbar space-y-4">
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">

@@ -8,6 +8,7 @@ import { PaymentMethod, PaymentStatus } from "@/types/club";
 import { getPlayerFullName } from "@/lib/club/metrics";
 import { updatePaymentInSupabase } from "@/lib/club/supabase-crud";
 import { validatePaymentPhotoFile, getPaymentPhotoPreviewUrl, uploadPaymentPhotoToSupabase } from "@/lib/club/payment-photo-utils";
+import { ToastNotification } from "@/components/ui/toast/ToastNotification";
 
 const inputClassName =
   "h-11 w-full rounded-lg border border-gray-300 bg-transparent px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs placeholder:text-gray-400 focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90";
@@ -35,6 +36,7 @@ export default function ModifyPaymentPage({ params }: { params: Promise<{ id: st
   const [paymentPhoto, setPaymentPhoto] = useState<File | null>(null);
   const [paymentPhotoPreview, setPaymentPhotoPreview] = useState<string | null>(null);
   const [paymentPhotoError, setPaymentPhotoError] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ message: string; type?: "success" | "error" | "info" } | null>(null);
 
   const searchContainerRef = { current: null as HTMLDivElement | null };
 
@@ -139,9 +141,13 @@ export default function ModifyPaymentPage({ params }: { params: Promise<{ id: st
 
       router.push("/paiements");
     } catch (error) {
-      const errorMsg = `Erreur lors de la modification du paiement: ${error instanceof Error ? error.message : "Erreur inconnue"}`;
-      setError(errorMsg);
-      alert(errorMsg);
+      console.error("Error updating payment:", error);
+      const errorMsg = error instanceof Error 
+        ? error.message 
+        : (error as any)?.message 
+          ? (error as any).message 
+          : "Erreur inconnue";
+      setToast({ message: `Erreur lors de la modification du paiement: ${errorMsg}`, type: "error" });
     }
   };
 
@@ -156,6 +162,9 @@ export default function ModifyPaymentPage({ params }: { params: Promise<{ id: st
   return (
     <div className="space-y-6">
       <PageBreadcrumb pageTitle="Modifier un paiement" />
+      {toast && (
+        <ToastNotification message={toast.message} type={toast.type} onClose={() => setToast(null)} />
+      )}
       <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03] sm:p-6">
         <div className="mb-4 rounded-lg bg-blue-50 px-4 py-3 dark:bg-blue-500/10">
           <p className="text-sm text-blue-800 dark:text-blue-200">

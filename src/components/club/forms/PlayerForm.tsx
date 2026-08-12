@@ -597,28 +597,30 @@ export default function PlayerForm({
           <div>
             <label className="mb-1.5 block text-xs font-medium text-gray-700 dark:text-gray-300">Taille du Haut (Top) *</label>
             <select value={formValues.tailleHaut} onChange={(e) => updateField("tailleHaut", e.target.value)} className={selectClassName}>
-              <option value="4XS">4XS (4-5 ans)</option>
-              <option value="3XS">3XS (6-7 ans)</option>
-              <option value="2XS">2XS (8-9 ans)</option>
-              <option value="XS">XS (10-11 ans)</option>
-              <option value="S">S</option>
-              <option value="M">M</option>
-              <option value="L">L</option>
-              <option value="XL">XL</option>
+              <option value="YXS">YXS (Youth Extra Small)</option>
+              <option value="YS">YS (Youth Small)</option>
+              <option value="YM">YM (Youth Medium)</option>
+              <option value="YL">YL (Youth Large)</option>
+              <option value="YXL">YXL (Youth Extra Large)</option>
+              <option value="AS">AS (Adult Small)</option>
+              <option value="AM">AM (Adult Medium)</option>
+              <option value="AL">AL (Adult Large)</option>
+              <option value="AXL">AXL (Adult Extra Large)</option>
             </select>
           </div>
 
           <div>
             <label className="mb-1.5 block text-xs font-medium text-gray-700 dark:text-gray-300">Taille du Short *</label>
             <select value={formValues.tailleShort} onChange={(e) => updateField("tailleShort", e.target.value)} className={selectClassName}>
-              <option value="4XS">4XS (4-5 ans)</option>
-              <option value="3XS">3XS (6-7 ans)</option>
-              <option value="2XS">2XS (8-9 ans)</option>
-              <option value="XS">XS (10-11 ans)</option>
-              <option value="S">S</option>
-              <option value="M">M</option>
-              <option value="L">L</option>
-              <option value="XL">XL</option>
+              <option value="YXS">YXS (Youth Extra Small)</option>
+              <option value="YS">YS (Youth Small)</option>
+              <option value="YM">YM (Youth Medium)</option>
+              <option value="YL">YL (Youth Large)</option>
+              <option value="YXL">YXL (Youth Extra Large)</option>
+              <option value="AS">AS (Adult Small)</option>
+              <option value="AM">AM (Adult Medium)</option>
+              <option value="AL">AL (Adult Large)</option>
+              <option value="AXL">AXL (Adult Extra Large)</option>
             </select>
           </div>
 

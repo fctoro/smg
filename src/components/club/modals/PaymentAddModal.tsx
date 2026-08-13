@@ -141,7 +141,7 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
   const { players, setPayments, rubriques } = useClubData();
 
   const rubricOptions = useMemo(() => {
-    return (rubriques || []).filter((item) => item.actif !== false);
+    return (rubriques || []).filter((item) => item.actif !== false && item.categorie !== "Payroll");
   }, [rubriques]);
 
   const adhesionOptions = useMemo(() => {

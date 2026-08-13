@@ -5,12 +5,33 @@ import { SiteMessage } from "@/types/club";
 export const fetchSiteMessages = async (): Promise<SiteMessage[]> => {
   const allMessages: SiteMessage[] = [];
 
-  const { data: siteData, error: siteErr } = await supabase
-    .from("site_messages")
-    .select("*")
-    .order("created_at", { ascending: false });
+  const fetchAllSiteMessages = async () => {
+    let allData: any[] = [];
+    let from = 0;
+    const step = 1000;
+    while (true) {
+      const { data, error } = await supabase
+        .from("site_messages")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .range(from, from + step - 1);
+      
+      if (error) break;
+      if (data && data.length > 0) {
+        allData = [...allData, ...data];
+        if (data.length < step) break;
+        from += step;
+      } else {
+        break;
+      }
+    }
+    return allData;
+  };
 
-  if (!siteErr && siteData) {
+  const siteData = await fetchAllSiteMessages();
+  const siteErr = null;
+
+  if (!siteErr && siteData && siteData.length > 0) {
     const formattedSite = siteData.map((m: any) => {
       // Map the real DB columns to the UI interface
       const enfantNom = m.payload?.child_first_name 

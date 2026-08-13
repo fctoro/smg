@@ -223,38 +223,145 @@ export default function BoiteDeReception() {
   const handleExportCSV = () => {
     confirm({
       title: "Exporter la liste",
-      message: `Voulez-vous vraiment exporter les demandes de la catégorie "${getTabTitle(activeTab)}" au format CSV ?`,
+      message: `Voulez-vous vraiment exporter les demandes de la catégorie "${getTabTitle(activeTab)}" au format Excel (.xls) ?`,
       onConfirm: () => {
-        const headers = ["Statut", "Catégorie", "Contact", "Email", "Téléphone", "Enfant", "Date", "Contenu"];
-        let csvContent = "\uFEFF" + headers.join(",") + "\n";
-        
+        const isDetection = activeTab === "detection";
+        const headers = isDetection
+          ? [
+              "N° Détection",
+              "Statut",
+              "Nom Joueur",
+              "Prénom Joueur",
+              "Sexe",
+              "Date de Naissance",
+              "Lieu de Naissance",
+              "Adresse / Zone de Résidence",
+              "Téléphone",
+              "Email",
+              "Parent / Tuteur",
+              "Pied Dominant",
+              "Club Actuel",
+              "Niveau Actuel",
+              "Date Demande"
+            ]
+          : [
+              "ID / Réf",
+              "Statut",
+              "Catégorie",
+              "Contact (Parent)",
+              "Email",
+              "Téléphone",
+              "Enfant / Joueur",
+              "Date de Naissance",
+              "Adresse",
+              "Date Demande",
+              "Contenu"
+            ];
+
+        const rowsData: string[][] = [];
+
         filteredMessages.forEach(msg => {
-          const enfantNom = msg.metadata?.enfant_nom || msg.metadata?.child_last_name || msg.metadata?.nom || "";
-          const enfantPrenom = msg.metadata?.enfant_prenom || msg.metadata?.child_first_name || msg.metadata?.prenom || "";
+          const enfantNom = msg.metadata?.nom || msg.metadata?.enfant_nom || msg.metadata?.child_last_name || "";
+          const enfantPrenom = msg.metadata?.prenom || msg.metadata?.enfant_prenom || msg.metadata?.child_first_name || "";
           const enfant = `${enfantPrenom} ${enfantNom}`.trim();
           
           const rawDate = new Date(msg.created_at);
-          const formattedDate = `${rawDate.getDate().toString().padStart(2, '0')}/${(rawDate.getMonth() + 1).toString().padStart(2, '0')}/${rawDate.getFullYear()}`;
+          const formattedDate = !isNaN(rawDate.getTime()) 
+            ? `${rawDate.getDate().toString().padStart(2, '0')}/${(rawDate.getMonth() + 1).toString().padStart(2, '0')}/${rawDate.getFullYear()}` 
+            : "";
           
-          const row = [
-            msg.statut,
-            getTabTitle(msg.type_message),
-            msg.contact_nom,
-            msg.contact_email,
-            msg.contact_telephone,
-            enfant,
-            formattedDate,
-            msg.contenu?.replace(/\n/g, ' ') || ""
-          ];
-          const csvRow = row.map(field => `"${(field || "").toString().replace(/"/g, '""')}"`);
-          csvContent += csvRow.join(",") + "\n";
+          const dateNaissance = msg.metadata?.date_naissance || msg.metadata?.child_birth_date || msg.metadata?.child_dob || "";
+          const adresse = msg.metadata?.zone_residence || msg.metadata?.adresse || msg.metadata?.child_address || msg.metadata?.guardian_address || "";
+          const numDetection = msg.metadata?.numero_detection || msg.reference_id || msg.id;
+
+          const row = isDetection
+            ? [
+                numDetection,
+                msg.statut === "nouveau" ? "Nouveau" : msg.statut === "inscrit" ? "Inscrit" : msg.statut,
+                enfantNom,
+                enfantPrenom,
+                msg.metadata?.sexe || "",
+                dateNaissance,
+                msg.metadata?.lieu_naissance || "",
+                adresse,
+                msg.contact_telephone || "",
+                msg.contact_email || "",
+                msg.contact_nom || "",
+                msg.metadata?.pied_dominant || "",
+                msg.metadata?.club_actuel || "",
+                msg.metadata?.niveau_actuel || "",
+                formattedDate
+              ]
+            : [
+                msg.id,
+                msg.statut,
+                getTabTitle(msg.type_message),
+                msg.contact_nom || "",
+                msg.contact_email || "",
+                msg.contact_telephone || "",
+                enfant,
+                dateNaissance,
+                adresse,
+                formattedDate,
+                msg.contenu?.replace(/\n/g, ' ') || ""
+              ];
+
+          rowsData.push(row);
         });
 
-        const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+        const escapeXml = (str: any) =>
+          String(str || "")
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&apos;");
+
+        const excelTable = `
+          <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+          <head>
+            <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+            <!--[if gte mso 9]>
+            <xml>
+              <x:ExcelWorkbook>
+                <x:ExcelWorksheets>
+                  <x:ExcelWorksheet>
+                    <x:Name>${escapeXml(getTabTitle(activeTab))}</x:Name>
+                    <x:WorksheetOptions>
+                      <x:DisplayGridlines/>
+                    </x:WorksheetOptions>
+                  </x:ExcelWorksheet>
+                </x:ExcelWorksheets>
+              </x:ExcelWorkbook>
+            </xml>
+            <![endif]-->
+            <style>
+              table { border-collapse: collapse; font-family: Arial, sans-serif; font-size: 11pt; }
+              th { background-color: #C8102E; color: #FFFFFF; font-weight: bold; border: 1px solid #999999; padding: 8px; text-align: left; }
+              td { border: 1px solid #CCCCCC; padding: 6px; mso-number-format:"\\@"; vertical-align: top; }
+              tr:nth-child(even) { background-color: #F9F9F9; }
+            </style>
+          </head>
+          <body>
+            <table>
+              <thead>
+                <tr>
+                  ${headers.map(h => `<th>${escapeXml(h)}</th>`).join('')}
+                </tr>
+              </thead>
+              <tbody>
+                ${rowsData.map(r => `<tr>${r.map(cell => `<td>${escapeXml(cell)}</td>`).join('')}</tr>`).join('')}
+              </tbody>
+            </table>
+          </body>
+          </html>
+        `;
+
+        const blob = new Blob([excelTable], { type: "application/vnd.ms-excel;charset=utf-8;" });
         const url = URL.createObjectURL(blob);
         const link = document.createElement("a");
         link.href = url;
-        link.setAttribute("download", `demandes_${activeTab}.csv`);
+        link.setAttribute("download", `export_${activeTab}_${Date.now()}.xls`);
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);

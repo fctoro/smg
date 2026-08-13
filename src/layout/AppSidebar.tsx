@@ -73,6 +73,12 @@ const adminNavItems: NavItem[] = [
     path: "/employes",
   },
   {
+    icon: <DollarLineIcon />,
+    name: "Payroll",
+    path: "/payroll",
+    sections: ["Employés", "Paiements"],
+  },
+  {
     icon: <DocsIcon />,
     name: "Demandes",
     path: "/demandes/inscriptions",
@@ -94,12 +100,6 @@ const adminNavItems: NavItem[] = [
     name: "Alumni",
     icon: <DocsIcon />,
     path: "/alumni",
-  },
-  {
-    icon: <DollarLineIcon />,
-    name: "Payroll",
-    path: "/payroll",
-    sections: ["Employés", "Paiements"],
   },
   {
     icon: <CalenderIcon />,

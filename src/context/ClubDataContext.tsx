@@ -397,7 +397,14 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
               }
             }
 
-            const currentDisplaySeason = latestSeasonStr || primaryRecord.Saison || entrySeason || "";
+            if (finalStatutJoueur && ["actif", "inactif", "blesse", "suspendu", "abandonne", "alumni"].includes(finalStatutJoueur.toLowerCase())) {
+              playerStatus = finalStatutJoueur.toLowerCase() as PlayerStatus;
+            }
+
+            let currentDisplaySeason = latestSeasonStr || primaryRecord.Saison || entrySeason || "";
+            if (typeof currentDisplaySeason === 'string' && currentDisplaySeason.trim().toLowerCase() === "saison 2026-2027") {
+              currentDisplaySeason = "2026-2027";
+            }
 
             fetchedPlayers.push({
               id: String(primaryRecord.EtudiantID),

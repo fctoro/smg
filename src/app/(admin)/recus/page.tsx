@@ -497,7 +497,7 @@ export default function RecusPage() {
               <option value="all">Toutes les saisons</option>
               {seasons.map((season) => (
                 <option key={season} value={season}>
-                  Saison {season}
+                  {String(season).toLowerCase().startsWith('saison') ? season : `Saison ${season}`}
                 </option>
               ))}
             </select>

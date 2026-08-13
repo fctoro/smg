@@ -220,6 +220,48 @@ export default function BoiteDeReception() {
     });
   };
 
+  const handleExportCSV = () => {
+    confirm({
+      title: "Exporter la liste",
+      message: `Voulez-vous vraiment exporter les demandes de la catégorie "${getTabTitle(activeTab)}" au format CSV ?`,
+      onConfirm: () => {
+        const headers = ["Statut", "Catégorie", "Contact", "Email", "Téléphone", "Enfant", "Date", "Contenu"];
+        let csvContent = "\uFEFF" + headers.join(",") + "\n";
+        
+        filteredMessages.forEach(msg => {
+          const enfantNom = msg.metadata?.enfant_nom || msg.metadata?.child_last_name || msg.metadata?.nom || "";
+          const enfantPrenom = msg.metadata?.enfant_prenom || msg.metadata?.child_first_name || msg.metadata?.prenom || "";
+          const enfant = `${enfantPrenom} ${enfantNom}`.trim();
+          
+          const rawDate = new Date(msg.created_at);
+          const formattedDate = `${rawDate.getDate().toString().padStart(2, '0')}/${(rawDate.getMonth() + 1).toString().padStart(2, '0')}/${rawDate.getFullYear()}`;
+          
+          const row = [
+            msg.statut,
+            getTabTitle(msg.type_message),
+            msg.contact_nom,
+            msg.contact_email,
+            msg.contact_telephone,
+            enfant,
+            formattedDate,
+            msg.contenu?.replace(/\n/g, ' ') || ""
+          ];
+          const csvRow = row.map(field => `"${(field || "").toString().replace(/"/g, '""')}"`);
+          csvContent += csvRow.join(",") + "\n";
+        });
+
+        const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.setAttribute("download", `demandes_${activeTab}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      }
+    });
+  };
+
   const getTabTitle = (tab: string) => {
     switch (tab) {
       case "inscription_joueur": return "Inscriptions Joueur";
@@ -300,7 +342,10 @@ export default function BoiteDeReception() {
           </div>
           
           <div className="flex items-center gap-3 w-full md:w-auto">
-            <button className="inline-flex h-10 items-center justify-center gap-2 whitespace-nowrap rounded-lg bg-[#107C41] px-4 text-sm font-medium text-white shadow-theme-xs hover:bg-[#0c5e31] transition-colors">
+            <button 
+              onClick={handleExportCSV}
+              className="inline-flex h-10 items-center justify-center gap-2 whitespace-nowrap rounded-lg bg-[#107C41] px-4 text-sm font-medium text-white shadow-theme-xs hover:bg-[#0c5e31] transition-colors"
+            >
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
                 <path d="M14 2v6h6"></path>
@@ -380,6 +425,8 @@ export default function BoiteDeReception() {
               <option value="all">Tous les statuts</option>
               <option value="nouveau">Nouveau</option>
               <option value="lu">Lu</option>
+              <option value="inscrit">Enregistré / Inscrit</option>
+              <option value="archive">Archivé / Refusé</option>
             </select>
           </div>
         </div>
@@ -432,10 +479,30 @@ export default function BoiteDeReception() {
                     </td>
                     <td className="px-4 py-4 align-top">
                       <div className="font-medium text-gray-900 dark:text-white">
-                        {msg.contact_nom}
-                        {msg.metadata?.enfant_nom && !msg.contact_nom.includes("Enfant:") && (
-                          <span className="font-normal text-gray-500 dark:text-gray-400"> (Enfant: {msg.metadata.enfant_nom})</span>
-                        )}
+                        {(() => {
+                          const enfantNom = msg.metadata?.enfant_nom || msg.metadata?.child_last_name || msg.metadata?.nom || "";
+                          const enfantPrenom = msg.metadata?.enfant_prenom || msg.metadata?.child_first_name || msg.metadata?.prenom || "";
+                          const enfant = `${enfantPrenom} ${enfantNom}`.trim();
+                          
+                          // Remove the (Enfant: ...) part from contact_nom if it exists
+                          let cleanParentName = msg.contact_nom || "";
+                          const enfantIdx = cleanParentName.toLowerCase().indexOf("(enfant");
+                          if (enfantIdx !== -1) {
+                            cleanParentName = cleanParentName.substring(0, enfantIdx).trim();
+                          }
+                          
+                          if (enfant) {
+                            return (
+                              <>
+                                {enfant}
+                                <span className="font-normal text-gray-500 dark:text-gray-400">
+                                  {cleanParentName ? ` (Parent: ${cleanParentName})` : ""}
+                                </span>
+                              </>
+                            );
+                          }
+                          return cleanParentName || msg.contact_nom;
+                        })()}
                       </div>
                       <div className="text-gray-500 dark:text-gray-400 text-xs">
                         {msg.contact_email} {msg.contact_telephone && `| ${msg.contact_telephone}`}
@@ -682,7 +749,18 @@ export default function BoiteDeReception() {
                 Refuser
               </button>
               
-              {verificationResult.status === "not_verified" ? (
+              {selectedMessage.type_message === "detection" ? (
+                <button
+                  onClick={async () => {
+                    await updateMessageStatus(selectedMessage.id, "inscrit");
+                    setMessages(prev => prev.map(m => m.id === selectedMessage.id ? { ...m, statut: "inscrit" as any } : m));
+                    setSelectedMessage(null);
+                  }}
+                  className="w-full sm:w-auto rounded-xl bg-[#107C41] px-8 py-2.5 text-sm font-bold text-white shadow-md shadow-green-500/25 hover:bg-[#0c5e31] transition-all"
+                >
+                  Enregistrer
+                </button>
+              ) : verificationResult.status === "not_verified" ? (
                 <button
                   onClick={handleVerifyPlayer}
                   className="w-full sm:w-auto rounded-xl bg-gray-800 px-8 py-2.5 text-sm font-bold text-white shadow-md shadow-gray-500/25 hover:bg-gray-700 transition-all"

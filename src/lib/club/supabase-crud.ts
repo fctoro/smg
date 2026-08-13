@@ -242,7 +242,23 @@ export const addPlayerToSupabase = async (data: Omit<Player & { photoIdentiteUrl
     throw new Error(result.error);
   }
 
-  return { EtudiantID: result.data?.EtudiantID };
+  const newEtudiantId = result.data?.EtudiantID;
+  if (newEtudiantId && data.statut) {
+    try {
+      const { upsertPlayerStatusAdmin } = await import("@/app/actions/club");
+      await upsertPlayerStatusAdmin(Number(newEtudiantId), data.statut);
+    } catch (e) {
+      await supabase
+        .from('player_status')
+        .upsert({ 
+          player_id: Number(newEtudiantId), 
+          status: data.statut,
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'player_id' });
+    }
+  }
+
+  return { EtudiantID: newEtudiantId };
 };
 
 // --- EMPLOYEES (tblEmployes) ---

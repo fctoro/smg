@@ -161,7 +161,7 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
   const [periode, setPeriode] = useState(currentPeriod());
   const [statut, setStatut] = useState<PaymentStatus>("pending");
   const [methode, setMethode] = useState<PaymentMethod>("virement");
-  const [datePaiement, setDatePaiement] = useState("");
+  const [datePaiement, setDatePaiement] = useState(() => new Date().toISOString().split("T")[0]);
   const [selectedPricing, setSelectedPricing] = useState<string[]>([]);
   const [selectedPlan, setSelectedPlan] = useState<string>("");
   const [reductionType, setReductionType] = useState<PaymentReductionType>("none");
@@ -214,7 +214,7 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
     setPeriode(currentPeriod());
     setStatut("pending");
     setMethode("virement");
-    setDatePaiement("");
+    setDatePaiement(new Date().toISOString().split("T")[0]);
     setSelectedPricing([]);
     setSelectedPlan("");
     setReductionType("none");
@@ -234,7 +234,7 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
       setToast({ message: "Veuillez remplir le joueur, la période et le montant payé.", type: "error" });
       return;
     }
-    const hasAdhesion = selectedPricing.some((item) => item === "adhesion-fc" || item === "adhesion-ti");
+    const hasAdhesion = selectedPricingItems.some((item) => item.estAdhesion || item.id === "adhesion-fc" || item.id === "adhesion-ti");
     if (!hasAdhesion) {
       setToast({ message: "Veuillez sélectionner une adhésion FC TORO ou TI TORO.", type: "error" });
       return;
@@ -247,10 +247,10 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
     setIsSubmitting(true);
     try {
       const plan = paymentPlans.find((item) => item.id === selectedPlan)!;
-      const selectedAdhesion = selectedPricing.find((item) => item === "adhesion-fc" || item === "adhesion-ti");
-      const isTiToro = selectedAdhesion === "adhesion-ti";
+      const selectedAdhesionItem = selectedPricingItems.find((item) => item.estAdhesion || item.id === "adhesion-fc" || item.id === "adhesion-ti");
+      const isTiToro = selectedAdhesionItem ? (selectedAdhesionItem.rubrique.toLowerCase().includes("ti toro") || selectedAdhesionItem.id === "adhesion-ti") : false;
       const nonAdhesionSum = selectedPricingItems
-        .filter((item) => item.id !== "adhesion-fc" && item.id !== "adhesion-ti")
+        .filter((item) => !item.estAdhesion && item.id !== "adhesion-fc" && item.id !== "adhesion-ti")
         .reduce((sum, item) => sum + item.montant, 0);
       const totalDue = (isTiToro ? plan.montantTIToro : plan.montantFCToro) + nonAdhesionSum;
       const discountedDue = calculateDiscountedAmount(totalDue, reductionType, customReductionPercent);
@@ -260,8 +260,12 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
       const montantUS = devise === "US" ? paymentAmount : (taux > 0 ? paymentAmount / taux : 0);
       const montantHTG = devise === "HTG" ? paymentAmount : 0;
       const adhesionCode = isTiToro ? "TI_TORO" : "FC_TORO";
+      const selectedAdhesionTitle = selectedAdhesionItem?.rubrique || "Adhésion";
+      const selectedRubricsLabel = selectedPricingItems
+        .filter((item) => !item.estAdhesion && item.id !== "adhesion-fc" && item.id !== "adhesion-ti")
+        .map((item) => item.rubrique)
+        .filter(Boolean).join(", ");
       const reductionMetadata = serializeReductionMetadata(reductionType, customReductionPercent);
-      const selectedRubricsLabel = selectedPricing.filter((item) => item !== "adhesion-fc" && item !== "adhesion-ti").map((item) => rubricOptions.find((pricingItem) => pricingItem.id === item)?.rubrique).filter(Boolean).join(", ");
       const paymentMarkers = `[ADHESION:${adhesionCode}] [PLAN:${selectedPlan.toUpperCase()}] [STATUT:${statut.toUpperCase()}]`;
       const adhesionLabel = isTiToro ? "Adhésion: TI TORO" : "Adhésion: FC TORO";
       const finalRemarque = `${paymentMarkers} ${reductionMetadata ? `${reductionMetadata} ` : ""}${description.trim()} ${adhesionLabel}${selectedRubricsLabel ? ` | Rubriques: ${selectedRubricsLabel}` : ""} Plan: ${plan.plan}`.trim();
@@ -399,9 +403,14 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
         return current.filter((value) => value !== itemId);
       }
 
-      const isAdhesion = itemId === "adhesion-fc" || itemId === "adhesion-ti";
+      const clickedItem = rubricOptions.find((r) => r.id === itemId);
+      const isAdhesion = clickedItem?.estAdhesion || itemId === "adhesion-fc" || itemId === "adhesion-ti";
+      
       if (isAdhesion) {
-        return [...current.filter((value) => value !== "adhesion-fc" && value !== "adhesion-ti"), itemId];
+        const otherAdhesionIds = rubricOptions
+          .filter((r) => r.estAdhesion || r.id === "adhesion-fc" || r.id === "adhesion-ti")
+          .map((r) => r.id);
+        return [...current.filter((value) => !otherAdhesionIds.includes(value)), itemId];
       }
 
       return [...current, itemId];
@@ -409,7 +418,7 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
   };
 
   const selectedPricingItems = rubricOptions.filter((item) => selectedPricing.includes(item.id));
-  const selectedAdhesionItem = adhesionOptions.find((item) => item.id === selectedPricing.find((value) => value === "adhesion-fc" || value === "adhesion-ti"));
+  const selectedAdhesionItem = selectedPricingItems.find((item) => item.estAdhesion || item.id === "adhesion-fc" || item.id === "adhesion-ti");
 
   const handlePlanChange = (planId: string) => {
     setSelectedPlan(planId);
@@ -420,12 +429,11 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
   };
 
   const selectedPlanData = paymentPlans.find((plan) => plan.id === selectedPlan);
-  const selectedAdhesion = selectedPricing.find((item) => item === "adhesion-fc" || item === "adhesion-ti");
-  const isTiToro = selectedAdhesion === "adhesion-ti";
+  const isTiToro = selectedAdhesionItem ? (selectedAdhesionItem.rubrique.toLowerCase().includes("ti toro") || selectedAdhesionItem.id === "adhesion-ti") : false;
 
   const baseTotalDue = useMemo(() => {
     const nonAdhesionSum = selectedPricingItems
-      .filter((item) => item.id !== "adhesion-fc" && item.id !== "adhesion-ti")
+      .filter((item) => !item.estAdhesion && item.id !== "adhesion-fc" && item.id !== "adhesion-ti")
       .reduce((sum, item) => sum + item.montant, 0);
 
     let adhesionAmount = 0;

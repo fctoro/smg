@@ -27,6 +27,7 @@ interface PricingItem {
   devise: "US" | "HTG";
   precision: string;
   categorie?: string;
+  estAdhesion?: boolean;
 }
 
 interface PaymentPlan {
@@ -144,7 +145,7 @@ export default function NewPaymentPage() {
   const [periode, setPeriode] = useState(currentPeriod());
   const [statut, setStatut] = useState<PaymentStatus>("pending");
   const [methode, setMethode] = useState<PaymentMethod>("virement");
-  const [datePaiement, setDatePaiement] = useState("");
+  const [datePaiement, setDatePaiement] = useState(() => new Date().toISOString().split("T")[0]);
   const [selectedPricing, setSelectedPricing] = useState<string[]>([]);
   const [selectedPlan, setSelectedPlan] = useState<string>("");
   const [montantDonne, setMontantDonne] = useState<number>(0);
@@ -242,7 +243,8 @@ export default function NewPaymentPage() {
       alert(msg);
       return;
     }
-    if (!selectedPricing.includes("adhesion-fc") && !selectedPricing.includes("adhesion-ti")) {
+    const hasAdhesion = selectedPricingItems.some((item) => item.estAdhesion || item.id === "adhesion-fc" || item.id === "adhesion-ti");
+    if (!hasAdhesion) {
       const msg = "❌ Erreur: Veuillez sélectionner une adhésion FC TORO ou TI TORO.";
       setError(msg);
       alert(msg);
@@ -287,12 +289,10 @@ export default function NewPaymentPage() {
       const paymentStatus: PaymentStatus = statut;
 
       const planRemark = selectedPlan ? `Plan: ${paymentPlans.find(p => p.id === selectedPlan)?.plan}` : "";
-      const adhesionRemark = selectedPricing.includes("adhesion-ti")
-        ? "Adhésion: TI TORO"
-        : selectedPricing.includes("adhesion-fc")
-          ? "Adhésion: FC TORO"
-          : "";
-      const adhesionCode = selectedPricing.includes("adhesion-ti") ? "TI_TORO" : "FC_TORO";
+      const selectedAdhesionItem = selectedPricingItems.find((item) => item.estAdhesion || item.id === "adhesion-fc" || item.id === "adhesion-ti");
+      const isTiToro = selectedAdhesionItem ? selectedAdhesionItem.rubrique.toLowerCase().includes("ti toro") : false;
+      const adhesionRemark = isTiToro ? "Adhésion: TI TORO" : "Adhésion: FC TORO";
+      const adhesionCode = isTiToro ? "TI_TORO" : "FC_TORO";
       const planCode = selectedPlan.toUpperCase();
       const statusCode = paymentStatus.toUpperCase();
       const paymentMarkers = `[ADHESION:${adhesionCode}] [PLAN:${planCode}] [STATUT:${statusCode}]`;
@@ -378,17 +378,19 @@ export default function NewPaymentPage() {
 
   const handlePricingChange = (pricingId: string) => {
     setSelectedPricing((prev) => {
+      const clickedItem = pricingItems.find((r: PricingItem) => r.id === pricingId);
+      const isAdhesion = clickedItem?.estAdhesion || pricingId === "adhesion-fc" || pricingId === "adhesion-ti";
+
+      if (isAdhesion) {
+        const otherAdhesionIds = pricingItems
+          .filter((r: PricingItem) => r.estAdhesion || r.id === "adhesion-fc" || r.id === "adhesion-ti")
+          .map((r: PricingItem) => r.id);
+        return [...prev.filter((id) => !otherAdhesionIds.includes(id)), pricingId];
+      }
       if (prev.includes(pricingId)) {
         return prev.filter((id) => id !== pricingId);
-      } else {
-        if (pricingId === "adhesion-fc") {
-          return [...prev.filter((id) => id !== "adhesion-ti"), pricingId];
-        }
-        if (pricingId === "adhesion-ti") {
-          return [...prev.filter((id) => id !== "adhesion-fc"), pricingId];
-        }
-        return [...prev, pricingId];
       }
+      return [...prev, pricingId];
     });
   };
 
@@ -416,20 +418,20 @@ export default function NewPaymentPage() {
     const categorieLower = (selectedPlayer.categorie || "")
       .trim()
       .toLowerCase();
-    const selectedFCToro = selectedPricing.includes("adhesion-fc");
-    const selectedTIToro = selectedPricing.includes("adhesion-ti");
-    const isFCToro = selectedFCToro ||
-                     (!selectedTIToro && (categorieLower.includes("fc toro") ||
-                     categorieLower.includes("académie") ||
-                     categorieLower.includes("elite") ||
-                     categorieLower.includes("école de football")));
+    const selectedAdhesionItem = selectedPricingItems.find((item) => item.estAdhesion || item.id === "adhesion-fc" || item.id === "adhesion-ti");
+    const isFCToro = selectedAdhesionItem 
+      ? !selectedAdhesionItem.rubrique.toLowerCase().includes("ti toro")
+      : (categorieLower.includes("fc toro") ||
+         categorieLower.includes("académie") ||
+         categorieLower.includes("elite") ||
+         categorieLower.includes("école de football"));
     
     // For plans, we use the plan amounts instead of individual rubriques
     const planAmount = isFCToro ? plan.montantFCToro : plan.montantTIToro;
     
     // Add non-adhesion items (like equipment, inscription) which are paid upfront
     const nonAdhesionSum = selectedPricingItems
-      .filter((item) => item.id !== "adhesion-fc" && item.id !== "adhesion-ti")
+      .filter((item) => !item.estAdhesion && item.id !== "adhesion-fc" && item.id !== "adhesion-ti")
       .reduce((sum, item) => sum + item.montant, 0);
 
     const totalToPayNow = planAmount + nonAdhesionSum;

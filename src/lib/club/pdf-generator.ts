@@ -16,9 +16,8 @@ export async function generateReceiptPDFBase64(
 ): Promise<string> {
   const doc = new jsPDF();
   
-  const parentFullName = parentNom && parentPrenom 
-    ? `${parentNom} ${parentPrenom}` 
-    : "Parent / Tuteur";
+  const computedName = [parentNom, parentPrenom].filter(Boolean).join(" ");
+  const parentFullName = computedName.length > 0 ? computedName : "Parent / Tuteur";
     
   const initials = parentFullName !== "Parent / Tuteur" 
     ? (parentNom?.charAt(0) || "") + (parentPrenom?.charAt(0) || "")

@@ -6,7 +6,7 @@ export type EventType = "match" | "entrainement" | "reunion" | (string & {});
 
 export type EventCalendarColor = "Danger" | "Success" | "Primary" | "Warning";
 
-export type PaymentMethod = "virement" | "carte" | "especes" | "mobile";
+export type PaymentMethod = "virement" | "carte" | "especes" | "mobile" | "cheque";
 
 export type StaffRole = "Coach" | "Assistant" | "Admin" | "Medical";
 

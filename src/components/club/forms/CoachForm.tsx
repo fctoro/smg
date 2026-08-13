@@ -5,6 +5,7 @@ import { getCurrentSeason, getDynamicSeasonOptions } from "@/lib/club/season";
 import React, { useState } from "react";
 import { Coach } from "@/types/club";
 import { DEFAULT_CATEGORIES } from "@/config/dashboard.config";
+import { useClubData } from "@/context/ClubDataContext";
 
 export interface CoachFormValues {
   nom: string;
@@ -31,6 +32,9 @@ export default function CoachForm({
   submitLabel = "Enregistrer",
   isSubmitting = false,
 }: CoachFormProps) {
+  const { employees } = useClubData();
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>("");
+
   const [formData, setFormData] = useState<CoachFormValues>({
     nom: initialValues.nom || "",
     prenom: initialValues.prenom || "",
@@ -40,6 +44,22 @@ export default function CoachForm({
     categories: initialValues.categories || [],
     saison: initialValues.saison || getCurrentSeason(),
   });
+
+  const handleSelectEmployee = (empId: string) => {
+    setSelectedEmployeeId(empId);
+    if (!empId) return;
+    const emp = employees.find((e) => e.id === empId || String(e.employeId) === empId);
+    if (emp) {
+      setFormData((prev) => ({
+        ...prev,
+        nom: emp.nom || prev.nom,
+        prenom: emp.prenom || prev.prenom,
+        email: emp.email || prev.email,
+        telephone: emp.telephone || prev.telephone,
+        sexe: emp.sexe === "F" ? "Féminin" : emp.sexe === "M" ? "Masculin" : emp.sexe || prev.sexe,
+      }));
+    }
+  };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -63,6 +83,30 @@ export default function CoachForm({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
+      {/* Sélecteur d'employé existant pour préremplir les données du coach */}
+      <div className="rounded-xl border border-brand-200 bg-brand-50/40 p-4 dark:border-brand-900/40 dark:bg-brand-950/20">
+        <label className="mb-1.5 block text-sm font-semibold text-brand-900 dark:text-brand-200">
+          Sélectionner un employé existant pour préremplir (Optionnel)
+        </label>
+        <select
+          value={selectedEmployeeId}
+          onChange={(e) => handleSelectEmployee(e.target.value)}
+          className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-800 focus:border-brand-500 focus:outline-none dark:border-gray-700 dark:bg-gray-900 dark:text-white"
+        >
+          <option value="">-- Choisir un employé existant --</option>
+          {employees.map((emp) => (
+            <option key={emp.id} value={emp.id}>
+              {emp.prenom} {emp.nom} {emp.fonction ? `(${emp.fonction})` : ""}
+            </option>
+          ))}
+        </select>
+        {selectedEmployeeId && (
+          <p className="mt-2 text-xs font-medium text-brand-700 dark:text-brand-300">
+            ✓ Informations pré-remplies automatiquement depuis la fiche employé.
+          </p>
+        )}
+      </div>
+
       <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
         <div>
           <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">

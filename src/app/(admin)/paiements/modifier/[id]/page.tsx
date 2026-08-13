@@ -180,7 +180,7 @@ export default function ModifyPaymentPage({ params }: { params: Promise<{ id: st
             <input
               type="number"
               min={0}
-              value={montant}
+              value={montant || ""}
               onChange={(event) => setMontant(Number(event.target.value))}
               className={inputClassName}
             />
@@ -207,7 +207,7 @@ export default function ModifyPaymentPage({ params }: { params: Promise<{ id: st
                 type="number"
                 min={0}
                 step="0.01"
-                value={taux}
+                value={taux || ""}
                 onChange={(event) => setTaux(Number(event.target.value))}
                 className={inputClassName}
               />
@@ -260,6 +260,7 @@ export default function ModifyPaymentPage({ params }: { params: Promise<{ id: st
               <option value="virement">Virement</option>
               <option value="carte">Carte</option>
               <option value="especes">Especes</option>
+              <option value="cheque">Chèque</option>
               <option value="mobile">Mobile</option>
             </select>
           </div>

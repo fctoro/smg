@@ -73,6 +73,7 @@ export default function EmployeeForm({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
+
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
         <div>
           <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">

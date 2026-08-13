@@ -48,12 +48,6 @@ const adminNavItems: NavItem[] = [
     path: "/statistiques",
   },
   {
-    icon: <DocsIcon />,
-    name: "Demandes",
-    path: "/demandes/inscriptions",
-    new: true,
-  },
-  {
     icon: <UserCircleIcon />,
     name: "Joueurs",
     path: "/joueurs",
@@ -62,6 +56,27 @@ const adminNavItems: NavItem[] = [
     icon: <DollarLineIcon />,
     name: "Paiements",
     path: "/paiements",
+  },
+  {
+    icon: <GroupIcon />,
+    name: "Parents",
+    path: "/parents",
+  },
+  {
+    icon: <CoachIcon />,
+    name: "Coachs",
+    path: "/coachs",
+  },
+  {
+    icon: <BoxCubeIcon />,
+    name: "Employés",
+    path: "/employes",
+  },
+  {
+    icon: <DocsIcon />,
+    name: "Demandes",
+    path: "/demandes/inscriptions",
+    new: true,
   },
   {
     icon: <DocsIcon />,
@@ -76,24 +91,9 @@ const adminNavItems: NavItem[] = [
     path: "/joueurs/statuts-speciaux",
   },
   {
-    icon: <GroupIcon />,
-    name: "Parents",
-    path: "/parents",
-  },
-  {
-    icon: <CoachIcon />,
-    name: "Coachs",
-    path: "/coachs",
-  },
-  {
     name: "Alumni",
     icon: <DocsIcon />,
     path: "/alumni",
-  },
-  {
-    icon: <BoxCubeIcon />,
-    name: "Employés",
-    path: "/employes",
   },
   {
     icon: <DollarLineIcon />,

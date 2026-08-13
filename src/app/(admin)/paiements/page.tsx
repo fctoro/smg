@@ -65,7 +65,7 @@ import { PaymentAddModal } from "@/components/club/modals/PaymentAddModal";
 import { TableBodySkeleton } from "@/components/ui/skeleton/Skeleton";
 
 export default function PaymentsPage() {
-  const { payments, players, setPayments, hydrated } = useClubData();
+  const { payments, players, setPayments, hydrated, rubriques } = useClubData();
   const [searchQuery, setSearchQuery] = useState("");
   const [deviseFilter, setDeviseFilter] = useState("all");
   const [selectedSeason, setSelectedSeason] = useState("all");
@@ -142,10 +142,49 @@ export default function PaymentsPage() {
     if (!selectedPlan || currentPayment.statut !== "paid") return 0;
 
     // Calculate total amount due based on category
-    const installmentAmount = selectedAdhesionId === "ti toro"
-      ? selectedPlan.montantTIToro
-      : selectedPlan.montantFCToro;
-    const totalDue = installmentAmount * selectedPlan.nombreVersements;
+    let totalDue = 0;
+    if (selectedPlanId === "annuel") {
+      totalDue = selectedAdhesionId === "ti toro"
+        ? selectedPlan.montantTIToro
+        : selectedPlan.montantFCToro;
+    } else {
+      // For Mensuel and Semestriel, the global debt is based on the base adhesion amount (1350/1000)
+      totalDue = selectedAdhesionId === "ti toro" ? 1000 : 1350;
+    }
+
+    // Extract non-adhesion rubriques cost from payment remarks
+    const extractExtraCost = (remark?: string) => {
+      if (!remark) return 0;
+      const match = remark.match(/Rubriques:\s*(.*?)(?=\s*Plan:|$)/i);
+      if (!match) return 0;
+      const items = match[1].split(',').map(s => s.trim().toLowerCase());
+      let sum = 0;
+      for (const item of items) {
+        if (!item) continue;
+        const found = (rubriques || []).find(r => (r.rubrique || "").toLowerCase().trim() === item);
+        if (found) {
+          sum += found.montant;
+        } else {
+          // Fallback if not found in db
+          if (item.includes("inscription")) sum += 75;
+          else if (item.includes("maillot") || item.includes("tracksuit") || item.includes("uniforme")) sum += 100;
+          else if (item.includes("sac") || item.includes("backpack")) sum += 90;
+        }
+      }
+      return sum;
+    };
+
+    const extraRubriquesCost = payments
+      .filter((p) =>
+        p.playerId === currentPayment.playerId &&
+        p.statut === "paid" &&
+        getPlanId(p.remarque) === selectedPlanId &&
+        getAdhesionId(p.remarque) === selectedAdhesionId
+      )
+      .reduce((sum, p) => sum + extractExtraCost(p.remarque), 0);
+
+    totalDue += extraRubriquesCost;
+    
     const discountedDue = calculateDiscountedAmount(totalDue, reductionState.reductionType, reductionState.customPercent);
 
     // Calculate total paid for the PLAN only (not all payments)

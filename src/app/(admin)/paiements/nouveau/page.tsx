@@ -427,13 +427,20 @@ export default function NewPaymentPage() {
     // For plans, we use the plan amounts instead of individual rubriques
     const planAmount = isFCToro ? plan.montantFCToro : plan.montantTIToro;
     
+    // Add non-adhesion items (like equipment, inscription) which are paid upfront
+    const nonAdhesionSum = selectedPricingItems
+      .filter((item) => item.id !== "adhesion-fc" && item.id !== "adhesion-ti")
+      .reduce((sum, item) => sum + item.montant, 0);
+
+    const totalToPayNow = planAmount + nonAdhesionSum;
+    
     // Convert to HTG if needed
     if (devise === "HTG" && taux > 0) {
-      return planAmount * taux;
+      return totalToPayNow * taux;
     }
     
-    return planAmount;
-  }, [selectedPlan, selectedPlayer, selectedPricing, totalRubriques, devise, taux]);
+    return totalToPayNow;
+  }, [selectedPlan, selectedPlayer, selectedPricing, selectedPricingItems, totalRubriques, devise, taux]);
 
   const montantRestant = useMemo(() => {
     return montantAvecPlan - montantDonne;

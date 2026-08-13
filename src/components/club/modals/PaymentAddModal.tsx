@@ -252,7 +252,7 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
       const nonAdhesionSum = selectedPricingItems
         .filter((item) => item.id !== "adhesion-fc" && item.id !== "adhesion-ti")
         .reduce((sum, item) => sum + item.montant, 0);
-      const totalDue = (isTiToro ? plan.montantTIToro : plan.montantFCToro) * plan.nombreVersements + nonAdhesionSum;
+      const totalDue = (isTiToro ? plan.montantTIToro : plan.montantFCToro) + nonAdhesionSum;
       const discountedDue = calculateDiscountedAmount(totalDue, reductionType, customReductionPercent);
       
       const finalMontantAPayer = devise === "HTG" ? montantDuManuel : montantDuManuel;
@@ -429,7 +429,7 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
 
     let adhesionAmount = 0;
     if (selectedPlanData) {
-      adhesionAmount = (isTiToro ? selectedPlanData.montantTIToro : selectedPlanData.montantFCToro) * selectedPlanData.nombreVersements;
+      adhesionAmount = isTiToro ? selectedPlanData.montantTIToro : selectedPlanData.montantFCToro;
     } else if (selectedAdhesionItem) {
       adhesionAmount = selectedAdhesionItem.montant;
     }

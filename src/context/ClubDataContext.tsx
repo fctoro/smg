@@ -750,13 +750,6 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
           });
         }
 
-        const has2026 = fetchedPayroll.some((p) => p.mois && p.mois.startsWith("2026"));
-        if (!has2026) {
-          const empsForPayroll = employesData || [];
-          const mockRecs = generateMockPayrollRecords(empsForPayroll);
-          fetchedPayroll = [...fetchedPayroll, ...mockRecs];
-        }
-
         setPayrollRecords(fetchedPayroll);
 
         // Fetch Rubriques

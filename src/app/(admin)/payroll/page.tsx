@@ -116,7 +116,7 @@ const getPrelevementAmount = (record: PayrollRecord) =>
   record.prelevementMontant ?? calculatePrelevement(record.salaireBase, record.prelevementPourcentage ?? 2);
 
 export default function PayrollPage() {
-  const { employees, payrollRecords, setPayrollRecords } = useClubData();
+  const { employees, payrollRecords, setPayrollRecords, rubriques } = useClubData();
 
   // Filters
   const currentYearStr = String(CURRENT_YEAR);
@@ -707,8 +707,8 @@ export default function PayrollPage() {
             </div>
 
             <form onSubmit={handleCreatePayroll} className="space-y-4">
-              {/* Year & Month Picker in Modal */}
-              <div className="grid grid-cols-2 gap-3">
+              {/* Row 1: Année, Mois, Employé */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
                   <label className="mb-1 block text-xs font-semibold text-gray-700 dark:text-gray-300">
                     Année
@@ -742,45 +742,46 @@ export default function PayrollPage() {
                     ))}
                   </select>
                 </div>
+
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-gray-700 dark:text-gray-300">
+                    Sélectionner l'Employé
+                  </label>
+                  <select
+                    required
+                    value={formData.employeId}
+                    onChange={(e) => {
+                      const empId = e.target.value;
+                      const emp = employees.find((x) => x.id === empId);
+                      const empSal = emp?.salaire || 500;
+                      const empDev: "US" | "HTG" = emp?.devise || (empSal >= 1000 ? "HTG" : "US");
+                      const isCoach = (emp?.fonction || emp?.role || "").toLowerCase().includes("coach");
+                      const defaultType = emp?.typeSalaire || (isCoach ? "variable" : "fixe");
+                      const defaultTaux = emp?.tauxParSeance || 0;
+                      setFormData((prev) => ({
+                        ...prev,
+                        employeId: empId,
+                        typeSalaire: defaultType,
+                        tauxParSeance: defaultTaux,
+                        salaireBase: empSal,
+                        prelevementPourcentage: prev.prelevementPourcentage || 2,
+                        devise: empDev,
+                      }));
+                    }}
+                    className="w-full rounded-xl border border-gray-300 bg-white p-2.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                  >
+                    <option value="">-- Choisir un employé --</option>
+                    {employees.map((emp) => (
+                      <option key={emp.id} value={emp.id}>
+                        {emp.prenom} {emp.nom} ({emp.fonction || "Employé"})
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
 
-              <div>
-                <label className="mb-1 block text-xs font-semibold text-gray-700 dark:text-gray-300">
-                  Sélectionner l'Employé
-                </label>
-                <select
-                  required
-                  value={formData.employeId}
-                  onChange={(e) => {
-                    const empId = e.target.value;
-                    const emp = employees.find((x) => x.id === empId);
-                    const empSal = emp?.salaire || 500;
-                    const empDev: "US" | "HTG" = emp?.devise || (empSal >= 1000 ? "HTG" : "US");
-                    const isCoach = (emp?.fonction || emp?.role || "").toLowerCase().includes("coach");
-                    const defaultType = emp?.typeSalaire || (isCoach ? "variable" : "fixe");
-                    const defaultTaux = emp?.tauxParSeance || 0;
-                    setFormData((prev) => ({
-                      ...prev,
-                      employeId: empId,
-                      typeSalaire: defaultType,
-                      tauxParSeance: defaultTaux,
-                      salaireBase: empSal,
-                      prelevementPourcentage: prev.prelevementPourcentage || 2,
-                      devise: empDev,
-                    }));
-                  }}
-                  className="w-full rounded-xl border border-gray-300 bg-white p-2.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
-                >
-                  <option value="">-- Choisir un employé --</option>
-                  {employees.map((emp) => (
-                    <option key={emp.id} value={emp.id}>
-                      {emp.prenom} {emp.nom} ({emp.fonction || "Employé"})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
+              {/* Row 2: Type, Devise, Statut */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
                   <label className="mb-1 block text-xs font-semibold text-gray-700 dark:text-gray-300">
                     Type de Rémunération
@@ -812,6 +813,21 @@ export default function PayrollPage() {
                     <option value="US">Dollars Américains (USD / $)</option>
                   </select>
                 </div>
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-gray-700 dark:text-gray-300">
+                    Statut du Paiement
+                  </label>
+                  <select
+                    value={formData.statut}
+                    onChange={(e) =>
+                      setFormData({ ...formData, statut: e.target.value as "paye" | "en_attente" })
+                    }
+                    className="w-full rounded-xl border border-gray-300 p-2.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                  >
+                    <option value="paye">Payé</option>
+                    <option value="en_attente">En attente</option>
+                  </select>
+                </div>
               </div>
 
               {formData.typeSalaire === "variable" ? (
@@ -835,16 +851,29 @@ export default function PayrollPage() {
                     <label className="mb-1 block text-xs font-semibold text-gray-700 dark:text-gray-300">
                       Taux par séance ({formData.devise === "HTG" ? "Gdes" : "$"})
                     </label>
-                    <input
-                      type="number"
-                      min="0"
-                      value={formData.tauxParSeance}
-                      onChange={(e) =>
-                        setFormData({ ...formData, tauxParSeance: Number(e.target.value) })
-                      }
-                      className="w-full rounded-xl border border-gray-300 bg-white p-2.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
-                      placeholder="Ex: 1500"
-                    />
+                    <div className="flex gap-2">
+                      <select
+                        className="rounded-xl border border-gray-300 bg-white p-2.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                        onChange={(e) => {
+                          if (e.target.value) setFormData({ ...formData, tauxParSeance: Number(e.target.value) });
+                        }}
+                      >
+                        <option value="">Sélectionnez...</option>
+                        {(rubriques || []).filter(r => r.categorie === "Payroll" && r.devise === formData.devise).map(r => (
+                          <option key={r.id} value={r.montant}>{r.rubrique} ({r.montant})</option>
+                        ))}
+                      </select>
+                      <input
+                        type="number"
+                        min="0"
+                        value={formData.tauxParSeance}
+                        onChange={(e) =>
+                          setFormData({ ...formData, tauxParSeance: Number(e.target.value) })
+                        }
+                        className="w-full rounded-xl border border-gray-300 bg-white p-2.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                        placeholder="Ex: 1500"
+                      />
+                    </div>
                   </div>
                   <div className="col-span-2 text-xs font-bold text-amber-900 dark:text-amber-300">
                     Sous-total séances (Brut) = {formatAmountWithDevise(formData.nombreSeances * formData.tauxParSeance, formData.devise)}
@@ -1024,22 +1053,7 @@ export default function PayrollPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="mb-1 block text-xs font-semibold text-gray-700 dark:text-gray-300">
-                    Statut du Paiement
-                  </label>
-                  <select
-                    value={formData.statut}
-                    onChange={(e) =>
-                      setFormData({ ...formData, statut: e.target.value as "paye" | "en_attente" })
-                    }
-                    className="w-full rounded-xl border border-gray-300 p-2.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
-                  >
-                    <option value="paye">Payé</option>
-                    <option value="en_attente">En attente</option>
-                  </select>
-                </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="mb-1 block text-xs font-semibold text-gray-700 dark:text-gray-300">
                     Mode de Règlement

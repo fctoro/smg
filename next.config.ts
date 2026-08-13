@@ -35,12 +35,6 @@ const nextConfig: NextConfig = {
     ]
   },
   /* config options here */
-  experimental: {
-    turbopackUseSystemTlsCerts: true,
-  },
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
   images: {
     remotePatterns: [
       {

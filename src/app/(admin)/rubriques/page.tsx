@@ -356,13 +356,19 @@ export default function RubriquesPage() {
             <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
               Catégorie associée (optionnel)
             </label>
-            <input
-              type="text"
+            <select
               value={categorie}
               onChange={(e) => setCategorie(e.target.value)}
-              placeholder="Ex: FC TORO, TI TORO, U12..."
-              className={inputClassName}
-            />
+              className={selectClassName}
+            >
+              <option value="">Sélectionnez une catégorie (Optionnel)</option>
+              <option value="FC TORO">FC TORO</option>
+              <option value="TI TORO">TI TORO</option>
+              <option value="Payroll">Payroll</option>
+              <option value="Équipement">Équipement</option>
+              <option value="Événement">Événement</option>
+              <option value="Autre">Autre</option>
+            </select>
           </div>
 
           <div>

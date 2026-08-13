@@ -49,6 +49,13 @@ function NewPlayerFormContent() {
               email: msg.email || p.guardian_email || "",
               adresse: p.guardian_address || p.child_address || "",
               categorie: p.program === "tiToro" ? "ti toro" : "fc toro",
+              parentNomPrenom: p.guardian_first_name ? `${p.guardian_first_name} ${p.guardian_last_name || ""}`.trim() : (msg.name || ""),
+              parentEmail: p.guardian_email || msg.email || "",
+              parentTelephone: p.guardian_phone || msg.phone || "",
+              parentAdresse: p.guardian_address || "",
+              urgenceNomPrenom: p.emergency_contact_name || "",
+              urgenceTelephone: p.emergency_contact_phone || "",
+              urgenceLien: p.emergency_contact_relation || "",
             };
 
             // Fetch docs

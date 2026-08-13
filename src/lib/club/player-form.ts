@@ -47,7 +47,7 @@ export const normalizePlayerFormValues = (
 
   planPaiement: values.planPaiement || "PLAN #1 (Annuel)",
   modePaiementChoisi: values.modePaiementChoisi || "Transfert bancaire",
-  saison: values.saison || getCurrentSeason(),
+  saison: String(values.saison || "").replace(/saison\s+/i, "").trim() || getCurrentSeason(),
 });
 
 export const toPlayerFormValues = (player: Player): PlayerFormValues => ({

@@ -25,9 +25,7 @@ import { BellIcon, PencilIcon, TrashBinIcon } from "@/icons";
 import { ActiveBellIcon } from "@/icons/ActiveBellIcon";
 import { ConfirmModal } from "@/components/ui/modal/ConfirmModal";
 import { CustomReminderMessageModal } from "@/components/club/modals/CustomReminderMessageModal";
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
-import { FC_TORO_LOGO } from "@/lib/club/pdfAssets";
+import { generateReceiptPDFBase64 } from "@/lib/club/pdf-generator";
 
 interface PaymentPlan {
   id: string;
@@ -277,179 +275,65 @@ export default function PaymentsPage() {
     }
   };
 
-  const handleDownloadSinglePaymentPDF = (payment: (typeof payments)[number]) => {
+  const handleDownloadSinglePaymentPDF = async (payment: (typeof payments)[number]) => {
     const player = playerMap.get(payment.playerId);
-    const parentFullName = player?.parentNomPrenom || (player ? `${player.prenom} ${player.nom}` : "Parent / Tuteur");
-    const receiptNo = `RP-FCTORO-${payment.id.slice(0, 8).toUpperCase()}`;
-
-    const doc = new jsPDF();
-    const grayDark: [number, number, number] = [31, 41, 55];
-    const grayMedium: [number, number, number] = [107, 114, 128];
-    const grayLight: [number, number, number] = [229, 231, 235];
-    const black: [number, number, number] = [0, 0, 0];
-
+    if (!player) return;
+    
     try {
-      doc.addImage(FC_TORO_LOGO, 'PNG', 14, 15, 25, 25);
-    } catch (e) {
-      console.warn("Erreur chargement logo PDF", e);
-    }
-    
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(18);
-    doc.setTextColor(grayDark[0], grayDark[1], grayDark[2]);
-    doc.text("FC TORO", 43, 24);
-    
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(9);
-    doc.setTextColor(grayMedium[0], grayMedium[1], grayMedium[2]);
-    doc.text("Football Club", 43, 29);
-    doc.text("7 Rue Rigaud, Pétion-Ville, Haïti", 43, 34);
-    doc.text("+509 2817-8676 | footballclubtoro@gmail.com", 43, 39);
-    
-    doc.setTextColor(82, 107, 132);
-    doc.textWithLink("www.fctoro.com", 43, 44, { url: "https://www.fctoro.com" });
-
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(28);
-    doc.setTextColor(grayDark[0], grayDark[1], grayDark[2]);
-    doc.text("REÇU", 196, 26, { align: 'right' });
-
-    doc.setFontSize(10);
-    doc.setFont("helvetica", "normal");
-    doc.setTextColor(grayMedium[0], grayMedium[1], grayMedium[2]);
-    doc.text("N° de reçu :", 155, 34, { align: 'right' });
-    
-    doc.setFont("helvetica", "bold");
-    doc.setTextColor(grayDark[0], grayDark[1], grayDark[2]);
-    doc.text(receiptNo, 196, 34, { align: 'right' });
-
-    doc.setFont("helvetica", "normal");
-    doc.setTextColor(grayMedium[0], grayMedium[1], grayMedium[2]);
-    doc.text("Date :", 155, 39, { align: 'right' });
-    
-    doc.setFont("helvetica", "bold");
-    doc.setTextColor(grayDark[0], grayDark[1], grayDark[2]);
-    doc.text(payment.datePaiement ? formatClubDate(payment.datePaiement) : formatClubDate(new Date().toISOString()), 196, 39, { align: 'right' });
-
-    doc.setDrawColor(grayLight[0], grayLight[1], grayLight[2]);
-    doc.setLineWidth(0.5);
-    doc.line(14, 48, 196, 48);
-
-    const headerTextColor: [number, number, number] = [82, 107, 132];
-    const headerLineColor: [number, number, number] = [226, 232, 240];
-
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(8);
-    doc.setTextColor(headerTextColor[0], headerTextColor[1], headerTextColor[2]);
-    doc.text("PARENT / TUTEUR", 14, 60);
-
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(10);
-    doc.setTextColor(grayDark[0], grayDark[1], grayDark[2]);
-    doc.text(parentFullName, 14, 66);
-
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(9);
-    doc.setTextColor(grayMedium[0], grayMedium[1], grayMedium[2]);
-    doc.text(`Tél : ${player?.parentTelephone || player?.telephone || "-"}`, 14, 72);
-    doc.text(`Email : ${player?.parentEmail || player?.email || "-"}`, 14, 78);
-
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(8);
-    doc.setTextColor(headerTextColor[0], headerTextColor[1], headerTextColor[2]);
-    doc.text("JOUEUR (ENFANT)", 120, 60);
-    
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(9);
-    doc.setTextColor(grayDark[0], grayDark[1], grayDark[2]);
-    doc.text(player ? getPlayerFullName(player) : "Inconnu", 120, 66);
-
-    const tableStartY = 90;
-    const tableColumn = ["Date", "Joueur (Enfant)", "Description", "Mode", "Montant"];
-    
-    const mapMode = (mode: any) => {
-      const modeStr = String(mode).toLowerCase();
-      if (modeStr === "1") return "Espèces";
-      if (modeStr === "2") return "Virement";
-      if (modeStr === "3") return "Chèque";
-      if (modeStr === "4") return "Carte";
-      if (modeStr === "5") return "Moncash";
-      if (modeStr === "virement") return "Virement";
-      if (modeStr === "especes" || modeStr === "espèces") return "Espèces";
-      return String(mode || "-");
-    };
-
-    const tableRows = [[
-      formatClubDate(payment.datePaiement ?? new Date().toISOString()),
-      player ? getPlayerFullName(player) : "Inconnu",
-      payment.remarque ? payment.remarque.replace(/\[.*?\]\s*/g, '').trim() || "Paiement de cotisation" : "Paiement de cotisation",
-      mapMode(payment.methode),
-      formatClubCurrency(payment.montant, payment.devise)
-    ]];
-
-    autoTable(doc, {
-      head: [tableColumn],
-      body: tableRows,
-      startY: tableStartY,
-      theme: 'plain',
-      styles: { fontSize: 9, cellPadding: 6 },
-      headStyles: { fillColor: false, textColor: headerTextColor, fontStyle: 'bold', halign: 'left' },
-      bodyStyles: { textColor: grayDark },
-      columnStyles: {
-        0: { cellWidth: 25, halign: 'left' },
-        1: { cellWidth: 40, halign: 'left' },
-        2: { cellWidth: 'auto', halign: 'left' },
-        3: { cellWidth: 20, halign: 'left' },
-        4: { cellWidth: 25, fontStyle: 'bold', halign: 'right' }
-      },
-      didDrawCell: function (data: any) {
-        if (data.section === 'head') {
-          doc.setDrawColor(headerLineColor[0], headerLineColor[1], headerLineColor[2]);
-          doc.setLineWidth(0.3);
-          doc.line(data.cell.x, data.cell.y, data.cell.x + data.cell.width, data.cell.y);
-          doc.line(data.cell.x, data.cell.y + data.cell.height, data.cell.x + data.cell.width, data.cell.y + data.cell.height);
+      const nomParts = (player.parentNomPrenom || "").split(" ");
+      const parentNom = nomParts[0] || "";
+      const parentPrenom = nomParts.slice(1).join(" ") || "";
+      
+      let proofBase64: string | null = null;
+      const proofMatch = payment.remarque?.match(/\[JUSTIFICATIF:(.+?)\]/);
+      if (proofMatch && proofMatch[1]) {
+        try {
+          const res = await fetch(proofMatch[1]);
+          const blob = await res.blob();
+          proofBase64 = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result as string);
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+          });
+        } catch (e) {
+          console.warn("Erreur lors de la récupération de la preuve", e);
         }
       }
-    });
-
-    const finalY = (doc as any).lastAutoTable.finalY || tableStartY;
-    const amountFormatted = formatClubCurrency(payment.montant, payment.devise);
-
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(10);
-    doc.setTextColor(grayMedium[0], grayMedium[1], grayMedium[2]);
-    doc.text("Sous-total", 110, finalY + 10);
-    doc.text(amountFormatted, 196, finalY + 10, { align: 'right' });
-
-    doc.setDrawColor(grayLight[0], grayLight[1], grayLight[2]);
-    doc.setLineWidth(0.5);
-    doc.line(100, finalY + 15, 196, finalY + 15);
-
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(12);
-    doc.setTextColor(black[0], black[1], black[2]);
-    doc.text("TOTAL PAYÉ", 110, finalY + 22);
-    doc.text(amountFormatted, 196, finalY + 22, { align: 'right' });
-
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(9);
-    doc.setTextColor(grayDark[0], grayDark[1], grayDark[2]);
-    doc.text("Merci de votre confiance.", 14, finalY + 15);
-    
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(8);
-    doc.setTextColor(grayMedium[0], grayMedium[1], grayMedium[2]);
-    doc.text("Ce reçu confirme le paiement pour l'inscription de votre enfant.", 14, finalY + 20);
-    doc.text("Document officiel valide sans signature physique.", 14, finalY + 24);
-
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(9);
-    doc.setTextColor(grayMedium[0], grayMedium[1], grayMedium[2]);
-    doc.text("Signature autorisée", 14, finalY + 45);
-    doc.line(14, finalY + 55, 60, finalY + 55);
-
-    const playerSlug = player ? getPlayerFullName(player).replace(/\s+/g, '_') : 'Paiement';
-    doc.save(`Recu_${playerSlug}_${payment.id.slice(0, 6)}.pdf`);
+      
+      const receiptBase64 = await generateReceiptPDFBase64(
+        player,
+        [payment],
+        parentNom,
+        parentPrenom,
+        player.parentTelephone || player.telephone || "",
+        player.parentEmail || player.email || "",
+        player.parentAdresse || player.adresse || "",
+        proofBase64
+      );
+      
+      // Télécharger le PDF
+      const base64Data = receiptBase64.includes("base64,") ? receiptBase64.split("base64,")[1] : receiptBase64;
+      const byteCharacters = atob(base64Data);
+      const byteNumbers = new Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) {
+          byteNumbers[i] = byteCharacters.charCodeAt(i);
+      }
+      const byteArray = new Uint8Array(byteNumbers);
+      const blob = new Blob([byteArray], {type: 'application/pdf'});
+      const blobUrl = URL.createObjectURL(blob);
+      
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      const receiptNo = `RP-FCTORO-${payment.id.slice(0, 8).toUpperCase()}`;
+      link.download = `${receiptNo}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (err) {
+      console.error("Erreur lors de la génération du PDF", err);
+      alert("Erreur lors de la génération du PDF");
+    }
   };
 
   const filteredPayments = useMemo(() => {
@@ -669,7 +553,7 @@ export default function PaymentsPage() {
             <option value="all">Toutes les saisons</option>
             {seasons.map((season) => (
               <option key={season} value={season}>
-                Saison {season}
+                {String(season).toLowerCase().startsWith('saison') ? season : `Saison ${season}`}
               </option>
             ))}
           </select>

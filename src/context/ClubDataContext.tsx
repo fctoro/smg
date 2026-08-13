@@ -374,9 +374,17 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
             // Informations parents du joueur
             const parentNomRec = group.find(g => g.NomParent)?.NomParent || primaryRecord.NomParent || "";
             const parentPrenomRec = group.find(g => g.PrenomParent)?.PrenomParent || primaryRecord.PrenomParent || "";
-            const parentNomPrenom = (parentNomRec || parentPrenomRec)
+            let parentNomPrenom = (parentNomRec || parentPrenomRec)
               ? `${parentNomRec} ${parentPrenomRec}`.trim()
               : (primaryRecord.NomParent || "");
+              
+            // Fallback si NomParent et PrenomParent sont vides
+            if (!parentNomPrenom) {
+              parentNomPrenom = primaryRecord.EngagementFinancierNom 
+                || primaryRecord.UrgenceNomPrenom 
+                || primaryRecord.NomContact 
+                || "";
+            }
             const parentTelephone = group.find(g => g.TelephoneParent)?.TelephoneParent || primaryRecord.TelephoneParent || telephone;
             const parentEmail = group.find(g => g.EmailParent)?.EmailParent || primaryRecord.EmailParent || email;
             const parentAdresse = group.find(g => g.AdresseParent)?.AdresseParent || primaryRecord.AdresseParent || adresse;
@@ -414,7 +422,14 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
               }
             }
 
-            const currentDisplaySeason = latestSeasonStr || primaryRecord.Saison || entrySeason || "";
+            if (finalStatutJoueur && ["actif", "inactif", "blesse", "suspendu", "abandonne", "alumni"].includes(finalStatutJoueur.toLowerCase())) {
+              playerStatus = finalStatutJoueur.toLowerCase() as PlayerStatus;
+            }
+
+            let currentDisplaySeason = latestSeasonStr || primaryRecord.Saison || entrySeason || "";
+            if (typeof currentDisplaySeason === 'string' && currentDisplaySeason.trim().toLowerCase() === "saison 2026-2027") {
+              currentDisplaySeason = "2026-2027";
+            }
 
             // Contact d'urgence (recherche robuste sur toutes les colonnes et entrées du groupe)
             const findInGroup = (keys: string[]) => {

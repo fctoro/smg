@@ -85,7 +85,7 @@ export default function CoachTable({ coaches, onDelete, actionButton }: CoachTab
               <option value="all">Toutes les saisons</option>
               {seasons.map((saison) => (
                 <option key={saison} value={saison}>
-                  Saison {saison}
+                  {String(saison).toLowerCase().startsWith('saison') ? saison : `Saison ${saison}`}
                 </option>
               ))}
             </select>

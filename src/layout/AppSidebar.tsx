@@ -48,12 +48,6 @@ const adminNavItems: NavItem[] = [
     path: "/statistiques",
   },
   {
-    icon: <DocsIcon />,
-    name: "Demandes",
-    path: "/demandes/inscriptions",
-    new: true,
-  },
-  {
     icon: <UserCircleIcon />,
     name: "Joueurs",
     path: "/joueurs",
@@ -62,6 +56,33 @@ const adminNavItems: NavItem[] = [
     icon: <DollarLineIcon />,
     name: "Paiements",
     path: "/paiements",
+  },
+  {
+    icon: <GroupIcon />,
+    name: "Parents",
+    path: "/parents",
+  },
+  {
+    icon: <CoachIcon />,
+    name: "Coachs",
+    path: "/coachs",
+  },
+  {
+    icon: <BoxCubeIcon />,
+    name: "Employés",
+    path: "/employes",
+  },
+  {
+    icon: <DollarLineIcon />,
+    name: "Payroll",
+    path: "/payroll",
+    sections: ["Employés", "Paiements"],
+  },
+  {
+    icon: <DocsIcon />,
+    name: "Demandes",
+    path: "/demandes/inscriptions",
+    new: true,
   },
   {
     icon: <DocsIcon />,
@@ -76,30 +97,9 @@ const adminNavItems: NavItem[] = [
     path: "/joueurs/statuts-speciaux",
   },
   {
-    icon: <GroupIcon />,
-    name: "Parents",
-    path: "/parents",
-  },
-  {
-    icon: <CoachIcon />,
-    name: "Coachs",
-    path: "/coachs",
-  },
-  {
     name: "Alumni",
     icon: <DocsIcon />,
     path: "/alumni",
-  },
-  {
-    icon: <BoxCubeIcon />,
-    name: "Employés",
-    path: "/employes",
-  },
-  {
-    icon: <DollarLineIcon />,
-    name: "Payroll",
-    path: "/payroll",
-    sections: ["Employés", "Paiements"],
   },
   {
     icon: <CalenderIcon />,
@@ -363,7 +363,7 @@ const AppSidebar: React.FC = () => {
         </Link>
       </div>
 
-      <div className="flex flex-col flex-1 overflow-y-auto duration-300 ease-linear no-scrollbar">
+      <div className="flex flex-col flex-1 overflow-y-auto duration-300 ease-linear sidebar-scrollbar -mr-4 pr-4">
         <nav className="mb-6">
           <div className="flex flex-col gap-4" suppressHydrationWarning>
             <div>

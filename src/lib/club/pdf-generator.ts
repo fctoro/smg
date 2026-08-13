@@ -11,13 +11,13 @@ export async function generateReceiptPDFBase64(
   parentPrenom?: string,
   parentTelephone?: string,
   parentEmail?: string,
-  parentAddress?: string
+  parentAddress?: string,
+  proofImageBase64?: string | null
 ): Promise<string> {
   const doc = new jsPDF();
   
-  const parentFullName = parentNom && parentPrenom 
-    ? `${parentNom} ${parentPrenom}` 
-    : "Parent / Tuteur";
+  const computedName = [parentNom, parentPrenom].filter(Boolean).join(" ");
+  const parentFullName = computedName.length > 0 ? computedName : "Parent / Tuteur";
     
   const initials = parentFullName !== "Parent / Tuteur" 
     ? (parentNom?.charAt(0) || "") + (parentPrenom?.charAt(0) || "")
@@ -85,14 +85,14 @@ export async function generateReceiptPDFBase64(
   doc.setFontSize(8);
   doc.setTextColor(headerTextColor[0], headerTextColor[1], headerTextColor[2]);
   doc.text("JOUEUR (ENFANT)", 14, 60);
-  
+
   let currentY = 66;
   doc.setFont("helvetica", "bold");
   doc.setFontSize(10);
   doc.setTextColor(grayDark[0], grayDark[1], grayDark[2]);
   doc.text(getPlayerFullName(player), 14, currentY);
   currentY += 6;
-  
+
   if (player.categorie) {
     doc.setFont("helvetica", "normal");
     doc.setFontSize(9);
@@ -103,15 +103,20 @@ export async function generateReceiptPDFBase64(
     currentY += 4;
   }
 
+  let enfantY = currentY;
+  
   doc.setFont("helvetica", "bold");
   doc.setFontSize(8);
   doc.setTextColor(headerTextColor[0], headerTextColor[1], headerTextColor[2]);
   doc.text("PARENT / TUTEUR", 120, 60);
-
+  
   doc.setFont("helvetica", "bold");
   doc.setFontSize(10);
   doc.setTextColor(grayDark[0], grayDark[1], grayDark[2]);
-  doc.text(parentFullName, 120, 66);
+  
+  // Si le parent n'est pas renseigné, on affiche juste "Parent / Tuteur" (on évite de mettre le nom de l'enfant)
+  const displayParentName = parentFullName === getPlayerFullName(player) ? "Parent / Tuteur" : parentFullName;
+  doc.text(displayParentName, 120, 66);
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(9);
@@ -119,12 +124,16 @@ export async function generateReceiptPDFBase64(
   doc.text(`Tél : ${parentTelephone || "-"}`, 120, 72);
   doc.text(`Email : ${parentEmail || "-"}`, 120, 78);
   
+  let parentY = 84;
   if (parentAddress) {
     const shortAddress = parentAddress.length > 40 ? parentAddress.substring(0, 37) + "..." : parentAddress;
-    doc.text(`Adresse : ${shortAddress}`, 120, 84);
+    doc.text(`Adresse : ${shortAddress}`, 120, parentY);
+    parentY += 6;
   }
 
-  const tableStartY = Math.max(90, currentY + 5);
+
+
+  const tableStartY = Math.max(90, Math.max(enfantY, parentY) + 5);
 
   const tableColumn = ["Date", "Joueur (Enfant)", "Description", "Mode", "Montant"];
   const tableRows: any[] = [];
@@ -266,6 +275,33 @@ export async function generateReceiptPDFBase64(
   doc.setTextColor(grayMedium[0], grayMedium[1], grayMedium[2]);
   doc.text("Signature autorisée", 14, finalY + 45);
   doc.line(14, finalY + 55, 60, finalY + 55);
+
+  if (proofImageBase64) {
+    const proofStartY = finalY + 65;
+    try {
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10);
+      doc.setTextColor(black[0], black[1], black[2]);
+      doc.text("DOCUMENT JUSTIFICATIF", 14, proofStartY);
+
+      let imgFormat = 'JPEG';
+      if (proofImageBase64.includes('image/png')) imgFormat = 'PNG';
+      if (proofImageBase64.includes('image/webp')) imgFormat = 'WEBP';
+      
+      const MAX_IMG_WIDTH = 180;
+      const MAX_IMG_HEIGHT = Math.max(50, 280 - (proofStartY + 5)); 
+      
+      if (MAX_IMG_HEIGHT > 30) {
+        doc.addImage(proofImageBase64, imgFormat, 14, proofStartY + 5, MAX_IMG_WIDTH, MAX_IMG_HEIGHT, undefined, 'FAST');
+      } else {
+        doc.addPage();
+        doc.text("DOCUMENT JUSTIFICATIF", 14, 20);
+        doc.addImage(proofImageBase64, imgFormat, 14, 25, MAX_IMG_WIDTH, 250, undefined, 'FAST');
+      }
+    } catch (err) {
+      console.warn("Could not add proof image to PDF", err);
+    }
+  }
 
   // Use datauristring and we will process it in the server
   return doc.output('datauristring');

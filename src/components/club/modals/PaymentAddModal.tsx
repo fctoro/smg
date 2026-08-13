@@ -337,7 +337,8 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
             parentPrenom,
             selectedPlayer.parentTelephone || "",
             selectedPlayer.parentEmail || selectedPlayer.email || "",
-            selectedPlayer.parentAdresse || selectedPlayer.adresse || ""
+            selectedPlayer.parentAdresse || selectedPlayer.adresse || "",
+            paymentPhotoPreview
           );
 
           // Open the generated PDF in a new tab automatically

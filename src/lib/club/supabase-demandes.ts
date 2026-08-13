@@ -69,9 +69,9 @@ export const fetchSiteMessageById = async (id: string): Promise<SiteMessage | nu
 };
 
 // Update message status
-export const updateMessageStatus = async (id: string, statut: "nouveau" | "lu" | "archive", metadata?: any) => {
-  const isRead = statut === "lu" || statut === "archive";
-  const statusStr = statut === "nouveau" ? "pending" : "resolved";
+export const updateMessageStatus = async (id: string, statut: "nouveau" | "lu" | "archive" | "inscrit", metadata?: any) => {
+  const isRead = statut === "lu" || statut === "archive" || statut === "inscrit";
+  const statusStr = statut === "nouveau" ? "pending" : statut === "inscrit" ? "enrolled" : statut === "archive" ? "archived" : "resolved";
 
   const { error } = await supabase
     .from("site_messages")

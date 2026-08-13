@@ -35,6 +35,9 @@ const nextConfig: NextConfig = {
     ]
   },
   /* config options here */
+  experimental: {
+    turbopackUseSystemTlsCerts: true,
+  },
   images: {
     remotePatterns: [
       {

@@ -84,44 +84,44 @@ export async function generateReceiptPDFBase64(
   doc.setFont("helvetica", "bold");
   doc.setFontSize(8);
   doc.setTextColor(headerTextColor[0], headerTextColor[1], headerTextColor[2]);
-  doc.text("PARENT / TUTEUR", 14, 60);
-
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(10);
-  doc.setTextColor(grayDark[0], grayDark[1], grayDark[2]);
-  doc.text(parentFullName, 14, 66);
-
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(9);
-  doc.setTextColor(grayMedium[0], grayMedium[1], grayMedium[2]);
-  doc.text(`Tél : ${parentTelephone || "-"}`, 14, 72);
-  doc.text(`Email : ${parentEmail || "-"}`, 14, 78);
-  
-  if (parentAddress) {
-    const shortAddress = parentAddress.length > 45 ? parentAddress.substring(0, 42) + "..." : parentAddress;
-    doc.text(`Adresse : ${shortAddress}`, 14, 84);
-  }
-  
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(8);
-  doc.setTextColor(headerTextColor[0], headerTextColor[1], headerTextColor[2]);
-  doc.text("JOUEUR (ENFANT)", 120, 60);
+  doc.text("JOUEUR (ENFANT)", 14, 60);
   
   let currentY = 66;
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(9);
+  doc.setFontSize(10);
   doc.setTextColor(grayDark[0], grayDark[1], grayDark[2]);
-  doc.text(getPlayerFullName(player), 120, currentY);
+  doc.text(getPlayerFullName(player), 14, currentY);
   currentY += 6;
   
   if (player.categorie) {
     doc.setFont("helvetica", "normal");
     doc.setFontSize(9);
     doc.setTextColor(grayMedium[0], grayMedium[1], grayMedium[2]);
-    doc.text(`Catégorie : ${player.categorie}`, 120, currentY);
+    doc.text(`Catégorie : ${player.categorie}`, 14, currentY);
     currentY += 8;
   } else {
     currentY += 4;
+  }
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8);
+  doc.setTextColor(headerTextColor[0], headerTextColor[1], headerTextColor[2]);
+  doc.text("PARENT / TUTEUR", 120, 60);
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(10);
+  doc.setTextColor(grayDark[0], grayDark[1], grayDark[2]);
+  doc.text(parentFullName, 120, 66);
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9);
+  doc.setTextColor(grayMedium[0], grayMedium[1], grayMedium[2]);
+  doc.text(`Tél : ${parentTelephone || "-"}`, 120, 72);
+  doc.text(`Email : ${parentEmail || "-"}`, 120, 78);
+  
+  if (parentAddress) {
+    const shortAddress = parentAddress.length > 40 ? parentAddress.substring(0, 37) + "..." : parentAddress;
+    doc.text(`Adresse : ${shortAddress}`, 120, 84);
   }
 
   const tableStartY = Math.max(90, currentY + 5);

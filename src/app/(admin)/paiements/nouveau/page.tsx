@@ -297,9 +297,7 @@ export default function NewPaymentPage() {
       const statusCode = paymentStatus.toUpperCase();
       const paymentMarkers = `[ADHESION:${adhesionCode}] [PLAN:${planCode}] [STATUT:${statusCode}]`;
       const finalRemarque = `${paymentMarkers} ${description.trim()} ${adhesionRemark} ${planRemark}`.trim();
-      const paymentPhotoUrl = paymentPhoto ? await uploadPaymentPhotoToSupabase(paymentPhoto) : null;
-      const paymentPhotoNote = paymentPhotoUrl ? ` [JUSTIFICATIF:${paymentPhotoUrl}]` : paymentPhoto ? ` [JUSTIFICATIF:${paymentPhoto.name}]` : "";
-      const finalRemarqueWithPhoto = `${finalRemarque}${paymentPhotoNote}`.trim();
+      const uploadPromise = paymentPhoto ? uploadPaymentPhotoToSupabase(paymentPhoto) : Promise.resolve(null);
 
       // Create invoice first
       const invoiceData = {
@@ -311,15 +309,21 @@ export default function NewPaymentPage() {
         devise,
         dateFacture: new Date().toISOString(),
         datePaiement: paymentStatus === "paid" ? datePaiement || new Date().toISOString() : undefined,
-        remarque: finalRemarqueWithPhoto,
+        remarque: finalRemarque, // We skip the photo in invoice remark to run concurrently
         statut: paymentStatus,
         montantUS: montantUS,
         montantHTG: montantHTG,
       };
 
-      console.log("📄 Création de la facture:", invoiceData);
-      const invoice = await addInvoiceToSupabase(invoiceData);
+      console.log("📄 Création de la facture et upload photo...");
+      const [paymentPhotoUrl, invoice] = await Promise.all([
+        uploadPromise,
+        addInvoiceToSupabase(invoiceData)
+      ]);
       console.log("✅ Facture créée:", invoice);
+
+      const paymentPhotoNote = paymentPhotoUrl ? ` [JUSTIFICATIF:${paymentPhotoUrl}]` : paymentPhoto ? ` [JUSTIFICATIF:${paymentPhoto.name}]` : "";
+      const finalRemarqueWithPhoto = `${finalRemarque}${paymentPhotoNote}`.trim();
 
       const dataToInsert = {
         playerId,
@@ -423,13 +427,20 @@ export default function NewPaymentPage() {
     // For plans, we use the plan amounts instead of individual rubriques
     const planAmount = isFCToro ? plan.montantFCToro : plan.montantTIToro;
     
+    // Add non-adhesion items (like equipment, inscription) which are paid upfront
+    const nonAdhesionSum = selectedPricingItems
+      .filter((item) => item.id !== "adhesion-fc" && item.id !== "adhesion-ti")
+      .reduce((sum, item) => sum + item.montant, 0);
+
+    const totalToPayNow = planAmount + nonAdhesionSum;
+    
     // Convert to HTG if needed
     if (devise === "HTG" && taux > 0) {
-      return planAmount * taux;
+      return totalToPayNow * taux;
     }
     
-    return planAmount;
-  }, [selectedPlan, selectedPlayer, selectedPricing, totalRubriques, devise, taux]);
+    return totalToPayNow;
+  }, [selectedPlan, selectedPlayer, selectedPricing, selectedPricingItems, totalRubriques, devise, taux]);
 
   const montantRestant = useMemo(() => {
     return montantAvecPlan - montantDonne;
@@ -609,7 +620,7 @@ export default function NewPaymentPage() {
             <input
               type="number"
               min={0}
-              value={montantDonne}
+              value={montantDonne || ""}
               onChange={(event) => setMontantDonne(Number(event.target.value))}
               className={inputClassName}
             />
@@ -621,7 +632,7 @@ export default function NewPaymentPage() {
             <input
               type="number"
               min={0}
-              value={montantAvecPlan}
+              value={montantAvecPlan || ""}
               onChange={(event) => setMontant(Number(event.target.value))}
               className={`${inputClassName} bg-gray-100 dark:bg-gray-800`}
               readOnly
@@ -666,7 +677,7 @@ export default function NewPaymentPage() {
                 type="number"
                 min={0}
                 step="0.01"
-                value={taux}
+                value={taux || ""}
                 onChange={(event) => setTaux(Number(event.target.value))}
                 className={inputClassName}
               />
@@ -765,6 +776,7 @@ export default function NewPaymentPage() {
               <option value="virement">Virement</option>
               <option value="carte">Carte</option>
               <option value="especes">Especes</option>
+              <option value="cheque">Chèque</option>
               <option value="mobile">Mobile</option>
             </select>
           </div>

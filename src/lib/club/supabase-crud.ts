@@ -71,6 +71,15 @@ export const updatePlayerInSupabase = async (playerId: string, data: Partial<Pla
   if (data.tailleHaut !== undefined) updatePayload.TailleHaut = data.tailleHaut;
   if (data.tailleShort !== undefined) updatePayload.TailleShort = data.tailleShort;
 
+  if (data.parentNomPrenom !== undefined) {
+    const parentParts = (data.parentNomPrenom || "").trim().split(" ");
+    updatePayload.NomParent = parentParts[0] || "";
+    updatePayload.PrenomParent = parentParts.slice(1).join(" ") || "";
+  }
+  if (data.parentEmail !== undefined) updatePayload.EmailParent = data.parentEmail;
+  if (data.parentTelephone !== undefined) updatePayload.TelephoneParent = data.parentTelephone;
+  if (data.parentAdresse !== undefined) updatePayload.AdresseParent = data.parentAdresse;
+
   if (data.statut !== undefined) {
     updatePayload.EstAlumni = data.statut === "alumni" ? 1 : 0;
     if (data.statut === "abandonne") {
@@ -582,51 +591,53 @@ export const addPaymentToSupabase = async (data: Omit<import("@/types/club").Pay
     throw new Error(result.error || "Impossible d’enregistrer le paiement.");
   }
 
-  // After payment is added, update the invoice with the new total
+  // After payment is added, update the invoice with the new total in the background
   if (result.success && data.playerId) {
-    try {
-      // Get all payments for this player to calculate total
-      const { data: allPayments, error: paymentsError } = await supabase
-        .from("tblPaiements")
-        .select("MntPayeUS, MntPayeGd")
-        .eq("EtudiantId", parseInt(data.playerId, 10));
+    (async () => {
+      try {
+        // Get all payments for this player to calculate total
+        const { data: allPayments, error: paymentsError } = await supabase
+          .from("tblPaiements")
+          .select("MntPayeUS, MntPayeGd")
+          .eq("EtudiantId", parseInt(data.playerId, 10));
 
-      if (!paymentsError && allPayments) {
-        // Calculate total paid across all payments
-        const totalPayeUS = allPayments.reduce((sum: number, p: any) => sum + (parseFloat(p.MntPayeUS) || 0), 0);
-        const totalPayeGd = allPayments.reduce((sum: number, p: any) => sum + (parseFloat(p.MntPayeGd) || 0), 0);
+        if (!paymentsError && allPayments) {
+          // Calculate total paid across all payments
+          const totalPayeUS = allPayments.reduce((sum: number, p: any) => sum + (parseFloat(p.MntPayeUS) || 0), 0);
+          const totalPayeGd = allPayments.reduce((sum: number, p: any) => sum + (parseFloat(p.MntPayeGd) || 0), 0);
 
-        // Find the most recent invoice for this player
-        const { data: invoices, error: invoiceQueryError } = await supabase
-          .from("tblFacture")
-          .select("*")
-          .eq("EtudiantId", parseInt(data.playerId, 10))
-          .order("DateFacture", { ascending: false })
-          .limit(1);
-
-        if (!invoiceQueryError && invoices && invoices.length > 0) {
-          const invoice = invoices[0];
-          const montantAPayer = parseFloat(invoice.MntAPayer) || 0;
-          
-          // Determine if invoice is fully paid
-          const isFullyPaid = totalPayeUS + totalPayeGd >= montantAPayer && montantAPayer > 0;
-          
-          // Update the invoice
-          await supabase
+          // Find the most recent invoice for this player
+          const { data: invoices, error: invoiceQueryError } = await supabase
             .from("tblFacture")
-            .update({
-              MntPayeUS: totalPayeUS,
-              MntPayeGd: totalPayeGd,
-              Statut: isFullyPaid ? "paid" : invoice.Statut,
-              DatePaiement: isFullyPaid ? new Date().toISOString() : invoice.DatePaiement
-            })
-            .eq("Id", invoice.Id);
+            .select("*")
+            .eq("EtudiantId", parseInt(data.playerId, 10))
+            .order("DateFacture", { ascending: false })
+            .limit(1);
+
+          if (!invoiceQueryError && invoices && invoices.length > 0) {
+            const invoice = invoices[0];
+            const montantAPayer = parseFloat(invoice.MntAPayer) || 0;
+            
+            // Determine if invoice is fully paid
+            const isFullyPaid = totalPayeUS + totalPayeGd >= montantAPayer && montantAPayer > 0;
+            
+            // Update the invoice
+            await supabase
+              .from("tblFacture")
+              .update({
+                MntPayeUS: totalPayeUS,
+                MntPayeGd: totalPayeGd,
+                Statut: isFullyPaid ? "paid" : invoice.Statut,
+                DatePaiement: isFullyPaid ? new Date().toISOString() : invoice.DatePaiement
+              })
+              .eq("Id", invoice.Id);
+          }
         }
+      } catch (invoiceError) {
+        console.error("Error updating invoice after payment:", invoiceError);
+        // Don't throw - payment was successful, invoice update is secondary
       }
-    } catch (invoiceError) {
-      console.error("Error updating invoice after payment:", invoiceError);
-      // Don't throw - payment was successful, invoice update is secondary
-    }
+    })();
   }
 
   return result.data;

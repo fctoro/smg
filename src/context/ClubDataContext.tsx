@@ -18,6 +18,8 @@ import {
   Employee,
   Parent,
   Payment,
+  PaymentMethod,
+  PaymentStatus,
   Player,
   PlayerStatus,
   StaffMember,
@@ -217,6 +219,7 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
         console.log("[DEBUG ClubDataContext] etudiantsData length:", etudiantsData?.length);
 
         const sessionsMap = new Map();
+        const studentToPrimaryIdMap = new Map<string, string>();
         if (sessionsData && sessionsData.length > 0) {
           sessionsData.forEach((s: any) => {
             if (s.Session && s.Session.trim() !== "") {
@@ -302,8 +305,16 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
               return idA - idB;
             });
 
-            // Récupérer tous les IDs liés à cette même personne
+            // Priorité à l'entrée possédant explicitement une saison initiale "2022-2023" ou la plus ancienne
+            const recordWithSeason2223 = sortedGroup.find(g => g.Saison && String(g.Saison).includes("2022-2023"));
+            const primaryRecord = recordWithSeason2223 || sortedGroup[0];
+            const primaryId = String(primaryRecord.EtudiantID);
+
+            // Récupérer tous les IDs liés à cette même personne et les mapper vers primaryId
             const allGroupIds = group.map((g) => g.EtudiantID);
+            allGroupIds.forEach((gid) => {
+              studentToPrimaryIdMap.set(String(gid), primaryId);
+            });
 
             // Agrégation de tous les paiements des doublons
             const studentPayments = paiements.filter((p: any) => allGroupIds.includes(p.EtudiantId));
@@ -329,10 +340,6 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
               new Date(b.DateInscription || 0).getTime() - new Date(a.DateInscription || 0).getTime()
             );
             let latestSeasonStr = sortedInscriptionsDesc.length > 0 ? sessionsMap.get(sortedInscriptionsDesc[0].SessionId) : "";
-
-            // Priorité à l'entrée possédant explicitement une saison initiale "2022-2023" ou la plus ancienne
-            const recordWithSeason2223 = sortedGroup.find(g => g.Saison && String(g.Saison).includes("2022-2023"));
-            const primaryRecord = recordWithSeason2223 || sortedGroup[0];
 
             let entrySeason = firstSeasonStr || primaryRecord.Saison || "";
             if (!entrySeason && primaryRecord.DtCreation) {
@@ -363,6 +370,16 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
             const email = group.find(g => g.Email)?.Email || "";
             const dateNaissance = group.find(g => g.DateNaissance)?.DateNaissance || "";
             const adresse = group.find(g => g.Adresse)?.Adresse || "";
+
+            // Informations parents du joueur
+            const parentNomRec = group.find(g => g.NomParent)?.NomParent || primaryRecord.NomParent || "";
+            const parentPrenomRec = group.find(g => g.PrenomParent)?.PrenomParent || primaryRecord.PrenomParent || "";
+            const parentNomPrenom = (parentNomRec || parentPrenomRec)
+              ? `${parentNomRec} ${parentPrenomRec}`.trim()
+              : (primaryRecord.NomParent || "");
+            const parentTelephone = group.find(g => g.TelephoneParent)?.TelephoneParent || primaryRecord.TelephoneParent || telephone;
+            const parentEmail = group.find(g => g.EmailParent)?.EmailParent || primaryRecord.EmailParent || email;
+            const parentAdresse = group.find(g => g.AdresseParent)?.AdresseParent || primaryRecord.AdresseParent || adresse;
 
             // Détermination du statut réel du joueur
             const savedPlayerStatus = String(primaryRecord.StatutJoueur || "").trim().toLowerCase();
@@ -406,8 +423,26 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
               currentDisplaySeason = "2026-2027";
             }
 
+            // Contact d'urgence (recherche robuste sur toutes les colonnes et entrées du groupe)
+            const findInGroup = (keys: string[]) => {
+              for (const g of group) {
+                for (const k of keys) {
+                  if (g[k] !== undefined && g[k] !== null && String(g[k]).trim() !== "") {
+                    return String(g[k]).trim();
+                  }
+                }
+              }
+              return "";
+            };
+
+            const urgenceNomPrenom = findInGroup(["UrgenceNomPrenom", "NomUrgence", "UrgenceNom", "ContactUrgence", "PersonneUrgence", "EmergencyName", "emergency_name"]);
+            const urgenceLien = findInGroup(["UrgenceLien", "LienUrgence", "LienParenteUrgence", "LienUrgent", "EmergencyRelation", "emergency_relation"]);
+            const urgenceTelephone = findInGroup(["UrgenceTelephone", "TelUrgence", "TelephoneUrgence", "UrgencePhone", "PhoneUrgence", "EmergencyPhone", "emergency_phone"]);
+            const urgenceEmail = findInGroup(["UrgenceEmail", "EmailUrgence", "EmergencyEmail", "emergency_email"]);
+            const urgenceAdresse = findInGroup(["UrgenceAdresse", "AdresseUrgence", "EmergencyAddress", "emergency_address"]);
+
             fetchedPlayers.push({
-              id: String(primaryRecord.EtudiantID),
+              id: primaryId,
               matricule: matricule,
               nom: primaryRecord.Nom || "",
               prenom: primaryRecord.Prenom || "",
@@ -458,11 +493,15 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
               cotisationStatut: totalPaid > 0 ? "paid" : "pending",
               dernierPaiement: dernierPaiementDate,
               saison: currentDisplaySeason,
-              urgenceNomPrenom: primaryRecord.UrgenceNomPrenom || "",
-              urgenceLien: primaryRecord.UrgenceLien || "",
-              urgenceTelephone: primaryRecord.UrgenceTelephone || "",
-              urgenceEmail: primaryRecord.UrgenceEmail || "",
-              urgenceAdresse: primaryRecord.UrgenceAdresse || "",
+              parentNomPrenom,
+              parentTelephone,
+              parentEmail,
+              parentAdresse,
+              urgenceNomPrenom,
+              urgenceLien,
+              urgenceTelephone,
+              urgenceEmail,
+              urgenceAdresse,
               tailleHaut: primaryRecord.TailleHaut || "M",
               tailleShort: primaryRecord.TailleShort || "M",
             });
@@ -479,11 +518,12 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
                 mail = tel;
                 tel = "";
               } else if (tel.includes("@") && mail) {
-                // S'il y a déjà un mail, on garde le tel erroné ou on nettoie
                 const temp = mail;
                 mail = tel;
                 tel = temp; 
               }
+
+              const parentPlayerId = studentToPrimaryIdMap.get(String(d.EtudiantID)) || String(d.EtudiantID);
 
               return {
                 id: `pa-${d.EtudiantID}`,
@@ -492,12 +532,60 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
                 telephone: tel,
                 email: mail,
                 lien: d.LienParente || "Parent",
-                playerId: String(d.EtudiantID),
+                playerId: parentPlayerId,
               };
             });
 
           setPlayers(fetchedPlayers);
           setParents(groupParentsByFamily(fetchedParents));
+
+          // Charger les paiements depuis tblPaiements dans l'état payments
+          if (paiementsData && paiementsData.length > 0) {
+            const modeMap: Record<number, PaymentMethod> = {
+              1: "especes",
+              2: "carte",
+              3: "virement",
+              4: "mobile",
+              5: "mobile",
+            };
+            const fetchedPayments: Payment[] = paiementsData.map((p: any) => {
+              const rawPid = String(p.EtudiantId);
+              const resolvedPid = studentToPrimaryIdMap.get(rawPid) || rawPid;
+              const mntUS = Number(p.MntPayeUS) || 0;
+              const mntGd = Number(p.MntPayeGd) || 0;
+              const devise: "US" | "HTG" = mntGd > 0 ? "HTG" : "US";
+              const montant = mntGd > 0 ? mntGd : mntUS;
+              
+              let methode: PaymentMethod = "especes";
+              if (typeof p.ModePaiement === "number") {
+                methode = modeMap[p.ModePaiement] || "especes";
+              } else if (typeof p.ModePaiement === "string") {
+                const lower = p.ModePaiement.toLowerCase();
+                if (lower.includes("vir") || lower === "3") methode = "virement";
+                else if (lower.includes("cart") || lower === "2") methode = "carte";
+                else if (lower.includes("mob") || lower.includes("moncash") || lower === "4" || lower === "5") methode = "mobile";
+                else methode = "especes";
+              }
+
+              return {
+                id: String(p.Id),
+                playerId: resolvedPid,
+                montant,
+                montantUS: mntUS,
+                montantHTG: mntGd,
+                devise,
+                taux: p.TauxChange || p.taux,
+                statut: (p.Statut || "paid").toLowerCase() as PaymentStatus,
+                periode: p.Periode || "",
+                methode,
+                datePaiement: p.DateTransact ? p.DateTransact.split("T")[0] : (p.DatePaiement ? p.DatePaiement.split("T")[0] : ""),
+                remarque: p.Remarque || p.Description || "",
+              };
+            });
+            setPayments(fetchedPayments);
+          } else {
+            setPayments(parseStoredArray<Payment>(window.localStorage.getItem(STORAGE_KEYS.payments), []));
+          }
         } else {
           // Fallback sur le storage local si pas de données
           setPlayers(
@@ -514,10 +602,13 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
               )
             )
           );
+          setPayments(
+            parseStoredArray<Payment>(
+              window.localStorage.getItem(STORAGE_KEYS.payments),
+              []
+            )
+          );
         }
-
-        // Reset global payments state to empty array as requested
-        setPayments([]);
 
         if (facturesData && facturesData.length > 0) {
           const fetchedInvoices: Invoice[] = facturesData.map((f: any) => {
@@ -525,10 +616,12 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
             const mntP = f.MntPayeUS || f.MntPayeGd || 0;
             const mntUS = f.MntPayeUS || 0;
             const mntHTG = f.MntPayeGd || 0;
+            const rawPid = String(f.EtudiantId);
+            const resolvedPid = studentToPrimaryIdMap.get(rawPid) || rawPid;
             return {
               id: String(f.Id),
               noFacture: f.NoFacture || `FCT-XXXX-${String(f.Id).padStart(4, "0")}`,
-              playerId: String(f.EtudiantId),
+              playerId: resolvedPid,
               sessionId: String(f.SessionId),
               remarque: f.Remarque || "",
               montantAPayer: mntA,

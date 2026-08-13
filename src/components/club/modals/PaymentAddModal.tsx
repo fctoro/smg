@@ -252,7 +252,7 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
       const nonAdhesionSum = selectedPricingItems
         .filter((item) => item.id !== "adhesion-fc" && item.id !== "adhesion-ti")
         .reduce((sum, item) => sum + item.montant, 0);
-      const totalDue = (isTiToro ? plan.montantTIToro : plan.montantFCToro) * plan.nombreVersements + nonAdhesionSum;
+      const totalDue = (isTiToro ? plan.montantTIToro : plan.montantFCToro) + nonAdhesionSum;
       const discountedDue = calculateDiscountedAmount(totalDue, reductionType, customReductionPercent);
       
       const finalMontantAPayer = devise === "HTG" ? montantDuManuel : montantDuManuel;
@@ -265,54 +265,59 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
       const paymentMarkers = `[ADHESION:${adhesionCode}] [PLAN:${selectedPlan.toUpperCase()}] [STATUT:${statut.toUpperCase()}]`;
       const adhesionLabel = isTiToro ? "Adhésion: TI TORO" : "Adhésion: FC TORO";
       const finalRemarque = `${paymentMarkers} ${reductionMetadata ? `${reductionMetadata} ` : ""}${description.trim()} ${adhesionLabel}${selectedRubricsLabel ? ` | Rubriques: ${selectedRubricsLabel}` : ""} Plan: ${plan.plan}`.trim();
-      const paymentPhotoUrl = paymentPhoto ? await uploadPaymentPhotoToSupabase(paymentPhoto) : null;
-      const paymentPhotoNote = paymentPhotoUrl ? ` [JUSTIFICATIF:${paymentPhotoUrl}]` : paymentPhoto ? ` [JUSTIFICATIF:${paymentPhoto.name}]` : "";
-      const finalRemarqueWithPhoto = `${finalRemarque}${paymentPhotoNote}`.trim();
-      const dataToInsert = {
+      const uploadPromise = paymentPhoto ? uploadPaymentPhotoToSupabase(paymentPhoto) : Promise.resolve(null);
+      const invoiceData = {
+        noFacture: `FAC-${Date.now()}`,
         playerId,
-        montant: paymentAmount,
+        sessionId: "1",
+        remarque: finalRemarque,
+        montantAPayer: finalMontantAPayer,
+        montantPaye: paymentAmount,
         montantUS,
         montantHTG,
         devise,
-        taux: devise === "HTG" ? taux : undefined,
         statut,
-        periode,
-        methode,
-        remarque: finalRemarqueWithPhoto,
+        dateFacture: new Date().toISOString(),
         datePaiement: statut === "paid" ? datePaiement || undefined : undefined,
       };
 
-      try {
-        await addInvoiceToSupabase({
-          noFacture: `FAC-${Date.now()}`,
+        const [paymentPhotoUrl] = await Promise.all([
+          uploadPromise,
+          addInvoiceToSupabase(invoiceData).catch((err) => {
+            console.warn("Erreur lors de la création de la facture (silencieuse):", err);
+            return null;
+          })
+        ]);
+        
+        const paymentPhotoNote = paymentPhotoUrl ? ` [JUSTIFICATIF:${paymentPhotoUrl}]` : paymentPhoto ? ` [JUSTIFICATIF:${paymentPhoto.name}]` : "";
+        const finalRemarqueWithPhoto = `${finalRemarque}${paymentPhotoNote}`.trim();
+        
+        const dataToInsert = {
           playerId,
-          sessionId: "1",
-          remarque: finalRemarque,
-          montantAPayer: finalMontantAPayer,
-          montantPaye: paymentAmount,
+          montant: paymentAmount,
           montantUS,
           montantHTG,
           devise,
+          taux: devise === "HTG" ? taux : undefined,
           statut,
-          dateFacture: new Date().toISOString(),
-          datePaiement: dataToInsert.datePaiement,
-        });
-      } catch (invoiceErr) {
-        console.warn("Erreur lors de la création de la facture (tblFacture n'existe peut-être pas):", invoiceErr);
-        // On continue quand même pour ne pas bloquer le paiement
-      }
-      const inserted = await addPaymentToSupabase(dataToInsert);
-      if (!inserted) {
-        throw new Error("Paiement non créé.");
-      }
+          periode,
+          methode,
+          remarque: finalRemarqueWithPhoto,
+          datePaiement: statut === "paid" ? datePaiement || undefined : undefined,
+        };
 
-      setPayments((prevPayments) => [
-        {
-          id: inserted.Id.toString(),
-          ...dataToInsert,
-        },
-        ...prevPayments,
-      ]);
+        const inserted = await addPaymentToSupabase(dataToInsert);
+        if (!inserted) {
+          throw new Error("Paiement non créé.");
+        }
+
+        setPayments((prevPayments) => [
+          {
+            id: inserted.Id.toString(),
+            ...dataToInsert,
+          },
+          ...prevPayments,
+        ]);
       // --- SEND EMAIL LOGIC ---
       try {
         if (selectedPlayer) {
@@ -424,7 +429,7 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
 
     let adhesionAmount = 0;
     if (selectedPlanData) {
-      adhesionAmount = (isTiToro ? selectedPlanData.montantTIToro : selectedPlanData.montantFCToro) * selectedPlanData.nombreVersements;
+      adhesionAmount = isTiToro ? selectedPlanData.montantTIToro : selectedPlanData.montantFCToro;
     } else if (selectedAdhesionItem) {
       adhesionAmount = selectedAdhesionItem.montant;
     }
@@ -688,14 +693,14 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
                 type="number"
                 min={0}
                 step="0.01"
-                value={montantDuManuel}
+                value={montantDuManuel || ""}
                 onChange={(event) => setMontantDuManuel(Number(event.target.value))}
                 className={inputClassName}
               />
             </div>
             <div>
               <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">Montant donné</label>
-              <input type="number" min={0} step="0.01" value={montantDonne} onChange={(event) => setMontantDonne(Number(event.target.value))} className={inputClassName} />
+              <input type="number" min={0} step="0.01" value={montantDonne || ""} onChange={(event) => setMontantDonne(Number(event.target.value))} className={inputClassName} />
             </div>
             <div>
               <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">Montant restant</label>
@@ -724,7 +729,7 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
                   type="number"
                   min={0}
                   step="0.01"
-                  value={taux}
+                  value={taux || ""}
                   onChange={(event) => setTaux(Number(event.target.value))}
                   className={inputClassName}
                 />
@@ -800,6 +805,7 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
                 <option value="virement">Virement</option>
                 <option value="carte">Carte bancaire</option>
                 <option value="especes">Espèces</option>
+                <option value="cheque">Chèque</option>
                 <option value="mobile">Paiement Mobile</option>
               </select>
             </div>

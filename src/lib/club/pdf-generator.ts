@@ -319,6 +319,9 @@ export async function generateReceiptPDFBase64(
     }
   }
 
+  // Activer l'impression automatique à l'ouverture du PDF
+  doc.autoPrint();
+
   // Use datauristring and we will process it in the server
   return doc.output('datauristring');
 }

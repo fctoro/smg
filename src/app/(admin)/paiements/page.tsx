@@ -383,15 +383,8 @@ export default function PaymentsPage() {
       const blob = new Blob([byteArray], {type: 'application/pdf'});
       const blobUrl = URL.createObjectURL(blob);
       
-      // Open in a new window/iframe and trigger print
-      const printWindow = window.open(blobUrl, "_blank");
-      if (printWindow) {
-        printWindow.onload = () => {
-          setTimeout(() => {
-            printWindow.print();
-          }, 500);
-        };
-      }
+      // Open in a new window/iframe (autoPrint is handled inside the PDF itself)
+      window.open(blobUrl, "_blank");
     } catch (err) {
       console.error("Erreur lors de la génération du PDF", err);
       alert("Erreur lors de la génération du PDF pour impression");

@@ -284,6 +284,23 @@ export default function PaymentsPage() {
       const parentNom = nomParts[0] || "";
       const parentPrenom = nomParts.slice(1).join(" ") || "";
       
+      let proofBase64: string | null = null;
+      const proofMatch = payment.remarque?.match(/\[JUSTIFICATIF:(.+?)\]/);
+      if (proofMatch && proofMatch[1]) {
+        try {
+          const res = await fetch(proofMatch[1]);
+          const blob = await res.blob();
+          proofBase64 = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result as string);
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+          });
+        } catch (e) {
+          console.warn("Erreur lors de la récupération de la preuve", e);
+        }
+      }
+      
       const receiptBase64 = await generateReceiptPDFBase64(
         player,
         [payment],
@@ -292,7 +309,7 @@ export default function PaymentsPage() {
         player.parentTelephone || player.telephone || "",
         player.parentEmail || player.email || "",
         player.parentAdresse || player.adresse || "",
-        null
+        proofBase64
       );
       
       // Télécharger le PDF

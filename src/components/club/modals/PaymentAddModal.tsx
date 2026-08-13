@@ -153,6 +153,7 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
   const [playerId, setPlayerId] = useState("");
   const [playerSearch, setPlayerSearch] = useState("");
   const [showPlayerDropdown, setShowPlayerDropdown] = useState(false);
+  const [montantDuManuel, setMontantDuManuel] = useState(0);
   const [montantDonne, setMontantDonne] = useState(0);
   const [devise, setDevise] = useState<"US" | "HTG">("US");
   const [taux, setTaux] = useState(0);
@@ -205,6 +206,7 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
     setPlayerId("");
     setPlayerSearch("");
     setShowPlayerDropdown(false);
+    setMontantDuManuel(0);
     setMontantDonne(0);
     setDevise("US");
     setTaux(0);
@@ -252,6 +254,8 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
         .reduce((sum, item) => sum + item.montant, 0);
       const totalDue = (isTiToro ? plan.montantTIToro : plan.montantFCToro) * plan.nombreVersements + nonAdhesionSum;
       const discountedDue = calculateDiscountedAmount(totalDue, reductionType, customReductionPercent);
+      
+      const finalMontantAPayer = devise === "HTG" ? montantDuManuel : montantDuManuel;
       const paymentAmount = devise === "HTG" ? montantDonne : montantDonne;
       const montantUS = devise === "US" ? paymentAmount : (taux > 0 ? paymentAmount / taux : 0);
       const montantHTG = devise === "HTG" ? paymentAmount : 0;
@@ -284,7 +288,7 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
           playerId,
           sessionId: "1",
           remarque: finalRemarque,
-          montantAPayer: discountedDue,
+          montantAPayer: finalMontantAPayer,
           montantPaye: paymentAmount,
           montantUS,
           montantHTG,
@@ -440,10 +444,11 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
   }, [discountedDue, devise, taux]);
 
   useEffect(() => {
+    setMontantDuManuel(computedDue);
     setMontantDonne(computedDue);
   }, [computedDue]);
 
-  const remainingAmount = Math.max(0, computedDue - montantDonne);
+  const remainingAmount = Math.max(0, montantDuManuel - montantDonne);
 
   const getPlayerStatusInfo = (status: string | null | undefined) => {
     const baseClassName =
@@ -681,9 +686,11 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
               </label>
               <input
                 type="number"
-                value={computedDue}
+                min={0}
+                step="0.01"
+                value={montantDuManuel}
+                onChange={(event) => setMontantDuManuel(Number(event.target.value))}
                 className={inputClassName}
-                readOnly
               />
             </div>
             <div>

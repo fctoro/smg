@@ -12,7 +12,8 @@ export async function generateReceiptPDFBase64(
   parentTelephone?: string,
   parentEmail?: string,
   parentAddress?: string,
-  proofImageBase64?: string | null
+  proofImageBase64?: string | null,
+  autoPrint: boolean = false
 ): Promise<string> {
   const doc = new jsPDF();
   
@@ -319,8 +320,10 @@ export async function generateReceiptPDFBase64(
     }
   }
 
-  // Activer l'impression automatique à l'ouverture du PDF
-  doc.autoPrint();
+  // Activer l'impression automatique à l'ouverture du PDF si demandé
+  if (autoPrint) {
+    doc.autoPrint();
+  }
 
   // Use datauristring and we will process it in the server
   return doc.output('datauristring');

@@ -370,7 +370,8 @@ export default function PaymentsPage() {
         player.parentTelephone || player.telephone || "",
         player.parentEmail || player.email || "",
         player.parentAdresse || player.adresse || "",
-        proofBase64
+        proofBase64,
+        true // autoPrint flag
       );
       
       const base64Data = receiptBase64.includes("base64,") ? receiptBase64.split("base64,")[1] : receiptBase64;
@@ -383,8 +384,24 @@ export default function PaymentsPage() {
       const blob = new Blob([byteArray], {type: 'application/pdf'});
       const blobUrl = URL.createObjectURL(blob);
       
-      // Open in a new window/iframe (autoPrint is handled inside the PDF itself)
-      window.open(blobUrl, "_blank");
+      // Use a hidden iframe to print without triggering a download in most browsers
+      const iframe = document.createElement('iframe');
+      iframe.style.display = 'none';
+      iframe.src = blobUrl;
+      document.body.appendChild(iframe);
+      
+      iframe.onload = () => {
+        setTimeout(() => {
+          try {
+            iframe.contentWindow?.focus();
+            iframe.contentWindow?.print();
+          } catch (e) {
+            console.error("Erreur lors de l'impression via iframe", e);
+            // Fallback to opening in new tab if iframe printing is blocked
+            window.open(blobUrl, "_blank");
+          }
+        }, 500);
+      };
     } catch (err) {
       console.error("Erreur lors de la génération du PDF", err);
       alert("Erreur lors de la génération du PDF pour impression");

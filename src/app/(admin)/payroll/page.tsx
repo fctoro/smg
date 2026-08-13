@@ -513,8 +513,8 @@ export default function PayrollPage() {
         </div>
       </div>
 
-      {/* Complete Historical Filtering Controls (2012 - Present) */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between print:hidden">
+      {/* Top Bar Actions */}
+      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between print:hidden">
         <div className="flex flex-wrap items-center gap-3">
           {/* Year Filter */}
           <div className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 shadow-xs dark:border-gray-800 dark:bg-gray-900">
@@ -578,17 +578,36 @@ export default function PayrollPage() {
         </div>
 
         {/* Action Button */}
-        <button
-          onClick={() => setShowModal(true)}
-          className="inline-flex items-center gap-2 rounded-xl bg-brand-500 px-4 py-2.5 text-sm font-semibold text-white shadow-md transition-all hover:bg-brand-600 focus:outline-none active:scale-95"
-        >
-          <Icons.Plus />
-          <span>Nouveau Bulletin</span>
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => {
+              setSelectedSlip(null);
+              setTimeout(() => {
+                window.print();
+              }, 200);
+            }}
+            className="inline-flex items-center gap-2 rounded-xl bg-gray-100 px-4 py-2.5 text-sm font-semibold text-gray-700 shadow-md transition-all hover:bg-gray-200 focus:outline-none active:scale-95 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+          >
+            <Icons.Printer />
+            <span>Imprimer</span>
+          </button>
+          
+          <button
+            onClick={() => setShowModal(true)}
+            className="inline-flex items-center gap-2 rounded-xl bg-brand-500 px-4 py-2.5 text-sm font-semibold text-white shadow-md transition-all hover:bg-brand-600 focus:outline-none active:scale-95"
+          >
+            <Icons.Plus />
+            <span>Nouveau Bulletin</span>
+          </button>
+        </div>
+      </div>
+
+      <div className="hidden print:block mb-6">
+        <h1 className="text-2xl font-bold text-gray-900">Rapport de Paie - {formatMonthYearDisplay(`${selectedYear}-${selectedMonth}`)}</h1>
       </div>
 
       {/* Payroll Records Table */}
-      <div className="rounded-2xl border border-gray-200 bg-white shadow-xs dark:border-gray-800 dark:bg-gray-900 print:hidden">
+      <div className={`rounded-2xl border border-gray-200 bg-white shadow-xs dark:border-gray-800 dark:bg-gray-900 ${selectedSlip ? 'print:hidden' : ''}`}>
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm text-gray-600 dark:text-gray-400">
             <thead className="bg-gray-50/80 text-xs uppercase text-gray-700 dark:bg-gray-800/60 dark:text-gray-300">

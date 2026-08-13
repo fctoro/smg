@@ -363,7 +363,7 @@ const AppSidebar: React.FC = () => {
         </Link>
       </div>
 
-      <div className="flex flex-col flex-1 overflow-y-auto duration-300 ease-linear no-scrollbar">
+      <div className="flex flex-col flex-1 overflow-y-auto duration-300 ease-linear sidebar-scrollbar -mr-4 pr-4">
         <nav className="mb-6">
           <div className="flex flex-col gap-4" suppressHydrationWarning>
             <div>

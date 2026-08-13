@@ -56,6 +56,8 @@ function NewPlayerFormContent() {
               urgenceNomPrenom: p.emergency_contact_name || "",
               urgenceTelephone: p.emergency_contact_phone || "",
               urgenceLien: p.emergency_contact_relation || "",
+              urgenceEmail: p.emergency_contact_email || "",
+              urgenceAdresse: p.emergency_contact_address || "",
             };
 
             // Fetch docs

@@ -336,6 +336,68 @@ export default function PaymentsPage() {
     }
   };
 
+  const handlePrintSinglePaymentPDF = async (payment: (typeof payments)[number]) => {
+    const player = playerMap.get(payment.playerId);
+    if (!player) return;
+    
+    try {
+      const nomParts = (player.parentNomPrenom || "").split(" ");
+      const parentNom = nomParts[0] || "";
+      const parentPrenom = nomParts.slice(1).join(" ") || "";
+      
+      let proofBase64: string | null = null;
+      const proofMatch = payment.remarque?.match(/\[JUSTIFICATIF:(.+?)\]/);
+      if (proofMatch && proofMatch[1]) {
+        try {
+          const res = await fetch(proofMatch[1]);
+          const blob = await res.blob();
+          proofBase64 = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result as string);
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+          });
+        } catch (e) {
+          console.warn("Erreur lors de la récupération de la preuve", e);
+        }
+      }
+      
+      const receiptBase64 = await generateReceiptPDFBase64(
+        player,
+        [payment],
+        parentNom,
+        parentPrenom,
+        player.parentTelephone || player.telephone || "",
+        player.parentEmail || player.email || "",
+        player.parentAdresse || player.adresse || "",
+        proofBase64
+      );
+      
+      const base64Data = receiptBase64.includes("base64,") ? receiptBase64.split("base64,")[1] : receiptBase64;
+      const byteCharacters = atob(base64Data);
+      const byteNumbers = new Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) {
+          byteNumbers[i] = byteCharacters.charCodeAt(i);
+      }
+      const byteArray = new Uint8Array(byteNumbers);
+      const blob = new Blob([byteArray], {type: 'application/pdf'});
+      const blobUrl = URL.createObjectURL(blob);
+      
+      // Open in a new window/iframe and trigger print
+      const printWindow = window.open(blobUrl, "_blank");
+      if (printWindow) {
+        printWindow.onload = () => {
+          setTimeout(() => {
+            printWindow.print();
+          }, 500);
+        };
+      }
+    } catch (err) {
+      console.error("Erreur lors de la génération du PDF", err);
+      alert("Erreur lors de la génération du PDF pour impression");
+    }
+  };
+
   const filteredPayments = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
     return payments
@@ -803,13 +865,13 @@ export default function PaymentsPage() {
                         <div className="flex items-center gap-3">
                           <button
                             type="button"
-                            onClick={() => handleDownloadSinglePaymentPDF(payment)}
+                            onClick={() => handlePrintSinglePaymentPDF(payment)}
                             className="inline-flex items-center justify-center text-brand-500 hover:text-brand-600 dark:text-brand-400 dark:hover:text-brand-300 transition cursor-pointer"
-                            aria-label="Télécharger le reçu PDF"
-                            title="Télécharger le reçu (PDF)"
+                            aria-label="Imprimer le reçu"
+                            title="Imprimer le reçu"
                           >
                             <svg className="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
                             </svg>
                           </button>
                           <Link
@@ -829,6 +891,7 @@ export default function PaymentsPage() {
                           >
                             <TrashBinIcon className="size-5" />
                           </button>
+
                           {balance > 0 && payment.statut === "paid" && (
                             <button
                               type="button"

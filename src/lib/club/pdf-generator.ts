@@ -277,27 +277,43 @@ export async function generateReceiptPDFBase64(
   doc.line(14, finalY + 55, 60, finalY + 55);
 
   if (proofImageBase64) {
-    const proofStartY = finalY + 65;
     try {
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(10);
-      doc.setTextColor(black[0], black[1], black[2]);
-      doc.text("DOCUMENT JUSTIFICATIF", 14, proofStartY);
-
       let imgFormat = 'JPEG';
       if (proofImageBase64.includes('image/png')) imgFormat = 'PNG';
       if (proofImageBase64.includes('image/webp')) imgFormat = 'WEBP';
       
-      const MAX_IMG_WIDTH = 180;
-      const MAX_IMG_HEIGHT = Math.max(50, 280 - (proofStartY + 5)); 
+      // Obtenir les dimensions réelles de l'image
+      const img = new Image();
+      img.src = proofImageBase64;
+      await new Promise((resolve) => {
+        img.onload = resolve;
+        img.onerror = resolve;
+      });
+
+      const imgWidth = img.width || 180;
+      const imgHeight = img.height || 250;
+      const ratio = imgWidth / imgHeight;
+
+      // Ajouter une nouvelle page pour le justificatif
+      doc.addPage();
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(14);
+      doc.setTextColor(black[0], black[1], black[2]);
+      doc.text("DOCUMENT JUSTIFICATIF", 14, 20);
+
+      let printWidth = 180;
+      let printHeight = printWidth / ratio;
       
-      if (MAX_IMG_HEIGHT > 30) {
-        doc.addImage(proofImageBase64, imgFormat, 14, proofStartY + 5, MAX_IMG_WIDTH, MAX_IMG_HEIGHT, undefined, 'FAST');
-      } else {
-        doc.addPage();
-        doc.text("DOCUMENT JUSTIFICATIF", 14, 20);
-        doc.addImage(proofImageBase64, imgFormat, 14, 25, MAX_IMG_WIDTH, 250, undefined, 'FAST');
+      // Si l'image est trop haute pour la page, on réduit en fonction de la hauteur max
+      if (printHeight > 250) {
+          printHeight = 250;
+          printWidth = printHeight * ratio;
       }
+      
+      // Centrer l'image horizontalement (la largeur dispo est 180, marge gauche 14)
+      const xOffset = 14 + (180 - printWidth) / 2;
+      
+      doc.addImage(proofImageBase64, imgFormat, xOffset, 25, printWidth, printHeight, undefined, 'FAST');
     } catch (err) {
       console.warn("Could not add proof image to PDF", err);
     }

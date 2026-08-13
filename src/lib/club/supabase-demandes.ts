@@ -56,33 +56,33 @@ export const fetchSiteMessages = async (): Promise<SiteMessage[]> => {
     fetchAllDetectionRegistrations().catch(() => [])
   ]);
 
-  if (siteData && siteData.length > 0) {
-    const formattedSite = siteData.map((m: any) => {
-      const enfantNom = m.payload?.child_first_name 
-        ? `${m.payload.child_first_name} ${m.payload.child_last_name || ''}`.trim() 
-        : undefined;
+  // Track seen detection keys to avoid any duplicate entries
+  const seenDetections = new Set<string>();
 
-      return {
-        id: String(m.id),
-        type_message: m.type === 'joueur' ? 'inscription_joueur' : m.type || "contact_general",
-        statut: m.status === 'enrolled' ? 'inscrit' : m.status === 'archived' ? 'archive' : m.is_read ? 'lu' : 'nouveau',
-        contact_nom: m.name || "",
-        contact_email: m.email || "",
-        contact_telephone: m.phone || "",
-        sujet: m.type === 'joueur' ? `Inscription Joueur - ${enfantNom || 'N/A'}` : "Message",
-        contenu: m.message || "",
-        reference_id: String(m.id),
-        created_at: m.created_at || new Date().toISOString(),
-        metadata: { ...m.payload, enfant_nom: enfantNom, source_table: 'site_messages' },
-      } as SiteMessage;
-    });
-    allMessages.push(...formattedSite);
-  }
-
+  // 1. Process detection_registrations first (primary source of truth for detections)
   if (detectionData && detectionData.length > 0) {
-    const formattedDetections = detectionData.map((d: any) => {
+    detectionData.forEach((d: any) => {
       const childFullName = `${d.prenom || ''} ${d.nom || ''}`.trim();
-      return {
+      const normName = childFullName.toLowerCase().replace(/\s+/g, ' ');
+      const dob = (d.date_naissance || '').trim();
+      const email = (d.email || d.parent_email || '').toLowerCase().trim();
+      const phone = (d.telephone || d.parent_telephone || '').trim();
+      const numDet = (d.numero_detection || '').trim();
+
+      // Identity key for deduplication
+      const dedupKey = numDet ? `num:${numDet}` : `${normName}|${dob}|${email || phone}`;
+
+      if (seenDetections.has(dedupKey)) {
+        return; // Skip duplicate
+      }
+      seenDetections.add(dedupKey);
+
+      // Also index by name & email/phone to catch site_messages duplicates
+      if (normName) {
+        seenDetections.add(`name:${normName}`);
+      }
+
+      allMessages.push({
         id: `det_${d.id}`,
         type_message: 'detection',
         statut: d.status === 'enrolled' ? 'inscrit' : d.status === 'archived' ? 'archive' : d.is_read ? 'lu' : 'nouveau',
@@ -119,9 +119,45 @@ export const fetchSiteMessages = async (): Promise<SiteMessage[]> => {
           source_table: 'detection_registrations',
           raw_db_id: d.id,
         },
-      } as SiteMessage;
+      } as SiteMessage);
     });
-    allMessages.push(...formattedDetections);
+  }
+
+  // 2. Process site_messages (ignoring detections that are already loaded)
+  if (siteData && siteData.length > 0) {
+    siteData.forEach((m: any) => {
+      const isDetectionMsg = m.type === 'detection';
+
+      if (isDetectionMsg) {
+        // Check if this detection is already in seenDetections from detection_registrations
+        const contactName = (m.name || '').toLowerCase().trim().replace(/\s+/g, ' ');
+        const email = (m.email || '').toLowerCase().trim();
+        const p = m.payload || {};
+        const childName = `${p.prenom || p.child_first_name || ''} ${p.nom || p.child_last_name || ''}`.trim().toLowerCase().replace(/\s+/g, ' ');
+
+        if (seenDetections.has(`name:${childName}`) || seenDetections.has(`name:${contactName}`) || (email && seenDetections.has(email))) {
+          return; // Skip duplicate detection from site_messages
+        }
+      }
+
+      const enfantNom = m.payload?.child_first_name 
+        ? `${m.payload.child_first_name} ${m.payload.child_last_name || ''}`.trim() 
+        : undefined;
+
+      allMessages.push({
+        id: String(m.id),
+        type_message: m.type === 'joueur' ? 'inscription_joueur' : m.type || "contact_general",
+        statut: m.status === 'enrolled' ? 'inscrit' : m.status === 'archived' ? 'archive' : m.is_read ? 'lu' : 'nouveau',
+        contact_nom: m.name || "",
+        contact_email: m.email || "",
+        contact_telephone: m.phone || "",
+        sujet: m.type === 'joueur' ? `Inscription Joueur - ${enfantNom || 'N/A'}` : "Message",
+        contenu: m.message || "",
+        reference_id: String(m.id),
+        created_at: m.created_at || new Date().toISOString(),
+        metadata: { ...m.payload, enfant_nom: enfantNom, source_table: 'site_messages' },
+      } as SiteMessage);
+    });
   }
 
   // Sort by date descending

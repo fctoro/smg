@@ -148,6 +148,7 @@ export default function NewPaymentPage() {
   const [datePaiement, setDatePaiement] = useState(() => new Date().toISOString().split("T")[0]);
   const [selectedPricing, setSelectedPricing] = useState<string[]>([]);
   const [selectedPlan, setSelectedPlan] = useState<string>("");
+  const [isUserEditedMontantDonne, setIsUserEditedMontantDonne] = useState(false);
   const [montantDonne, setMontantDonne] = useState<number>(0);
   const [error, setError] = useState<string>("");
 
@@ -195,33 +196,6 @@ export default function NewPaymentPage() {
       playerInputRef.current.style.color = '';
     }
   }, [selectedPlayer]);
-
-  // Cocher automatiquement l'adhésion Ti Toro ou FC Toro lors du choix d'un joueur
-  useEffect(() => {
-    if (!selectedPlayer) return;
-    const cat = (selectedPlayer.categorie || "").toLowerCase();
-    const isTiToro = cat.includes("ti toro") || cat.includes("titoro") || cat.includes("u6-u8");
-
-    const adhesionOptions = pricingItems.filter(
-      (item) => item.estAdhesion || item.id === "adhesion-fc" || item.id === "adhesion-ti"
-    );
-
-    const targetAdhesion = adhesionOptions.find((item) => {
-      const name = (item.rubrique || "").toLowerCase();
-      return isTiToro
-        ? name.includes("ti toro") || item.id === "adhesion-ti"
-        : (name.includes("fc toro") && !name.includes("ti")) || item.id === "adhesion-fc";
-    });
-
-    if (targetAdhesion) {
-      setSelectedPricing((prev) => {
-        const otherPricing = prev.filter(
-          (id) => !adhesionOptions.some((adh) => adh.id === id)
-        );
-        return [...otherPricing, targetAdhesion.id];
-      });
-    }
-  }, [selectedPlayer, pricingItems]);
 
 
 
@@ -284,8 +258,8 @@ export default function NewPaymentPage() {
       return;
     }
 
-    // Si montantDonne est 0 mais qu'il y a un montantAvecPlan, utiliser montantAvecPlan
-    const finalMontant = montantDonne > 0 ? montantDonne : montantAvecPlan;
+    // Si montantDonne est 0 mais qu'il y a un totalRubriques, utiliser totalRubriques
+    const finalMontant = montantDonne > 0 ? montantDonne : totalRubriques;
     if (finalMontant <= 0) {
       const msg = "❌ Erreur: Veuillez entrer un montant donné ou sélectionner des rubriques/plan.";
       setError(msg);
@@ -322,7 +296,7 @@ export default function NewPaymentPage() {
       const adhesionCode = isTiToro ? "TI_TORO" : "FC_TORO";
       const planCode = selectedPlan.toUpperCase();
       const statusCode = paymentStatus.toUpperCase();
-      const paymentMarkers = `[ADHESION:${adhesionCode}] [PLAN:${planCode}] [STATUT:${statusCode}] [TOTAL_DUE:${montantAvecPlan}]`;
+      const paymentMarkers = `[ADHESION:${adhesionCode}] [PLAN:${planCode}] [STATUT:${statusCode}]`;
       const finalRemarque = `${paymentMarkers} ${description.trim()} ${adhesionRemark} ${planRemark}`.trim();
       const uploadPromise = paymentPhoto ? uploadPaymentPhotoToSupabase(paymentPhoto) : Promise.resolve(null);
 
@@ -335,7 +309,7 @@ export default function NewPaymentPage() {
         montantPaye: paymentAmount,
         devise,
         dateFacture: new Date().toISOString(),
-        datePaiement: paymentStatus === "paid" ? datePaiement || new Date().toISOString() : undefined,
+        datePaiement: datePaiement || new Date().toISOString().split("T")[0],
         remarque: finalRemarque, // We skip the photo in invoice remark to run concurrently
         statut: paymentStatus,
         montantUS: montantUS,
@@ -428,71 +402,67 @@ export default function NewPaymentPage() {
   };
 
   const totalRubriques = useMemo(() => {
-    const total = selectedPricingItems.reduce((sum, item) => sum + item.montant, 0);
-    // Convert to HTG if needed
-    if (devise === "HTG" && taux > 0) {
-      return total * taux;
-    }
-    return total;
-  }, [selectedPricingItems, devise, taux]);
-
-  const [nombreDeMois, setNombreDeMois] = useState<number>(1);
-
-  const montantAvecPlan = useMemo(() => {
-    // Si le joueur est boursier, appliquer automatiquement le tarif boursier 2500 HTG / mois
-    if (selectedPlayer && (selectedPlayer.statutJoueur || "").toLowerCase().includes("bourse")) {
-      const boursierHTG = nombreDeMois * 2500;
-      if (devise === "HTG") {
-        return boursierHTG;
-      }
-      return taux > 0 ? Number((boursierHTG / taux).toFixed(2)) : 0;
+    if (selectedPricingItems.length === 0 && !selectedPlan) {
+      return 0;
     }
 
-    if (!selectedPlan || totalRubriques === 0) return totalRubriques;
-    
-    const plan = paymentPlans.find((p) => p.id === selectedPlan);
-    if (!plan || !selectedPlayer) return totalRubriques;
-    
-    if (selectedPlan !== "annuel") {
-      return totalRubriques;
-    }
-
-    const categorieLower = (selectedPlayer.categorie || "")
-      .trim()
-      .toLowerCase();
-    const selectedAdhesionItem = selectedPricingItems.find((item) => item.estAdhesion || item.id === "adhesion-fc" || item.id === "adhesion-ti");
-    const isFCToro = selectedAdhesionItem 
-      ? !selectedAdhesionItem.rubrique.toLowerCase().includes("ti toro")
-      : (categorieLower.includes("fc toro") ||
-         categorieLower.includes("académie") ||
-         categorieLower.includes("elite") ||
-         categorieLower.includes("école de football"));
-    
     const nonAdhesionSum = selectedPricingItems
       .filter((item) => !item.estAdhesion && item.id !== "adhesion-fc" && item.id !== "adhesion-ti")
       .reduce((sum, item) => sum + item.montant, 0);
 
-    const planAmount = isFCToro ? plan.montantFCToro : plan.montantTIToro;
-    const totalToPayNow = planAmount + nonAdhesionSum;
-    
-    if (devise === "HTG" && taux > 0) {
-      return totalToPayNow * taux;
+    const selectedAdhesionItem = selectedPricingItems.find((item) => item.estAdhesion || item.id === "adhesion-fc" || item.id === "adhesion-ti");
+    const isTiToro = selectedAdhesionItem ? selectedAdhesionItem.rubrique.toLowerCase().includes("ti toro") : false;
+
+    const hasAdhesion = selectedPricingItems.some((item) => item.estAdhesion || item.id === "adhesion-fc" || item.id === "adhesion-ti");
+
+    let adhesionAmount = 0;
+    if (hasAdhesion || selectedPlan) {
+      adhesionAmount = isTiToro ? 1000 : 1350;
+      if (selectedPlan === "annuel") {
+        adhesionAmount = isTiToro ? 900 : 1215;
+      } else if (selectedAdhesionItem) {
+        adhesionAmount = selectedAdhesionItem.montant;
+      }
     }
-    
-    return totalToPayNow;
-  }, [selectedPlan, selectedPlayer, selectedPricing, selectedPricingItems, totalRubriques, devise, taux, nombreDeMois]);
+
+    const totalUSD = adhesionAmount + nonAdhesionSum;
+    if (devise === "HTG" && taux > 0) {
+      return totalUSD * taux;
+    }
+    return totalUSD;
+  }, [selectedPricingItems, selectedPlan, devise, taux]);
+
+  const planInstallmentAmount = useMemo(() => {
+    if (!selectedPlan) return 0;
+    const plan = paymentPlans.find((p) => p.id === selectedPlan);
+    if (!plan) return 0;
+
+    const selectedAdhesionItem = selectedPricingItems.find((item) => item.estAdhesion || item.id === "adhesion-fc" || item.id === "adhesion-ti");
+    const isTiToro = selectedAdhesionItem ? selectedAdhesionItem.rubrique.toLowerCase().includes("ti toro") : false;
+
+    const installmentUSD = isTiToro ? plan.montantTIToro : plan.montantFCToro;
+    if (devise === "HTG" && taux > 0) {
+      return installmentUSD * taux;
+    }
+    return installmentUSD;
+  }, [selectedPlan, selectedPricingItems, devise, taux]);
 
   const montantRestant = useMemo(() => {
-    return montantAvecPlan - montantDonne;
-  }, [montantAvecPlan, montantDonne]);
+    return Math.max(0, totalRubriques - montantDonne);
+  }, [totalRubriques, montantDonne]);
 
-  // Auto-fill montantDonne when totalRubriques or montantAvecPlan changes
+  const hasPricingItems = selectedPricingItems.length > 0;
+
+  // Pre-fill montantDonne with totalRubriques if not manually edited by user
   useEffect(() => {
-    const total = montantAvecPlan > 0 ? montantAvecPlan : totalRubriques;
-    if (total > 0) {
-      setMontantDonne(total);
+    if (isUserEditedMontantDonne) return; // Preserve manual user input
+
+    if (hasPricingItems) {
+      setMontantDonne(totalRubriques);
+    } else {
+      setMontantDonne(0);
     }
-  }, [montantAvecPlan, totalRubriques]);
+  }, [totalRubriques, isUserEditedMontantDonne, hasPricingItems]);
 
   // Convert montantDonne to HTG if needed
   const montantDonneConverti = useMemo(() => {
@@ -613,6 +583,40 @@ export default function NewPaymentPage() {
               </div>
             )}
           </div>
+          <div className="md:col-span-2 xl:col-span-3">
+            <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
+              Rubriques
+            </label>
+            <div className="max-h-48 overflow-auto rounded-lg border border-gray-300 bg-white dark:border-gray-700 dark:bg-gray-900">
+              {pricingItems.map((item) => (
+                <label
+                  key={item.id}
+                  className="flex cursor-pointer items-start gap-3 border-b border-gray-100 px-4 py-2.5 last:border-b-0 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800"
+                >
+                  <input
+                    type="checkbox"
+                    checked={selectedPricing.includes(item.id)}
+                    onChange={() => handlePricingChange(item.id)}
+                    className="mt-0.5 h-4 w-4 rounded border-gray-300 text-brand-500 focus:ring-brand-500"
+                  />
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-gray-800 dark:text-white/90">
+                        {item.rubrique}
+                      </span>
+                      <span className="text-sm font-semibold text-brand-600 dark:text-brand-400">
+                        ${item.montant}
+                      </span>
+                    </div>
+                    <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                      {item.precision}
+                    </p>
+                  </div>
+                </label>
+              ))}
+            </div>
+            {selectedPricingItems.length > 0 && (
+              <div className="mt-2 rounded-lg bg-brand-50 px-3 py-2 dark:bg-brand-500/10">
                 <p className="text-sm font-medium text-brand-900 dark:text-brand-100">
                   Total rubriques: ${totalRubriques.toFixed(2)}
                 </p>
@@ -627,7 +631,10 @@ export default function NewPaymentPage() {
               type="number"
               min={0}
               value={montantDonne || ""}
-              onChange={(event) => setMontantDonne(Number(event.target.value))}
+              onChange={(event) => {
+                setMontantDonne(Number(event.target.value));
+                setIsUserEditedMontantDonne(true);
+              }}
               className={inputClassName}
             />
           </div>
@@ -638,7 +645,7 @@ export default function NewPaymentPage() {
             <input
               type="number"
               min={0}
-              value={montantAvecPlan || ""}
+              value={totalRubriques || ""}
               onChange={(event) => setMontant(Number(event.target.value))}
               className={`${inputClassName} bg-gray-100 dark:bg-gray-800`}
               readOnly
@@ -753,131 +760,23 @@ export default function NewPaymentPage() {
               <option value="late">En retard</option>
             </select>
           </div>
-          {selectedPlayer && (selectedPlayer.statutJoueur || "").toLowerCase().includes("bourse") ? (
-            <div className="md:col-span-2 rounded-xl border border-emerald-300 bg-emerald-50/80 p-4 shadow-sm dark:border-emerald-500/30 dark:bg-emerald-950/30">
-              <div className="flex items-center gap-2 mb-3">
-                <span className="flex h-3 w-3 rounded-full bg-emerald-500"></span>
-                <h4 className="text-sm font-bold text-emerald-950 dark:text-emerald-200 uppercase tracking-wide">
-                  Tarif Boursier (2,500 HTG / mois)
-                </h4>
-              </div>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <div>
-                  <label className="mb-1.5 block text-xs font-semibold text-emerald-800 dark:text-emerald-300">
-                    Mensualité Boursier
-                  </label>
-                  <input
-                    type="text"
-                    readOnly
-                    value={
-                      devise === "HTG"
-                        ? "2,500 HTG / mois"
-                        : taux > 0
-                        ? `US$${(2500 / taux).toFixed(2)} / mois`
-                        : "2,500 HTG (définir le taux)"
-                    }
-                    className="h-10 w-full rounded-lg border border-emerald-300 bg-white px-3 text-sm font-bold text-emerald-950 shadow-sm dark:border-emerald-700 dark:bg-gray-800 dark:text-emerald-200"
-                  />
-                </div>
-                <div>
-                  <label className="mb-1.5 block text-xs font-semibold text-emerald-800 dark:text-emerald-300">
-                    Nombre de mois payés
-                  </label>
-                  <select
-                    value={nombreDeMois}
-                    onChange={(e) => setNombreDeMois(Number(e.target.value))}
-                    className="h-10 w-full rounded-lg border border-emerald-300 bg-white px-3 text-sm font-bold text-emerald-950 shadow-sm dark:border-emerald-700 dark:bg-gray-800 dark:text-emerald-200 focus:ring-2 focus:ring-emerald-500"
-                  >
-                    {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((m) => {
-                      const totalBoursierHTG = m * 2500;
-                      const totalBoursierUSD = taux > 0 ? (totalBoursierHTG / taux).toFixed(2) : 0;
-                      return (
-                        <option key={m} value={m}>
-                          {m} mois ({devise === "HTG" ? `${totalBoursierHTG.toLocaleString()} HTG` : taux > 0 ? `US$${totalBoursierUSD}` : `${totalBoursierHTG.toLocaleString()} HTG`})
-                        </option>
-                      );
-                    })}
-                  </select>
-                </div>
-              </div>
-              <div className="mt-3 rounded-lg bg-emerald-100/70 p-2.5 dark:bg-emerald-900/40">
-                <p className="text-xs font-semibold text-emerald-900 dark:text-emerald-200">
-                  💡 Total Boursier dû :{" "}
-                  <span className="text-sm font-bold text-emerald-950 dark:text-emerald-100">
-                    {devise === "HTG"
-                      ? `${(nombreDeMois * 2500).toLocaleString()} HTG`
-                      : taux > 0
-                      ? `US$${((nombreDeMois * 2500) / taux).toFixed(2)} (${(nombreDeMois * 2500).toLocaleString()} HTG au taux de ${taux})`
-                      : `${(nombreDeMois * 2500).toLocaleString()} HTG`}
-                  </span>
-                </p>
-              </div>
-            </div>
-          ) : (
-            <div>
-              <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
-                Plan de paiement
-              </label>
-              <select
-                value={selectedPlan}
-                onChange={(event) => handlePlanChange(event.target.value)}
-                className={selectClassName}
-              >
-                <option value="">Sélectionner un plan</option>
-                {paymentPlans.map((plan) => (
-                  <option key={plan.id} value={plan.id}>
-                    {plan.plan} - {plan.avantage}
-                  </option>
-                ))}
-              </select>
-
-              {selectedPlan === "mensuel" && (
-                <div className="mt-3">
-                  <label className="mb-1.5 block text-xs font-semibold text-gray-700 dark:text-gray-300">
-                    Nombre de mois réglés
-                  </label>
-                  <select
-                    value={nombreDeMois}
-                    onChange={(e) => setNombreDeMois(Number(e.target.value))}
-                    className={selectClassName}
-                  >
-                    {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((m) => {
-                      const cat = (selectedPlayer?.categorie || "").toLowerCase();
-                      const isTiToro = cat.includes("ti toro") || cat.includes("titoro") || cat.includes("u6-u8");
-                      const rate = isTiToro ? 115 : 155;
-                      return (
-                        <option key={m} value={m}>
-                          {m} mois ({m} × ${rate} = ${m * rate})
-                        </option>
-                      );
-                    })}
-                  </select>
-                </div>
-              )}
-
-              {selectedPlan && (() => {
-                const selectedPlanObj = paymentPlans.find((p) => p.id === selectedPlan);
-                if (!selectedPlanObj) return null;
-                const cat = (selectedPlayer?.categorie || "").toLowerCase();
-                const isTiToro = cat.includes("ti toro") || cat.includes("titoro") || cat.includes("u6-u8");
-                const rate = isTiToro ? selectedPlanObj.montantTIToro : selectedPlanObj.montantFCToro;
-                return (
-                  <div className="mt-2 rounded-lg border border-blue-100 bg-blue-50/50 p-2.5 dark:border-blue-900/30 dark:bg-blue-900/10">
-                    <p className="text-xs font-semibold text-blue-900 dark:text-blue-200">
-                      {selectedPlanObj.plan} : {selectedPlanObj.modalites}
-                    </p>
-                    <p className="mt-0.5 text-xs font-bold text-blue-700 dark:text-blue-300">
-                      {selectedPlan === "mensuel" ? (
-                        <>Montant pour {nombreDeMois} mois : ${nombreDeMois * rate}</>
-                      ) : (
-                        <>Tarif par versement: ${rate} ({selectedPlanObj.avantage})</>
-                      )}
-                    </p>
-                  </div>
-                );
-              })()}
-            </div>
-          )}
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
+              Plan de paiement
+            </label>
+            <select
+              value={selectedPlan}
+              onChange={(event) => handlePlanChange(event.target.value)}
+              className={selectClassName}
+            >
+              <option value="">Sélectionner un plan</option>
+              {paymentPlans.map((plan) => (
+                <option key={plan.id} value={plan.id}>
+                  {plan.plan} - {plan.avantage}
+                </option>
+              ))}
+            </select>
+          </div>
           <div>
             <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
               Methode

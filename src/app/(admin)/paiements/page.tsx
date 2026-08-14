@@ -352,10 +352,8 @@ export default function PaymentsPage() {
             iframe.contentWindow?.print();
           } catch (e) {
             console.error("Erreur lors de l'impression via iframe", e);
-            // Fallback to opening in new tab if iframe printing is blocked
-            window.open(blobUrl, "_blank");
           }
-        }, 500);
+        }, 300);
       };
     } catch (err) {
       console.error("Erreur lors de la génération du PDF", err);

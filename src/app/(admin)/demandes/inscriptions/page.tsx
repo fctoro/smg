@@ -946,13 +946,22 @@ export default function BoiteDeReception() {
                        <span className="h-px flex-1 bg-gray-200 dark:bg-gray-700"></span>
                      </div>
                      <div className="grid gap-3">
-                      {(downloadTarget.type_message === "detection"
-                        ? downloadDocs.filter(doc => doc.doc_key === "document_photo_id" || doc.doc_key === "photo_recente")
-                        : downloadDocs
-                      ).map((doc) => {
+                      {downloadDocs.map((doc) => {
                         const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://uivlcmvofzoyzhtjntlp.supabase.co";
                         const bucket = process.env.SUPABASE_STORAGE_BUCKET || "videos";
                         const publicUrl = doc.path?.startsWith("http") ? doc.path : `${supabaseUrl}/storage/v1/object/public/${bucket}/${doc.path}`;
+                        
+                        const docLabels: Record<string, string> = {
+                          document_photo_id: "PHOTO D'IDENTITÉ",
+                          photo_recente: "PHOTO RÉCENTE",
+                          fiche_9e: "FICHE 8ÈME",
+                          carnet_vaccination: "CARNET DE VACCINATION",
+                          acte_naissance: "ACTE DE NAISSANCE",
+                          piece_identite_parent: "PIÈCE D'IDENTITÉ PARENT",
+                          document_birth_certificate: "DOCUMENT BIRTH CERTIFICATE",
+                          document_parent_id: "DOCUMENT PARENT ID",
+                        };
+                        const label = docLabels[doc.doc_key] || doc.doc_key?.replace(/_/g, " ").toUpperCase() || "DOCUMENT";
                         
                         return (
                           <button 
@@ -965,7 +974,7 @@ export default function BoiteDeReception() {
                              </div>
                              <div className="flex-1 overflow-hidden">
                                 <div className="text-sm font-bold text-gray-900 dark:text-white truncate group-hover:text-brand-600 dark:group-hover:text-brand-400 transition-colors">
-                                   {doc.doc_key === "document_photo_id" ? "PHOTO D'IDENTITÉ" : doc.doc_key?.replace(/_/g, " ").toUpperCase() || "DOCUMENT"}
+                                   {label}
                                 </div>
                                 <div className="text-[11px] font-medium text-gray-500 mt-0.5 truncate">{doc.path?.split('/').pop() || "Fichier joint"}</div>
                              </div>

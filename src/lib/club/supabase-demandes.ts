@@ -115,6 +115,10 @@ export const fetchSiteMessages = async (): Promise<SiteMessage[]> => {
           urgence_nom: d.urgence_nom,
           urgence_telephone: d.urgence_telephone,
           photo_recente_url: d.photo_recente_url,
+          fiche_9e_url: d.fiche_9e_url,
+          carnet_vaccination_url: d.carnet_vaccination_url,
+          acte_naissance_url: d.acte_naissance_url,
+          piece_identite_parent_url: d.piece_identite_parent_url,
           numero_detection: d.numero_detection,
           source_table: 'detection_registrations',
           raw_db_id: d.id,
@@ -303,6 +307,41 @@ export const deleteMessage = async (id: string, metadata?: any) => {
 };
 
 export const fetchDocumentsForMessage = async (id: string, email: string) => {
+  // Handle detection_registrations documents directly from URLs
+  if (id.startsWith('det_')) {
+    const numericId = id.replace('det_', '');
+    const { data: detRow } = await supabase
+      .from('detection_registrations')
+      .select('photo_recente_url, fiche_9e_url, carnet_vaccination_url, acte_naissance_url, piece_identite_parent_url, document_photo_id_url')
+      .eq('id', numericId)
+      .single();
+    
+    if (!detRow) return [];
+    
+    const docs: any[] = [];
+    const docMap: Record<string, string> = {
+      'photo_recente': detRow.photo_recente_url,
+      'document_photo_id': detRow.document_photo_id_url,
+      'fiche_9e': detRow.fiche_9e_url,
+      'carnet_vaccination': detRow.carnet_vaccination_url,
+      'acte_naissance': detRow.acte_naissance_url,
+      'piece_identite_parent': detRow.piece_identite_parent_url,
+    };
+    
+    Object.entries(docMap).forEach(([key, url]) => {
+      if (url) {
+        docs.push({
+          id: `${id}_${key}`,
+          doc_key: key,
+          path: url,
+        });
+      }
+    });
+    
+    return docs;
+  }
+
+  // Original logic for inscriptions
   const { data: msgData } = await supabase.from('site_messages').select('created_at').eq('id', id).single();
   const targetTime = msgData?.created_at ? new Date(msgData.created_at).getTime() : Date.now();
 

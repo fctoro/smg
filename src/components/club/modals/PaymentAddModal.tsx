@@ -532,16 +532,33 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
       const boursierHTG = nombreDeMois * 2500;
       return boursierHTG; // Toujours en HTG pour les boursiers
     }
-    if (devise === "HTG" && taux > 0) {
-      return discountedDue * taux;
+
+    let defaultToPayUSD = discountedDue;
+    if (selectedPlan === "mensuel") {
+      const monthlyRate = isTiToro ? 115 : 155;
+      const nonAdhesionSum = selectedPricingItems
+        .filter((item) => !item.estAdhesion && item.id !== "adhesion-fc" && item.id !== "adhesion-ti")
+        .reduce((sum, item) => sum + item.montant, 0);
+      defaultToPayUSD = (nombreDeMois * monthlyRate) + nonAdhesionSum;
+    } else if (selectedPlan === "semestriel") {
+      const semesterRate = isTiToro ? 415 : 570;
+      const nonAdhesionSum = selectedPricingItems
+        .filter((item) => !item.estAdhesion && item.id !== "adhesion-fc" && item.id !== "adhesion-ti")
+        .reduce((sum, item) => sum + item.montant, 0);
+      defaultToPayUSD = semesterRate + nonAdhesionSum;
     }
-    return discountedDue;
-  }, [isBoursier, nombreDeMois, discountedDue, devise, taux]);
+
+    if (devise === "HTG" && taux > 0) {
+      return defaultToPayUSD * taux;
+    }
+    return defaultToPayUSD;
+  }, [isBoursier, nombreDeMois, selectedPlan, isTiToro, selectedPricingItems, discountedDue, devise, taux]);
 
   useEffect(() => {
-    setMontantDuManuel(computedDue);
+    const fullTotalDue = devise === "HTG" && taux > 0 ? discountedDue * taux : discountedDue;
+    setMontantDuManuel(fullTotalDue);
     setMontantDonne(computedDue);
-  }, [computedDue]);
+  }, [computedDue, discountedDue, devise, taux]);
 
   const hasPricingItems = selectedPricingItems.length > 0;
 

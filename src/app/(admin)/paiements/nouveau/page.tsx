@@ -148,6 +148,7 @@ export default function NewPaymentPage() {
   const [datePaiement, setDatePaiement] = useState(() => new Date().toISOString().split("T")[0]);
   const [selectedPricing, setSelectedPricing] = useState<string[]>([]);
   const [selectedPlan, setSelectedPlan] = useState<string>("");
+  const [isUserEditedMontantDonne, setIsUserEditedMontantDonne] = useState(false);
   const [montantDonne, setMontantDonne] = useState<number>(0);
   const [error, setError] = useState<string>("");
 
@@ -257,8 +258,8 @@ export default function NewPaymentPage() {
       return;
     }
 
-    // Si montantDonne est 0 mais qu'il y a un montantAvecPlan, utiliser montantAvecPlan
-    const finalMontant = montantDonne > 0 ? montantDonne : montantAvecPlan;
+    // Si montantDonne est 0 mais qu'il y a un totalRubriques, utiliser totalRubriques
+    const finalMontant = montantDonne > 0 ? montantDonne : totalRubriques;
     if (finalMontant <= 0) {
       const msg = "❌ Erreur: Veuillez entrer un montant donné ou sélectionner des rubriques/plan.";
       setError(msg);
@@ -308,7 +309,7 @@ export default function NewPaymentPage() {
         montantPaye: paymentAmount,
         devise,
         dateFacture: new Date().toISOString(),
-        datePaiement: paymentStatus === "paid" ? datePaiement || new Date().toISOString() : undefined,
+        datePaiement: datePaiement || new Date().toISOString().split("T")[0],
         remarque: finalRemarque, // We skip the photo in invoice remark to run concurrently
         statut: paymentStatus,
         montantUS: montantUS,
@@ -336,7 +337,7 @@ export default function NewPaymentPage() {
         periode,
         methode,
         remarque: finalRemarqueWithPhoto,
-        datePaiement: paymentStatus === "paid" ? datePaiement || undefined : undefined,
+        datePaiement: datePaiement || new Date().toISOString().split("T")[0],
         factureId: invoice.Id, // Link to the created invoice
       };
 
@@ -401,60 +402,67 @@ export default function NewPaymentPage() {
   };
 
   const totalRubriques = useMemo(() => {
-    const total = selectedPricingItems.reduce((sum, item) => sum + item.montant, 0);
-    // Convert to HTG if needed
-    if (devise === "HTG" && taux > 0) {
-      return total * taux;
+    if (selectedPricingItems.length === 0 && !selectedPlan) {
+      return 0;
     }
-    return total;
-  }, [selectedPricingItems, devise, taux]);
 
-  const montantAvecPlan = useMemo(() => {
-    if (!selectedPlan || totalRubriques === 0) return totalRubriques;
-    
-    const plan = paymentPlans.find((p) => p.id === selectedPlan);
-    if (!plan || !selectedPlayer) return totalRubriques;
-    
-    const categorieLower = (selectedPlayer.categorie || "")
-      .trim()
-      .toLowerCase();
-    const selectedAdhesionItem = selectedPricingItems.find((item) => item.estAdhesion || item.id === "adhesion-fc" || item.id === "adhesion-ti");
-    const isFCToro = selectedAdhesionItem 
-      ? !selectedAdhesionItem.rubrique.toLowerCase().includes("ti toro")
-      : (categorieLower.includes("fc toro") ||
-         categorieLower.includes("académie") ||
-         categorieLower.includes("elite") ||
-         categorieLower.includes("école de football"));
-    
-    // For plans, we use the plan amounts instead of individual rubriques
-    const planAmount = isFCToro ? plan.montantFCToro : plan.montantTIToro;
-    
-    // Add non-adhesion items (like equipment, inscription) which are paid upfront
     const nonAdhesionSum = selectedPricingItems
       .filter((item) => !item.estAdhesion && item.id !== "adhesion-fc" && item.id !== "adhesion-ti")
       .reduce((sum, item) => sum + item.montant, 0);
 
-    const totalToPayNow = planAmount + nonAdhesionSum;
-    
-    // Convert to HTG if needed
-    if (devise === "HTG" && taux > 0) {
-      return totalToPayNow * taux;
+    const selectedAdhesionItem = selectedPricingItems.find((item) => item.estAdhesion || item.id === "adhesion-fc" || item.id === "adhesion-ti");
+    const isTiToro = selectedAdhesionItem ? selectedAdhesionItem.rubrique.toLowerCase().includes("ti toro") : false;
+
+    const hasAdhesion = selectedPricingItems.some((item) => item.estAdhesion || item.id === "adhesion-fc" || item.id === "adhesion-ti");
+
+    let adhesionAmount = 0;
+    if (hasAdhesion || selectedPlan) {
+      adhesionAmount = isTiToro ? 1000 : 1350;
+      if (selectedPlan === "annuel") {
+        adhesionAmount = isTiToro ? 900 : 1215;
+      } else if (selectedAdhesionItem) {
+        adhesionAmount = selectedAdhesionItem.montant;
+      }
     }
-    
-    return totalToPayNow;
-  }, [selectedPlan, selectedPlayer, selectedPricing, selectedPricingItems, totalRubriques, devise, taux]);
+
+    const totalUSD = adhesionAmount + nonAdhesionSum;
+    if (devise === "HTG" && taux > 0) {
+      return totalUSD * taux;
+    }
+    return totalUSD;
+  }, [selectedPricingItems, selectedPlan, devise, taux]);
+
+  const planInstallmentAmount = useMemo(() => {
+    if (!selectedPlan) return 0;
+    const plan = paymentPlans.find((p) => p.id === selectedPlan);
+    if (!plan) return 0;
+
+    const selectedAdhesionItem = selectedPricingItems.find((item) => item.estAdhesion || item.id === "adhesion-fc" || item.id === "adhesion-ti");
+    const isTiToro = selectedAdhesionItem ? selectedAdhesionItem.rubrique.toLowerCase().includes("ti toro") : false;
+
+    const installmentUSD = isTiToro ? plan.montantTIToro : plan.montantFCToro;
+    if (devise === "HTG" && taux > 0) {
+      return installmentUSD * taux;
+    }
+    return installmentUSD;
+  }, [selectedPlan, selectedPricingItems, devise, taux]);
 
   const montantRestant = useMemo(() => {
-    return montantAvecPlan - montantDonne;
-  }, [montantAvecPlan, montantDonne]);
+    return Math.max(0, totalRubriques - montantDonne);
+  }, [totalRubriques, montantDonne]);
 
-  // Auto-fill montantDonne when totalRubriques or montantAvecPlan changes
+  const hasPricingItems = selectedPricingItems.length > 0;
+
+  // Pre-fill montantDonne with totalRubriques if not manually edited by user
   useEffect(() => {
-    const total = montantAvecPlan > 0 ? montantAvecPlan : totalRubriques;
-    if (total > 0) {
-      setMontantDonne(total);
+    if (isUserEditedMontantDonne) return; // Preserve manual user input
+
+    if (hasPricingItems) {
+      setMontantDonne(totalRubriques);
+    } else {
+      setMontantDonne(0);
     }
-  }, [montantAvecPlan, totalRubriques]);
+  }, [totalRubriques, isUserEditedMontantDonne, hasPricingItems]);
 
   // Convert montantDonne to HTG if needed
   const montantDonneConverti = useMemo(() => {
@@ -623,7 +631,10 @@ export default function NewPaymentPage() {
               type="number"
               min={0}
               value={montantDonne || ""}
-              onChange={(event) => setMontantDonne(Number(event.target.value))}
+              onChange={(event) => {
+                setMontantDonne(Number(event.target.value));
+                setIsUserEditedMontantDonne(true);
+              }}
               className={inputClassName}
             />
           </div>
@@ -634,7 +645,7 @@ export default function NewPaymentPage() {
             <input
               type="number"
               min={0}
-              value={montantAvecPlan || ""}
+              value={totalRubriques || ""}
               onChange={(event) => setMontant(Number(event.target.value))}
               className={`${inputClassName} bg-gray-100 dark:bg-gray-800`}
               readOnly

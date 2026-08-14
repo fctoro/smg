@@ -164,6 +164,7 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
   const [datePaiement, setDatePaiement] = useState(() => new Date().toISOString().split("T")[0]);
   const [selectedPricing, setSelectedPricing] = useState<string[]>([]);
   const [selectedPlan, setSelectedPlan] = useState<string>("");
+  const [isUserEditedMontantDonne, setIsUserEditedMontantDonne] = useState(false);
   const [reductionType, setReductionType] = useState<PaymentReductionType>("none");
   const [customReductionPercent, setCustomReductionPercent] = useState(0);
   const [paymentPhoto, setPaymentPhoto] = useState<File | null>(null);
@@ -217,6 +218,7 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
     setDatePaiement(new Date().toISOString().split("T")[0]);
     setSelectedPricing([]);
     setSelectedPlan("");
+    setIsUserEditedMontantDonne(false);
     setReductionType("none");
     setCustomReductionPercent(0);
     setPaymentPhoto(null);
@@ -252,7 +254,7 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
       const nonAdhesionSum = selectedPricingItems
         .filter((item) => !item.estAdhesion && item.id !== "adhesion-fc" && item.id !== "adhesion-ti")
         .reduce((sum, item) => sum + item.montant, 0);
-      const totalDue = (isTiToro ? plan.montantTIToro : plan.montantFCToro) + nonAdhesionSum;
+      const totalDue = plan ? (isTiToro ? plan.montantTIToro : plan.montantFCToro) : (selectedAdhesionItem?.montant || 0) + nonAdhesionSum;
       const discountedDue = calculateDiscountedAmount(totalDue, reductionType, customReductionPercent);
       
       const finalMontantAPayer = devise === "HTG" ? montantDuManuel : montantDuManuel;
@@ -269,6 +271,8 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
       const paymentMarkers = `[ADHESION:${adhesionCode}] [PLAN:${selectedPlan.toUpperCase()}] [STATUT:${statut.toUpperCase()}]`;
       const adhesionLabel = isTiToro ? "Adhésion: TI TORO" : "Adhésion: FC TORO";
       const finalRemarque = `${paymentMarkers} ${reductionMetadata ? `${reductionMetadata} ` : ""}${description.trim()} ${adhesionLabel}${selectedRubricsLabel ? ` | Rubriques: ${selectedRubricsLabel}` : ""} Plan: ${plan.plan}`.trim();
+      
+      const actualDatePaiement = datePaiement || new Date().toISOString().split("T")[0];
       const uploadPromise = paymentPhoto ? uploadPaymentPhotoToSupabase(paymentPhoto) : Promise.resolve(null);
       const invoiceData = {
         noFacture: `FAC-${Date.now()}`,
@@ -282,7 +286,7 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
         devise,
         statut,
         dateFacture: new Date().toISOString(),
-        datePaiement: statut === "paid" ? datePaiement || undefined : undefined,
+        datePaiement: actualDatePaiement,
       };
 
         const [paymentPhotoUrl] = await Promise.all([
@@ -307,7 +311,7 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
           periode,
           methode,
           remarque: finalRemarqueWithPhoto,
-          datePaiement: statut === "paid" ? datePaiement || undefined : undefined,
+          datePaiement: actualDatePaiement,
         };
 
         const inserted = await addPaymentToSupabase(dataToInsert);
@@ -345,7 +349,7 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
             paymentPhotoPreview
           );
 
-          // Open the generated PDF in a new tab automatically
+          // Print the generated PDF receipt on the same page using a hidden iframe
           try {
             const base64Data = receiptBase64.includes("base64,") ? receiptBase64.split("base64,")[1] : receiptBase64;
             const byteCharacters = atob(base64Data);
@@ -356,9 +360,29 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
             const byteArray = new Uint8Array(byteNumbers);
             const blob = new Blob([byteArray], {type: 'application/pdf'});
             const blobUrl = URL.createObjectURL(blob);
-            window.open(blobUrl, '_blank');
+
+            const iframe = document.createElement("iframe");
+            iframe.style.position = "fixed";
+            iframe.style.right = "0";
+            iframe.style.bottom = "0";
+            iframe.style.width = "0";
+            iframe.style.height = "0";
+            iframe.style.border = "0";
+            iframe.src = blobUrl;
+            document.body.appendChild(iframe);
+
+            iframe.onload = () => {
+              setTimeout(() => {
+                try {
+                  iframe.contentWindow?.focus();
+                  iframe.contentWindow?.print();
+                } catch (e) {
+                  console.error("Erreur lors de l'impression via iframe", e);
+                }
+              }, 300);
+            };
           } catch (pdfErr) {
-            console.error("Erreur lors de l'ouverture du PDF :", pdfErr);
+            console.error("Erreur lors de l'impression du PDF :", pdfErr);
           }
 
           const emailToSend = selectedPlayer.parentEmail || selectedPlayer.email;
@@ -432,19 +456,28 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
   const isTiToro = selectedAdhesionItem ? (selectedAdhesionItem.rubrique.toLowerCase().includes("ti toro") || selectedAdhesionItem.id === "adhesion-ti") : false;
 
   const baseTotalDue = useMemo(() => {
+    if (selectedPricingItems.length === 0 && !selectedPlan) {
+      return 0;
+    }
+
     const nonAdhesionSum = selectedPricingItems
       .filter((item) => !item.estAdhesion && item.id !== "adhesion-fc" && item.id !== "adhesion-ti")
       .reduce((sum, item) => sum + item.montant, 0);
 
+    const hasAdhesion = selectedPricingItems.some((item) => item.estAdhesion || item.id === "adhesion-fc" || item.id === "adhesion-ti");
+
     let adhesionAmount = 0;
-    if (selectedPlanData) {
-      adhesionAmount = isTiToro ? selectedPlanData.montantTIToro : selectedPlanData.montantFCToro;
-    } else if (selectedAdhesionItem) {
-      adhesionAmount = selectedAdhesionItem.montant;
+    if (hasAdhesion || selectedPlan) {
+      adhesionAmount = isTiToro ? 1000 : 1350;
+      if (selectedPlan === "annuel") {
+        adhesionAmount = isTiToro ? 900 : 1215;
+      } else if (selectedAdhesionItem) {
+        adhesionAmount = selectedAdhesionItem.montant;
+      }
     }
 
     return adhesionAmount + nonAdhesionSum;
-  }, [selectedPricingItems, selectedPlanData, isTiToro, selectedAdhesionItem]);
+  }, [selectedPricingItems, selectedPlan, isTiToro, selectedAdhesionItem]);
 
   const discountedDue = useMemo(() => {
     return calculateDiscountedAmount(baseTotalDue, reductionType, customReductionPercent);
@@ -459,8 +492,19 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
 
   useEffect(() => {
     setMontantDuManuel(computedDue);
-    setMontantDonne(computedDue);
   }, [computedDue]);
+
+  const hasPricingItems = selectedPricingItems.length > 0;
+
+  useEffect(() => {
+    if (isUserEditedMontantDonne) return; // Preserve manual user input
+
+    if (hasPricingItems) {
+      setMontantDonne(computedDue);
+    } else {
+      setMontantDonne(0);
+    }
+  }, [hasPricingItems, computedDue, isUserEditedMontantDonne]);
 
   const remainingAmount = Math.max(0, montantDuManuel - montantDonne);
 
@@ -709,7 +753,17 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
             </div>
             <div>
               <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">Montant donné</label>
-              <input type="number" min={0} step="0.01" value={montantDonne || ""} onChange={(event) => setMontantDonne(Number(event.target.value))} className={inputClassName} />
+              <input
+                type="number"
+                min={0}
+                step="0.01"
+                value={montantDonne || ""}
+                onChange={(event) => {
+                  setMontantDonne(Number(event.target.value));
+                  setIsUserEditedMontantDonne(true);
+                }}
+                className={inputClassName}
+              />
             </div>
             <div>
               <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">Montant restant</label>

@@ -11,7 +11,7 @@ import { DownloadIcon, EyeIcon, TrashBinIcon } from "@/icons";
 import { useConfirm } from "@/hooks/useConfirm";
 import { useClubData } from "@/context/ClubDataContext";
 import { TableBodySkeleton } from "@/components/ui/skeleton/Skeleton";
-import { fetchDocumentsForMessage } from "@/lib/club/supabase-demandes";
+import { fetchDocumentsForMessage, uploadDetectionDocument } from "@/lib/club/supabase-demandes";
 
 // Placeholder icon for document
 const DocumentIcon = () => (
@@ -44,6 +44,24 @@ export default function BoiteDeReception() {
   const [downloadTarget, setDownloadTarget] = useState<SiteMessage | null>(null);
   const [downloadDocs, setDownloadDocs] = useState<any[]>([]);
   const [isLoadingDocs, setIsLoadingDocs] = useState(false);
+  const [uploadingDocKey, setUploadingDocKey] = useState<string | null>(null);
+
+  const handleUploadDoc = async (docKey: string, file: File) => {
+    if (!downloadTarget) return;
+    setUploadingDocKey(docKey);
+    try {
+      const newDoc = await uploadDetectionDocument(downloadTarget.id, docKey, file);
+      setDownloadDocs(prev => {
+        const filtered = prev.filter(d => d.doc_key !== docKey);
+        return [...filtered, newDoc];
+      });
+    } catch (e) {
+      console.error("Erreur lors de l'upload du document:", e);
+      alert("Erreur lors de l'envoi du document. Veuillez réessayer.");
+    } finally {
+      setUploadingDocKey(null);
+    }
+  };
 
   useEffect(() => {
     setVerificationResult({ status: "not_verified" });
@@ -938,6 +956,104 @@ export default function BoiteDeReception() {
                      <div className="h-8 w-8 border-3 border-brand-200 border-t-brand-500 rounded-full animate-spin" />
                      <span className="text-xs font-bold uppercase tracking-widest text-brand-500">Chargement des pièces jointes...</span>
                   </div>
+               ) : downloadTarget.type_message === "detection" ? (
+                  <div className="space-y-3 pt-4 border-t border-gray-100 dark:border-gray-800">
+                     <div className="flex items-center gap-2 mb-4">
+                       <span className="h-px flex-1 bg-gray-200 dark:bg-gray-700"></span>
+                       <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Documents de Détection</span>
+                       <span className="h-px flex-1 bg-gray-200 dark:bg-gray-700"></span>
+                     </div>
+                     <div className="grid gap-3">
+                      {[
+                        { key: "fiche_9e", label: "FICHE 9ÈME" },
+                        { key: "carnet_vaccination", label: "CARNET DE VACCINATION" },
+                        { key: "acte_naissance", label: "ACTE DE NAISSANCE" },
+                        { key: "piece_identite_parent", label: "PIÈCE D'IDENTITÉ PARENT" },
+                        { key: "photo_recente", label: "PHOTO RÉCENTE" },
+                        { key: "document_photo_id", label: "PHOTO D'IDENTITÉ" },
+                      ].map((slot) => {
+                        const existingDoc = downloadDocs.find(d => d.doc_key === slot.key);
+                        const isUploading = uploadingDocKey === slot.key;
+
+                        if (existingDoc) {
+                          const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://uivlcmvofzoyzhtjntlp.supabase.co";
+                          const bucket = process.env.SUPABASE_STORAGE_BUCKET || "videos";
+                          const publicUrl = existingDoc.path?.startsWith("http") ? existingDoc.path : `${supabaseUrl}/storage/v1/object/public/${bucket}/${existingDoc.path}`;
+
+                          return (
+                            <div key={slot.key} className="flex items-center gap-2">
+                              <button 
+                                 type="button"
+                                 onClick={() => window.open(publicUrl, "_blank")}
+                                 className="flex-1 group p-4 bg-white dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700/50 rounded-xl hover:border-brand-400 hover:bg-brand-50/50 dark:hover:bg-brand-500/10 transition-all flex items-center gap-4 text-left shadow-xs hover:shadow-sm"
+                              >
+                                 <div className="h-10 w-10 shrink-0 rounded-lg bg-brand-50 dark:bg-gray-800 text-brand-600 dark:text-brand-400 flex items-center justify-center group-hover:bg-brand-500 group-hover:text-white transition-colors duration-300">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                                 </div>
+                                 <div className="flex-1 overflow-hidden">
+                                    <div className="text-sm font-bold text-gray-900 dark:text-white truncate group-hover:text-brand-600 dark:group-hover:text-brand-400 transition-colors">
+                                       {slot.label}
+                                    </div>
+                                    <div className="text-[11px] font-medium text-emerald-600 dark:text-emerald-400 mt-0.5 truncate flex items-center gap-1">
+                                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7"/></svg>
+                                      Disponible
+                                    </div>
+                                 </div>
+                              </button>
+                              <label className="cursor-pointer p-3 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 rounded-xl text-gray-500 dark:text-gray-400 transition-colors" title="Remplacer ce document">
+                                <input
+                                  type="file"
+                                  accept="image/*,application/pdf"
+                                  className="hidden"
+                                  disabled={isUploading}
+                                  onChange={(e) => {
+                                    if (e.target.files?.[0]) {
+                                      handleUploadDoc(slot.key, e.target.files[0]);
+                                    }
+                                  }}
+                                />
+                                {isUploading ? (
+                                  <div className="h-5 w-5 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
+                                ) : (
+                                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+                                )}
+                              </label>
+                            </div>
+                          );
+                        }
+
+                        return (
+                          <div key={slot.key} className="p-4 bg-gray-50 dark:bg-gray-800/30 border border-dashed border-gray-300 dark:border-gray-700 rounded-xl flex items-center justify-between gap-4">
+                            <div>
+                              <div className="text-xs font-bold text-gray-700 dark:text-gray-300">{slot.label}</div>
+                              <div className="text-[11px] text-amber-600 dark:text-amber-400 font-medium mt-0.5">Non fourni (Manquant)</div>
+                            </div>
+                            <label className="cursor-pointer shrink-0 px-3 py-2 bg-brand-500 hover:bg-brand-600 text-white rounded-lg text-xs font-bold transition-all shadow-xs flex items-center gap-1.5">
+                              <input
+                                type="file"
+                                accept="image/*,application/pdf"
+                                className="hidden"
+                                disabled={isUploading}
+                                onChange={(e) => {
+                                  if (e.target.files?.[0]) {
+                                    handleUploadDoc(slot.key, e.target.files[0]);
+                                  }
+                                }}
+                              />
+                              {isUploading ? (
+                                <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                              ) : (
+                                <>
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 4v16m8-8H4"/></svg>
+                                  Ajouter
+                                </>
+                              )}
+                            </label>
+                          </div>
+                        );
+                      })}
+                     </div>
+                  </div>
                ) : downloadDocs.length > 0 ? (
                   <div className="space-y-3 pt-4 border-t border-gray-100 dark:border-gray-800">
                      <div className="flex items-center gap-2 mb-4">
@@ -954,7 +1070,7 @@ export default function BoiteDeReception() {
                         const docLabels: Record<string, string> = {
                           document_photo_id: "PHOTO D'IDENTITÉ",
                           photo_recente: "PHOTO RÉCENTE",
-                          fiche_9e: "FICHE 8ÈME",
+                          fiche_9e: "FICHE 9ÈME",
                           carnet_vaccination: "CARNET DE VACCINATION",
                           acte_naissance: "ACTE DE NAISSANCE",
                           piece_identite_parent: "PIÈCE D'IDENTITÉ PARENT",
@@ -980,7 +1096,7 @@ export default function BoiteDeReception() {
                              </div>
                           </button>
                         );
-                     })}
+                      })}
                      </div>
                   </div>
                ) : (

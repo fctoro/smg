@@ -409,3 +409,51 @@ export const fetchFullRegistrationDataForPlayer = async (player: any) => {
     return { registration: null, documents: [] };
   }
 };
+
+export const uploadDetectionDocument = async (id: string, docKey: string, file: File) => {
+  const numericId = id.replace('det_', '');
+  const bucket = process.env.NEXT_PUBLIC_SUPABASE_STORAGE_BUCKET || process.env.SUPABASE_STORAGE_BUCKET || "videos";
+  
+  const ext = file.name.split('.').pop() || 'pdf';
+  const fileName = `detection_${numericId}_${docKey}_${Date.now()}.${ext}`;
+
+  const { error: uploadError } = await supabase.storage.from(bucket).upload(fileName, file, {
+    upsert: true,
+  });
+
+  if (uploadError) {
+    console.error("Upload error:", uploadError);
+    throw uploadError;
+  }
+
+  const { data: publicUrlData } = supabase.storage.from(bucket).getPublicUrl(fileName);
+  const publicUrl = publicUrlData.publicUrl;
+
+  const columnMap: Record<string, string> = {
+    'fiche_9e': 'fiche_9e_url',
+    'carnet_vaccination': 'carnet_vaccination_url',
+    'acte_naissance': 'acte_naissance_url',
+    'piece_identite_parent': 'piece_identite_parent_url',
+    'photo_recente': 'photo_recente_url',
+    'document_photo_id': 'document_photo_id_url',
+  };
+
+  const dbColumn = columnMap[docKey];
+  if (dbColumn) {
+    const { error: updateError } = await supabase
+      .from('detection_registrations')
+      .update({ [dbColumn]: publicUrl })
+      .eq('id', numericId);
+
+    if (updateError) {
+      console.error("Update error:", updateError);
+      throw updateError;
+    }
+  }
+
+  return {
+    id: `${id}_${docKey}`,
+    doc_key: docKey,
+    path: publicUrl,
+  };
+};

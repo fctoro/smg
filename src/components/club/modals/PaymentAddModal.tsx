@@ -181,26 +181,7 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
     [players, playerId]
   );
 
-  // Cocher automatiquement l'adhésion Ti Toro ou FC Toro lors du choix d'un joueur
-  useEffect(() => {
-    if (!selectedPlayer) return;
-    const cat = (selectedPlayer.categorie || "").toLowerCase();
-    const isTiToroPlayer = cat.includes("ti toro") || cat.includes("titoro") || cat.includes("u6-u8");
-    const targetAdhesion = adhesionOptions.find((item) => {
-      const name = (item.rubrique || "").toLowerCase();
-      return isTiToroPlayer
-        ? name.includes("ti toro") || item.id === "adhesion-ti"
-        : (name.includes("fc toro") && !name.includes("ti")) || item.id === "adhesion-fc";
-    });
-    if (targetAdhesion) {
-      setSelectedPricing((prev) => {
-        const otherPricing = prev.filter(
-          (id) => !adhesionOptions.some((adh) => adh.id === id)
-        );
-        return [...otherPricing, targetAdhesion.id];
-      });
-    }
-  }, [selectedPlayer, adhesionOptions]);
+
 
   const filteredPlayers = useMemo(() => {
     const query = playerSearch.trim().toLowerCase();
@@ -288,7 +269,7 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
         .reduce((sum, item) => sum + item.montant, 0);
       const totalDue = isBoursierPlayer
         ? nombreDeMois * 2500
-        : (plan ? (isTiToro ? plan.montantTIToro : plan.montantFCToro) : (selectedAdhesionItem?.montant || 0) + nonAdhesionSum);
+        : ((selectedAdhesionItem ? (plan ? (isTiToro ? plan.montantTIToro : plan.montantFCToro) : selectedAdhesionItem.montant) : 0) + nonAdhesionSum);
       const discountedDue = isBoursierPlayer ? totalDue : calculateDiscountedAmount(totalDue, reductionType, customReductionPercent);
       
       // Pour les boursiers: montant toujours en HTG, pas de taux
@@ -297,7 +278,7 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
       const actualDevise = isBoursierPlayer ? "HTG" : devise;
       const montantUS = isBoursierPlayer ? 0 : (actualDevise === "US" ? paymentAmount : (taux > 0 ? paymentAmount / taux : 0));
       const montantHTG = isBoursierPlayer ? paymentAmount : (actualDevise === "HTG" ? paymentAmount : 0);
-      const adhesionCode = isBoursierPlayer ? "BOURSE" : (isTiToro ? "TI_TORO" : "FC_TORO");
+      const adhesionCode = isBoursierPlayer ? "BOURSE" : (selectedAdhesionItem ? (isTiToro ? "TI_TORO" : "FC_TORO") : "");
       const selectedRubricsLabel = selectedPricingItems
         .filter((item) => !item.estAdhesion && item.id !== "adhesion-fc" && item.id !== "adhesion-ti")
         .map((item) => item.rubrique)
@@ -306,10 +287,10 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
       const totalDueInUSD = actualDevise === "HTG" ? (taux > 0 ? discountedDue / taux : discountedDue) : discountedDue;
       const paymentMarkers = isBoursierPlayer
         ? `[ADHESION:${adhesionCode}] [PLAN:BOURSIER] [STATUT:${statut.toUpperCase()}] [TOTAL_DUE:${totalDue}]`
-        : `[ADHESION:${adhesionCode}] [PLAN:${selectedPlan ? selectedPlan.toUpperCase() : "AUCUN"}] [STATUT:${statut.toUpperCase()}] [TOTAL_DUE:${totalDueInUSD}]`;
+        : `${adhesionCode ? `[ADHESION:${adhesionCode}] ` : ""}[PLAN:${selectedPlan ? selectedPlan.toUpperCase() : "AUCUN"}] [STATUT:${statut.toUpperCase()}] [TOTAL_DUE:${totalDueInUSD}]`;
       const adhesionLabel = isBoursierPlayer
         ? `Boursier: ${nombreDeMois} mois × 2,500 HTG`
-        : (isTiToro ? "Adhésion: TI TORO" : "Adhésion: FC TORO");
+        : (selectedAdhesionItem ? (isTiToro ? "Adhésion: TI TORO" : "Adhésion: FC TORO") : "");
       const finalRemarque = `${paymentMarkers} ${reductionMetadata ? `${reductionMetadata} ` : ""}${description.trim()} ${adhesionLabel}${selectedRubricsLabel ? ` | Rubriques: ${selectedRubricsLabel}` : ""}${plan ? ` Plan: ${plan.plan}` : ""}`.trim();
       
       const actualDatePaiement = datePaiement || new Date().toISOString().split("T")[0];

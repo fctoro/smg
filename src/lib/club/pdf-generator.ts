@@ -264,10 +264,9 @@ export async function generateReceiptPDFBase64(
         const remLower = (p.remarque || "").toLowerCase();
         const catLower = (player.categorie || "").toLowerCase();
         const isTiToro = remLower.includes("ti toro") || catLower.includes("ti toro") || catLower.includes("u6-u8");
-        const hasAdhesion = remLower.includes("adhésion") || remLower.includes("adhesion");
-        const hasPlan = remLower.includes("mensuel") || remLower.includes("semestriel") || remLower.includes("annuel");
+        const hasExplicitAdhesion = remLower.includes("adhésion") || remLower.includes("adhesion") || remLower.includes("[adhesion:");
 
-        if (hasAdhesion || hasPlan) {
+        if (hasExplicitAdhesion) {
           if (remLower.includes("annuel")) {
             totalDueValue += isTiToro ? 900 : 1215;
           } else {

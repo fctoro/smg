@@ -128,17 +128,16 @@ export default function PaymentsPage() {
       totalDueUSD = parseFloat(totalDueMarker[1]) || 0;
     }
 
-    // 2. Si pas de marqueur TOTAL_DUE, calculer à partir des informations de la remarque et de la catégorie
+    // 2. Si pas de marqueur TOTAL_DUE, vérifier si le paiement contient une adhésion explicite
     if (totalDueUSD <= 0) {
       const remLower = (currentPayment.remarque || "").toLowerCase();
       const catLower = (player.categorie || "").toLowerCase();
       const isTiToro = remLower.includes("ti toro") || catLower.includes("ti toro") || catLower.includes("u6-u8");
 
-      // Si le paiement concerne une adhésion ou a un plan mensuel/semestriel/annuel
-      const hasAdhesion = remLower.includes("adhésion") || remLower.includes("adhesion");
-      const hasPlan = remLower.includes("mensuel") || remLower.includes("semestriel") || remLower.includes("annuel");
+      // Vérifier si la remarque comporte EXPLICITEMENT une adhésion
+      const hasExplicitAdhesion = remLower.includes("adhésion") || remLower.includes("adhesion") || remLower.includes("[adhesion:");
 
-      if (hasAdhesion || hasPlan) {
+      if (hasExplicitAdhesion) {
         if (remLower.includes("annuel")) {
           totalDueUSD = isTiToro ? 900 : 1215;
         } else {

@@ -13,7 +13,8 @@ export async function generateReceiptPDFBase64(
   parentEmail?: string,
   parentAddress?: string,
   proofImageBase64?: string | null,
-  autoPrint: boolean = false
+  autoPrint: boolean = false,
+  totalRubriques?: number
 ): Promise<string> {
   const doc = new jsPDF();
   
@@ -248,7 +249,11 @@ export async function generateReceiptPDFBase64(
   const isBoursierReceipt = playerStatus.includes("bourse") || playerStatus.includes("boursier") || payments.some((p: any) => (p.remarque || "").toLowerCase().includes("[plan:boursier]"));
 
   let totalDueValue = 0;
-  if (isBoursierReceipt) {
+  
+  // Si totalRubriques est fourni, l'utiliser directement (basé sur les rubriques sélectionnées)
+  if (totalRubriques && totalRubriques > 0 && !isBoursierReceipt) {
+    totalDueValue = totalRubriques;
+  } else if (isBoursierReceipt) {
     // Pour les boursiers, le montant total dû = montant versé (solde = 0)
     payments.forEach((p: any) => {
       const isHTGPay = p.devise === "HTG";

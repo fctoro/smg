@@ -102,8 +102,8 @@ export default function PaymentsPage() {
   );
 
   // Calcule la balance uniquement si [TOTAL_DUE:XXX] est présent dans la remarque
-  const calculateBalance = (currentPayment: (typeof payments)[number]): { balance: number; devise: string } => {
-    const zero = { balance: 0, devise: currentPayment.devise || "US" };
+  const calculateBalance = (currentPayment: (typeof payments)[number]): { balance: number; devise: "US" | "HTG" } => {
+    const zero = { balance: 0, devise: (currentPayment.devise || "US") as "US" | "HTG" };
     const player = playerMap.get(currentPayment.playerId);
     if (!player) return zero;
 
@@ -228,6 +228,10 @@ export default function PaymentsPage() {
         }
       }
       
+      // Extraire le total des rubriques depuis la remarque du paiement
+      const totalRubriquesMatch = payment.remarque?.match(/\[TOTAL_DUE:\s*([\d.]+)\s*\]/i);
+      const totalRubriques = totalRubriquesMatch ? parseFloat(totalRubriquesMatch[1]) : undefined;
+      
       const receiptBase64 = await generateReceiptPDFBase64(
         player,
         [payment],
@@ -236,7 +240,9 @@ export default function PaymentsPage() {
         player.parentTelephone || player.telephone || "",
         player.parentEmail || player.email || "",
         player.parentAdresse || player.adresse || "",
-        proofBase64
+        proofBase64,
+        false,
+        totalRubriques
       );
       
       // Télécharger le PDF
@@ -289,6 +295,10 @@ export default function PaymentsPage() {
         }
       }
       
+      // Extraire le total des rubriques depuis la remarque du paiement
+      const totalRubriquesMatch = payment.remarque?.match(/\[TOTAL_DUE:\s*([\d.]+)\s*\]/i);
+      const totalRubriques = totalRubriquesMatch ? parseFloat(totalRubriquesMatch[1]) : undefined;
+      
       const receiptBase64 = await generateReceiptPDFBase64(
         player,
         [payment],
@@ -298,7 +308,8 @@ export default function PaymentsPage() {
         player.parentEmail || player.email || "",
         player.parentAdresse || player.adresse || "",
         proofBase64,
-        true // autoPrint flag
+        true,
+        totalRubriques
       );
       
       const base64Data = receiptBase64.includes("base64,") ? receiptBase64.split("base64,")[1] : receiptBase64;

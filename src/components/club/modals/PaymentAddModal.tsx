@@ -7,7 +7,7 @@ import { PaymentMethod, PaymentStatus, Player } from "@/types/club";
 import { getPlayerFullName } from "@/lib/club/metrics";
 import { addPaymentToSupabase, addInvoiceToSupabase } from "@/lib/club/supabase-crud";
 import { validatePaymentPhotoFile, getPaymentPhotoPreviewUrl, uploadPaymentPhotoToSupabase } from "@/lib/club/payment-photo-utils";
-import { calculateDiscountedAmount, serializeReductionMetadata, type PaymentReductionType } from "@/lib/club/payment-reduction-utils";
+import { calculateDiscountedAmount } from "@/lib/club/payment-reduction-utils";
 import { generateReceiptPDFBase64 } from "@/lib/club/pdf-generator";
 import { ToastNotification } from "@/components/ui/toast/ToastNotification";
 
@@ -166,8 +166,6 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
   const [selectedPlan, setSelectedPlan] = useState<string>("");
   const [nombreDeMois, setNombreDeMois] = useState<number>(1);
   const [isUserEditedMontantDonne, setIsUserEditedMontantDonne] = useState(false);
-  const [reductionType, setReductionType] = useState<PaymentReductionType>("none");
-  const [customReductionPercent, setCustomReductionPercent] = useState(0);
   const [paymentPhoto, setPaymentPhoto] = useState<File | null>(null);
   const [paymentPhotoPreview, setPaymentPhotoPreview] = useState<string | null>(null);
   const [paymentPhotoError, setPaymentPhotoError] = useState<string | null>(null);
@@ -222,8 +220,6 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
     setSelectedPricing([]);
     setSelectedPlan("");
     setIsUserEditedMontantDonne(false);
-    setReductionType("none");
-    setCustomReductionPercent(0);
     setPaymentPhoto(null);
     setPaymentPhotoPreview(null);
     setPaymentPhotoError(null);
@@ -262,10 +258,12 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
       const nonAdhesionSum = selectedPricingItems
         .filter((item) => !item.estAdhesion && item.id !== "adhesion-fc" && item.id !== "adhesion-ti")
         .reduce((sum, item) => sum + item.montant, 0);
+      const planBaseAmount = plan ? (isTiToro ? plan.montantTIToro : plan.montantFCToro) : 0;
+      const finalPlanAmount = (plan && selectedPlan === "mensuel") ? planBaseAmount * nombreDeMois : planBaseAmount;
+      // Le total dû est basé sur les rubriques sélectionnées, pas sur le montant du plan
       const totalDue = isBoursierPlayer
         ? nombreDeMois * 2500
-        : ((selectedAdhesionItem ? (plan ? (isTiToro ? plan.montantTIToro : plan.montantFCToro) : selectedAdhesionItem.montant) : 0) + nonAdhesionSum);
-      const discountedDue = isBoursierPlayer ? totalDue : calculateDiscountedAmount(totalDue, reductionType, customReductionPercent);
+        : baseTotalDue;
       
       // Pour les boursiers: montant toujours en HTG, pas de taux
       const finalMontantAPayer = isBoursierPlayer ? totalDue : montantDuManuel;
@@ -278,15 +276,14 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
         .filter((item) => !item.estAdhesion && item.id !== "adhesion-fc" && item.id !== "adhesion-ti")
         .map((item) => item.rubrique)
         .filter(Boolean).join(", ");
-      const reductionMetadata = isBoursierPlayer ? "" : serializeReductionMetadata(reductionType, customReductionPercent);
-      const totalDueInUSD = actualDevise === "HTG" ? (taux > 0 ? discountedDue / taux : discountedDue) : discountedDue;
+      const totalDueInUSD = actualDevise === "HTG" ? (taux > 0 ? baseTotalDue / taux : baseTotalDue) : baseTotalDue;
       const paymentMarkers = isBoursierPlayer
         ? `[ADHESION:${adhesionCode}] [PLAN:BOURSIER] [STATUT:${statut.toUpperCase()}] [TOTAL_DUE:${totalDue}]`
         : `${adhesionCode ? `[ADHESION:${adhesionCode}] ` : ""}[PLAN:${selectedPlan ? selectedPlan.toUpperCase() : "AUCUN"}] [STATUT:${statut.toUpperCase()}] [TOTAL_DUE:${totalDueInUSD}]`;
       const adhesionLabel = isBoursierPlayer
         ? `Boursier: ${nombreDeMois} mois × 2,500 HTG`
         : (selectedAdhesionItem ? (isTiToro ? "Adhésion: TI TORO" : "Adhésion: FC TORO") : "");
-      const finalRemarque = `${paymentMarkers} ${reductionMetadata ? `${reductionMetadata} ` : ""}${description.trim()} ${adhesionLabel}${selectedRubricsLabel ? ` | Rubriques: ${selectedRubricsLabel}` : ""}${plan ? ` Plan: ${plan.plan}` : ""}`.trim();
+      const finalRemarque = `${paymentMarkers} ${description.trim()} ${adhesionLabel}${selectedRubricsLabel ? ` | Rubriques: ${selectedRubricsLabel}` : ""}${plan ? ` Plan: ${plan.plan}` : ""}`.trim();
       
       const actualDatePaiement = datePaiement || new Date().toISOString().split("T")[0];
       const uploadPromise = paymentPhoto ? uploadPaymentPhotoToSupabase(paymentPhoto) : Promise.resolve(null);
@@ -362,7 +359,9 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
             selectedPlayer.parentTelephone || "",
             selectedPlayer.parentEmail || selectedPlayer.email || "",
             selectedPlayer.parentAdresse || selectedPlayer.adresse || "",
-            paymentPhotoPreview
+            paymentPhotoPreview,
+            false,
+            discountedDue
           );
 
           // Print the generated PDF receipt on the same page using a hidden iframe
@@ -496,8 +495,8 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
   }, [selectedPricingItems, selectedPlan, isTiToro, selectedAdhesionItem]);
 
   const discountedDue = useMemo(() => {
-    return calculateDiscountedAmount(baseTotalDue, reductionType, customReductionPercent);
-  }, [baseTotalDue, reductionType, customReductionPercent]);
+    return baseTotalDue; // Pas de réduction
+  }, [baseTotalDue]);
 
   const isBoursier = useMemo(() => {
     return !!(selectedPlayer && (selectedPlayer.statutJoueur || "").toLowerCase().includes("bourse"));
@@ -530,24 +529,23 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
     return defaultToPayUSD;
   }, [isBoursier, nombreDeMois, selectedPlan, isTiToro, selectedPricingItems, discountedDue, devise, taux]);
 
-  useEffect(() => {
-    const fullTotalDue = devise === "HTG" && taux > 0 ? discountedDue * taux : discountedDue;
-    setMontantDuManuel(fullTotalDue);
-    setMontantDonne(computedDue);
-  }, [computedDue, discountedDue, devise, taux]);
-
   const hasPricingItems = selectedPricingItems.length > 0;
 
+  // Ne pas modifier automatiquement les montants quand le plan change
+  // Les montants sont basés sur les rubriques sélectionnées uniquement
   useEffect(() => {
     if (isBoursier) return; // Preserve boursier computed amount
     if (isUserEditedMontantDonne) return; // Preserve manual user input
 
     if (hasPricingItems) {
-      setMontantDonne(computedDue);
+      const fullTotalDue = devise === "HTG" && taux > 0 ? discountedDue * taux : discountedDue;
+      setMontantDuManuel(fullTotalDue);
+      setMontantDonne(fullTotalDue);
     } else {
+      setMontantDuManuel(0);
       setMontantDonne(0);
     }
-  }, [isBoursier, hasPricingItems, computedDue, isUserEditedMontantDonne]);
+  }, [isBoursier, hasPricingItems, discountedDue, devise, taux, isUserEditedMontantDonne]);
 
   const remainingAmount = Math.max(0, montantDuManuel - montantDonne);
 
@@ -1003,41 +1001,6 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
               </select>
             </div>
 
-            {!isBoursier && (
-              <>
-                <div>
-                  <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
-                    Réduction
-                  </label>
-                  <select
-                    value={reductionType}
-                    onChange={(event) => setReductionType(event.target.value as PaymentReductionType)}
-                    className={selectClassName}
-                  >
-                    <option value="none">Aucune réduction</option>
-                    <option value="full">Bourse 100%</option>
-                    <option value="half">Demi-bourse 50%</option>
-                    <option value="custom">Spécial</option>
-                  </select>
-                </div>
-                {reductionType === "custom" && (
-                  <div>
-                    <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
-                      Pourcentage spécial
-                    </label>
-                    <input
-                      type="number"
-                      min={0}
-                      max={100}
-                      step="1"
-                      value={customReductionPercent}
-                      onChange={(event) => setCustomReductionPercent(Number(event.target.value))}
-                      className={inputClassName}
-                    />
-                  </div>
-                )}
-              </>
-            )}
 
             {/* Date Paiement */}
             <div className="md:col-span-2">

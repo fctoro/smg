@@ -248,13 +248,8 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
         setToast({ message: "Veuillez remplir le montant payé et le taux de change.", type: "error" });
         return;
       }
-      const hasAdhesion = selectedPricingItems.some((item) => item.estAdhesion || item.id === "adhesion-fc" || item.id === "adhesion-ti");
-      if (!hasAdhesion) {
-        setToast({ message: "Veuillez sélectionner une adhésion FC TORO ou TI TORO.", type: "error" });
-        return;
-      }
-      if (!selectedPlan) {
-        setToast({ message: "Veuillez sélectionner un plan de paiement.", type: "error" });
+      if (selectedPricingItems.length === 0) {
+        setToast({ message: "Veuillez sélectionner au moins une rubrique.", type: "error" });
         return;
       }
     }

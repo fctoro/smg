@@ -224,6 +224,7 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
     setPaymentPhoto(null);
     setPaymentPhotoPreview(null);
     setPaymentPhotoError(null);
+    setIsSubmitting(false);
   };
 
   const handleClose = () => {
@@ -270,7 +271,7 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
       const reductionMetadata = serializeReductionMetadata(reductionType, customReductionPercent);
       const paymentMarkers = `[ADHESION:${adhesionCode}] [PLAN:${selectedPlan.toUpperCase()}] [STATUT:${statut.toUpperCase()}]`;
       const adhesionLabel = isTiToro ? "Adhésion: TI TORO" : "Adhésion: FC TORO";
-      const finalRemarque = `${paymentMarkers} ${reductionMetadata ? `${reductionMetadata} ` : ""}${description.trim()} ${adhesionLabel}${selectedRubricsLabel ? ` | Rubriques: ${selectedRubricsLabel}` : ""} Plan: ${plan.plan}`.trim();
+      const finalRemarque = `${paymentMarkers} ${reductionMetadata ? `${reductionMetadata} ` : ""}${description.trim()} ${adhesionLabel}${selectedRubricsLabel ? ` | ${selectedRubricsLabel}` : ""} Plan: ${plan.plan}`.trim();
       
       const actualDatePaiement = datePaiement || new Date().toISOString().split("T")[0];
       const uploadPromise = paymentPhoto ? uploadPaymentPhotoToSupabase(paymentPhoto) : Promise.resolve(null);
@@ -326,87 +327,92 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
           },
           ...prevPayments,
         ]);
-      // --- SEND EMAIL LOGIC ---
-      try {
-        if (selectedPlayer) {
-          const paymentForPdf = {
-            id: inserted.Id.toString(),
-            ...dataToInsert,
-          };
 
-          const nomParts = (selectedPlayer.parentNomPrenom || "").split(" ");
-          const parentNom = nomParts[0] || "";
-          const parentPrenom = nomParts.slice(1).join(" ") || "";
+        setToast({ message: "Paiement enregistré avec succès !", type: "success" });
+        handleClose();
 
-          const receiptBase64 = await generateReceiptPDFBase64(
-            selectedPlayer,
-            [paymentForPdf],
-            parentNom,
-            parentPrenom,
-            selectedPlayer.parentTelephone || "",
-            selectedPlayer.parentEmail || selectedPlayer.email || "",
-            selectedPlayer.parentAdresse || selectedPlayer.adresse || "",
-            paymentPhotoPreview
-          );
-
-          // Print the generated PDF receipt on the same page using a hidden iframe
+        // Non-blocking background process for PDF generation, iframe print, and email receipt
+        (async () => {
           try {
-            const base64Data = receiptBase64.includes("base64,") ? receiptBase64.split("base64,")[1] : receiptBase64;
-            const byteCharacters = atob(base64Data);
-            const byteNumbers = new Array(byteCharacters.length);
-            for (let i = 0; i < byteCharacters.length; i++) {
-                byteNumbers[i] = byteCharacters.charCodeAt(i);
-            }
-            const byteArray = new Uint8Array(byteNumbers);
-            const blob = new Blob([byteArray], {type: 'application/pdf'});
-            const blobUrl = URL.createObjectURL(blob);
+            if (selectedPlayer) {
+              const paymentForPdf = {
+                id: inserted.Id.toString(),
+                ...dataToInsert,
+              };
 
-            const iframe = document.createElement("iframe");
-            iframe.style.position = "fixed";
-            iframe.style.right = "0";
-            iframe.style.bottom = "0";
-            iframe.style.width = "0";
-            iframe.style.height = "0";
-            iframe.style.border = "0";
-            iframe.src = blobUrl;
-            document.body.appendChild(iframe);
+              const nomParts = (selectedPlayer.parentNomPrenom || "").split(" ");
+              const parentNom = nomParts[0] || "";
+              const parentPrenom = nomParts.slice(1).join(" ") || "";
 
-            iframe.onload = () => {
-              setTimeout(() => {
-                try {
-                  iframe.contentWindow?.focus();
-                  iframe.contentWindow?.print();
-                } catch (e) {
-                  console.error("Erreur lors de l'impression via iframe", e);
+              const receiptBase64 = await generateReceiptPDFBase64(
+                selectedPlayer,
+                [paymentForPdf],
+                parentNom,
+                parentPrenom,
+                selectedPlayer.parentTelephone || "",
+                selectedPlayer.parentEmail || selectedPlayer.email || "",
+                selectedPlayer.parentAdresse || selectedPlayer.adresse || "",
+                paymentPhotoPreview
+              );
+
+              // Print the generated PDF receipt on the same page using a hidden iframe
+              try {
+                const base64Data = receiptBase64.includes("base64,") ? receiptBase64.split("base64,")[1] : receiptBase64;
+                const byteCharacters = atob(base64Data);
+                const byteNumbers = new Array(byteCharacters.length);
+                for (let i = 0; i < byteCharacters.length; i++) {
+                    byteNumbers[i] = byteCharacters.charCodeAt(i);
                 }
-              }, 300);
-            };
-          } catch (pdfErr) {
-            console.error("Erreur lors de l'impression du PDF :", pdfErr);
-          }
+                const byteArray = new Uint8Array(byteNumbers);
+                const blob = new Blob([byteArray], {type: 'application/pdf'});
+                const blobUrl = URL.createObjectURL(blob);
 
-          const emailToSend = selectedPlayer.parentEmail || selectedPlayer.email;
-          if (emailToSend) {
-            const mntStr = devise === "HTG" ? `${montantDonne} HTG` : `${montantDonne} USD`;
-            await fetch("/api/send-receipt", {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({
-                email: emailToSend,
-                parentName: selectedPlayer.parentNomPrenom || getPlayerFullName(selectedPlayer),
-                receiptBase64,
-                receiptNumber: `FAC-${Date.now()}`,
-                amount: mntStr,
-              }),
-            });
+                const iframe = document.createElement("iframe");
+                iframe.style.position = "fixed";
+                iframe.style.right = "0";
+                iframe.style.bottom = "0";
+                iframe.style.width = "0";
+                iframe.style.height = "0";
+                iframe.style.border = "0";
+                iframe.src = blobUrl;
+                document.body.appendChild(iframe);
+
+                iframe.onload = () => {
+                  setTimeout(() => {
+                    try {
+                      iframe.contentWindow?.focus();
+                      iframe.contentWindow?.print();
+                    } catch (e) {
+                      console.error("Erreur lors de l'impression via iframe", e);
+                    }
+                  }, 50);
+                };
+              } catch (pdfErr) {
+                console.error("Erreur lors de l'impression du PDF :", pdfErr);
+              }
+
+              const emailToSend = selectedPlayer.parentEmail || selectedPlayer.email;
+              if (emailToSend) {
+                const mntStr = devise === "HTG" ? `${montantDonne} HTG` : `${montantDonne} USD`;
+                fetch("/api/send-receipt", {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                  },
+                  body: JSON.stringify({
+                    email: emailToSend,
+                    parentName: selectedPlayer.parentNomPrenom || getPlayerFullName(selectedPlayer),
+                    receiptBase64,
+                    receiptNumber: `FAC-${Date.now()}`,
+                    amount: mntStr,
+                  }),
+                }).catch((e) => console.error("Erreur envoi email reçu (silencieux):", e));
+              }
+            }
+          } catch (err) {
+            console.error("Erreur traitement arrière-plan reçu:", err);
           }
-        }
-      } catch (err) {
-        console.error("Erreur lors de l'envoi du recu par email:", err);
-      }
-      handleClose();
+        })();
     } catch (error) {
       console.error(error);
       setToast({ message: "Erreur lors de l'ajout du paiement. Veuillez réessayer.", type: "error" });
@@ -419,6 +425,11 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
     setPlayerId(player.id);
     setPlayerSearch("");
     setShowPlayerDropdown(false);
+    setSelectedPricing([]);
+    setSelectedPlan("");
+    setMontantDuManuel(0);
+    setMontantDonne(0);
+    setIsUserEditedMontantDonne(false);
   };
 
   const handlePricingChange = (itemId: string) => {

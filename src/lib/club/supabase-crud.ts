@@ -274,7 +274,7 @@ export const addPlayerToSupabase = async (data: Omit<Player & { photoIdentiteUrl
 
 const isMissingEmployeeColumnError = (error: any) => {
   const message = String(error?.message || error || "").toLowerCase();
-  return error?.code === "PGRST204" || message.includes("tauxparseance") || message.includes("typesalaire");
+  return error?.code === "PGRST204" || message.includes("tauxparseance") || message.includes("typesalaire") || message.includes("devise");
 };
 
 export const updateEmployeeInSupabase = async (employeeId: string, data: Partial<Employee>) => {
@@ -290,6 +290,7 @@ export const updateEmployeeInSupabase = async (employeeId: string, data: Partial
   if (data.typeSalaire !== undefined) updatePayload.TypeSalaire = data.typeSalaire;
   if (data.tauxParSeance !== undefined) updatePayload.TauxParSeance = data.tauxParSeance;
   if (data.salaire !== undefined) updatePayload.Salaire = data.salaire;
+  if (data.devise !== undefined) updatePayload.Devise = data.devise;
   if (data.dateEmbauche !== undefined) updatePayload.DateEmbauche = data.dateEmbauche;
   if (data.niveauEtude !== undefined) updatePayload.NiveauEtude = data.niveauEtude;
   if (data.profession !== undefined) updatePayload.Profession = data.profession;
@@ -300,6 +301,7 @@ export const updateEmployeeInSupabase = async (employeeId: string, data: Partial
   if (!result.success && isMissingEmployeeColumnError(result.error)) {
     delete updatePayload.TypeSalaire;
     delete updatePayload.TauxParSeance;
+    delete updatePayload.Devise;
     result = await updateEmployeeAdmin(employeeId, updatePayload);
   }
 
@@ -312,6 +314,7 @@ export const updateEmployeeInSupabase = async (employeeId: string, data: Partial
     if (error && isMissingEmployeeColumnError(error)) {
       delete updatePayload.TypeSalaire;
       delete updatePayload.TauxParSeance;
+      delete updatePayload.Devise;
       ({ error } = await supabase
         .from("tblEmployes")
         .update(updatePayload)
@@ -357,6 +360,7 @@ export const addEmployeeToSupabase = async (data: Omit<Employee, "id" | "employe
     TypeSalaire: data.typeSalaire || "fixe",
     TauxParSeance: data.tauxParSeance || null,
     Salaire: data.salaire,
+    Devise: data.devise || "HTG",
     DateEmbauche: data.dateEmbauche || null,
     NiveauEtude: data.niveauEtude,
     Profession: data.profession,
@@ -369,6 +373,7 @@ export const addEmployeeToSupabase = async (data: Omit<Employee, "id" | "employe
   if (!result.success && isMissingEmployeeColumnError(result.error)) {
     delete insertPayload.TypeSalaire;
     delete insertPayload.TauxParSeance;
+    delete insertPayload.Devise;
     result = await insertEmployeeAdmin(insertPayload);
   }
 
@@ -399,6 +404,7 @@ export const addEmployeeToSupabase = async (data: Omit<Employee, "id" | "employe
   if (error && isMissingEmployeeColumnError(error)) {
     delete insertPayload.TypeSalaire;
     delete insertPayload.TauxParSeance;
+    delete insertPayload.Devise;
     ({ data: insertedData, error } = await supabase
       .from("tblEmployes")
       .insert(insertPayload)

@@ -120,6 +120,7 @@ export default function PayrollPage() {
 
   // Filters
   const currentYearStr = String(CURRENT_YEAR);
+  const currentMonthStr = String(new Date().getMonth() + 1).padStart(2, "0");
   const [selectedYear, setSelectedYear] = useState<string>(currentYearStr);
   const [selectedMonth, setSelectedMonth] = useState<string>("all");
   const [searchTerm, setSearchTerm] = useState<string>("");
@@ -154,8 +155,8 @@ export default function PayrollPage() {
     file: File | null;
   }>({
     employeId: "",
-    annee: "2026",
-    mois: "07",
+    annee: currentYearStr,
+    mois: currentMonthStr,
     salaireBase: 500,
     typeSalaire: "fixe",
     nombreSeances: 0,
@@ -326,8 +327,8 @@ export default function PayrollPage() {
       setFileError(null);
       setFormData({
         employeId: "",
-        annee: "2026",
-        mois: "07",
+        annee: currentYearStr,
+        mois: currentMonthStr,
         salaireBase: 500,
         typeSalaire: "fixe",
         nombreSeances: 0,
@@ -916,47 +917,17 @@ export default function PayrollPage() {
                 </div>
               )}
 
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <label className="mb-1 block text-xs font-semibold text-gray-700 dark:text-gray-300">
-                    Primes / Bonus ({formData.devise === "HTG" ? "Gdes" : "$"})
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={formData.bonus}
-                    onChange={(e) => setFormData({ ...formData, bonus: Number(e.target.value) })}
-                    className="w-full rounded-xl border border-gray-300 p-2.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs font-semibold text-gray-700 dark:text-gray-300">
-                    Vacances Payées ({formData.devise === "HTG" ? "Gdes" : "$"})
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={formData.vacancesPayees}
-                    onChange={(e) =>
-                      setFormData({ ...formData, vacancesPayees: Number(e.target.value) })
-                    }
-                    className="w-full rounded-xl border border-gray-300 p-2.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs font-semibold text-gray-700 dark:text-gray-300">
-                    Congé Sans Solde ({formData.devise === "HTG" ? "Gdes" : "$"})
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={formData.congeSansSolde}
-                    onChange={(e) =>
-                      setFormData({ ...formData, congeSansSolde: Number(e.target.value) })
-                    }
-                    className="w-full rounded-xl border border-gray-300 p-2.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
-                  />
-                </div>
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-gray-700 dark:text-gray-300">
+                  Primes / Bonus ({formData.devise === "HTG" ? "Gdes" : "$"})
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  value={formData.bonus}
+                  onChange={(e) => setFormData({ ...formData, bonus: Number(e.target.value) })}
+                  className="w-full rounded-xl border border-gray-300 p-2.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                />
               </div>
 
               {/* Deductions & Prelevements Section */}
@@ -979,7 +950,7 @@ export default function PayrollPage() {
                   </div>
                   <div>
                     <label className="mb-1 block text-xs font-semibold text-gray-700 dark:text-gray-300">
-                      Montant Taxe 2%
+                      Montant Taxe
                     </label>
                     <div className="flex h-[42px] items-center rounded-xl border border-gray-200 bg-white px-3 text-sm font-bold text-rose-600 dark:border-gray-700 dark:bg-gray-900 dark:text-rose-400">
                       -{formatAmountWithDevise(
@@ -995,44 +966,6 @@ export default function PayrollPage() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="mb-1 block text-xs font-semibold text-gray-700 dark:text-gray-300">
-                      Prélèvement (Prêt / Avance / Compte à crédit)
-                    </label>
-                    <input
-                      type="number"
-                      min="0"
-                      value={formData.deductions}
-                      onChange={(e) =>
-                        setFormData({ ...formData, deductions: Number(e.target.value) })
-                      }
-                      className="w-full rounded-xl border border-gray-300 bg-white p-2.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
-                      placeholder="Ex: 5000 (Avance)"
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-xs font-semibold text-gray-700 dark:text-gray-300">
-                      Type de Prélèvement
-                    </label>
-                    <select
-                      value={formData.prelevementType}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          prelevementType: e.target.value as "taxe" | "credit" | "avance" | "pret",
-                        })
-                      }
-                      className="w-full rounded-xl border border-gray-300 bg-white p-2.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
-                    >
-                      <option value="avance">Avance sur salaire</option>
-                      <option value="pret">Remboursement Prêt</option>
-                      <option value="credit">Compte à crédit</option>
-                      <option value="taxe">Taxe / Autre</option>
-                    </select>
-                  </div>
-                </div>
-
                 <div className="pt-2 border-t border-gray-200 dark:border-gray-700 text-xs font-semibold text-gray-700 dark:text-gray-300 flex justify-between">
                   <span>
                     Total Retenues :{" "}
@@ -1043,7 +976,7 @@ export default function PayrollPage() {
                             ? formData.nombreSeances * formData.tauxParSeance
                             : formData.salaireBase,
                           formData.prelevementPourcentage
-                        ) + formData.deductions + formData.congeSansSolde,
+                        ),
                         formData.devise
                       )}
                     </strong>
@@ -1055,16 +988,13 @@ export default function PayrollPage() {
                         (formData.typeSalaire === "variable"
                           ? formData.nombreSeances * formData.tauxParSeance
                           : formData.salaireBase) +
-                          formData.bonus +
-                          formData.vacancesPayees -
-                          (calculatePrelevement(
+                          formData.bonus -
+                          calculatePrelevement(
                             formData.typeSalaire === "variable"
                               ? formData.nombreSeances * formData.tauxParSeance
                               : formData.salaireBase,
                             formData.prelevementPourcentage
-                          ) +
-                            formData.deductions +
-                            formData.congeSansSolde),
+                          ),
                         formData.devise
                       )}
                     </strong>

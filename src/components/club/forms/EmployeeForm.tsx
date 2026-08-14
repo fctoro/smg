@@ -24,6 +24,7 @@ const defaultValues: EmployeeFormValues = {
   typeSalaire: "fixe",
   tauxParSeance: null,
   salaire: null,
+  devise: "HTG",
   dateEmbauche: "",
   telephone: "",
   email: "",
@@ -182,7 +183,7 @@ export default function EmployeeForm({
         {formValues.typeSalaire === "variable" ? (
           <div>
             <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
-              Tarif / Taux par Séance (HTG / USD)
+              Tarif / Taux par Séance
             </label>
             <input
               type="number"
@@ -197,7 +198,7 @@ export default function EmployeeForm({
         ) : (
           <div>
             <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
-              Salaire Fixe Mensuel (HTG / USD)
+              Salaire Fixe Mensuel
             </label>
             <input
               type="number"
@@ -210,6 +211,20 @@ export default function EmployeeForm({
             />
           </div>
         )}
+
+        <div>
+          <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
+            Devise du Salaire
+          </label>
+          <select
+            value={formValues.devise || "HTG"}
+            onChange={(event) => updateField("devise", event.target.value as "US" | "HTG")}
+            className={selectClassName}
+          >
+            <option value="HTG">Gourde Haïtienne (HTG)</option>
+            <option value="US">Dollar Américain (USD)</option>
+          </select>
+        </div>
 
         <div>
           <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">

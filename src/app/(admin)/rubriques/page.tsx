@@ -171,7 +171,7 @@ export default function RubriquesPage() {
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Titre, précision, catégorie..."
+              placeholder="Titre, précision, domaine/module..."
               className={inputClassName}
             />
           </div>
@@ -211,7 +211,7 @@ export default function RubriquesPage() {
                 <th className="px-6 py-4">Titre Rubrique</th>
                 <th className="px-6 py-4">Montant</th>
                 <th className="px-6 py-4">Précision / Note</th>
-                <th className="px-6 py-4">Catégorie</th>
+                <th className="px-6 py-4">Domaine / Module</th>
                 <th className="px-6 py-4">Statut</th>
                 <th className="px-6 py-4 text-right">Actions</th>
               </tr>
@@ -354,14 +354,14 @@ export default function RubriquesPage() {
 
           <div>
             <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
-              Catégorie associée (optionnel)
+              Domaine / Module associé (optionnel)
             </label>
             <select
               value={categorie}
               onChange={(e) => setCategorie(e.target.value)}
               className={selectClassName}
             >
-              <option value="">Sélectionnez une catégorie (Optionnel)</option>
+              <option value="">Sélectionnez un domaine / module (Optionnel)</option>
               <option value="FC TORO">FC TORO</option>
               <option value="TI TORO">TI TORO</option>
               <option value="Payroll">Payroll</option>

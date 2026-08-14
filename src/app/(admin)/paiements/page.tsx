@@ -101,58 +101,33 @@ export default function PaymentsPage() {
     [players],
   );
 
-  // Calcule la balance uniquement si [TOTAL_DUE:XXX] est explicitement présent dans la remarque
+  // Calcule la balance uniquement si [TOTAL_DUE:XXX] est présent dans la remarque
   const calculateBalance = (currentPayment: (typeof payments)[number]): { balance: number; devise: string } => {
     const zero = { balance: 0, devise: currentPayment.devise || "US" };
     const player = playerMap.get(currentPayment.playerId);
     if (!player) return zero;
 
-    // Si le joueur est boursier ou si c'est un paiement boursier, pas de solde (balance = 0)
+    // Boursiers -> balance = 0
     const playerStatus = (player.statutJoueur || "").toLowerCase();
-    const isBoursierPlayer = playerStatus.includes("bourse") || playerStatus.includes("boursier");
-    const isBoursierPayment = (currentPayment.remarque || "").toLowerCase().includes("[plan:boursier]");
-    if (isBoursierPlayer || isBoursierPayment) {
+    if (playerStatus.includes("bourse") || playerStatus.includes("boursier") || (currentPayment.remarque || "").toLowerCase().includes("[plan:boursier]")) {
       return zero;
     }
 
     const isHTG = currentPayment.devise === "HTG";
     const tauxConv = currentPayment.taux || 1000;
-    const paidInDevise = currentPayment.montant;
-    const paidUSD = isHTG ? paidInDevise / tauxConv : paidInDevise;
+    const paidUSD = isHTG ? currentPayment.montant / tauxConv : currentPayment.montant;
 
-    // 1. Priorité au marqueur [TOTAL_DUE:XXX] s'il est présent
+    // Seul un marqueur [TOTAL_DUE:XXX] explicite génère un solde
     const totalDueMarker = currentPayment.remarque?.match(/\[TOTAL_DUE:\s*([\d.]+)\s*\]/i);
-    let totalDueUSD = 0;
-
     if (totalDueMarker && totalDueMarker[1]) {
-      totalDueUSD = parseFloat(totalDueMarker[1]) || 0;
-    }
-
-    // 2. Si pas de marqueur TOTAL_DUE, vérifier si le paiement contient une adhésion explicite
-    if (totalDueUSD <= 0) {
-      const remLower = (currentPayment.remarque || "").toLowerCase();
-      const catLower = (player.categorie || "").toLowerCase();
-      const isTiToro = remLower.includes("ti toro") || catLower.includes("ti toro") || catLower.includes("u6-u8");
-
-      // Vérifier si la remarque comporte EXPLICITEMENT une adhésion
-      const hasExplicitAdhesion = remLower.includes("adhésion") || remLower.includes("adhesion") || remLower.includes("[adhesion:");
-
-      if (hasExplicitAdhesion) {
-        if (remLower.includes("annuel")) {
-          totalDueUSD = isTiToro ? 900 : 1215;
-        } else {
-          totalDueUSD = isTiToro ? 1000 : 1350;
+      const recordedTotalDueUSD = parseFloat(totalDueMarker[1]);
+      if (!isNaN(recordedTotalDueUSD) && recordedTotalDueUSD > paidUSD) {
+        const balanceUSD = recordedTotalDueUSD - paidUSD;
+        if (isHTG) {
+          return { balance: Math.round(balanceUSD * tauxConv), devise: "HTG" };
         }
+        return { balance: Number(balanceUSD.toFixed(2)), devise: "US" };
       }
-    }
-
-    if (totalDueUSD > 0) {
-      const balanceUSD = Math.max(0, totalDueUSD - paidUSD);
-      if (balanceUSD <= 0) return zero;
-      if (isHTG) {
-        return { balance: Math.round(balanceUSD * tauxConv), devise: "HTG" };
-      }
-      return { balance: balanceUSD, devise: "US" };
     }
 
     return zero;

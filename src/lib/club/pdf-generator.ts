@@ -261,22 +261,9 @@ export async function generateReceiptPDFBase64(
       if (dueMatch && dueMatch[1]) {
         totalDueValue += parseFloat(dueMatch[1]);
       } else {
-        const remLower = (p.remarque || "").toLowerCase();
-        const catLower = (player.categorie || "").toLowerCase();
-        const isTiToro = remLower.includes("ti toro") || catLower.includes("ti toro") || catLower.includes("u6-u8");
-        const hasExplicitAdhesion = remLower.includes("adhésion") || remLower.includes("adhesion") || remLower.includes("[adhesion:");
-
-        if (hasExplicitAdhesion) {
-          if (remLower.includes("annuel")) {
-            totalDueValue += isTiToro ? 900 : 1215;
-          } else {
-            totalDueValue += isTiToro ? 1000 : 1350;
-          }
-        } else {
-          const isHTGPay = p.devise === "HTG";
-          const pTaux = p.taux || 1000;
-          totalDueValue += isHTGPay ? (p.montant / pTaux) : p.montant;
-        }
+        const isHTGPay = p.devise === "HTG";
+        const pTaux = p.taux || 1000;
+        totalDueValue += isHTGPay ? (p.montant / pTaux) : p.montant;
       }
     });
   }

@@ -244,26 +244,38 @@ export async function generateReceiptPDFBase64(
   const finalY = (doc as any).lastAutoTable.finalY || tableStartY;
 
   // Extraction / Calcul du total dû pour ce reçu
+  const playerStatus = (player.statutJoueur || "").toLowerCase();
+  const isBoursierReceipt = playerStatus.includes("bourse") || playerStatus.includes("boursier") || payments.some((p: any) => (p.remarque || "").toLowerCase().includes("[plan:boursier]"));
+
   let totalDueValue = 0;
-  payments.forEach((p: any) => {
-    const dueMatch = p.remarque?.match(/\[TOTAL_DUE:\s*([\d.]+)\s*\]/i);
-    if (dueMatch && dueMatch[1]) {
-      totalDueValue += parseFloat(dueMatch[1]);
-    } else if (p.remarque) {
-      const match = p.remarque.match(/Rubriques:\s*(.*?)(?:\s*Plan:|\s*\[|$)/i);
-      if (match && match[1]) {
-        const items = match[1].split(',').map((s: string) => s.trim().toLowerCase());
-        items.forEach((item: string) => {
-          if (item.includes("adhesion") || item.includes("adhésion")) {
-            if (item.includes("ti toro")) totalDueValue += 1000;
-            else totalDueValue += 1350;
-          } else if (item.includes("inscription")) totalDueValue += 75;
-          else if (item.includes("maillot") || item.includes("tracksuit") || item.includes("uniforme")) totalDueValue += 100;
-          else if (item.includes("sac") || item.includes("backpack")) totalDueValue += 90;
-        });
+  if (isBoursierReceipt) {
+    // Pour les boursiers, le montant total dû = montant versé (solde = 0)
+    payments.forEach((p: any) => {
+      const isHTGPay = p.devise === "HTG";
+      const pTaux = p.taux || 1000;
+      totalDueValue += isHTGPay ? (p.montant / pTaux) : p.montant;
+    });
+  } else {
+    payments.forEach((p: any) => {
+      const dueMatch = p.remarque?.match(/\[TOTAL_DUE:\s*([\d.]+)\s*\]/i);
+      if (dueMatch && dueMatch[1]) {
+        totalDueValue += parseFloat(dueMatch[1]);
+      } else if (p.remarque) {
+        const match = p.remarque.match(/Rubriques:\s*(.*?)(?:\s*Plan:|\s*\[|$)/i);
+        if (match && match[1]) {
+          const items = match[1].split(',').map((s: string) => s.trim().toLowerCase());
+          items.forEach((item: string) => {
+            if (item.includes("adhesion") || item.includes("adhésion")) {
+              if (item.includes("ti toro")) totalDueValue += 1000;
+              else totalDueValue += 1350;
+            } else if (item.includes("inscription")) totalDueValue += 75;
+            else if (item.includes("maillot") || item.includes("tracksuit") || item.includes("uniforme")) totalDueValue += 100;
+            else if (item.includes("sac") || item.includes("backpack")) totalDueValue += 90;
+          });
+        }
       }
-    }
-  });
+    });
+  }
 
   const mainPayment = payments[0] || {};
   const isHTG = mainPayment.devise === "HTG";

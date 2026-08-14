@@ -107,6 +107,14 @@ export default function PaymentsPage() {
     const player = playerMap.get(currentPayment.playerId);
     if (!player) return zero;
 
+    // Si le joueur est boursier ou si c'est un paiement boursier, pas de solde (balance = 0)
+    const playerStatus = (player.statutJoueur || "").toLowerCase();
+    const isBoursierPlayer = playerStatus.includes("bourse") || playerStatus.includes("boursier");
+    const isBoursierPayment = (currentPayment.remarque || "").toLowerCase().includes("[plan:boursier]");
+    if (isBoursierPlayer || isBoursierPayment) {
+      return zero;
+    }
+
     const normalizeText = (value?: string) => (value || "")
       .normalize("NFD")
       .replace(/[\u0300-\u036f]/g, "")
@@ -137,22 +145,38 @@ export default function PaymentsPage() {
       }
     }
 
-    // --- Cas 2 : calcul de secours depuis les rubriques listées dans la remarque ---
-    const normalize = (s?: string) =>
-      (s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
+    // --- Cas 2 : calcul de secours depuis la remarque & catégorie ---
+    const remarkLower = (currentPayment.remarque || "").toLowerCase();
+    let totalEstimatedDueUSD = 0;
 
-    let rubriquesCostUSD = 0;
-    const matchRubriques = currentPayment.remarque?.match(/Rubriques:\s*(.*?)(?:\s*Plan:|\s*\[|$)/i);
-    if (matchRubriques && matchRubriques[1]?.trim()) {
-      const items = matchRubriques[1].split(',').map(s => normalize(s)).filter(Boolean);
-      for (const item of items) {
-        const found = (rubriques || []).find(r => normalize(r.rubrique) === item);
-        if (found && found.montant > 0) rubriquesCostUSD += found.montant;
+    // Détecter l'adhésion depuis la remarque ou la catégorie du joueur
+    const catLower = (player.categorie || "").toLowerCase();
+    const isTiToro = remarkLower.includes("ti toro") || catLower.includes("ti toro") || catLower.includes("u6-u8");
+    const hasAdhesionInRemark = remarkLower.includes("adhésion") || remarkLower.includes("adhesion");
+
+    if (hasAdhesionInRemark) {
+      if (remarkLower.includes("annuel")) {
+        totalEstimatedDueUSD += isTiToro ? 900 : 1215;
+      } else {
+        totalEstimatedDueUSD += isTiToro ? 1000 : 1350;
       }
     }
 
-    if (rubriquesCostUSD > 0) {
-      const balanceUSD = Math.max(0, rubriquesCostUSD - paidUSD);
+    // Analyser les rubriques complémentaires dans "Rubriques: ..."
+    const matchRubriques = currentPayment.remarque?.match(/Rubriques:\s*(.*?)(?:\s*Plan:|\s*\[|$)/i);
+    if (matchRubriques && matchRubriques[1]?.trim()) {
+      const items = matchRubriques[1].split(',').map((s) => s.trim().toLowerCase());
+      for (const item of items) {
+        if (!item.includes("adhésion") && !item.includes("adhesion")) {
+          if (item.includes("inscription")) totalEstimatedDueUSD += 75;
+          else if (item.includes("maillot") || item.includes("tracksuit") || item.includes("uniforme")) totalEstimatedDueUSD += 100;
+          else if (item.includes("sac") || item.includes("backpack")) totalEstimatedDueUSD += 90;
+        }
+      }
+    }
+
+    if (totalEstimatedDueUSD > 0) {
+      const balanceUSD = Math.max(0, totalEstimatedDueUSD - paidUSD);
       if (balanceUSD <= 0) return zero;
       if (isHTG) return { balance: Math.round(balanceUSD * tauxConv), devise: "HTG" };
       return { balance: balanceUSD, devise: "US" };

@@ -254,45 +254,63 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
   };
 
   const handleSubmit = async () => {
-    if (!playerId || !periode || montantDonne <= 0 || (devise === "HTG" && taux <= 0)) {
-      setToast({ message: "Veuillez remplir le joueur, la période et le montant payé.", type: "error" });
+    const isBoursierPlayer = !!(selectedPlayer && (selectedPlayer.statutJoueur || "").toLowerCase().includes("bourse"));
+
+    if (!playerId || !periode) {
+      setToast({ message: "Veuillez remplir le joueur et la période.", type: "error" });
       return;
     }
-    const hasAdhesion = selectedPricingItems.some((item) => item.estAdhesion || item.id === "adhesion-fc" || item.id === "adhesion-ti");
-    if (!hasAdhesion) {
-      setToast({ message: "Veuillez sélectionner une adhésion FC TORO ou TI TORO.", type: "error" });
-      return;
-    }
-    if (!selectedPlan) {
-      setToast({ message: "Veuillez sélectionner un plan de paiement.", type: "error" });
-      return;
+
+    if (!isBoursierPlayer) {
+      // Validations uniquement pour les joueurs non-boursiers
+      if (montantDonne <= 0 || (devise === "HTG" && taux <= 0)) {
+        setToast({ message: "Veuillez remplir le montant payé et le taux de change.", type: "error" });
+        return;
+      }
+      const hasAdhesion = selectedPricingItems.some((item) => item.estAdhesion || item.id === "adhesion-fc" || item.id === "adhesion-ti");
+      if (!hasAdhesion) {
+        setToast({ message: "Veuillez sélectionner une adhésion FC TORO ou TI TORO.", type: "error" });
+        return;
+      }
+      if (!selectedPlan) {
+        setToast({ message: "Veuillez sélectionner un plan de paiement.", type: "error" });
+        return;
+      }
     }
 
     setIsSubmitting(true);
     try {
-      const plan = paymentPlans.find((item) => item.id === selectedPlan)!;
+      const plan = isBoursierPlayer ? null : paymentPlans.find((item) => item.id === selectedPlan);
       const selectedAdhesionItem = selectedPricingItems.find((item) => item.estAdhesion || item.id === "adhesion-fc" || item.id === "adhesion-ti");
       const isTiToro = selectedAdhesionItem ? (selectedAdhesionItem.rubrique.toLowerCase().includes("ti toro") || selectedAdhesionItem.id === "adhesion-ti") : false;
       const nonAdhesionSum = selectedPricingItems
         .filter((item) => !item.estAdhesion && item.id !== "adhesion-fc" && item.id !== "adhesion-ti")
         .reduce((sum, item) => sum + item.montant, 0);
-      const totalDue = plan ? (isTiToro ? plan.montantTIToro : plan.montantFCToro) : (selectedAdhesionItem?.montant || 0) + nonAdhesionSum;
-      const discountedDue = calculateDiscountedAmount(totalDue, reductionType, customReductionPercent);
+      const totalDue = isBoursierPlayer
+        ? nombreDeMois * 2500
+        : (plan ? (isTiToro ? plan.montantTIToro : plan.montantFCToro) : (selectedAdhesionItem?.montant || 0) + nonAdhesionSum);
+      const discountedDue = isBoursierPlayer ? totalDue : calculateDiscountedAmount(totalDue, reductionType, customReductionPercent);
       
-      const finalMontantAPayer = devise === "HTG" ? montantDuManuel : montantDuManuel;
-      const paymentAmount = devise === "HTG" ? montantDonne : montantDonne;
-      const montantUS = devise === "US" ? paymentAmount : (taux > 0 ? paymentAmount / taux : 0);
-      const montantHTG = devise === "HTG" ? paymentAmount : 0;
-      const adhesionCode = isTiToro ? "TI_TORO" : "FC_TORO";
-      const selectedAdhesionTitle = selectedAdhesionItem?.rubrique || "Adhésion";
+      // Pour les boursiers: montant toujours en HTG, pas de taux
+      const finalMontantAPayer = isBoursierPlayer ? totalDue : montantDuManuel;
+      const paymentAmount = isBoursierPlayer ? totalDue : montantDonne;
+      const actualDevise = isBoursierPlayer ? "HTG" : devise;
+      const montantUS = isBoursierPlayer ? 0 : (actualDevise === "US" ? paymentAmount : (taux > 0 ? paymentAmount / taux : 0));
+      const montantHTG = isBoursierPlayer ? paymentAmount : (actualDevise === "HTG" ? paymentAmount : 0);
+      const adhesionCode = isBoursierPlayer ? "BOURSE" : (isTiToro ? "TI_TORO" : "FC_TORO");
       const selectedRubricsLabel = selectedPricingItems
         .filter((item) => !item.estAdhesion && item.id !== "adhesion-fc" && item.id !== "adhesion-ti")
         .map((item) => item.rubrique)
         .filter(Boolean).join(", ");
-      const reductionMetadata = serializeReductionMetadata(reductionType, customReductionPercent);
-      const paymentMarkers = `[ADHESION:${adhesionCode}] [PLAN:${selectedPlan.toUpperCase()}] [STATUT:${statut.toUpperCase()}]`;
-      const adhesionLabel = isTiToro ? "Adhésion: TI TORO" : "Adhésion: FC TORO";
-      const finalRemarque = `${paymentMarkers} ${reductionMetadata ? `${reductionMetadata} ` : ""}${description.trim()} ${adhesionLabel}${selectedRubricsLabel ? ` | Rubriques: ${selectedRubricsLabel}` : ""} Plan: ${plan.plan}`.trim();
+      const reductionMetadata = isBoursierPlayer ? "" : serializeReductionMetadata(reductionType, customReductionPercent);
+      const totalDueInUSD = actualDevise === "HTG" ? (taux > 0 ? discountedDue / taux : discountedDue) : discountedDue;
+      const paymentMarkers = isBoursierPlayer
+        ? `[ADHESION:${adhesionCode}] [PLAN:BOURSIER] [STATUT:${statut.toUpperCase()}] [TOTAL_DUE:${totalDue}]`
+        : `[ADHESION:${adhesionCode}] [PLAN:${selectedPlan ? selectedPlan.toUpperCase() : "AUCUN"}] [STATUT:${statut.toUpperCase()}] [TOTAL_DUE:${totalDueInUSD}]`;
+      const adhesionLabel = isBoursierPlayer
+        ? `Boursier: ${nombreDeMois} mois × 2,500 HTG`
+        : (isTiToro ? "Adhésion: TI TORO" : "Adhésion: FC TORO");
+      const finalRemarque = `${paymentMarkers} ${reductionMetadata ? `${reductionMetadata} ` : ""}${description.trim()} ${adhesionLabel}${selectedRubricsLabel ? ` | Rubriques: ${selectedRubricsLabel}` : ""}${plan ? ` Plan: ${plan.plan}` : ""}`.trim();
       
       const actualDatePaiement = datePaiement || new Date().toISOString().split("T")[0];
       const uploadPromise = paymentPhoto ? uploadPaymentPhotoToSupabase(paymentPhoto) : Promise.resolve(null);
@@ -327,8 +345,8 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
           montant: paymentAmount,
           montantUS,
           montantHTG,
-          devise,
-          taux: devise === "HTG" ? taux : undefined,
+          devise: actualDevise,
+          taux: (!isBoursierPlayer && actualDevise === "HTG") ? taux : undefined,
           statut,
           periode,
           methode,
@@ -939,6 +957,40 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
                     </option>
                   ))}
                 </select>
+
+                {selectedPlan === "mensuel" && (
+                  <div className="mt-3">
+                    <label className="mb-1.5 block text-xs font-semibold text-gray-700 dark:text-gray-300">
+                      Nombre de mois réglés
+                    </label>
+                    <select
+                      value={nombreDeMois}
+                      onChange={(e) => setNombreDeMois(Number(e.target.value))}
+                      className={selectClassName}
+                    >
+                      {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((m) => (
+                        <option key={m} value={m}>
+                          {m} mois ({m} × ${isTiToro ? 115 : 155} = ${m * (isTiToro ? 115 : 155)})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {selectedPlanData && selectedPlan !== "annuel" && (
+                  <div className="mt-2.5 rounded-lg border border-blue-100 bg-blue-50/70 p-3 dark:border-blue-900/30 dark:bg-blue-900/20">
+                    <p className="text-xs font-semibold text-blue-900 dark:text-blue-200">
+                      ℹ️ {selectedPlanData.plan} : {selectedPlanData.modalites}
+                    </p>
+                    <p className="mt-1 text-xs font-bold text-blue-700 dark:text-blue-300">
+                      {selectedPlan === "mensuel" ? (
+                        <>Montant total calculé ({nombreDeMois} mois) : ${nombreDeMois * (isTiToro ? selectedPlanData.montantTIToro : selectedPlanData.montantFCToro)}</>
+                      ) : (
+                        <>Tarif par versement semestriel : ${isTiToro ? selectedPlanData.montantTIToro : selectedPlanData.montantFCToro} ({selectedPlanData.avantage})</>
+                      )}
+                    </p>
+                  </div>
+                )}
               </div>
             )}
             <div>

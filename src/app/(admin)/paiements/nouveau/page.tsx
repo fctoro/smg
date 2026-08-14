@@ -296,7 +296,8 @@ export default function NewPaymentPage() {
       const adhesionCode = isTiToro ? "TI_TORO" : "FC_TORO";
       const planCode = selectedPlan.toUpperCase();
       const statusCode = paymentStatus.toUpperCase();
-      const paymentMarkers = `[ADHESION:${adhesionCode}] [PLAN:${planCode}] [STATUT:${statusCode}]`;
+      const totalDueInUSD = devise === "HTG" ? (taux > 0 ? montantAvecPlan / taux : montantAvecPlan) : montantAvecPlan;
+      const paymentMarkers = `[ADHESION:${adhesionCode}] [PLAN:${planCode}] [STATUT:${statusCode}] [TOTAL_DUE:${totalDueInUSD}]`;
       const finalRemarque = `${paymentMarkers} ${description.trim()} ${adhesionRemark} ${planRemark}`.trim();
       const uploadPromise = paymentPhoto ? uploadPaymentPhotoToSupabase(paymentPhoto) : Promise.resolve(null);
 

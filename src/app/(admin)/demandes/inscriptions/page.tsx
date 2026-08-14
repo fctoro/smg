@@ -965,12 +965,11 @@ export default function BoiteDeReception() {
                      </div>
                      <div className="grid gap-3">
                       {[
+                        { key: "photo_recente", label: "PHOTO RÉCENTE DU JOUEUR" },
                         { key: "fiche_9e", label: "FICHE 9ÈME" },
                         { key: "carnet_vaccination", label: "CARNET DE VACCINATION" },
                         { key: "acte_naissance", label: "ACTE DE NAISSANCE" },
                         { key: "piece_identite_parent", label: "PIÈCE D'IDENTITÉ PARENT" },
-                        { key: "photo_recente", label: "PHOTO RÉCENTE" },
-                        { key: "document_photo_id", label: "PHOTO D'IDENTITÉ" },
                       ].map((slot) => {
                         const existingDoc = downloadDocs.find(d => d.doc_key === slot.key);
                         const isUploading = uploadingDocKey === slot.key;
@@ -1069,7 +1068,7 @@ export default function BoiteDeReception() {
                         
                         const docLabels: Record<string, string> = {
                           document_photo_id: "PHOTO D'IDENTITÉ",
-                          photo_recente: "PHOTO RÉCENTE",
+                          photo_recente: "PHOTO RÉCENTE DU JOUEUR",
                           fiche_9e: "FICHE 9ÈME",
                           carnet_vaccination: "CARNET DE VACCINATION",
                           acte_naissance: "ACTE DE NAISSANCE",

@@ -371,14 +371,12 @@ export async function GET(request) {
 
     drawFooter(page, 1);
 
-    // List of potential attachment documents to embed as annexes
     const attachmentsToEmbed = [
+      { key: "photo_recente", label: "PHOTO RÉCENTE DU JOUEUR", url: metadata.photo_recente_url },
       { key: "fiche_9e", label: "FICHE 9ÈME", url: metadata.fiche_9e_url },
       { key: "carnet_vaccination", label: "CARNET DE VACCINATION", url: metadata.carnet_vaccination_url },
       { key: "acte_naissance", label: "ACTE DE NAISSANCE", url: metadata.acte_naissance_url },
       { key: "piece_identite_parent", label: "PIÈCE D'IDENTITÉ PARENT", url: metadata.piece_identite_parent_url },
-      { key: "photo_recente", label: "PHOTO RÉCENTE", url: metadata.photo_recente_url },
-      { key: "document_photo_id", label: "PHOTO D'IDENTITÉ", url: metadata.document_photo_id_url },
     ];
 
     const seenUrls = new Set();

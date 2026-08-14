@@ -101,7 +101,7 @@ export default function PaymentsPage() {
     [players],
   );
 
-  // Retourne { balance: number, devise: string } — balance dans la devise du paiement
+  // Calcule la balance uniquement si [TOTAL_DUE:XXX] est explicitement présent dans la remarque
   const calculateBalance = (currentPayment: (typeof payments)[number]): { balance: number; devise: string } => {
     const zero = { balance: 0, devise: currentPayment.devise || "US" };
     const player = playerMap.get(currentPayment.playerId);
@@ -115,71 +115,23 @@ export default function PaymentsPage() {
       return zero;
     }
 
-    const normalizeText = (value?: string) => (value || "")
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .toLowerCase()
-      .replace(/\s+/g, " ")
-      .trim();
-
     const isHTG = currentPayment.devise === "HTG";
     const tauxConv = currentPayment.taux || 1000;
-
-    // Montant payé dans la devise originale
     const paidInDevise = currentPayment.montant;
-    // Montant payé converti en USD (pour comparer avec les totaux USD)
     const paidUSD = isHTG ? paidInDevise / tauxConv : paidInDevise;
 
-    // --- Cas 1 : marqueur [TOTAL_DUE:XXX] enregistré à la création (en USD) ---
+    // Seul le marqueur [TOTAL_DUE:XXX] génère un solde
     const totalDueMarker = currentPayment.remarque?.match(/\[TOTAL_DUE:\s*([\d.]+)\s*\]/i);
     if (totalDueMarker && totalDueMarker[1]) {
       const recordedTotalDueUSD = parseFloat(totalDueMarker[1]);
       if (!isNaN(recordedTotalDueUSD) && recordedTotalDueUSD > 0) {
         const balanceUSD = Math.max(0, recordedTotalDueUSD - paidUSD);
         if (balanceUSD <= 0) return zero;
-        // Convertir dans la devise du paiement
         if (isHTG) {
           return { balance: Math.round(balanceUSD * tauxConv), devise: "HTG" };
         }
         return { balance: balanceUSD, devise: "US" };
       }
-    }
-
-    // --- Cas 2 : calcul de secours depuis la remarque & catégorie ---
-    const remarkLower = (currentPayment.remarque || "").toLowerCase();
-    let totalEstimatedDueUSD = 0;
-
-    // Détecter l'adhésion depuis la remarque ou la catégorie du joueur
-    const catLower = (player.categorie || "").toLowerCase();
-    const isTiToro = remarkLower.includes("ti toro") || catLower.includes("ti toro") || catLower.includes("u6-u8");
-    const hasAdhesionInRemark = remarkLower.includes("adhésion") || remarkLower.includes("adhesion");
-
-    if (hasAdhesionInRemark || remarkLower.includes("mensuel") || remarkLower.includes("semestriel")) {
-      if (remarkLower.includes("annuel")) {
-        totalEstimatedDueUSD += isTiToro ? 900 : 1215;
-      } else {
-        totalEstimatedDueUSD += isTiToro ? 1000 : 1350;
-      }
-    }
-
-    // Analyser les rubriques complémentaires dans "Rubriques: ..."
-    const matchRubriques = currentPayment.remarque?.match(/Rubriques:\s*(.*?)(?:\s*Plan:|\s*\[|$)/i);
-    if (matchRubriques && matchRubriques[1]?.trim()) {
-      const items = matchRubriques[1].split(',').map((s) => s.trim().toLowerCase());
-      for (const item of items) {
-        if (!item.includes("adhésion") && !item.includes("adhesion")) {
-          if (item.includes("inscription")) totalEstimatedDueUSD += 75;
-          else if (item.includes("maillot") || item.includes("tracksuit") || item.includes("uniforme")) totalEstimatedDueUSD += 100;
-          else if (item.includes("sac") || item.includes("backpack")) totalEstimatedDueUSD += 90;
-        }
-      }
-    }
-
-    if (totalEstimatedDueUSD > 0) {
-      const balanceUSD = Math.max(0, totalEstimatedDueUSD - paidUSD);
-      if (balanceUSD <= 0) return zero;
-      if (isHTG) return { balance: Math.round(balanceUSD * tauxConv), devise: "HTG" };
-      return { balance: balanceUSD, devise: "US" };
     }
 
     return zero;

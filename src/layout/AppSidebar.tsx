@@ -169,11 +169,23 @@ const AppSidebar: React.FC = () => {
     setMounted(true);
 
     const fetchUnread = async () => {
-      const { count } = await supabase
+      let total = 0;
+      
+      const { count: siteCount } = await supabase
         .from("site_messages")
         .select("*", { count: "exact", head: true })
+        .eq("type", "joueur")
         .eq("is_read", false);
-      if (count !== null) setUnreadCount(count);
+        
+      if (siteCount) total += siteCount;
+        
+      const { count: detectionCount } = await supabase
+        .from("detection_registrations")
+        .select("*", { count: "exact", head: true });
+
+      if (detectionCount) total += detectionCount;
+      
+      setUnreadCount(total);
     };
 
     fetchUnread();

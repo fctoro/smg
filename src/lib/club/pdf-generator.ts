@@ -158,24 +158,18 @@ export async function generateReceiptPDFBase64(
     let cleaned = remark.replace(/\[.*?\]\s*/g, '').trim();
     
     // Remplacer les séparateurs par des sauts de ligne
-    cleaned = cleaned.replace(/\s*\|\s*/g, '\n\n');
-    cleaned = cleaned.replace(/\s*Plan:\s*/g, '\n\nPlan : ');
+    cleaned = cleaned.replace(/\s*\|\s*/g, '\n');
+    cleaned = cleaned.replace(/\s*Plan:\s*/g, '\nPlan : ');
     
-    // Mettre en liste à puces les rubriques si présentes
-    if (cleaned.includes('Rubriques:')) {
-      cleaned = cleaned.replace(/Rubriques:\s*/, 'Rubriques :\n• ');
-      // Astuce simple : remplacer les virgules par des puces, en supposant 
-      // que dans cette portion du texte, les virgules séparent les rubriques.
-      // Pour éviter de casser d'autres textes, on le fait de manière prudente.
-      let parts = cleaned.split('Rubriques :');
-      if (parts.length > 1) {
-        let rubriquesPart = parts[1];
-        rubriquesPart = rubriquesPart.replace(/,\s*/g, '\n• ');
-        cleaned = parts[0] + 'Rubriques :' + rubriquesPart;
-      }
+    // Retirer complètement le mot "Rubriques:" pour ne garder que les noms des articles
+    cleaned = cleaned.replace(/Rubriques\s*:\s*/gi, '');
+    cleaned = cleaned.replace(/Rubriques:\s*/gi, '');
+    
+    if (cleaned.includes('•')) {
+      cleaned = cleaned.replace(/,\s*/g, '\n• ');
     }
 
-    return cleaned || "Paiement de cotisation";
+    return cleaned.trim() || "Paiement de cotisation";
   };
 
   let totalUSD = 0;

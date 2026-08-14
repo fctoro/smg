@@ -340,20 +340,17 @@ export default function RecusPage() {
       if (!remark) return "Paiement de cotisation";
       let cleaned = remark.replace(/\[.*?\]\s*/g, '').trim();
       
-      cleaned = cleaned.replace(/\s*\|\s*/g, '\n\n');
-      cleaned = cleaned.replace(/\s*Plan:\s*/g, '\n\nPlan : ');
+      cleaned = cleaned.replace(/\s*\|\s*/g, '\n');
+      cleaned = cleaned.replace(/\s*Plan:\s*/g, '\nPlan : ');
       
-      if (cleaned.includes('Rubriques:')) {
-        cleaned = cleaned.replace(/Rubriques:\s*/, 'Rubriques :\n• ');
-        let parts = cleaned.split('Rubriques :');
-        if (parts.length > 1) {
-          let rubriquesPart = parts[1];
-          rubriquesPart = rubriquesPart.replace(/,\s*/g, '\n• ');
-          cleaned = parts[0] + 'Rubriques :' + rubriquesPart;
-        }
+      cleaned = cleaned.replace(/Rubriques\s*:\s*/gi, '');
+      cleaned = cleaned.replace(/Rubriques:\s*/gi, '');
+      
+      if (cleaned.includes('•')) {
+        cleaned = cleaned.replace(/,\s*/g, '\n• ');
       }
 
-      return cleaned || "Paiement de cotisation";
+      return cleaned.trim() || "Paiement de cotisation";
     };
 
     if (parentData.parentPayments.length === 0) {

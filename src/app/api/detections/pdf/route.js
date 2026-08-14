@@ -259,44 +259,103 @@ export async function GET(request) {
         } else {
           page.drawText(textVal, {
             x: 180,
+      const colWidth = (width - 100) / 2;
+      for (let i = 0; i < fields.length; i += 2) {
+        const field1 = fields[i];
+        const field2 = fields[i + 1];
+
+        if (field1) {
+          page.drawText(field1[0], {
+            x: 50,
             y: currentY,
-            size: 10,
-            font: timesRomanFont,
-            color: textVal === "(Champ laissé vide)" ? rgb(0.8, 0.1, 0.1) : rgb(0, 0, 0),
+            size: 9,
+            font: timesBoldFont,
+            color: rgb(0.3, 0.3, 0.3),
           });
-          currentY -= 14;
+          page.drawText(String(field1[1] || "N/A"), {
+            x: 150,
+            y: currentY,
+            size: 9,
+            font: timesRomanFont,
+            color: rgb(0, 0, 0),
+          });
         }
+
+        if (field2) {
+          page.drawText(field2[0], {
+            x: 50 + colWidth,
+            y: currentY,
+            size: 9,
+            font: timesBoldFont,
+            color: rgb(0.3, 0.3, 0.3),
+          });
+          page.drawText(String(field2[1] || "N/A"), {
+            x: 150 + colWidth,
+            y: currentY,
+            size: 9,
+            font: timesRomanFont,
+            color: rgb(0, 0, 0),
+          });
+        }
+
+        currentY -= 18;
+      }
+    };
+
+    const drawFooter = (targetPage, pageNum) => {
+      targetPage.drawLine({
+        start: { x: 40, y: 40 },
+        end: { x: width - 40, y: 40 },
+        thickness: 0.5,
+        color: rgb(0.7, 0.7, 0.7),
+      });
+
+      targetPage.drawText("FC TORO - Fiche de candidature Détection officielle", {
+        x: 40,
+        y: 25,
+        size: 8,
+        font: timesRomanFont,
+        color: rgb(0.5, 0.5, 0.5),
+      });
+
+      targetPage.drawText(`Page ${pageNum}`, {
+        x: width - 80,
+        y: 25,
+        size: 8,
+        font: timesRomanFont,
+        color: rgb(0.5, 0.5, 0.5),
       });
     };
 
-    drawSectionHeader("1. IDENTITÉ DU JOUEUR");
+    drawSectionHeader("1. INFORMATIONS DU JOUEUR");
     drawFields([
       ["Nom:", metadata.nom],
       ["Prénom:", metadata.prenom],
-      ["Date de Naissance:", metadata.date_naissance],
-      ["Lieu de Naissance:", metadata.lieu_naissance],
       ["Sexe:", metadata.sexe],
+      ["Date de naissance:", metadata.date_naissance],
+      ["Lieu de naissance:", metadata.lieu_naissance],
       ["Zone de résidence:", metadata.zone_residence],
     ]);
 
     currentY -= 15;
-    drawSectionHeader("2. CONTACT JOUEUR");
+    drawSectionHeader("2. PROFIL SPORTIF");
     drawFields([
-      ["Email:", metadata.email],
-      ["Téléphone:", metadata.telephone],
+      ["Pied dominant:", metadata.pied_dominant],
+      ["Club actuel:", metadata.club_actuel],
+      ["Niveau actuel:", metadata.niveau_actuel],
+      ["Expérience compétitive:", metadata.experience_competitive],
     ]);
 
     currentY -= 15;
-    drawSectionHeader("3. INFORMATIONS SPORTIVES");
+    drawSectionHeader("3. INFORMATIONS COMPLÉMENTAIRES");
     drawFields([
-      ["Pied dominant:", metadata.pied_dominant],
-      ["Niveau actuel:", metadata.niveau_actuel],
-      ["Club actuel:", metadata.club_actuel],
-      ["Expérience compétitive:", metadata.experience_competitive],
+      ["Comment identifié:", metadata.comment_identifie],
+      ["Téléphone candidat:", metadata.telephone],
+      ["Email candidat:", metadata.email],
     ]);
-    
+
     currentY -= 15;
-    drawSectionHeader("4. PARENT OU TUTEUR LÉGAL");
+    drawSectionHeader("4. PARENT / TUTEUR LÉGAL");
     drawFields([
       ["Nom du parent:", metadata.parent_nom],
       ["Lien de parenté:", metadata.parent_lien],
@@ -310,73 +369,80 @@ export async function GET(request) {
       ["Téléphone urgence:", metadata.urgence_telephone],
     ]);
 
-    // Fetch photo_recente_url from detection_registrations using payload.id
-    let photoUrl = metadata.photo_recente_url || null;
+    drawFooter(page, 1);
 
-    if (!photoUrl && metadata.id) {
+    // List of potential attachment documents to embed as annexes
+    const attachmentsToEmbed = [
+      { key: "fiche_9e", label: "FICHE 9ÈME", url: metadata.fiche_9e_url },
+      { key: "carnet_vaccination", label: "CARNET DE VACCINATION", url: metadata.carnet_vaccination_url },
+      { key: "acte_naissance", label: "ACTE DE NAISSANCE", url: metadata.acte_naissance_url },
+      { key: "piece_identite_parent", label: "PIÈCE D'IDENTITÉ PARENT", url: metadata.piece_identite_parent_url },
+      { key: "photo_recente", label: "PHOTO RÉCENTE", url: metadata.photo_recente_url },
+      { key: "document_photo_id", label: "PHOTO D'IDENTITÉ", url: metadata.document_photo_id_url },
+    ];
+
+    const seenUrls = new Set();
+
+    for (const att of attachmentsToEmbed) {
+      if (!att.url || seenUrls.has(att.url)) continue;
+      seenUrls.add(att.url);
+
       try {
-        const { data: detReg } = await supabase
-          .from("detection_registrations")
-          .select("photo_recente_url")
-          .eq("id", metadata.id)
-          .single();
-        if (detReg?.photo_recente_url) {
-          photoUrl = detReg.photo_recente_url;
-        }
-      } catch (e) {
-        console.warn("Could not fetch detection registration photo:", e.message);
-      }
-    }
+        const fileBytes = await resolvePhotoBytes(att.url);
+        if (fileBytes && fileBytes.length > 0) {
+          const isPdf = fileBytes.length >= 4 && fileBytes[0] === 0x25 && fileBytes[1] === 0x50 && fileBytes[2] === 0x44 && fileBytes[3] === 0x46; // %PDF
 
-    // Also update the inline photo at the top if not already shown
-    if (photoUrl && !metadata.photo_recente_url) {
-      // The inline photo wasn't drawn — update metadata for reference
-      metadata.photo_recente_url = photoUrl;
-    }
+          if (isPdf) {
+            try {
+              const srcDoc = await PDFDocument.load(fileBytes);
+              const copiedPages = await pdfDoc.copyPages(srcDoc, srcDoc.getPageIndices());
+              for (let i = 0; i < copiedPages.length; i++) {
+                const pdfPage = pdfDoc.addPage(copiedPages[i]);
+                drawFooter(pdfPage, pdfDoc.getPageCount());
+              }
+            } catch (pdfErr) {
+              console.warn(`Could not copy PDF pages for ${att.label}:`, pdfErr.message);
+            }
+          } else {
+            const annexPage = pdfDoc.addPage([595.28, 841.89]);
+            const pageNumber = pdfDoc.getPageCount();
 
-    // Append photo as full-page annex
-    if (photoUrl) {
-      try {
-        const photoBytes = await resolvePhotoBytes(photoUrl);
-        if (photoBytes) {
-          const annexPage = pdfDoc.addPage([595.28, 841.89]);
-          const pageNumber = pdfDoc.getPageCount();
+            annexPage.drawText(`ANNEXE : ${att.label}`, {
+              x: 50,
+              y: 800,
+              size: 14,
+              font: timesBoldFont,
+              color: rgb(0.1, 0.1, 0.3),
+            });
 
-          annexPage.drawText("ANNEXE : PHOTO D'IDENTITÉ", {
-            x: 50,
-            y: 800,
-            size: 14,
-            font: timesBoldFont,
-            color: rgb(0.1, 0.1, 0.3),
-          });
+            annexPage.drawLine({
+              start: { x: 40, y: 785 },
+              end: { x: width - 40, y: 785 },
+              thickness: 1,
+              color: rgb(0.8, 0.1, 0.1),
+            });
 
-          annexPage.drawLine({
-            start: { x: 40, y: 785 },
-            end: { x: width - 40, y: 785 },
-            thickness: 1,
-            color: rgb(0.8, 0.1, 0.1),
-          });
+            const photoImage = await embedImage(pdfDoc, fileBytes);
+            const maxWidth = 500;
+            const maxHeight = 650;
+            let drawWidth = photoImage.width;
+            let drawHeight = photoImage.height;
+            const ratio = Math.min(maxWidth / drawWidth, maxHeight / drawHeight);
+            drawWidth *= ratio;
+            drawHeight *= ratio;
 
-          const photoImage = await embedImage(pdfDoc, photoBytes);
-          const maxWidth = 500;
-          const maxHeight = 650;
-          let drawWidth = photoImage.width;
-          let drawHeight = photoImage.height;
-          const ratio = Math.min(maxWidth / drawWidth, maxHeight / drawHeight);
-          drawWidth *= ratio;
-          drawHeight *= ratio;
+            annexPage.drawImage(photoImage, {
+              x: (595.28 - drawWidth) / 2,
+              y: 841.89 - drawHeight - 120,
+              width: drawWidth,
+              height: drawHeight,
+            });
 
-          annexPage.drawImage(photoImage, {
-            x: (595.28 - drawWidth) / 2,
-            y: 841.89 - drawHeight - 120,
-            width: drawWidth,
-            height: drawHeight,
-          });
-
-          drawFooter(annexPage, pageNumber);
+            drawFooter(annexPage, pageNumber);
+          }
         }
       } catch (error) {
-        console.warn("Could not embed photo annex:", error.message);
+        console.warn(`Could not embed annex ${att.label}:`, error.message);
       }
     }
 

@@ -261,10 +261,23 @@ export async function generateReceiptPDFBase64(
       if (dueMatch && dueMatch[1]) {
         totalDueValue += parseFloat(dueMatch[1]);
       } else {
-        // Sans marqueur TOTAL_DUE explicite, le montant dû correspond au montant réglé
-        const isHTGPay = p.devise === "HTG";
-        const pTaux = p.taux || 1000;
-        totalDueValue += isHTGPay ? (p.montant / pTaux) : p.montant;
+        const remLower = (p.remarque || "").toLowerCase();
+        const catLower = (player.categorie || "").toLowerCase();
+        const isTiToro = remLower.includes("ti toro") || catLower.includes("ti toro") || catLower.includes("u6-u8");
+        const hasAdhesion = remLower.includes("adhésion") || remLower.includes("adhesion");
+        const hasPlan = remLower.includes("mensuel") || remLower.includes("semestriel") || remLower.includes("annuel");
+
+        if (hasAdhesion || hasPlan) {
+          if (remLower.includes("annuel")) {
+            totalDueValue += isTiToro ? 900 : 1215;
+          } else {
+            totalDueValue += isTiToro ? 1000 : 1350;
+          }
+        } else {
+          const isHTGPay = p.devise === "HTG";
+          const pTaux = p.taux || 1000;
+          totalDueValue += isHTGPay ? (p.montant / pTaux) : p.montant;
+        }
       }
     });
   }

@@ -120,18 +120,40 @@ export default function PaymentsPage() {
     const paidInDevise = currentPayment.montant;
     const paidUSD = isHTG ? paidInDevise / tauxConv : paidInDevise;
 
-    // Seul le marqueur [TOTAL_DUE:XXX] génère un solde
+    // 1. Priorité au marqueur [TOTAL_DUE:XXX] s'il est présent
     const totalDueMarker = currentPayment.remarque?.match(/\[TOTAL_DUE:\s*([\d.]+)\s*\]/i);
+    let totalDueUSD = 0;
+
     if (totalDueMarker && totalDueMarker[1]) {
-      const recordedTotalDueUSD = parseFloat(totalDueMarker[1]);
-      if (!isNaN(recordedTotalDueUSD) && recordedTotalDueUSD > 0) {
-        const balanceUSD = Math.max(0, recordedTotalDueUSD - paidUSD);
-        if (balanceUSD <= 0) return zero;
-        if (isHTG) {
-          return { balance: Math.round(balanceUSD * tauxConv), devise: "HTG" };
+      totalDueUSD = parseFloat(totalDueMarker[1]) || 0;
+    }
+
+    // 2. Si pas de marqueur TOTAL_DUE, calculer à partir des informations de la remarque et de la catégorie
+    if (totalDueUSD <= 0) {
+      const remLower = (currentPayment.remarque || "").toLowerCase();
+      const catLower = (player.categorie || "").toLowerCase();
+      const isTiToro = remLower.includes("ti toro") || catLower.includes("ti toro") || catLower.includes("u6-u8");
+
+      // Si le paiement concerne une adhésion ou a un plan mensuel/semestriel/annuel
+      const hasAdhesion = remLower.includes("adhésion") || remLower.includes("adhesion");
+      const hasPlan = remLower.includes("mensuel") || remLower.includes("semestriel") || remLower.includes("annuel");
+
+      if (hasAdhesion || hasPlan) {
+        if (remLower.includes("annuel")) {
+          totalDueUSD = isTiToro ? 900 : 1215;
+        } else {
+          totalDueUSD = isTiToro ? 1000 : 1350;
         }
-        return { balance: balanceUSD, devise: "US" };
       }
+    }
+
+    if (totalDueUSD > 0) {
+      const balanceUSD = Math.max(0, totalDueUSD - paidUSD);
+      if (balanceUSD <= 0) return zero;
+      if (isHTG) {
+        return { balance: Math.round(balanceUSD * tauxConv), devise: "HTG" };
+      }
+      return { balance: balanceUSD, devise: "US" };
     }
 
     return zero;

@@ -243,39 +243,103 @@ export async function generateReceiptPDFBase64(
 
   const finalY = (doc as any).lastAutoTable.finalY || tableStartY;
 
+  // Extraction / Calcul du total dû pour ce reçu
+  let totalDueValue = 0;
+  payments.forEach((p: any) => {
+    const dueMatch = p.remarque?.match(/\[TOTAL_DUE:\s*([\d.]+)\s*\]/i);
+    if (dueMatch && dueMatch[1]) {
+      totalDueValue += parseFloat(dueMatch[1]);
+    } else if (p.remarque) {
+      const match = p.remarque.match(/Rubriques:\s*(.*?)(?:\s*Plan:|\s*\[|$)/i);
+      if (match && match[1]) {
+        const items = match[1].split(',').map((s: string) => s.trim().toLowerCase());
+        items.forEach((item: string) => {
+          if (item.includes("adhesion") || item.includes("adhésion")) {
+            if (item.includes("ti toro")) totalDueValue += 1000;
+            else totalDueValue += 1350;
+          } else if (item.includes("inscription")) totalDueValue += 75;
+          else if (item.includes("maillot") || item.includes("tracksuit") || item.includes("uniforme")) totalDueValue += 100;
+          else if (item.includes("sac") || item.includes("backpack")) totalDueValue += 90;
+        });
+      }
+    }
+  });
+
+  const mainPayment = payments[0] || {};
+  const isHTG = mainPayment.devise === "HTG";
+  const taux = mainPayment.taux || 1000;
+
+  // Libellé du montant total dû
+  const totalDueLabel = totalDueValue > 0 
+    ? (isHTG ? formatClubCurrency(Math.round(totalDueValue * taux), "HTG") : formatClubCurrency(totalDueValue, "US"))
+    : totalPayeLabel;
+
+  // Calcul du solde
+  const paidUSD = isHTG ? totalHTG / taux : totalUSD;
+  const balanceUSD = totalDueValue > 0 ? Math.max(0, totalDueValue - paidUSD) : 0;
+  const balanceLabel = isHTG 
+    ? formatClubCurrency(Math.round(balanceUSD * taux), "HTG")
+    : formatClubCurrency(balanceUSD, "US");
+
+  let yPos = finalY + 10;
+
+  // 1. MONTANT TOTAL DÛ
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10);
   doc.setTextColor(grayMedium[0], grayMedium[1], grayMedium[2]);
-  doc.text("Sous-total", 110, finalY + 10);
-  doc.text(totalPayeLabel, 196, finalY + 10, { align: 'right' });
+  doc.text("Montant total dû :", 110, yPos);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(grayDark[0], grayDark[1], grayDark[2]);
+  doc.text(totalDueLabel, 196, yPos, { align: 'right' });
 
+  // 2. MONTANT DONNÉ (PAYÉ)
+  yPos += 7;
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(grayMedium[0], grayMedium[1], grayMedium[2]);
+  doc.text("Montant versé :", 110, yPos);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(grayDark[0], grayDark[1], grayDark[2]);
+  doc.text(totalPayeLabel, 196, yPos, { align: 'right' });
+
+  // Séparateur
+  yPos += 4;
   doc.setDrawColor(grayLight[0], grayLight[1], grayLight[2]);
   doc.setLineWidth(0.5);
-  doc.line(100, finalY + 15, 196, finalY + 15);
-  
+  doc.line(100, yPos, 196, yPos);
+
+  // 3. SOLDE RESTANT
+  yPos += 7;
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(12);
-  doc.setTextColor(black[0], black[1], black[2]);
-  doc.text("TOTAL PAYÉ", 110, finalY + 22);
-  doc.text(totalPayeLabel, 196, finalY + 22, { align: 'right' });
+  doc.setFontSize(11);
+  if (balanceUSD > 0) {
+    doc.setTextColor(220, 38, 38); // Rouge si solde restant
+    doc.text("SOLDE RESTANT :", 110, yPos);
+    doc.text(balanceLabel, 196, yPos, { align: 'right' });
+  } else {
+    doc.setTextColor(22, 163, 74); // Vert si 0 solde (RÉGLÉ)
+    doc.text("SOLDE RESTANT :", 110, yPos);
+    doc.text(isHTG ? "0 G" : "US$0", 196, yPos, { align: 'right' });
+  }
+
+  const footerY = Math.max(finalY + 15, yPos + 10);
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(9);
   doc.setTextColor(grayDark[0], grayDark[1], grayDark[2]);
-  doc.text("Merci de votre confiance.", 14, finalY + 15);
+  doc.text("Merci de votre confiance.", 14, footerY);
   
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8);
   doc.setTextColor(grayMedium[0], grayMedium[1], grayMedium[2]);
-  doc.text("Ce reçu confirme les paiements pour l'inscription de votre/vos", 14, finalY + 20);
-  doc.text("enfant(s) au sein du FC TORO. Document officiel valide", 14, finalY + 24);
-  doc.text("sans signature physique.", 14, finalY + 28);
+  doc.text("Ce reçu confirme les paiements pour l'inscription de votre/vos", 14, footerY + 5);
+  doc.text("enfant(s) au sein du FC TORO. Document officiel valide", 14, footerY + 9);
+  doc.text("sans signature physique.", 14, footerY + 13);
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(9);
   doc.setTextColor(grayMedium[0], grayMedium[1], grayMedium[2]);
-  doc.text("Signature autorisée", 14, finalY + 45);
-  doc.line(14, finalY + 55, 60, finalY + 55);
+  doc.text("Signature autorisée", 14, footerY + 30);
+  doc.line(14, footerY + 40, 60, footerY + 40);
 
   if (proofImageBase64) {
     try {

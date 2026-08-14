@@ -164,6 +164,7 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
   const [datePaiement, setDatePaiement] = useState(() => new Date().toISOString().split("T")[0]);
   const [selectedPricing, setSelectedPricing] = useState<string[]>([]);
   const [selectedPlan, setSelectedPlan] = useState<string>("");
+  const [nombreDeMois, setNombreDeMois] = useState<number>(1);
   const [reductionType, setReductionType] = useState<PaymentReductionType>("none");
   const [customReductionPercent, setCustomReductionPercent] = useState(0);
   const [paymentPhoto, setPaymentPhoto] = useState<File | null>(null);
@@ -178,6 +179,31 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
     () => players.find((p) => p.id === playerId) ?? null,
     [players, playerId]
   );
+
+  // Cocher automatiquement l'adhésion Ti Toro ou FC Toro lors du choix d'un joueur
+  useEffect(() => {
+    if (!selectedPlayer) return;
+    const cat = (selectedPlayer.categorie || "").toLowerCase();
+    const isTiToro = cat.includes("ti toro") || cat.includes("titoro") || cat.includes("u6-u8");
+    
+    // Trouver l'option d'adhésion correspondante dans adhesionOptions
+    const targetAdhesion = adhesionOptions.find((item) => {
+      const name = (item.rubrique || "").toLowerCase();
+      return isTiToro
+        ? name.includes("ti toro") || item.id === "adhesion-ti"
+        : (name.includes("fc toro") && !name.includes("ti")) || item.id === "adhesion-fc";
+    });
+
+    if (targetAdhesion) {
+      setSelectedPricing((prev) => {
+        // Enlever les autres adhésions et ajouter la bonne
+        const otherPricing = prev.filter(
+          (id) => !adhesionOptions.some((adh) => adh.id === id)
+        );
+        return [...otherPricing, targetAdhesion.id];
+      });
+    }
+  }, [selectedPlayer, adhesionOptions]);
 
   const filteredPlayers = useMemo(() => {
     const query = playerSearch.trim().toLowerCase();
@@ -234,41 +260,33 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
       setToast({ message: "Veuillez remplir le joueur, la période et le montant payé.", type: "error" });
       return;
     }
-    const hasAdhesion = selectedPricingItems.some((item) => item.estAdhesion || item.id === "adhesion-fc" || item.id === "adhesion-ti");
-    if (!hasAdhesion) {
-      setToast({ message: "Veuillez sélectionner une adhésion FC TORO ou TI TORO.", type: "error" });
-      return;
-    }
-    if (!selectedPlan) {
-      setToast({ message: "Veuillez sélectionner un plan de paiement.", type: "error" });
+    if (selectedPricingItems.length === 0) {
+      setToast({ message: "Veuillez sélectionner au moins une rubrique.", type: "error" });
       return;
     }
 
     setIsSubmitting(true);
     try {
-      const plan = paymentPlans.find((item) => item.id === selectedPlan)!;
+      const plan = paymentPlans.find((item) => item.id === selectedPlan);
       const selectedAdhesionItem = selectedPricingItems.find((item) => item.estAdhesion || item.id === "adhesion-fc" || item.id === "adhesion-ti");
       const isTiToro = selectedAdhesionItem ? (selectedAdhesionItem.rubrique.toLowerCase().includes("ti toro") || selectedAdhesionItem.id === "adhesion-ti") : false;
-      const nonAdhesionSum = selectedPricingItems
-        .filter((item) => !item.estAdhesion && item.id !== "adhesion-fc" && item.id !== "adhesion-ti")
-        .reduce((sum, item) => sum + item.montant, 0);
-      const totalDue = (isTiToro ? plan.montantTIToro : plan.montantFCToro) + nonAdhesionSum;
-      const discountedDue = calculateDiscountedAmount(totalDue, reductionType, customReductionPercent);
+
+      // Le montant dû réel choisi/saisi dans le formulaire (converti en USD pour la référence)
+      const totalDueInUSD = devise === "HTG" ? (taux > 0 ? montantDuManuel / taux : 0) : montantDuManuel;
+      const discountedDue = calculateDiscountedAmount(totalDueInUSD, reductionType, customReductionPercent);
       
-      const finalMontantAPayer = devise === "HTG" ? montantDuManuel : montantDuManuel;
-      const paymentAmount = devise === "HTG" ? montantDonne : montantDonne;
+      const finalMontantAPayer = montantDuManuel;
+      const paymentAmount = montantDonne;
       const montantUS = devise === "US" ? paymentAmount : (taux > 0 ? paymentAmount / taux : 0);
       const montantHTG = devise === "HTG" ? paymentAmount : 0;
       const adhesionCode = isTiToro ? "TI_TORO" : "FC_TORO";
-      const selectedAdhesionTitle = selectedAdhesionItem?.rubrique || "Adhésion";
       const selectedRubricsLabel = selectedPricingItems
-        .filter((item) => !item.estAdhesion && item.id !== "adhesion-fc" && item.id !== "adhesion-ti")
         .map((item) => item.rubrique)
         .filter(Boolean).join(", ");
       const reductionMetadata = serializeReductionMetadata(reductionType, customReductionPercent);
-      const paymentMarkers = `[ADHESION:${adhesionCode}] [PLAN:${selectedPlan.toUpperCase()}] [STATUT:${statut.toUpperCase()}]`;
-      const adhesionLabel = isTiToro ? "Adhésion: TI TORO" : "Adhésion: FC TORO";
-      const finalRemarque = `${paymentMarkers} ${reductionMetadata ? `${reductionMetadata} ` : ""}${description.trim()} ${adhesionLabel}${selectedRubricsLabel ? ` | Rubriques: ${selectedRubricsLabel}` : ""} Plan: ${plan.plan}`.trim();
+      const paymentMarkers = `${selectedAdhesionItem ? `[ADHESION:${adhesionCode}] ` : ""}${selectedPlan ? `[PLAN:${selectedPlan.toUpperCase()}] ` : ""}[STATUT:${statut.toUpperCase()}] [TOTAL_DUE:${discountedDue}]`;
+      const adhesionLabel = selectedAdhesionItem ? (isTiToro ? "Adhésion: TI TORO" : "Adhésion: FC TORO") : "";
+      const finalRemarque = `${paymentMarkers} ${reductionMetadata ? `${reductionMetadata} ` : ""}${description.trim()} ${adhesionLabel}${selectedRubricsLabel ? ` | Rubriques: ${selectedRubricsLabel}` : ""}${plan ? ` Plan: ${plan.plan}` : ""}`.trim();
       const uploadPromise = paymentPhoto ? uploadPaymentPhotoToSupabase(paymentPhoto) : Promise.resolve(null);
       const invoiceData = {
         noFacture: `FAC-${Date.now()}`,
@@ -307,7 +325,7 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
           periode,
           methode,
           remarque: finalRemarqueWithPhoto,
-          datePaiement: statut === "paid" ? datePaiement || undefined : undefined,
+          datePaiement: datePaiement || new Date().toISOString().split("T")[0],
         };
 
         const inserted = await addPaymentToSupabase(dataToInsert);
@@ -429,33 +447,44 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
   };
 
   const selectedPlanData = paymentPlans.find((plan) => plan.id === selectedPlan);
-  const isTiToro = selectedAdhesionItem ? (selectedAdhesionItem.rubrique.toLowerCase().includes("ti toro") || selectedAdhesionItem.id === "adhesion-ti") : false;
+  const isTiToro = useMemo(() => {
+    if (selectedAdhesionItem) {
+      const name = selectedAdhesionItem.rubrique.toLowerCase();
+      return name.includes("ti toro") || selectedAdhesionItem.id === "adhesion-ti";
+    }
+    if (selectedPlayer) {
+      const cat = (selectedPlayer.categorie || "").toLowerCase();
+      return cat.includes("ti toro") || cat.includes("titoro") || cat.includes("u6-u8");
+    }
+    return false;
+  }, [selectedAdhesionItem, selectedPlayer]);
 
   const baseTotalDue = useMemo(() => {
-    const nonAdhesionSum = selectedPricingItems
-      .filter((item) => !item.estAdhesion && item.id !== "adhesion-fc" && item.id !== "adhesion-ti")
-      .reduce((sum, item) => sum + item.montant, 0);
-
-    let adhesionAmount = 0;
-    if (selectedPlanData) {
-      adhesionAmount = isTiToro ? selectedPlanData.montantTIToro : selectedPlanData.montantFCToro;
-    } else if (selectedAdhesionItem) {
-      adhesionAmount = selectedAdhesionItem.montant;
-    }
-
-    return adhesionAmount + nonAdhesionSum;
-  }, [selectedPricingItems, selectedPlanData, isTiToro, selectedAdhesionItem]);
+    return selectedPricingItems.reduce((sum, item) => sum + item.montant, 0);
+  }, [selectedPricingItems]);
 
   const discountedDue = useMemo(() => {
     return calculateDiscountedAmount(baseTotalDue, reductionType, customReductionPercent);
   }, [baseTotalDue, reductionType, customReductionPercent]);
 
+  const isBoursier = useMemo(() => {
+    return !!(selectedPlayer && (selectedPlayer.statutJoueur || "").toLowerCase().includes("bourse"));
+  }, [selectedPlayer]);
+
   const computedDue = useMemo(() => {
+    if (isBoursier) {
+      const boursierHTG = nombreDeMois * 2500;
+      if (devise === "HTG") {
+        return boursierHTG;
+      }
+      return taux > 0 ? Number((boursierHTG / taux).toFixed(2)) : 0;
+    }
+
     if (devise === "HTG" && taux > 0) {
       return discountedDue * taux;
     }
     return discountedDue;
-  }, [discountedDue, devise, taux]);
+  }, [isBoursier, nombreDeMois, discountedDue, devise, taux]);
 
   useEffect(() => {
     setMontantDuManuel(computedDue);
@@ -648,105 +677,111 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
               )}
             </div>
 
-            {/* Rubriques */}
-            <div className="md:col-span-2">
-              <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
-                Rubriques
-              </label>
-              <div className="max-h-48 overflow-auto rounded-lg border border-gray-300 bg-white dark:border-gray-700 dark:bg-gray-900">
-                {rubricOptions.map((item) => (
-                  <label
-                    key={item.id}
-                    className="flex cursor-pointer items-start gap-3 border-b border-gray-100 px-4 py-2.5 last:border-b-0 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selectedPricing.includes(item.id)}
-                      onChange={() => handlePricingChange(item.id)}
-                      className="mt-0.5 h-4 w-4 rounded border-gray-300 text-brand-500 focus:ring-brand-500"
-                    />
-                    <div className="flex-1">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium text-gray-800 dark:text-white/90">
-                          {item.rubrique}
-                        </span>
-                        <span className="text-sm font-semibold text-brand-600 dark:text-brand-400">
-                          ${item.montant}
-                        </span>
-                      </div>
-                      <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
-                        {item.precision}
-                      </p>
-                    </div>
-                  </label>
-                ))}
-              </div>
-              <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                Choisissez une adhésion FC/TI et autant d’autres rubriques que nécessaire.
-              </p>
-              {selectedPricingItems.length > 0 && (
-                <div className="mt-2 rounded-lg bg-brand-50 px-3 py-2 dark:bg-brand-500/10">
-                  <p className="text-sm font-medium text-brand-900 dark:text-brand-100">
-                    Sélection: {selectedPricingItems.map((item) => item.rubrique).join(", ")}
-                  </p>
-                </div>
-              )}
-            </div>
-
-            {/* Montant dû, montant versé et balance */}
-            <div>
-              <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
-                Montant dû
-              </label>
-              <input
-                type="number"
-                min={0}
-                step="0.01"
-                value={montantDuManuel || ""}
-                onChange={(event) => setMontantDuManuel(Number(event.target.value))}
-                className={inputClassName}
-              />
-            </div>
-            <div>
-              <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">Montant donné</label>
-              <input type="number" min={0} step="0.01" value={montantDonne || ""} onChange={(event) => setMontantDonne(Number(event.target.value))} className={inputClassName} />
-            </div>
-            <div>
-              <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">Montant restant</label>
-              <input type="number" value={remainingAmount} className={inputClassName} readOnly />
-            </div>
-            <div>
-              <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
-                Devise
-              </label>
-              <select
-                value={devise}
-                onChange={(event) => setDevise(event.target.value as "US" | "HTG")}
-                className={selectClassName}
-              >
-                <option value="US">Dollar US ($)</option>
-                <option value="HTG">Gourde HTG (G)</option>
-              </select>
-            </div>
-
-            {devise === "HTG" && (
-              <div>
+            {/* Rubriques (Masquées pour les boursiers car tarif unique 2500 HTG/mois) */}
+            {!(selectedPlayer && (selectedPlayer.statutJoueur || "").toLowerCase().includes("bourse")) && (
+              <div className="md:col-span-2">
                 <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
-                  Taux de change
+                  Rubriques
                 </label>
-                <input
-                  type="number"
-                  min={0}
-                  step="0.01"
-                  value={taux || ""}
-                  onChange={(event) => setTaux(Number(event.target.value))}
-                  className={inputClassName}
-                />
+                <div className="max-h-48 overflow-auto rounded-lg border border-gray-300 bg-white dark:border-gray-700 dark:bg-gray-900">
+                  {rubricOptions.map((item) => (
+                    <label
+                      key={item.id}
+                      className="flex cursor-pointer items-start gap-3 border-b border-gray-100 px-4 py-2.5 last:border-b-0 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedPricing.includes(item.id)}
+                        onChange={() => handlePricingChange(item.id)}
+                        className="mt-0.5 h-4 w-4 rounded border-gray-300 text-brand-500 focus:ring-brand-500"
+                      />
+                      <div className="flex-1">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium text-gray-800 dark:text-white/90">
+                            {item.rubrique}
+                          </span>
+                          <span className="text-sm font-semibold text-brand-600 dark:text-brand-400">
+                            ${item.montant}
+                          </span>
+                        </div>
+                        <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                          {item.precision}
+                        </p>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+                <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                  Sélectionnez la ou les rubriques souhaitées pour calculer le montant total.
+                </p>
+                {selectedPricingItems.length > 0 && (
+                  <div className="mt-2 rounded-lg bg-brand-50 px-3 py-2 dark:bg-brand-500/10">
+                    <p className="text-sm font-medium text-brand-900 dark:text-brand-100">
+                      Sélection: {selectedPricingItems.map((item) => item.rubrique).join(", ")}
+                    </p>
+                  </div>
+                )}
               </div>
             )}
 
+            {/* Montant dû, montant versé et balance (Masqués si Joueur Boursier) */}
+            {!isBoursier && (
+              <>
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
+                    Montant dû
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    value={montantDuManuel || ""}
+                    onChange={(event) => setMontantDuManuel(Number(event.target.value))}
+                    className={inputClassName}
+                  />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">Montant donné</label>
+                  <input type="number" min={0} step="0.01" value={montantDonne || ""} onChange={(event) => setMontantDonne(Number(event.target.value))} className={inputClassName} />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">Montant restant</label>
+                  <input type="number" value={remainingAmount} className={inputClassName} readOnly />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
+                    Devise
+                  </label>
+                  <select
+                    value={devise}
+                    onChange={(event) => setDevise(event.target.value as "US" | "HTG")}
+                    className={selectClassName}
+                  >
+                    <option value="US">Dollar US ($)</option>
+                    <option value="HTG">Gourde HTG (G)</option>
+                  </select>
+                </div>
+
+                {devise === "HTG" && (
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
+                      Taux de change
+                    </label>
+                    <input
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      value={taux || ""}
+                      onChange={(event) => setTaux(Number(event.target.value))}
+                      className={inputClassName}
+                    />
+                  </div>
+                )}
+              </>
+            )}
+
             {/* Description */}
-            <div className={devise === "HTG" ? "" : "md:col-span-2"}>
+            <div className={!isBoursier && devise === "HTG" ? "" : "md:col-span-2"}>
               <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
                 Description
               </label>
@@ -784,24 +819,109 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
               </select>
             </div>
 
-            {/* Plan de paiement & Methode */}
-            <div>
-              <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
-                Plan de paiement
-              </label>
-              <select
-                value={selectedPlan}
-                onChange={(event) => handlePlanChange(event.target.value)}
-                className={selectClassName}
-              >
-                <option value="">Sélectionner un plan</option>
-                {paymentPlans.map((plan) => (
-                  <option key={plan.id} value={plan.id}>
-                    {plan.plan} - {plan.avantage}
-                  </option>
-                ))}
-              </select>
-            </div>
+            {/* Plan de paiement ou Tarif Boursier Spécial */}
+            {isBoursier ? (
+              <div className="md:col-span-2 rounded-xl border border-emerald-300 bg-emerald-50/80 p-4 shadow-sm dark:border-emerald-500/30 dark:bg-emerald-950/30">
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="flex h-3 w-3 rounded-full bg-emerald-500"></span>
+                  <h4 className="text-sm font-bold text-emerald-950 dark:text-emerald-200 uppercase tracking-wide">
+                    Tarif Boursier (2,500 HTG / mois)
+                  </h4>
+                </div>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <div>
+                    <label className="mb-1.5 block text-xs font-semibold text-emerald-800 dark:text-emerald-300">
+                      Mensualité Boursier
+                    </label>
+                    <input
+                      type="text"
+                      readOnly
+                      value="2,500 HTG / mois"
+                      className="h-10 w-full rounded-lg border border-emerald-300 bg-white px-3 text-sm font-bold text-emerald-950 shadow-sm dark:border-emerald-700 dark:bg-gray-800 dark:text-emerald-200"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-xs font-semibold text-emerald-800 dark:text-emerald-300">
+                      Nombre de mois payés
+                    </label>
+                    <select
+                      value={nombreDeMois}
+                      onChange={(e) => setNombreDeMois(Number(e.target.value))}
+                      className="h-10 w-full rounded-lg border border-emerald-300 bg-white px-3 text-sm font-bold text-emerald-950 shadow-sm dark:border-emerald-700 dark:bg-gray-800 dark:text-emerald-200 focus:ring-2 focus:ring-emerald-500"
+                    >
+                      {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((m) => {
+                        const totalBoursierHTG = m * 2500;
+                        return (
+                          <option key={m} value={m}>
+                            {m} mois ({totalBoursierHTG.toLocaleString()} HTG)
+                          </option>
+                        );
+                      })}
+                    </select>
+                  </div>
+                </div>
+                <div className="mt-3 rounded-lg bg-emerald-100/70 p-2.5 dark:bg-emerald-900/40">
+                  <p className="text-xs font-semibold text-emerald-900 dark:text-emerald-200">
+                    💡 Total Boursier dû :{" "}
+                    <span className="text-sm font-bold text-emerald-950 dark:text-emerald-100">
+                      {(nombreDeMois * 2500).toLocaleString()} HTG
+                    </span>
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
+                  Plan de paiement
+                </label>
+                <select
+                  value={selectedPlan}
+                  onChange={(event) => handlePlanChange(event.target.value)}
+                  className={selectClassName}
+                >
+                  <option value="">Sélectionner un plan</option>
+                  {paymentPlans.map((plan) => (
+                    <option key={plan.id} value={plan.id}>
+                      {plan.plan} - {plan.avantage}
+                    </option>
+                  ))}
+                </select>
+
+                {selectedPlan === "mensuel" && (
+                  <div className="mt-3">
+                    <label className="mb-1.5 block text-xs font-semibold text-gray-700 dark:text-gray-300">
+                      Nombre de mois réglés
+                    </label>
+                    <select
+                      value={nombreDeMois}
+                      onChange={(e) => setNombreDeMois(Number(e.target.value))}
+                      className={selectClassName}
+                    >
+                      {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((m) => (
+                        <option key={m} value={m}>
+                          {m} mois ({m} × ${isTiToro ? 115 : 155} = ${m * (isTiToro ? 115 : 155)})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {selectedPlanData && (
+                  <div className="mt-2 rounded-lg border border-blue-100 bg-blue-50/50 p-2.5 dark:border-blue-900/30 dark:bg-blue-900/10">
+                    <p className="text-xs font-semibold text-blue-900 dark:text-blue-200">
+                      {selectedPlanData.plan} : {selectedPlanData.modalites}
+                    </p>
+                    <p className="mt-0.5 text-xs font-bold text-blue-700 dark:text-blue-300">
+                      {selectedPlan === "mensuel" ? (
+                        <>Montant pour {nombreDeMois} mois : ${nombreDeMois * (isTiToro ? selectedPlanData.montantTIToro : selectedPlanData.montantFCToro)}</>
+                      ) : (
+                        <>Tarif par versement: ${isTiToro ? selectedPlanData.montantTIToro : selectedPlanData.montantFCToro} ({selectedPlanData.avantage})</>
+                      )}
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
             <div>
               <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
                 Méthode de paiement
@@ -819,21 +939,23 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
               </select>
             </div>
 
-            <div>
-              <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
-                Réduction
-              </label>
-              <select
-                value={reductionType}
-                onChange={(event) => setReductionType(event.target.value as PaymentReductionType)}
-                className={selectClassName}
-              >
-                <option value="none">Aucune réduction</option>
-                <option value="full">Bourse 100%</option>
-                <option value="half">Demi-bourse 50%</option>
-                <option value="custom">Spécial</option>
-              </select>
-            </div>
+            {!isBoursier && (
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
+                  Réduction
+                </label>
+                <select
+                  value={reductionType}
+                  onChange={(event) => setReductionType(event.target.value as PaymentReductionType)}
+                  className={selectClassName}
+                >
+                  <option value="none">Aucune réduction</option>
+                  <option value="full">Bourse 100%</option>
+                  <option value="half">Demi-bourse 50%</option>
+                  <option value="custom">Spécial</option>
+                </select>
+              </div>
+            )}
             {reductionType === "custom" && (
               <div>
                 <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">

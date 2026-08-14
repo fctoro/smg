@@ -101,9 +101,11 @@ export default function PaymentsPage() {
     [players],
   );
 
-  const calculateBalance = (currentPayment: (typeof payments)[number]): number => {
+  // Retourne { balance: number, devise: string } — balance dans la devise du paiement
+  const calculateBalance = (currentPayment: (typeof payments)[number]): { balance: number; devise: string } => {
+    const zero = { balance: 0, devise: currentPayment.devise || "US" };
     const player = playerMap.get(currentPayment.playerId);
-    if (!player) return 0;
+    if (!player) return zero;
 
     const normalizeText = (value?: string) => (value || "")
       .normalize("NFD")
@@ -111,99 +113,52 @@ export default function PaymentsPage() {
       .toLowerCase()
       .replace(/\s+/g, " ")
       .trim();
-    const categorieLower = normalizeText(player.categorie);
-    const defaultAdhesion = categorieLower.includes("ti toro") ||
-      categorieLower.includes("titoro") ||
-      categorieLower.includes("u6-u8")
-      ? "ti toro"
-      : "fc toro";
 
-    const getPlanId = (remark?: string) => {
-      const normalized = normalizeText(remark);
-      const marker = normalized.match(/\[plan\s*:\s*(annuel|semestriel|mensuel)\]/);
-      const legacy = normalized.match(/plan\s*:\s*(annuel|semestriel|mensuel)/);
-      return (marker?.[1] || legacy?.[1]);
-    };
-    const getAdhesionId = (remark?: string) => {
-      const normalized = normalizeText(remark);
-      const marker = normalized.match(/\[adhesion\s*:\s*(fc_toro|ti_toro)\]/);
-      const legacy = normalized.match(/adhesion\s*:\s*(fc toro|ti toro)/);
-      return marker?.[1]?.replace("_", " ") || legacy?.[1] || defaultAdhesion;
-    };
-    const selectedPlanId = getPlanId(currentPayment.remarque);
-    const selectedAdhesionId = getAdhesionId(currentPayment.remarque);
-    const selectedPlan = paymentPlans.find(
-      (plan) => normalizeText(plan.plan) === selectedPlanId,
-    );
-    const reductionState = parseReductionFromRemark(currentPayment.remarque);
+    const isHTG = currentPayment.devise === "HTG";
+    const tauxConv = currentPayment.taux || 1000;
 
-    if (!selectedPlan || currentPayment.statut !== "paid") return 0;
+    // Montant payé dans la devise originale
+    const paidInDevise = currentPayment.montant;
+    // Montant payé converti en USD (pour comparer avec les totaux USD)
+    const paidUSD = isHTG ? paidInDevise / tauxConv : paidInDevise;
 
-    // Calculate total amount due based on category
-    let totalDue = 0;
-    if (selectedPlanId === "annuel") {
-      totalDue = selectedAdhesionId === "ti toro"
-        ? selectedPlan.montantTIToro
-        : selectedPlan.montantFCToro;
-    } else {
-      // For Mensuel and Semestriel, the global debt is based on the base adhesion amount (1350/1000)
-      totalDue = selectedAdhesionId === "ti toro" ? 1000 : 1350;
+    // --- Cas 1 : marqueur [TOTAL_DUE:XXX] enregistré à la création (en USD) ---
+    const totalDueMarker = currentPayment.remarque?.match(/\[TOTAL_DUE:\s*([\d.]+)\s*\]/i);
+    if (totalDueMarker && totalDueMarker[1]) {
+      const recordedTotalDueUSD = parseFloat(totalDueMarker[1]);
+      if (!isNaN(recordedTotalDueUSD) && recordedTotalDueUSD > 0) {
+        const balanceUSD = Math.max(0, recordedTotalDueUSD - paidUSD);
+        if (balanceUSD <= 0) return zero;
+        // Convertir dans la devise du paiement
+        if (isHTG) {
+          return { balance: Math.round(balanceUSD * tauxConv), devise: "HTG" };
+        }
+        return { balance: balanceUSD, devise: "US" };
+      }
     }
 
-    // Extract non-adhesion rubriques cost from payment remarks
-    const extractExtraCost = (remark?: string) => {
-      if (!remark) return 0;
-      const match = remark.match(/Rubriques:\s*(.*?)(?=\s*Plan:|$)/i);
-      if (!match) return 0;
-      const items = match[1].split(',').map(s => s.trim().toLowerCase());
-      let sum = 0;
+    // --- Cas 2 : calcul de secours depuis les rubriques listées dans la remarque ---
+    const normalize = (s?: string) =>
+      (s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
+
+    let rubriquesCostUSD = 0;
+    const matchRubriques = currentPayment.remarque?.match(/Rubriques:\s*(.*?)(?:\s*Plan:|\s*\[|$)/i);
+    if (matchRubriques && matchRubriques[1]?.trim()) {
+      const items = matchRubriques[1].split(',').map(s => normalize(s)).filter(Boolean);
       for (const item of items) {
-        if (!item) continue;
-        const found = (rubriques || []).find(r => (r.rubrique || "").toLowerCase().trim() === item);
-        if (found) {
-          sum += found.montant;
-        } else {
-          // Fallback if not found in db
-          if (item.includes("inscription")) sum += 75;
-          else if (item.includes("maillot") || item.includes("tracksuit") || item.includes("uniforme")) sum += 100;
-          else if (item.includes("sac") || item.includes("backpack")) sum += 90;
-        }
+        const found = (rubriques || []).find(r => normalize(r.rubrique) === item);
+        if (found && found.montant > 0) rubriquesCostUSD += found.montant;
       }
-      return sum;
-    };
+    }
 
-    const extraRubriquesCost = payments
-      .filter((p) =>
-        p.playerId === currentPayment.playerId &&
-        p.statut === "paid" &&
-        getPlanId(p.remarque) === selectedPlanId &&
-        getAdhesionId(p.remarque) === selectedAdhesionId
-      )
-      .reduce((sum, p) => sum + extractExtraCost(p.remarque), 0);
+    if (rubriquesCostUSD > 0) {
+      const balanceUSD = Math.max(0, rubriquesCostUSD - paidUSD);
+      if (balanceUSD <= 0) return zero;
+      if (isHTG) return { balance: Math.round(balanceUSD * tauxConv), devise: "HTG" };
+      return { balance: balanceUSD, devise: "US" };
+    }
 
-    totalDue += extraRubriquesCost;
-    
-    const discountedDue = calculateDiscountedAmount(totalDue, reductionState.reductionType, reductionState.customPercent);
-
-    // Calculate total paid for the PLAN only (not all payments)
-    const totalPaidUSD = payments
-      .filter((payment) =>
-        payment.playerId === currentPayment.playerId &&
-        payment.statut === "paid" &&
-        getPlanId(payment.remarque) === selectedPlanId &&
-        getAdhesionId(payment.remarque) === selectedAdhesionId,
-      )
-      .reduce((sum, p) => {
-        if (p.devise === "HTG") {
-          const taux = p.taux || 1000;
-          return sum + (p.montant / taux);
-        } else {
-          return sum + p.montant;
-        }
-      }, 0);
-
-    // Return balance in USD (positive = owes, negative = overpaid)
-    return Math.max(0, discountedDue - totalPaidUSD);
+    return zero;
   };
 
   const hasPaymentPlan = (remark?: string) =>
@@ -422,7 +377,10 @@ export default function PaymentsPage() {
       .sort((a, b) => {
         const dateA = new Date(a.datePaiement || 0).getTime();
         const dateB = new Date(b.datePaiement || 0).getTime();
-        return dateB - dateA;
+        if (dateB !== dateA) return dateB - dateA;
+        const idA = parseInt(String(a.id).replace(/\D/g, ""), 10) || 0;
+        const idB = parseInt(String(b.id).replace(/\D/g, ""), 10) || 0;
+        return idB - idA;
       });
   }, [payments, playerMap, searchQuery, deviseFilter, selectedSeason]);
 
@@ -823,17 +781,9 @@ export default function PaymentsPage() {
                         {formatClubCurrency(payment.montant, payment.devise)}
                       </TableCell>
                       <TableCell className="py-3 text-theme-sm">
-                        {balance > 0 && payment.statut === "paid" ? (
+                        {balance.balance > 0 ? (
                           <span className="font-medium text-error-600 dark:text-error-400">
-                            {formatClubCurrency(balance, "US")} à payer
-                          </span>
-                        ) : balance < 0 ? (
-                          <span className="font-medium text-success-600 dark:text-success-400">
-                            {formatClubCurrency(Math.abs(balance), payment.devise)} en trop
-                          </span>
-                        ) : !hasPaymentPlan(payment.remarque) ? (
-                          <span className="text-warning-600 dark:text-warning-400">
-                            Plan manquant
+                            {formatClubCurrency(balance.balance, balance.devise)} à payer
                           </span>
                         ) : (
                           <span className="text-gray-400">-</span>
@@ -902,7 +852,7 @@ export default function PaymentsPage() {
                             <TrashBinIcon className="size-5" />
                           </button>
 
-                          {balance > 0 && payment.statut === "paid" && (
+                          {balance.balance > 0 && (
                             <button
                               type="button"
                               onClick={() => openEditModal(payment)}
@@ -913,7 +863,7 @@ export default function PaymentsPage() {
                             </button>
                           )}
                         </div>
-                        {balance < 0 && (
+                        {balance.balance < 0 && (
                           <span className="text-xs text-gray-500 mt-1 block">
                             Payé en trop
                           </span>
@@ -962,7 +912,10 @@ export default function PaymentsPage() {
               <div>
                 <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">Montant à régler</label>
                 <p className="rounded-lg bg-gray-100 px-3 py-2 text-sm text-gray-700 dark:bg-gray-800 dark:text-gray-300">
-                  {formatClubCurrency(calculateBalance(editingPayment), "US")}
+                  {(() => {
+                    const b = calculateBalance(editingPayment);
+                    return formatClubCurrency(b.balance, b.devise);
+                  })()}
                 </p>
               </div>
               <div>

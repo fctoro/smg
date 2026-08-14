@@ -260,17 +260,34 @@ export async function generateReceiptPDFBase64(
       const dueMatch = p.remarque?.match(/\[TOTAL_DUE:\s*([\d.]+)\s*\]/i);
       if (dueMatch && dueMatch[1]) {
         totalDueValue += parseFloat(dueMatch[1]);
-      } else if (p.remarque) {
-        const match = p.remarque.match(/Rubriques:\s*(.*?)(?:\s*Plan:|\s*\[|$)/i);
+      } else {
+        const remLower = (p.remarque || "").toLowerCase();
+        const catLower = (player.categorie || "").toLowerCase();
+        const isTiToro = remLower.includes("ti toro") || catLower.includes("ti toro") || catLower.includes("u6-u8");
+        
+        if (remLower.includes("adhésion") || remLower.includes("adhesion")) {
+          if (remLower.includes("annuel")) {
+            totalDueValue += isTiToro ? 900 : 1215;
+          } else {
+            totalDueValue += isTiToro ? 1000 : 1350;
+          }
+        } else {
+          // Si rien d'explicite, déduire 1350 (FC TORO) ou 1000 (TI TORO) par défaut si un plan mensuel/semestriel est présent
+          if (remLower.includes("mensuel") || remLower.includes("semestriel")) {
+            totalDueValue += isTiToro ? 1000 : 1350;
+          }
+        }
+
+        // Ajouter les rubriques complémentaires
+        const match = p.remarque?.match(/Rubriques:\s*(.*?)(?:\s*Plan:|\s*\[|$)/i);
         if (match && match[1]) {
           const items = match[1].split(',').map((s: string) => s.trim().toLowerCase());
           items.forEach((item: string) => {
-            if (item.includes("adhesion") || item.includes("adhésion")) {
-              if (item.includes("ti toro")) totalDueValue += 1000;
-              else totalDueValue += 1350;
-            } else if (item.includes("inscription")) totalDueValue += 75;
-            else if (item.includes("maillot") || item.includes("tracksuit") || item.includes("uniforme")) totalDueValue += 100;
-            else if (item.includes("sac") || item.includes("backpack")) totalDueValue += 90;
+            if (!item.includes("adhesion") && !item.includes("adhésion")) {
+              if (item.includes("inscription")) totalDueValue += 75;
+              else if (item.includes("maillot") || item.includes("tracksuit") || item.includes("uniforme")) totalDueValue += 100;
+              else if (item.includes("sac") || item.includes("backpack")) totalDueValue += 90;
+            }
           });
         }
       }

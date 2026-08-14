@@ -154,7 +154,7 @@ export default function PaymentsPage() {
     const isTiToro = remarkLower.includes("ti toro") || catLower.includes("ti toro") || catLower.includes("u6-u8");
     const hasAdhesionInRemark = remarkLower.includes("adhésion") || remarkLower.includes("adhesion");
 
-    if (hasAdhesionInRemark) {
+    if (hasAdhesionInRemark || remarkLower.includes("mensuel") || remarkLower.includes("semestriel")) {
       if (remarkLower.includes("annuel")) {
         totalEstimatedDueUSD += isTiToro ? 900 : 1215;
       } else {

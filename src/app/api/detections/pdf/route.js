@@ -52,7 +52,7 @@ async function embedImage(pdfDoc, bytes) {
     return pdfDoc.embedPng(bytes);
   }
   
-  return pdfDoc.embedPng(bytes); // default fallback
+  return pdfDoc.embedPng(bytes);
 }
 
 export async function GET(request) {
@@ -71,17 +71,67 @@ export async function GET(request) {
       return NextResponse.json({ error: "ID manquant." }, { status: 400 });
     }
 
-    const { data: msgRows, error: msgErr } = await supabase
-      .from("site_messages")
-      .select("payload, created_at")
-      .eq("id", id);
+    const numericId = id.replace("det_", "");
+    let metadata = null;
 
-    if (msgErr || !msgRows || msgRows.length === 0) {
-      return NextResponse.json({ error: "Message non trouve." }, { status: 404 });
+    // 1. Fetch directly from detection_registrations
+    if (numericId && !isNaN(Number(numericId))) {
+      const { data: detRegRow } = await supabase
+        .from("detection_registrations")
+        .select("*")
+        .eq("id", Number(numericId))
+        .maybeSingle();
+
+      if (detRegRow) {
+        const childFullName = `${detRegRow.prenom || ''} ${detRegRow.nom || ''}`.trim();
+        metadata = {
+          id: detRegRow.id,
+          nom: detRegRow.nom,
+          prenom: detRegRow.prenom,
+          enfant_nom: childFullName,
+          sexe: detRegRow.sexe,
+          date_naissance: detRegRow.date_naissance,
+          lieu_naissance: detRegRow.lieu_naissance,
+          telephone: detRegRow.telephone,
+          email: detRegRow.email,
+          zone_residence: detRegRow.zone_residence,
+          pied_dominant: detRegRow.pied_dominant,
+          club_actuel: detRegRow.club_actuel,
+          niveau_actuel: detRegRow.niveau_actuel,
+          experience_competitive: detRegRow.experience_competitive,
+          comment_identifie: detRegRow.comment_identifie,
+          parent_nom: detRegRow.parent_nom,
+          parent_lien: detRegRow.parent_lien,
+          parent_telephone: detRegRow.parent_telephone,
+          parent_email: detRegRow.parent_email,
+          urgence_nom: detRegRow.urgence_nom,
+          urgence_telephone: detRegRow.urgence_telephone,
+          photo_recente_url: detRegRow.photo_recente_url,
+          document_photo_id_url: detRegRow.document_photo_id_url,
+          fiche_9e_url: detRegRow.fiche_9e_url,
+          carnet_vaccination_url: detRegRow.carnet_vaccination_url,
+          acte_naissance_url: detRegRow.acte_naissance_url,
+          piece_identite_parent_url: detRegRow.piece_identite_parent_url,
+          numero_detection: detRegRow.numero_detection,
+        };
+      }
     }
 
-    const msg = msgRows[0];
-    const metadata = msg.payload || {};
+    // 2. Fallback to site_messages
+    if (!metadata) {
+      const { data: msgRows } = await supabase
+        .from("site_messages")
+        .select("payload, created_at")
+        .eq("id", id);
+
+      if (msgRows && msgRows.length > 0) {
+        metadata = msgRows[0].payload || {};
+      }
+    }
+
+    if (!metadata) {
+      return NextResponse.json({ error: "Détection non trouvée." }, { status: 404 });
+    }
 
     const pdfDoc = await PDFDocument.create();
     pdfDoc.registerFontkit(fontkit);
@@ -118,92 +168,45 @@ export async function GET(request) {
 
     page.drawText("FC TORO - DÉTECTION", {
       x: 105,
-      y: height - 55,
-      size: 20,
+      y: height - 65,
+      size: 18,
       font: timesBoldFont,
       color: rgb(0.1, 0.1, 0.3),
     });
 
-    page.drawText("FICHE DE CANDIDATURE", {
+    page.drawText("FICHE DE CANDIDATURE DÉTECTION", {
       x: 105,
-      y: height - 75,
-      size: 12,
+      y: height - 85,
+      size: 11,
       font: timesBoldFont,
-      color: rgb(0.4, 0.4, 0.4),
+      color: rgb(0.8, 0.1, 0.1),
     });
 
-    page.drawText("7, Rue Rigaud Pétion-Ville, Haïti | footballclubtoro@gmail.com", {
-      x: 105,
-      y: height - 90,
-      size: 9,
-      font: timesRomanFont,
-      color: rgb(0.5, 0.5, 0.5),
-    });
-
-    // Draw Photo if exists
-    if (metadata.photo_recente_url) {
-      try {
-        const photoBytes = await resolvePhotoBytes(metadata.photo_recente_url);
-        if (photoBytes) {
-          const photoOffsetY = 40;
-          const photoImage = await embedImage(pdfDoc, photoBytes);
-
-          page.drawRectangle({
-            x: width - 152,
-            y: height - 212 - photoOffsetY,
-            width: 104,
-            height: 124,
-            borderColor: rgb(0.8, 0.8, 0.8),
-            borderWidth: 1,
-          });
-
-          page.drawImage(photoImage, {
-            x: width - 150,
-            y: height - 210 - photoOffsetY,
-            width: 100,
-            height: 120,
-          });
-        }
-      } catch (error) {
-        console.warn("Photo error:", error.message);
-      }
+    if (metadata.numero_detection) {
+      page.drawText(`N° ${metadata.numero_detection}`, {
+        x: width - 150,
+        y: height - 65,
+        size: 12,
+        font: timesBoldFont,
+        color: rgb(0.1, 0.1, 0.3),
+      });
     }
 
-    let currentY = height - 140;
-
-    const drawFooter = (targetPage, pageNumber) => {
-      targetPage.drawText(
-        `Document généré le ${new Date().toLocaleDateString("fr-FR")} - Page ${pageNumber}`,
-        {
-          x: 40,
-          y: 30,
-          size: 8,
-          font: timesRomanFont,
-          color: rgb(0.6, 0.6, 0.6),
-        },
-      );
-    };
-    drawFooter(page, 1);
+    let currentY = height - 130;
 
     const drawSectionHeader = (title) => {
-      if (currentY < 100) {
-        page = pdfDoc.addPage([595.28, 841.89]);
-        currentY = 800;
-        drawFooter(page, pdfDoc.getPageCount());
-      }
-
       page.drawRectangle({
         x: 40,
         y: currentY - 5,
-        width: width - 200,
-        height: 18,
-        color: rgb(0.95, 0.95, 0.98),
+        width: width - 80,
+        height: 20,
+        color: rgb(0.95, 0.95, 0.95),
       });
 
       page.drawText(title, {
-        x: 45,
+        x: 48,
         y: currentY,
-        size: 11,
+        size: 10,
         font: timesBoldFont,
         color: rgb(0.1, 0.1, 0.3),
       });
@@ -212,53 +215,6 @@ export async function GET(request) {
     };
 
     const drawFields = (fields) => {
-      fields.forEach(([label, value]) => {
-        if (currentY < 60) {
-          page = pdfDoc.addPage([595.28, 841.89]);
-          currentY = 800;
-          drawFooter(page, pdfDoc.getPageCount());
-        }
-
-        page.drawText(label, {
-          x: 50,
-          y: currentY,
-          size: 9,
-          font: timesBoldFont,
-          color: rgb(0.3, 0.3, 0.3),
-        });
-        
-        let textVal = String(value || "").trim();
-        if (!textVal || textVal === "undefined" || textVal === "null") textVal = "(Champ laissé vide)";
-
-        // Handle multiline text for experience
-        if (textVal.length > 70) {
-          const words = textVal.split(" ");
-          let currentLine = "";
-          const lines = [];
-          
-          words.forEach((word) => {
-            if ((currentLine + word).length > 70) {
-              lines.push(currentLine);
-              currentLine = word + " ";
-            } else {
-              currentLine += word + " ";
-            }
-          });
-          if (currentLine) lines.push(currentLine);
-
-          lines.forEach(line => {
-            page.drawText(line.trim(), {
-              x: 180,
-              y: currentY,
-              size: 10,
-              font: timesRomanFont,
-              color: textVal === "(Champ laissé vide)" ? rgb(0.8, 0.1, 0.1) : rgb(0, 0, 0),
-            });
-            currentY -= 14;
-          });
-        } else {
-          page.drawText(textVal, {
-            x: 180,
       const colWidth = (width - 100) / 2;
       for (let i = 0; i < fields.length; i += 2) {
         const field1 = fields[i];

@@ -97,7 +97,7 @@ export default function BoiteDeReception() {
     setDownloadTarget(msg);
     setIsLoadingDocs(true);
     try {
-      const docs = await fetchDocumentsForMessage(msg.id, msg.contact_email);
+      const docs = await fetchDocumentsForMessage(msg.id, msg.contact_email, msg);
       setDownloadDocs(docs || []);
     } catch (e) {
       console.error(e);

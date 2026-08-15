@@ -306,26 +306,59 @@ export const deleteMessage = async (id: string, metadata?: any) => {
   }
 };
 
-export const fetchDocumentsForMessage = async (id: string, email: string) => {
+export const fetchDocumentsForMessage = async (id: string, email: string, msg?: any) => {
+  const isDetection = id.startsWith('det_') || msg?.type_message === 'detection' || msg?.metadata?.source_table === 'detection_registrations';
+
   // Handle detection_registrations documents directly from URLs
-  if (id.startsWith('det_')) {
-    const numericId = id.replace('det_', '');
-    const { data: detRow } = await supabase
-      .from('detection_registrations')
-      .select('photo_recente_url, fiche_9e_url, carnet_vaccination_url, acte_naissance_url, piece_identite_parent_url, document_photo_id_url')
-      .eq('id', numericId)
-      .single();
-    
-    if (!detRow) return [];
-    
+  if (isDetection) {
+    const rawId = id.replace('det_', '');
+    let detRow: any = null;
+
+    if (rawId && !isNaN(Number(rawId))) {
+      const { data: rowByNumeric } = await supabase
+        .from('detection_registrations')
+        .select('photo_recente_url, fiche_9e_url, carnet_vaccination_url, acte_naissance_url, piece_identite_parent_url, document_photo_id_url')
+        .eq('id', Number(rawId))
+        .maybeSingle();
+      detRow = rowByNumeric;
+    }
+
+    if (!detRow && msg?.metadata?.raw_db_id) {
+      const { data: rowByRaw } = await supabase
+        .from('detection_registrations')
+        .select('photo_recente_url, fiche_9e_url, carnet_vaccination_url, acte_naissance_url, piece_identite_parent_url, document_photo_id_url')
+        .eq('id', msg.metadata.raw_db_id)
+        .maybeSingle();
+      detRow = rowByRaw;
+    }
+
+    if (!detRow && email) {
+      const { data: rowByEmail } = await supabase
+        .from('detection_registrations')
+        .select('photo_recente_url, fiche_9e_url, carnet_vaccination_url, acte_naissance_url, piece_identite_parent_url, document_photo_id_url')
+        .or(`email.eq.${email},parent_email.eq.${email}`)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      detRow = rowByEmail;
+    }
+
+    const meta = msg?.metadata || {};
+    const photoUrl = detRow?.photo_recente_url || meta.photo_recente_url || meta.photo_url || meta.photo_id_url;
+    const docPhotoIdUrl = detRow?.document_photo_id_url || meta.document_photo_id_url;
+    const fiche9eUrl = detRow?.fiche_9e_url || meta.fiche_9e_url || meta.fiche_9e;
+    const carnetVaccinationUrl = detRow?.carnet_vaccination_url || meta.carnet_vaccination_url || meta.carnet_vaccination;
+    const acteNaissanceUrl = detRow?.acte_naissance_url || meta.acte_naissance_url || meta.acte_naissance;
+    const pieceIdentiteParentUrl = detRow?.piece_identite_parent_url || meta.piece_identite_parent_url || meta.piece_identite_parent;
+
     const docs: any[] = [];
-    const docMap: Record<string, string> = {
-      'photo_recente': detRow.photo_recente_url,
-      'document_photo_id': detRow.document_photo_id_url,
-      'fiche_9e': detRow.fiche_9e_url,
-      'carnet_vaccination': detRow.carnet_vaccination_url,
-      'acte_naissance': detRow.acte_naissance_url,
-      'piece_identite_parent': detRow.piece_identite_parent_url,
+    const docMap: Record<string, string | null | undefined> = {
+      'photo_recente': photoUrl,
+      'document_photo_id': docPhotoIdUrl,
+      'fiche_9e': fiche9eUrl,
+      'carnet_vaccination': carnetVaccinationUrl,
+      'acte_naissance': acteNaissanceUrl,
+      'piece_identite_parent': pieceIdentiteParentUrl,
     };
     
     Object.entries(docMap).forEach(([key, url]) => {

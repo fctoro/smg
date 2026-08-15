@@ -31,9 +31,6 @@ const defaultColumns: PlayerColumnKey[] = [
   "sexe",
   "statut",
   "categorie",
-  "cotisation",
-  "montant",
-  "dernierPaiement",
   "saison",
   "actions",
 ];
@@ -52,9 +49,11 @@ interface PlayerTableProps {
   emptyMessage?: string;
   onViewPlayer?: (player: Player) => void;
   onEditPlayer?: (player: Player) => void;
+  onEvaluatePlayer?: (player: Player) => void;
   onDeletePlayer?: (player: Player) => void;
   actionButton?: React.ReactNode;
   exportButton?: React.ReactNode;
+  availableCategories?: string[];
 }
 
 export default function PlayerTable({
@@ -66,9 +65,11 @@ export default function PlayerTable({
   emptyMessage = "Aucun joueur trouvé.",
   onViewPlayer,
   onEditPlayer,
+  onEvaluatePlayer,
   onDeletePlayer,
   actionButton,
   exportButton,
+  availableCategories,
 }: PlayerTableProps) {
   const { hydrated } = useClubData();
   const [searchQuery, setSearchQuery] = useState("");
@@ -94,6 +95,9 @@ export default function PlayerTable({
   );
 
   const categories = useMemo(() => {
+    if (availableCategories) {
+      return availableCategories;
+    }
     const customCats = players.map((player) => player.categorie).filter(Boolean);
     const combined = [...DEFAULT_CATEGORIES, ...customCats];
     const uniqueMap = new Map<string, string>();
@@ -104,7 +108,7 @@ export default function PlayerTable({
       }
     });
     return Array.from(uniqueMap.values());
-  }, [players]);
+  }, [players, availableCategories]);
 
   const seasons = useMemo(() => {
     const customSeasons = players.map((player) => player.saison).filter(Boolean) as string[];
@@ -384,7 +388,7 @@ export default function PlayerTable({
                 const safeAvatarSrc = getSafeAvatarSrc(player.photoIdentiteUrl || player.photoUrl);
                 const safeMatricule = player.matricule && !player.matricule.includes("XXXX")
                   ? player.matricule
-                  : generatePlayerMatricule(player.id, player.saison);
+                  : generatePlayerMatricule(player.id, player.saison, player.sourceDetection);
 
                 return (
                 <TableRow key={player.id}>
@@ -421,13 +425,13 @@ export default function PlayerTable({
                       {player.sexe}
                     </TableCell>
                   ) : null}
-                  {visibleColumnSet.has("statut") ? (
-                    <TableCell className="py-3 text-theme-sm text-gray-500 dark:text-gray-400">
-                      <Badge size="sm" color={colorFromPlayerStatus(player.statut)}>
-                        {playerStatusLabel[player.statut]}
-                      </Badge>
-                    </TableCell>
-                  ) : null}
+                    {visibleColumnSet.has("statut") ? (
+                      <TableCell className="py-3 text-theme-sm text-gray-500 dark:text-gray-400">
+                        <Badge size="sm" color={colorFromPlayerStatus(player.statut)}>
+                          {playerStatusLabel[player.statut]}
+                        </Badge>
+                      </TableCell>
+                    ) : null}
                   {visibleColumnSet.has("categorie") ? (
                     <TableCell className="py-3 text-theme-sm text-gray-500 dark:text-gray-400">
                       {player.categorie}
@@ -480,6 +484,19 @@ export default function PlayerTable({
                         >
                           <EyeIcon className="size-5" />
                         </button>
+                        {onEvaluatePlayer && (
+                          <button
+                            type="button"
+                            className="inline-flex items-center justify-center text-brand-500 transition hover:text-brand-600 dark:text-brand-400 dark:hover:text-brand-300 cursor-pointer"
+                            onClick={() => onEvaluatePlayer(player)}
+                            aria-label="Évaluer"
+                            title="Évaluer le joueur"
+                          >
+                            <svg className="size-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                            </svg>
+                          </button>
+                        )}
                         {onEditPlayer && (
                           <button
                             type="button"

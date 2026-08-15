@@ -88,13 +88,20 @@ export interface Player {
   acteNaissanceUrl?: string;
   carteIdentiteParentUrl?: string;
   dossierPdfUrl?: string;
+  sourceDetection?: boolean;
+  fiche9eUrl?: string;
+  carnetVaccinationUrl?: string;
 
   // Extended Inscription sections (01 to 07)
   programme?: string;
   ecole?: string;
   experienceSoccer?: string;
+  commentIdentifie?: string;
+  piedDominant?: string;
+  clubActuel?: string;
 
   parentNomPrenom?: string;
+  parentLien?: string;
   parentEmail?: string;
   parentTelephone?: string;
   parentAdresse?: string;
@@ -243,13 +250,19 @@ export interface PlayerFormValues {
   acteNaissanceUrl?: string;
   carteIdentiteParentUrl?: string;
   dossierPdfUrl?: string;
+  fiche9eUrl?: string;
+  carnetVaccinationUrl?: string;
 
   // Extended Inscription sections (01 to 07)
   programme?: string;
   ecole?: string;
   experienceSoccer?: string;
+  commentIdentifie?: string;
+  piedDominant?: string;
+  clubActuel?: string;
 
   parentNomPrenom?: string;
+  parentLien?: string;
   parentEmail?: string;
   parentTelephone?: string;
   parentAdresse?: string;
@@ -268,6 +281,8 @@ export interface PlayerFormValues {
   modePaiementChoisi?: string;
   programmesAssignesIds?: string[];
   saison?: string;
+  statutJoueur?: string;
+  sourceDetection?: boolean;
 }
 
 export interface ParentFormValues {
@@ -335,7 +350,7 @@ export interface PayrollRecord {
 export interface SiteMessage {
   id: string;
   type_message: "inscription_joueur" | "devenir_fan" | "stagiaire" | "contact_general" | "detection";
-  statut: "nouveau" | "lu" | "archive" | "inscrit";
+  statut: "nouveau" | "lu" | "archive" | "inscrit" | "refuse";
   contact_nom: string;
   contact_email: string;
   contact_telephone?: string;

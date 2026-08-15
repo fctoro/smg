@@ -103,6 +103,14 @@ function PlayersPageContent() {
                            updatedPlayer.carteIdentiteParentUrl = finalUrl;
                            fieldsToHighlight.push("carteIdentiteParentUrl");
                         }
+                        if ((key.includes("9e") || key.includes("9eme") || key.includes("fiche_9e")) && !updatedPlayer.fiche9eUrl) {
+                           updatedPlayer.fiche9eUrl = finalUrl;
+                           fieldsToHighlight.push("fiche9eUrl");
+                        }
+                        if ((key.includes("vaccin") || key.includes("carnet_vaccination")) && !updatedPlayer.carnetVaccinationUrl) {
+                           updatedPlayer.carnetVaccinationUrl = finalUrl;
+                           fieldsToHighlight.push("carnetVaccinationUrl");
+                        }
                       }
                     });
                   }
@@ -295,6 +303,8 @@ function PlayersPageContent() {
         player={selectedEditPlayer}
         highlightFields={highlightFields}
         demandeId={searchParams.get("demandeId")}
+        siteMessageId={searchParams.get("siteMessageId")}
+        commentIdentifie={searchParams.get("commentIdentifie")}
       />
       <PlayerAddModal
         isOpen={isAddModalOpen}

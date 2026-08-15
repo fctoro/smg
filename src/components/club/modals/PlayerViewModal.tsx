@@ -14,6 +14,7 @@ import { paymentStatusLabel, playerStatusLabel } from "@/lib/club/status";
 import { useClubData } from "@/context/ClubDataContext";
 import { useUserRole } from "@/context/UserRoleContext";
 import { fetchFullRegistrationDataForPlayer } from "@/lib/club/supabase-demandes";
+import { PlayerSportsTracking } from "@/components/club/player/PlayerSportsTracking";
 
 interface PlayerViewModalProps {
   isOpen: boolean;
@@ -202,6 +203,53 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
             </div>
           </div>
 
+          {/* Section Uniformes & Tailles */}
+          <div className="rounded-2xl shadow-sm border border-gray-200 bg-white p-6 dark:border-gray-800 dark:bg-gray-900 relative overflow-hidden">
+            {/* Subtle background pattern */}
+            <div className="absolute -right-10 -top-10 opacity-5 dark:opacity-10 pointer-events-none">
+              <svg width="150" height="150" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+              </svg>
+            </div>
+            
+            <div className="flex items-center gap-3 mb-6 relative z-10">
+              <div className="p-2.5 bg-brand-50 dark:bg-brand-900/30 rounded-xl text-brand-600 dark:text-brand-400">
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                </svg>
+              </div>
+              <h4 className="font-bold text-gray-900 dark:text-white text-lg tracking-tight">Uniformes & Tailles</h4>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 relative z-10">
+              <div className="bg-gray-50 dark:bg-gray-800/50 p-4 rounded-xl border border-gray-100 dark:border-gray-800">
+                <span className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Haut (Maillot)</span>
+                <span className="inline-flex items-center justify-center min-w-[3rem] px-3 py-1.5 rounded-lg bg-white dark:bg-gray-700 shadow-sm border border-gray-200 dark:border-gray-600 text-base font-bold text-gray-900 dark:text-white">{tailleHaut}</span>
+              </div>
+              <div className="bg-gray-50 dark:bg-gray-800/50 p-4 rounded-xl border border-gray-100 dark:border-gray-800">
+                <span className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Bas (Short)</span>
+                <span className="inline-flex items-center justify-center min-w-[3rem] px-3 py-1.5 rounded-lg bg-white dark:bg-gray-700 shadow-sm border border-gray-200 dark:border-gray-600 text-base font-bold text-gray-900 dark:text-white">{tailleShort}</span>
+              </div>
+              <div className="bg-gray-50 dark:bg-gray-800/50 p-4 rounded-xl border border-gray-100 dark:border-gray-800">
+                <span className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Numéros</span>
+                <span className={`inline-flex items-center px-3 py-1.5 rounded-lg text-sm font-bold shadow-sm border ${numerosPreferes === "Non renseigné" ? "bg-red-50 text-red-600 border-red-100 dark:bg-red-900/20 dark:border-red-900/30" : "bg-brand-50 text-brand-700 border-brand-100 dark:bg-brand-900/30 dark:border-brand-800"}`}>{numerosPreferes}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Section Suivi Sportif */}
+          <div className="rounded-xl shadow-sm border border-gray-200 bg-white p-6 dark:border-gray-800 dark:bg-gray-900">
+            <div className="flex items-center gap-3 mb-5 border-b border-gray-100 dark:border-gray-800 pb-4">
+              <div className="p-2 bg-gray-100 dark:bg-gray-800 rounded-lg">
+                <svg className="w-5 h-5 text-gray-600 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                </svg>
+              </div>
+              <h4 className="font-semibold text-gray-900 dark:text-white text-base">Suivi Sportif & Présences</h4>
+            </div>
+            <PlayerSportsTracking playerId={player.id} />
+          </div>
+
           {/* Section 02: Parents / Tuteur */}
           {!isConfidential && (
             <div className="rounded-xl shadow-sm border border-gray-200 bg-white p-6 dark:border-gray-800 dark:bg-gray-900">
@@ -272,32 +320,6 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
             </div>
           )}
 
-          {/* Section 04: Uniformes & Tailles */}
-          <div className="rounded-xl shadow-sm border border-gray-200 bg-white p-6 dark:border-gray-800 dark:bg-gray-900">
-            <div className="flex items-center gap-3 mb-5 border-b border-gray-100 dark:border-gray-800 pb-4">
-              <div className="p-2 bg-gray-100 dark:bg-gray-800 rounded-lg">
-                <svg className="w-5 h-5 text-gray-600 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                </svg>
-              </div>
-              <h4 className="font-semibold text-gray-900 dark:text-white text-base">Uniformes & Tailles</h4>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
-              <div>
-                <span className="block text-xs font-medium text-gray-500 mb-1">Taille Haut (Top)</span>
-                <span className="inline-block px-3 py-1 rounded-lg bg-gray-100 dark:bg-gray-800 text-sm font-bold text-gray-900 dark:text-white">{tailleHaut}</span>
-              </div>
-              <div>
-                <span className="block text-xs font-medium text-gray-500 mb-1">Taille Short</span>
-                <span className="inline-block px-3 py-1 rounded-lg bg-gray-100 dark:bg-gray-800 text-sm font-bold text-gray-900 dark:text-white">{tailleShort}</span>
-              </div>
-              <div>
-                <span className="block text-xs font-medium text-gray-500 mb-1">Numéros préférés</span>
-                <span className="inline-block px-3 py-1 rounded-lg bg-brand-50 text-brand-700 dark:bg-brand-900/20 text-sm font-bold">{numerosPreferes}</span>
-              </div>
-            </div>
-          </div>
 
           {/* Section 05 & 06: Plan & Mode de paiement */}
           {!isConfidential && (
@@ -308,26 +330,30 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
                   </svg>
                 </div>
-                <h4 className="font-semibold text-gray-900 dark:text-white text-base">Plan & Mode de Paiement</h4>
+                <h4 className="font-semibold text-gray-900 dark:text-white text-base">Dossier Financier</h4>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
                 <div>
-                  <span className="block text-xs font-medium text-gray-500 mb-1">Plan de Paiement</span>
-                  <span className="block text-sm font-semibold text-gray-900 dark:text-white">{planPaiement}</span>
+                  <span className="block text-xs font-medium text-gray-500 mb-1">Statut Joueur / Plan</span>
+                  <span className="block text-sm font-semibold text-gray-900 dark:text-white">{(player as any).statutJoueur || planPaiement}</span>
                 </div>
-                <div>
-                  <span className="block text-xs font-medium text-gray-500 mb-1">Mode de règlement</span>
-                  <span className="block text-sm font-semibold text-gray-900 dark:text-white">{modePaiementChoisi}</span>
-                </div>
-                <div>
-                  <span className="block text-xs font-medium text-gray-500 mb-1">Montant Total Payé</span>
-                  <span className="block text-sm font-bold text-emerald-600 dark:text-emerald-400">{formatClubCurrency(player.cotisationMontant, player.cotisationDevise)}</span>
-                </div>
-                <div>
-                  <span className="block text-xs font-medium text-gray-500 mb-1">Dernier versement</span>
-                  <span className="block text-sm font-semibold text-gray-900 dark:text-white">{formatClubDate(player.dernierPaiement)}</span>
-                </div>
+                {(!(player as any).statutJoueur || (player as any).statutJoueur.toLowerCase().includes("demi-bourse")) && (
+                  <>
+                    <div>
+                      <span className="block text-xs font-medium text-gray-500 mb-1">Mode de règlement</span>
+                      <span className="block text-sm font-semibold text-gray-900 dark:text-white">{modePaiementChoisi}</span>
+                    </div>
+                    <div>
+                      <span className="block text-xs font-medium text-gray-500 mb-1">Montant Total Payé</span>
+                      <span className="block text-sm font-bold text-emerald-600 dark:text-emerald-400">{formatClubCurrency(player.cotisationMontant, player.cotisationDevise)}</span>
+                    </div>
+                    <div>
+                      <span className="block text-xs font-medium text-gray-500 mb-1">Dernier versement</span>
+                      <span className="block text-sm font-semibold text-gray-900 dark:text-white">{formatClubDate(player.dernierPaiement)}</span>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           )}

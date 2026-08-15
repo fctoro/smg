@@ -51,13 +51,57 @@ export const fetchSiteMessages = async (): Promise<SiteMessage[]> => {
     return allData;
   };
 
-  const [siteData, detectionData] = await Promise.all([
+  const fetchAllEtudiants = async () => {
+    let allData: any[] = [];
+    let from = 0;
+    const step = 1000;
+    while (true) {
+      const { data, error } = await supabase
+        .from("tblEtudiants")
+        .select("Nom, Prenom, IsDeleted")
+        .range(from, from + step - 1);
+      
+      if (error) break;
+      if (data && data.length > 0) {
+        allData = [...allData, ...data];
+        if (data.length < step) break;
+        from += step;
+      } else {
+        break;
+      }
+    }
+    return allData;
+  };
+
+  const [siteData, detectionData, etudiantsData] = await Promise.all([
     fetchAllSiteMessages(),
-    fetchAllDetectionRegistrations().catch(() => [])
+    fetchAllDetectionRegistrations().catch(() => []),
+    fetchAllEtudiants().catch(() => [])
   ]);
+
+  // Track enrolled players to auto-mark messages
+  const enrolledPlayerNames = new Set<string>();
+  if (etudiantsData) {
+    etudiantsData.forEach((e: any) => {
+      if (e.IsDeleted !== 1 && e.IsDeleted !== true && String(e.IsDeleted).toLowerCase() !== "true") {
+        const fullName = `${e.Prenom || ""} ${e.Nom || ""}`.trim().toLowerCase().replace(/\s+/g, ' ');
+        if (fullName) enrolledPlayerNames.add(fullName);
+      }
+    });
+  }
 
   // Track seen detection keys to avoid any duplicate entries
   const seenDetections = new Set<string>();
+
+  // Create a map to look up status from site_messages for detections
+  const detectionStatusMap = new Map<string, any>();
+  if (siteData) {
+    siteData.forEach((m: any) => {
+      if (m.type === 'detection' && m.payload && m.payload.id) {
+        detectionStatusMap.set(String(m.payload.id), { status: m.status, is_read: m.is_read, site_message_id: m.id });
+      }
+    });
+  }
 
   // 1. Process detection_registrations first (primary source of truth for detections)
   if (detectionData && detectionData.length > 0) {
@@ -82,10 +126,19 @@ export const fetchSiteMessages = async (): Promise<SiteMessage[]> => {
         seenDetections.add(`name:${normName}`);
       }
 
+      // Look up status in the site_messages table, fallback to 'nouveau'
+      const smgMsg = detectionStatusMap.get(String(d.id)) || {};
+      let actualStatus = smgMsg.status || d.status;
+      const isRead = smgMsg.is_read || d.is_read;
+
+      if (enrolledPlayerNames.has(normName) && actualStatus !== 'archived') {
+        actualStatus = 'enrolled';
+      }
+
       allMessages.push({
         id: `det_${d.id}`,
         type_message: 'detection',
-        statut: d.status === 'enrolled' ? 'inscrit' : d.status === 'archived' ? 'archive' : d.is_read ? 'lu' : 'nouveau',
+        statut: actualStatus === 'enrolled' ? 'inscrit' : actualStatus === 'archived' ? 'archive' : isRead ? 'lu' : 'nouveau',
         contact_nom: d.parent_nom || childFullName || d.nom || "",
         contact_email: d.parent_email || d.email || "",
         contact_telephone: d.parent_telephone || d.telephone || "",
@@ -122,6 +175,7 @@ export const fetchSiteMessages = async (): Promise<SiteMessage[]> => {
           numero_detection: d.numero_detection,
           source_table: 'detection_registrations',
           raw_db_id: d.id,
+          site_message_id: smgMsg.site_message_id,
         },
       } as SiteMessage);
     });
@@ -131,14 +185,13 @@ export const fetchSiteMessages = async (): Promise<SiteMessage[]> => {
   if (siteData && siteData.length > 0) {
     siteData.forEach((m: any) => {
       const isDetectionMsg = m.type === 'detection';
+      const p = m.payload || {};
+      const childName = `${p.prenom || p.child_first_name || ''} ${p.nom || p.child_last_name || ''}`.trim().toLowerCase().replace(/\s+/g, ' ');
+      const contactName = (m.name || '').toLowerCase().trim().replace(/\s+/g, ' ');
+      const email = (m.email || '').toLowerCase().trim();
 
       if (isDetectionMsg) {
         // Check if this detection is already in seenDetections from detection_registrations
-        const contactName = (m.name || '').toLowerCase().trim().replace(/\s+/g, ' ');
-        const email = (m.email || '').toLowerCase().trim();
-        const p = m.payload || {};
-        const childName = `${p.prenom || p.child_first_name || ''} ${p.nom || p.child_last_name || ''}`.trim().toLowerCase().replace(/\s+/g, ' ');
-
         if (seenDetections.has(`name:${childName}`) || seenDetections.has(`name:${contactName}`) || (email && seenDetections.has(email))) {
           return; // Skip duplicate detection from site_messages
         }
@@ -148,10 +201,16 @@ export const fetchSiteMessages = async (): Promise<SiteMessage[]> => {
         ? `${m.payload.child_first_name} ${m.payload.child_last_name || ''}`.trim() 
         : undefined;
 
+      let msgStatus = m.status;
+      const normSearchName = childName || contactName;
+      if (enrolledPlayerNames.has(normSearchName) && msgStatus !== 'archived') {
+        msgStatus = 'enrolled';
+      }
+
       allMessages.push({
         id: String(m.id),
         type_message: m.type === 'joueur' ? 'inscription_joueur' : m.type || "contact_general",
-        statut: m.status === 'enrolled' ? 'inscrit' : m.status === 'archived' ? 'archive' : m.is_read ? 'lu' : 'nouveau',
+        statut: msgStatus === 'enrolled' ? 'inscrit' : msgStatus === 'rejected' ? 'refuse' : msgStatus === 'archived' ? 'archive' : m.is_read ? 'lu' : 'nouveau',
         contact_nom: m.name || "",
         contact_email: m.email || "",
         contact_telephone: m.phone || "",
@@ -237,7 +296,7 @@ export const fetchSiteMessageById = async (id: string): Promise<SiteMessage | nu
   return {
     id: String(data.id),
     type_message: data.type === 'joueur' ? 'inscription_joueur' : data.type || "contact_general",
-    statut: data.status === 'enrolled' ? 'inscrit' : data.status === 'archived' ? 'archive' : data.is_read ? 'lu' : 'nouveau',
+    statut: data.status === 'enrolled' ? 'inscrit' : data.status === 'rejected' ? 'refuse' : data.status === 'archived' ? 'archive' : data.is_read ? 'lu' : 'nouveau',
     contact_nom: data.name || "",
     contact_email: data.email || "",
     contact_telephone: data.phone || "",
@@ -250,11 +309,19 @@ export const fetchSiteMessageById = async (id: string): Promise<SiteMessage | nu
 };
 
 // Update message status
-export const updateMessageStatus = async (id: string, statut: "nouveau" | "lu" | "archive" | "inscrit", metadata?: any) => {
-  const isRead = statut === "lu" || statut === "archive" || statut === "inscrit";
-  const statusStr = statut === "nouveau" ? "pending" : statut === "inscrit" ? "enrolled" : statut === "archive" ? "archived" : "resolved";
+export const updateMessageStatus = async (id: string, statut: "nouveau" | "lu" | "archive" | "inscrit" | "refuse", metadata?: any) => {
+  const isRead = statut === "lu" || statut === "archive" || statut === "inscrit" || statut === "refuse";
+  const statusStr = statut === "nouveau" ? "pending" : statut === "inscrit" ? "enrolled" : statut === "refuse" ? "rejected" : statut === "archive" ? "archived" : "resolved";
 
   if (id.startsWith("det_") || metadata?.source_table === 'detection_registrations') {
+    if (metadata?.site_message_id) {
+      // Detections also have a corresponding site_messages entry, update it!
+      await supabase
+        .from("site_messages")
+        .update({ is_read: isRead, status: statusStr })
+        .eq("id", metadata.site_message_id);
+    }
+
     const rawId = metadata?.raw_db_id || id.replace("det_", "");
     const { error } = await supabase
       .from("detection_registrations")
@@ -284,6 +351,13 @@ export const updateMessageStatus = async (id: string, statut: "nouveau" | "lu" |
 // Delete message
 export const deleteMessage = async (id: string, metadata?: any) => {
   if (id.startsWith("det_") || metadata?.source_table === 'detection_registrations') {
+    if (metadata?.site_message_id) {
+      await supabase
+        .from("site_messages")
+        .delete()
+        .eq("id", metadata.site_message_id);
+    }
+
     const rawId = metadata?.raw_db_id || id.replace("det_", "");
     const { error } = await supabase
       .from("detection_registrations")
@@ -489,4 +563,8 @@ export const uploadDetectionDocument = async (id: string, docKey: string, file: 
     doc_key: docKey,
     path: publicUrl,
   };
+};
+export const updatePlayerFinancialStatus = async (playerId: string | number, statutJoueur: string) => {
+  const { error } = await supabase.from('tblEtudiants').update({ StatutJoueur: statutJoueur }).eq('EtudiantID', playerId);
+  if (error) throw error;
 };

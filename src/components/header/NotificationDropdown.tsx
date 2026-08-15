@@ -54,8 +54,18 @@ export default function NotificationDropdown() {
     setIsOpen(false);
   }
 
-  const newCount = messages.filter((m) => m.statut === "nouveau").length;
+  const allNewCount = messages.filter((m) => m.statut === "nouveau").length;
   const recentMessages = messages.slice(0, 7);
+
+  const demandesCount = messages.filter(
+    (m) => (m.type_message === "inscription_joueur" || m.type_message === "detection") && m.statut === "nouveau"
+  ).length;
+
+  useEffect(() => {
+    if (!loading) {
+      window.dispatchEvent(new CustomEvent('update-unread-count', { detail: demandesCount }));
+    }
+  }, [demandesCount, loading]);
 
   return (
     <div className="relative">
@@ -64,9 +74,9 @@ export default function NotificationDropdown() {
         onClick={toggleDropdown}
         aria-label="Notifications"
       >
-        {newCount > 0 && (
+        {allNewCount > 0 && (
           <span className="absolute -right-1 -top-1 z-10 flex h-5 min-w-5 items-center justify-center rounded-full bg-brand-500 px-1 text-[10px] font-bold text-white shadow-xs">
-            {newCount}
+            {allNewCount}
           </span>
         )}
         <svg
@@ -93,10 +103,10 @@ export default function NotificationDropdown() {
         <div className="flex items-center justify-between pb-3 mb-3 border-b border-gray-100 dark:border-gray-700">
           <div>
             <h5 className="text-base font-bold text-gray-900 dark:text-white">
-              Demandes & Notifications
+              Notifications
             </h5>
             <p className="text-xs text-gray-500 dark:text-gray-400">
-              {newCount > 0 ? `${newCount} nouvelle(s) demande(s)` : "Toutes les demandes à jour"}
+              {allNewCount > 0 ? `${allNewCount} nouvelle(s) notification(s)` : "Toutes les notifications à jour"}
             </p>
           </div>
           <button
@@ -139,13 +149,15 @@ export default function NotificationDropdown() {
               </div>
             </li>
           ) : recentMessages.length === 0 ? (
-            <li className="p-6 text-center text-xs text-gray-500">Aucune demande reçue.</li>
+            <li className="p-6 text-center text-xs text-gray-500">Aucune notification reçue.</li>
           ) : (
             recentMessages.map((msg) => {
               const isNew = msg.statut === "nouveau";
               const typeLabel =
                 msg.type_message === "inscription_joueur"
                   ? "Inscription joueur"
+                  : msg.type_message === "detection"
+                  ? "Détection joueur"
                   : msg.type_message === "stagiaire"
                   ? "Candidature stage"
                   : msg.type_message === "devenir_fan"
@@ -199,7 +211,7 @@ export default function NotificationDropdown() {
           onClick={closeDropdown}
           className="block px-4 py-2.5 mt-3 text-xs font-semibold text-center text-white bg-brand-500 rounded-lg hover:bg-brand-600 transition-colors shadow-xs"
         >
-          Voir toutes les demandes ({messages.length})
+          Voir toutes les notifications ({messages.length})
         </Link>
       </Dropdown>
     </div>

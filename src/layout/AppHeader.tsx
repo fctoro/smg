@@ -3,6 +3,7 @@ import { ThemeToggleButton } from "@/components/common/ThemeToggleButton";
 import NotificationDropdown from "@/components/header/NotificationDropdown";
 import UserDropdown from "@/components/header/UserDropdown";
 import { useSidebar } from "@/context/SidebarContext";
+import { useUserRole } from "@/context/UserRoleContext";
 import Image from "next/image";
 import Link from "next/link";
 import React, { useState ,useEffect,useRef} from "react";
@@ -11,6 +12,7 @@ const AppHeader: React.FC = () => {
   const [isApplicationMenuOpen, setApplicationMenuOpen] = useState(false);
 
   const { isMobileOpen, toggleSidebar, toggleMobileSidebar } = useSidebar();
+  const { isCoach, isAdmin } = useUserRole();
 
   const handleToggle = () => {
     if (window.innerWidth >= 1024) {
@@ -114,7 +116,7 @@ const AppHeader: React.FC = () => {
             <ThemeToggleButton />
             {/* <!-- Dark Mode Toggler --> */}
 
-           <NotificationDropdown /> 
+            {!(isCoach && !isAdmin) && <NotificationDropdown />}
             {/* <!-- Notification Menu Area --> */}
           </div>
           {/* <!-- User Area --> */}

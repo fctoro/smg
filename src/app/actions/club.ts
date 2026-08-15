@@ -105,27 +105,32 @@ export async function softDeletePlayerAdmin(etudiantId: number) {
     return { success: false, error: "Service role Supabase indisponible." };
   }
 
-  const { data, error } = await supabaseAdmin
+  // First, fetch the email before deleting to revert site_messages
+  const { data: playerInfo } = await supabaseAdmin
     .from("tblEtudiants")
-    .update({ IsDeleted: 1 })
-    .eq("EtudiantID", etudiantId)
     .select("Email")
+    .eq("EtudiantID", etudiantId)
     .single();
+
+  const { error } = await supabaseAdmin
+    .from("tblEtudiants")
+    .delete()
+    .eq("EtudiantID", etudiantId);
 
   if (error) {
     return { success: false, error: error.message };
   }
   
   // Revert site_messages from "enrolled" to "resolved" (LU)
-  if (data?.Email) {
+  if (playerInfo?.Email) {
     await supabaseAdmin
       .from("site_messages")
       .update({ status: "resolved" })
-      .eq("email", data.Email)
+      .eq("email", playerInfo.Email)
       .eq("status", "enrolled");
   }
 
-  return { success: true, data };
+  return { success: true };
 }
 
 export async function insertEmployeeAdmin(insertPayload: any) {

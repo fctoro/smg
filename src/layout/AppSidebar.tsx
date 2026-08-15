@@ -137,6 +137,11 @@ const coachNavItems: NavItem[] = [
     name: "Effectif Joueurs",
     path: "/coach?tab=effectif",
   },
+  {
+    icon: <CalenderIcon />,
+    name: "Faire l'appel",
+    path: "/coach?tab=presences",
+  },
 ];
 
 const baseOthersItems: NavItem[] = [
@@ -168,41 +173,14 @@ const AppSidebar: React.FC = () => {
   useEffect(() => {
     setMounted(true);
 
-    const fetchUnread = async () => {
-      let total = 0;
-      
-      const { count: siteCount } = await supabase
-        .from("site_messages")
-        .select("*", { count: "exact", head: true })
-        .eq("type", "joueur")
-        .eq("is_read", false);
-        
-      if (siteCount) total += siteCount;
-        
-      const { count: detectionCount } = await supabase
-        .from("detection_registrations")
-        .select("*", { count: "exact", head: true });
-
-      if (detectionCount) total += detectionCount;
-      
-      setUnreadCount(total);
+    const handleUpdate = (e: any) => {
+      setUnreadCount(e.detail);
     };
 
-    fetchUnread();
-
-    const channel = supabase
-      .channel("sidebar_unread_msgs")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "site_messages" },
-        () => {
-          fetchUnread();
-        }
-      )
-      .subscribe();
+    window.addEventListener('update-unread-count', handleUpdate);
 
     return () => {
-      supabase.removeChannel(channel);
+      window.removeEventListener('update-unread-count', handleUpdate);
     };
   }, [pathname]);
 

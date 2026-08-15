@@ -3,6 +3,7 @@ export interface SavedTacticalPlan {
   name: string;
   formationId: string;
   assignments: Record<string, string>;
+  benchIds?: string[];
   createdAt: string;
 }
 
@@ -11,7 +12,8 @@ export function getSavedPlans(): SavedTacticalPlan[] {
   const stored = localStorage.getItem("fctoro_coach_plans");
   if (!stored) return [];
   try {
-    return JSON.parse(stored);
+    const parsed = JSON.parse(stored);
+    return Array.isArray(parsed) ? parsed : [];
   } catch {
     return [];
   }
@@ -25,11 +27,24 @@ export function savePlan(plan: Omit<SavedTacticalPlan, "id" | "createdAt">): Sav
     createdAt: new Date().toISOString(),
   };
   
-  // We can just append, or overwrite if we wanted to support "updating" a plan.
-  // For simplicity, we'll just append it as a new save snapshot.
   plans.push(newPlan);
   localStorage.setItem("fctoro_coach_plans", JSON.stringify(plans));
   return newPlan;
+}
+
+export function updatePlan(id: string, plan: Partial<Omit<SavedTacticalPlan, "id" | "createdAt">>): SavedTacticalPlan | null {
+  const plans = getSavedPlans();
+  const index = plans.findIndex(p => p.id === id);
+  if (index === -1) return null;
+  
+  const updatedPlan = {
+    ...plans[index],
+    ...plan,
+  };
+  
+  plans[index] = updatedPlan;
+  localStorage.setItem("fctoro_coach_plans", JSON.stringify(plans));
+  return updatedPlan;
 }
 
 export function deletePlan(id: string) {

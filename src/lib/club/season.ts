@@ -41,13 +41,14 @@ export function getSeasonCode(seasonStr?: string, date: Date = new Date()): stri
 
 /**
  * Generates an automatic player matricule code based on season and student ID.
- * Format: FCT-{SeasonCode}-{PaddedId} (e.g. FCT-2627-0045)
+ * Format: FCT-{SeasonCode}-{PaddedId} (e.g. FCT-2627-0045 or DET-2627-0045)
  */
-export function generatePlayerMatricule(studentId: number | string, seasonStr?: string): string {
+export function generatePlayerMatricule(studentId: number | string, seasonStr?: string, isDetection?: boolean): string {
   const sCode = getSeasonCode(seasonStr);
   const numId = String(studentId).replace(/\D/g, "") || String(studentId);
   const paddedId = String(numId).padStart(4, "0");
-  return `FCT-${sCode}-${paddedId}`;
+  const prefix = isDetection ? "DET" : "FCT";
+  return `${prefix}-${sCode}-${paddedId}`;
 }
 
 /**

@@ -4,3 +4,9 @@ createUser auth done. authError: false
 upserting profile for user c9a2b582-e2d0-4606-84fd-ca3a6f1ce7c6
 revalidating path
 done
+[2026-08-15T13:46:08.214Z] createUser called
+Email: pitonrodjy@gmail.com, Role: Coach
+createUser auth done. authError: false
+upserting profile for user ba1e2d54-d161-4f51-b3f2-58697fd2eb13
+revalidating path
+done

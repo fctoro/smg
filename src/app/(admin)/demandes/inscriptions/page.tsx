@@ -4,7 +4,7 @@ import React, { useState, useEffect, useMemo, useEffect as useReactEffect } from
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
-import { fetchSiteMessages, updateMessageStatus, deleteMessage } from "@/lib/club/supabase-demandes";
+import { fetchSiteMessages, updateMessageStatus, deleteMessage, updatePlayerFinancialStatus } from "@/lib/club/supabase-demandes";
 import { SiteMessage } from "@/types/club";
 import Pagination from "@/components/tables/Pagination";
 import { DownloadIcon, EyeIcon, TrashBinIcon } from "@/icons";
@@ -19,6 +19,54 @@ const DocumentIcon = () => (
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
   </svg>
 );
+
+const CustomSelect = ({ value, onChange, options, placeholder = "Sélectionner..." }: { value: string; onChange: (val: string) => void; options: {value: string; label: string}[]; placeholder?: string }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const containerRef = React.useRef<HTMLDivElement>(null);
+  
+  useReactEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const selectedOption = options.find((o) => o.value === value);
+
+  return (
+    <div className="relative" ref={containerRef}>
+      <button
+        type="button"
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full flex items-center justify-between rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-2.5 text-sm text-gray-900 dark:text-white focus:border-brand-500 focus:ring-1 focus:ring-brand-500 outline-none"
+      >
+        <span>{selectedOption ? selectedOption.label : placeholder}</span>
+        <svg className={`w-4 h-4 transition-transform text-gray-400 ${isOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+      </button>
+      
+      {isOpen && (
+        <div className="absolute z-50 w-full mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg overflow-hidden py-1">
+          {options.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              onClick={() => {
+                onChange(option.value);
+                setIsOpen(false);
+              }}
+              className={`w-full text-left px-4 py-2 text-sm transition-colors hover:bg-brand-50 hover:text-brand-600 dark:hover:bg-brand-500/20 dark:hover:text-brand-400 ${value === option.value ? 'bg-brand-50 text-brand-600 dark:bg-brand-500/20 dark:text-brand-400 font-medium' : 'text-gray-700 dark:text-gray-300'}`}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
 
 export default function BoiteDeReception() {
   const router = useRouter();
@@ -38,7 +86,7 @@ export default function BoiteDeReception() {
   const [selectedMessage, setSelectedMessage] = useState<SiteMessage | null>(null);
   const [modalMode, setModalMode] = useState<"details" | "documents">("details");
   const [duplicateCheck, setDuplicateCheck] = useState<{ isDuplicate: boolean; source?: string; player?: any } | null>(null);
-  const [verificationResult, setVerificationResult] = useState<{ status: "not_verified" | "not_found" | "found_missing_data" | "found_complete"; missingFields?: string[]; playerId?: string }>({ status: "not_verified" });
+  const [verificationResult, setVerificationResult] = useState<{ status: "not_verified" | "not_found" | "found_missing_data" | "found_complete" | "found_inactive"; missingFields?: string[]; playerId?: string; source?: string; playerName?: string }>({ status: "not_verified" });
   
   // Download states
   const [downloadTarget, setDownloadTarget] = useState<SiteMessage | null>(null);
@@ -46,6 +94,11 @@ export default function BoiteDeReception() {
   const [isLoadingDocs, setIsLoadingDocs] = useState(false);
   const [uploadingDocKey, setUploadingDocKey] = useState<string | null>(null);
 
+  // UI state for Detection status
+  const [detectionStatutSpecial, setDetectionStatutSpecial] = useState<"" | "Demi-bourse" | "Spécial">("");
+  const [detectionRabais, setDetectionRabais] = useState<string>("");
+  const [detectionSpecialType, setDetectionSpecialType] = useState<string>("Enfant sponsorisé");
+  const [detectionSpecialAutre, setDetectionSpecialAutre] = useState<string>("");
   const handleUploadDoc = async (docKey: string, file: File) => {
     if (!downloadTarget) return;
     setUploadingDocKey(docKey);
@@ -65,7 +118,11 @@ export default function BoiteDeReception() {
 
   useEffect(() => {
     setVerificationResult({ status: "not_verified" });
-    if (selectedMessage && selectedMessage.type_message === "inscription_joueur") {
+    setDetectionStatutSpecial("");
+    setDetectionRabais("");
+    setDetectionSpecialType("Enfant sponsorisé");
+    setDetectionSpecialAutre("");
+    if (selectedMessage && (selectedMessage.type_message === "inscription_joueur" || selectedMessage.type_message === "detection")) {
       fetch(`/api/demandes/${selectedMessage.id}/check-duplicate`)
         .then(res => {
           if (!res.ok) {
@@ -149,6 +206,14 @@ export default function BoiteDeReception() {
       } else {
         setVerificationResult({ status: "found_complete", playerId: existingPlayer.id });
       }
+    } else if (duplicateCheck && duplicateCheck.isDuplicate) {
+      const p = duplicateCheck.player || {};
+      const childName = `${p.child_first_name || p.prenom || ""} ${p.child_last_name || p.nom || ""}`.trim() || "Ce joueur";
+      setVerificationResult({ 
+        status: "found_inactive", 
+        source: duplicateCheck.source === 'club_players' ? "les joueurs du club (mais inactif)" : "les anciennes inscriptions",
+        playerName: childName
+      });
     } else {
       setVerificationResult({ status: "not_found" });
     }
@@ -176,8 +241,12 @@ export default function BoiteDeReception() {
 
   const filteredMessages = useMemo(() => {
     return messages.filter(m => {
-      const matchTab = m.type_message === activeTab;
-      if (!matchTab) return false;
+      if (statusFilter === "detection") {
+        if (m.type_message !== "detection") return false;
+      } else {
+        const matchTab = m.type_message === activeTab;
+        if (!matchTab) return false;
+      }
 
       if (searchQuery.trim() !== "") {
         const query = searchQuery.toLowerCase().trim();
@@ -203,7 +272,7 @@ export default function BoiteDeReception() {
         const month = (new Date(m.created_at).getMonth() + 1).toString();
         if (month !== monthFilter) return false;
       }
-      if (statusFilter !== "all") {
+      if (statusFilter !== "all" && statusFilter !== "detection") {
         if (m.statut !== statusFilter) return false;
       }
       return true;
@@ -552,6 +621,7 @@ export default function BoiteDeReception() {
               <option value="lu">Lu</option>
               <option value="inscrit">Enregistré / Inscrit</option>
               <option value="archive">Archivé / Refusé</option>
+              <option value="detection">Détections</option>
             </select>
           </div>
         </div>
@@ -605,9 +675,9 @@ export default function BoiteDeReception() {
                     <td className="px-4 py-4 align-top">
                       <div className="font-medium text-gray-900 dark:text-white">
                         {(() => {
-                          const enfantNom = msg.metadata?.enfant_nom || msg.metadata?.child_last_name || msg.metadata?.nom || "";
+                          const enfantNom = msg.metadata?.child_last_name || msg.metadata?.nom || "";
                           const enfantPrenom = msg.metadata?.enfant_prenom || msg.metadata?.child_first_name || msg.metadata?.prenom || "";
-                          const enfant = `${enfantPrenom} ${enfantNom}`.trim();
+                          const enfant = msg.metadata?.enfant_nom || `${enfantPrenom} ${enfantNom}`.trim();
                           
                           // Remove the (Enfant: ...) part from contact_nom if it exists
                           let cleanParentName = msg.contact_nom || "";
@@ -732,15 +802,7 @@ export default function BoiteDeReception() {
             </div>
             
             <div className="max-h-[calc(100vh-14rem)] overflow-y-auto p-6 space-y-5">
-              {duplicateCheck?.isDuplicate && (
-                <div className="p-4 bg-warning-50 dark:bg-warning-900/20 border border-warning-200 dark:border-warning-900/30 rounded-2xl flex gap-3 animate-in slide-in-from-top-2">
-                  <span className="text-warning-600 dark:text-warning-400 text-lg">⚠️</span>
-                  <div className="text-xs text-warning-800 dark:text-warning-200">
-                    <strong className="block mb-1 text-sm font-bold">Attention : Doublon potentiel !</strong>
-                    Un joueur nommé <strong>{duplicateCheck.player.child_first_name} {duplicateCheck.player.child_last_name}</strong> existe déjà dans {duplicateCheck.source === 'club_players' ? "les joueurs du club" : "les anciennes inscriptions"}. Vérifiez s'il s'agit de la même personne avant de valider.
-                  </div>
-                </div>
-              )}
+
 
               <div className="space-y-6">
                 <div className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-6">
@@ -806,6 +868,75 @@ export default function BoiteDeReception() {
                         </div>
                       )}
                     </div>
+
+                    {/* Statut Financier / Spécial */}
+                    <div className="mt-6 border-t border-gray-100 dark:border-gray-800 pt-5">
+                      <div className="flex items-center gap-2.5 mb-4">
+                        <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                        <h4 className="font-semibold text-gray-900 dark:text-white text-base">Statut Financier / Spécial</h4>
+                      </div>
+                      
+                      <div className="space-y-4">
+                        <div>
+                          <label className="block text-xs font-medium text-gray-500 mb-1">Catégorie de statut (Optionnel)</label>
+                          <CustomSelect 
+                            value={detectionStatutSpecial}
+                            onChange={(val) => setDetectionStatutSpecial(val as any)}
+                            options={[
+                              { value: "Demi-bourse", label: "Demi-boursier" },
+                              { value: "Spécial", label: "Situation spéciale" }
+                            ]}
+                          />
+                        </div>
+
+                        {detectionStatutSpecial === "Demi-bourse" && (
+                          <div className="animate-in fade-in slide-in-from-top-2">
+                            <label className="block text-xs font-medium text-gray-500 mb-1">Pourcentage de rabais (%)</label>
+                            <div className="relative">
+                              <input 
+                                type="number"
+                                min="1"
+                                max="99"
+                                value={detectionRabais}
+                                onChange={(e) => setDetectionRabais(e.target.value)}
+                                placeholder="Ex: 50"
+                                className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 pl-4 pr-10 py-2.5 text-sm text-gray-900 dark:text-white focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+                              />
+                              <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 text-sm">%</span>
+                            </div>
+                          </div>
+                        )}
+
+                        {detectionStatutSpecial === "Spécial" && (
+                          <div className="space-y-4 animate-in fade-in slide-in-from-top-2">
+                            <div>
+                              <label className="block text-xs font-medium text-gray-500 mb-1">Motif spécial</label>
+                              <CustomSelect 
+                                value={detectionSpecialType}
+                                onChange={(val) => setDetectionSpecialType(val)}
+                                options={[
+                                  { value: "Enfant sponsorisé", label: "Sponsor (Enfant sponsorisé)" },
+                                  { value: "Autre", label: "Autre (Préciser)" }
+                                ]}
+                              />
+                            </div>
+                            
+                            {detectionSpecialType === "Autre" && (
+                              <div>
+                                <label className="block text-xs font-medium text-gray-500 mb-1">Préciser le statut</label>
+                                <input 
+                                  type="text"
+                                  value={detectionSpecialAutre}
+                                  onChange={(e) => setDetectionSpecialAutre(e.target.value)}
+                                  placeholder="Ex: Seulement les uniformes"
+                                  className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-2.5 text-sm text-gray-900 dark:text-white focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+                                />
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 ) : (
                   <div className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-6">
@@ -835,7 +966,7 @@ export default function BoiteDeReception() {
                   <span className="text-warning-600 dark:text-warning-400 text-lg">⚠️</span>
                   <div className="text-xs text-warning-800 dark:text-warning-200">
                     <strong className="block mb-1 text-sm font-bold">Joueur existant mais incomplet</strong>
-                    Le joueur existe déjà dans la base de données, mais il manque des informations importantes (ex: {verificationResult.missingFields?.join(", ")}).
+                    Le joueur existe déjà dans l'effectif actuel, mais il manque des informations importantes (ex: {verificationResult.missingFields?.join(", ")}).
                   </div>
                 </div>
               )}
@@ -845,17 +976,27 @@ export default function BoiteDeReception() {
                   <span className="text-success-600 dark:text-success-400 text-lg">✅</span>
                   <div className="text-xs text-success-800 dark:text-success-200">
                     <strong className="block mb-1 text-sm font-bold">Joueur existant et complet</strong>
-                    Le joueur existe déjà et toutes les informations de base sont renseignées.
+                    Le joueur existe déjà dans l'effectif actuel et toutes les informations de base sont renseignées.
+                  </div>
+                </div>
+              )}
+
+              {verificationResult.status === "found_inactive" && (
+                <div className="p-4 bg-warning-50 dark:bg-warning-900/20 border border-warning-200 dark:border-warning-900/30 rounded-2xl flex gap-3 animate-in slide-in-from-bottom-2">
+                  <span className="text-warning-600 dark:text-warning-400 text-lg">⚠️</span>
+                  <div className="text-xs text-warning-800 dark:text-warning-200">
+                    <strong className="block mb-1 text-sm font-bold">Attention : Doublon potentiel !</strong>
+                    Le nom <strong className="text-warning-900 dark:text-white font-bold">{verificationResult.playerName}</strong> existe déjà dans la base de données en tant que <strong className="text-warning-900 dark:text-white font-bold">{verificationResult.source}</strong>. Cependant, il ne fait pas partie de l'effectif actuel (actif) du club. Vérifiez s'il s'agit de la même personne avant de procéder à l'inscription.
                   </div>
                 </div>
               )}
 
               {verificationResult.status === "not_found" && (
-                <div className="p-4 bg-info-50 dark:bg-info-900/20 border border-info-200 dark:border-info-900/30 rounded-2xl flex gap-3 animate-in slide-in-from-bottom-2">
-                  <span className="text-info-600 dark:text-info-400 text-lg">ℹ️</span>
-                  <div className="text-xs text-info-800 dark:text-info-200">
+                <div className="p-4 bg-success-50 dark:bg-success-900/20 border border-success-200 dark:border-success-900/30 rounded-2xl flex gap-3 animate-in slide-in-from-bottom-2">
+                  <span className="text-success-600 dark:text-success-400 text-lg">✅</span>
+                  <div className="text-xs text-success-800 dark:text-success-200">
                     <strong className="block mb-1 text-sm font-bold">Nouveau joueur</strong>
-                    Aucun joueur existant trouvé avec ce nom. Vous pouvez procéder à l'inscription.
+                    Aucun joueur existant trouvé avec ce nom. Vous pouvez procéder à l'inscription en toute sécurité.
                   </div>
                 </div>
               )}
@@ -866,7 +1007,9 @@ export default function BoiteDeReception() {
             <div className="p-5 border-t border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/50 flex flex-col sm:flex-row justify-end gap-3">
               <button
                 onClick={async () => {
-                  await updateMessageStatus(selectedMessage.id, "archive");
+                  const newStatus = selectedMessage.type_message === "detection" ? "refuse" : "archive";
+                  await updateMessageStatus(selectedMessage.id, newStatus);
+                  setMessages(prev => prev.map(m => m.id === selectedMessage.id ? { ...m, statut: newStatus } : m));
                   setSelectedMessage(null);
                 }}
                 className="w-full sm:w-auto rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 px-6 py-2.5 text-sm font-bold text-error-600 shadow-sm hover:bg-error-50 hover:border-error-200 dark:hover:bg-error-900/20 dark:hover:border-error-900/50 transition-all"
@@ -874,45 +1017,102 @@ export default function BoiteDeReception() {
                 Refuser
               </button>
               
-              {selectedMessage.type_message === "detection" ? (
-                <button
-                  onClick={async () => {
-                    await updateMessageStatus(selectedMessage.id, "inscrit");
-                    setMessages(prev => prev.map(m => m.id === selectedMessage.id ? { ...m, statut: "inscrit" as any } : m));
-                    setSelectedMessage(null);
-                  }}
-                  className="w-full sm:w-auto rounded-xl bg-[#107C41] px-8 py-2.5 text-sm font-bold text-white shadow-md shadow-green-500/25 hover:bg-[#0c5e31] transition-all"
-                >
-                  Enregistrer
-                </button>
-              ) : verificationResult.status === "not_verified" ? (
-                <button
-                  onClick={handleVerifyPlayer}
-                  className="w-full sm:w-auto rounded-xl bg-gray-800 px-8 py-2.5 text-sm font-bold text-white shadow-md shadow-gray-500/25 hover:bg-gray-700 transition-all"
-                >
-                  Vérifier
-                </button>
-              ) : verificationResult.status === "found_missing_data" ? (
-                <button
-                  onClick={() => {
-                    router.push(`/joueurs?editPlayerId=${verificationResult.playerId}&demandeId=${selectedMessage.id}`);
-                    setSelectedMessage(null);
-                  }}
-                  className="w-full sm:w-auto rounded-xl bg-warning-500 px-8 py-2.5 text-sm font-bold text-white shadow-md shadow-warning-500/25 hover:bg-warning-600 hover:-translate-y-0.5 transition-all"
-                >
-                  Remplir champs
-                </button>
-              ) : (
-                <button
-                  onClick={() => {
-                    router.push(`/joueurs/nouveau?demandeId=${selectedMessage.id}`);
-                    setSelectedMessage(null);
-                  }}
-                  className="w-full sm:w-auto rounded-xl bg-brand-500 px-8 py-2.5 text-sm font-bold text-white shadow-md shadow-brand-500/25 hover:bg-brand-600 hover:-translate-y-0.5 transition-all"
-                >
-                  Accepter
-                </button>
-              )}
+              {verificationResult.status === "not_verified" ? (
+                  <button
+                    onClick={handleVerifyPlayer}
+                    className="w-full sm:w-auto rounded-xl bg-gray-800 px-8 py-2.5 text-sm font-bold text-white shadow-md shadow-gray-500/25 hover:bg-gray-700 transition-all"
+                  >
+                    Vérifier
+                  </button>
+                ) : verificationResult.status === "found_missing_data" ? (
+                  <button
+                    onClick={() => {
+                      const params = new URLSearchParams();
+                      params.set("editPlayerId", verificationResult.playerId || "");
+                      params.set("demandeId", selectedMessage.id);
+                        if (selectedMessage.metadata?.site_message_id) {
+                          params.set("siteMessageId", selectedMessage.metadata.site_message_id);
+                        }
+                        if (selectedMessage.metadata?.comment_identifie) {
+                          params.set("commentIdentifie", selectedMessage.metadata.comment_identifie);
+                        }
+                        if (selectedMessage.metadata?.pied_dominant) {
+                          params.set("piedDominant", selectedMessage.metadata.pied_dominant);
+                        }
+                        if (selectedMessage.metadata?.club_actuel) {
+                          params.set("clubActuel", selectedMessage.metadata.club_actuel);
+                        }
+                        router.push(`/joueurs?${params.toString()}`);
+                      setSelectedMessage(null);
+                    }}
+                    className="w-full sm:w-auto rounded-xl bg-warning-500 px-8 py-2.5 text-sm font-bold text-white shadow-md shadow-warning-500/25 hover:bg-warning-600 hover:-translate-y-0.5 transition-all"
+                  >
+                    Remplir champs
+                  </button>
+                ) : verificationResult.status === "found_complete" || verificationResult.status === "found_inactive" ? (
+                  <button
+                    onClick={async () => {
+                      try {
+                        const newStatus = "inscrit";
+                        
+                        // Si le joueur est issu d'une détection et a un statut financier spécial
+                        if (selectedMessage.type_message === "detection" && verificationResult.playerId) {
+                          let finalStatus = "";
+                          if (detectionStatutSpecial === "Demi-bourse") {
+                            finalStatus = `Demi-bourse${detectionRabais ? ` (${detectionRabais}%)` : ""}`;
+                          } else if (detectionStatutSpecial === "Spécial") {
+                            finalStatus = `Spécial: ${detectionSpecialType === "Autre" && detectionSpecialAutre ? detectionSpecialAutre : detectionSpecialType}`;
+                          }
+                          
+                          if (finalStatus) {
+                            await updatePlayerFinancialStatus(verificationResult.playerId, finalStatus);
+                          }
+                        }
+                        
+                        await updateMessageStatus(selectedMessage.id, newStatus, selectedMessage.metadata);
+                        setMessages(prev => prev.map(m => m.id === selectedMessage.id ? { ...m, statut: newStatus } : m));
+                        setSelectedMessage(null);
+                      } catch (err) {
+                        console.error("Erreur lors de l'inscription:", err);
+                        alert("Une erreur est survenue lors de l'inscription.");
+                      }
+                    }}
+                    className="w-full sm:w-auto rounded-xl bg-success-600 px-8 py-2.5 text-sm font-bold text-white shadow-md shadow-success-500/25 hover:bg-success-500 transition-all"
+                  >
+                    {detectionStatutSpecial ? "Mettre à jour dans le système" : "Marquer comme Inscrit"}
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => {
+                      const queryParams = new URLSearchParams();
+                      queryParams.set("demandeId", selectedMessage.id);
+                      if (selectedMessage.metadata?.site_message_id) {
+                        queryParams.set("siteMessageId", selectedMessage.metadata.site_message_id);
+                      }
+                      
+                      if (selectedMessage.type_message === "detection") {
+                        let finalStatus = "";
+                        if (detectionStatutSpecial === "Demi-bourse") {
+                          finalStatus = `Demi-bourse${detectionRabais ? ` (${detectionRabais}%)` : ""}`;
+                        } else if (detectionStatutSpecial === "Spécial") {
+                          finalStatus = `Spécial: ${detectionSpecialType === "Autre" && detectionSpecialAutre ? detectionSpecialAutre : detectionSpecialType}`;
+                        }
+                        queryParams.set("sourceDetection", "true");
+                        if (finalStatus) {
+                          queryParams.set("statutJoueur", finalStatus);
+                        }
+                      }
+                      
+                      router.push(`/joueurs/nouveau?${queryParams.toString()}`);
+                      setSelectedMessage(null);
+                    }}
+                    className={`w-full sm:w-auto rounded-xl px-8 py-2.5 text-sm font-bold text-white shadow-md hover:-translate-y-0.5 transition-all ${
+                      selectedMessage.type_message === "detection" ? "bg-[#107C41] shadow-green-500/25 hover:bg-[#0c5e31]" : "bg-brand-500 shadow-brand-500/25 hover:bg-brand-600"
+                    }`}
+                  >
+                    {selectedMessage.type_message === "detection" ? "Enregistrer et Créer Joueur" : "Accepter"}
+                  </button>
+                )}
             </div>
           </div>
         </div>,

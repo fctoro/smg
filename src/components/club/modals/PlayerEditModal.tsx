@@ -16,6 +16,10 @@ interface PlayerEditModalProps {
   player: Player | null;
   highlightFields?: string[];
   demandeId?: string | null;
+  siteMessageId?: string | null;
+  commentIdentifie?: string | null;
+  piedDominant?: string | null;
+  clubActuel?: string | null;
 }
 
 export const PlayerEditModal: React.FC<PlayerEditModalProps> = ({
@@ -24,6 +28,10 @@ export const PlayerEditModal: React.FC<PlayerEditModalProps> = ({
   player,
   highlightFields = [],
   demandeId,
+  siteMessageId,
+  commentIdentifie,
+  piedDominant,
+  clubActuel,
 }) => {
   const { players, setPlayers } = useClubData();
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -67,7 +75,9 @@ export const PlayerEditModal: React.FC<PlayerEditModalProps> = ({
       // Clear the draft once submitted successfully
       sessionStorage.removeItem(`draft_${player.id}`);
       
-      if (demandeId) {
+      if (siteMessageId) {
+        await supabase.from("site_messages").update({ status: "enrolled", is_read: true }).eq("id", siteMessageId);
+      } else if (demandeId && !demandeId.startsWith("det_")) {
         await supabase.from("site_messages").update({ status: "enrolled", is_read: true }).eq("id", demandeId);
       }
       
@@ -107,7 +117,12 @@ export const PlayerEditModal: React.FC<PlayerEditModalProps> = ({
         
         <div className="max-h-[70vh] overflow-y-auto pr-2 px-1 -mx-1 custom-scrollbar">
           <PlayerForm
-            initialValues={toPlayerFormValues(player)}
+            initialValues={{
+              ...toPlayerFormValues(player),
+              ...(commentIdentifie ? { commentIdentifie } : {}),
+              ...(piedDominant ? { piedDominant } : {}),
+              ...(clubActuel ? { clubActuel } : {})
+            }}
             onSubmit={handleSubmit}
             onCancel={onClose}
             categories={categories}

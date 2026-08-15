@@ -144,6 +144,48 @@ export default function PlayerForm({
     }
   }, [formValues, draftKey]);
 
+  useEffect(() => {
+    if (!formValues.dateNaissance) return;
+    const dob = new Date(formValues.dateNaissance);
+    if (isNaN(dob.getTime())) return;
+    
+    const today = new Date();
+    let age = today.getFullYear() - dob.getFullYear();
+    const m = today.getMonth() - dob.getMonth();
+    if (m < 0 || (m === 0 && today.getDate() < dob.getDate())) {
+      age--;
+    }
+
+    let autoCategory = "";
+    if (age <= 5) autoCategory = "ti toro";
+    else if (age <= 7) autoCategory = "U8";
+    else if (age <= 9) autoCategory = "U10";
+    else if (age <= 11) autoCategory = "U12";
+    else if (age <= 13) autoCategory = "U14";
+    else if (age <= 15) autoCategory = "U16";
+    else if (age <= 17) autoCategory = "U18";
+    else if (age === 18) autoCategory = "U19";
+    else if (age >= 19) autoCategory = "U20";
+
+    if (autoCategory && autoCategory !== formValues.categorie) {
+      // Only set if the category exists in the available options or if it's one of the standard ones
+      const hasCategory = categories.some((c) => c.toLowerCase() === autoCategory.toLowerCase());
+      if (hasCategory) {
+        const exactCat = categories.find((c) => c.toLowerCase() === autoCategory.toLowerCase()) || autoCategory;
+        updateField("categorie", exactCat);
+        
+        // Also auto-assign program (ti toro vs FC toro) based on age
+        const isTiToro = age <= 5;
+        const currentProgramme = formValues.programme || "";
+        if (isTiToro && !currentProgramme.includes("Ti Toro")) {
+           updateField("programme", "Ti Toro (2 à 5 ans)");
+        } else if (!isTiToro && !currentProgramme.includes("FC Toro")) {
+           updateField("programme", "FC Toro (6 ans et plus)");
+        }
+      }
+    }
+  }, [formValues.dateNaissance, categories]);
+
   const getInputClass = (fieldName: string) => {
     if (highlightFields.includes(fieldName)) {
       return `${inputClassName} border-brand-500 ring-2 ring-brand-500/50 bg-brand-50/10 dark:bg-brand-900/10 relative`;
@@ -166,6 +208,7 @@ export default function PlayerForm({
   return (
     <form onSubmit={handleSubmit} className="space-y-8 pb-4">
       {/* PROGRAMME */}
+      {!formValues.sourceDetection && (
       <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-xs dark:border-gray-800 dark:bg-gray-900/50">
         <label className="mb-4 block text-sm font-semibold uppercase tracking-wider text-gray-800 dark:text-gray-200">
           Choix de la catégorie *
@@ -211,6 +254,7 @@ export default function PlayerForm({
           </label>
         </div>
       </div>
+      )}
 
       {/* SAISON D'INSCRIPTION */}
       <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-xs dark:border-gray-800 dark:bg-gray-900/50">
@@ -378,14 +422,94 @@ export default function PlayerForm({
             <input required value={formValues.adresse} onChange={(e) => updateField("adresse", e.target.value)} placeholder="Rue, Quartier, Ville" className={inputClassName} />
           </div>
 
-          <div>
-            <label className="mb-1.5 block text-xs font-medium text-gray-700 dark:text-gray-300">École fréquentée *</label>
-            <input value={formValues.ecole} onChange={(e) => updateField("ecole", e.target.value)} placeholder="Nom de l'établissement" className={inputClassName} />
-          </div>
+          {!formValues.sourceDetection && (
+            <div>
+              <label className="mb-1.5 block text-xs font-medium text-gray-700 dark:text-gray-300">École fréquentée *</label>
+              <input value={formValues.ecole} onChange={(e) => updateField("ecole", e.target.value)} placeholder="Nom de l'établissement" className={inputClassName} />
+            </div>
+          )}
 
-          <div className="sm:col-span-3">
-            <label className="mb-1.5 block text-xs font-medium text-gray-700 dark:text-gray-300">Ancienne expérience soccer</label>
-            <input value={formValues.experienceSoccer} onChange={(e) => updateField("experienceSoccer", e.target.value)} placeholder="Clubs précédents ou Nouveau" className={inputClassName} />
+          <div className="sm:col-span-2 lg:col-span-3 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="sm:col-span-2 lg:col-span-3">
+              <label className="mb-3 block text-xs font-medium text-gray-700 dark:text-gray-300">PIED DOMINANT *</label>
+              <div className="flex gap-4">
+                {["Droit", "Gauche", "Les deux"].map((option) => (
+                  <label key={option} className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="piedDominant"
+                      checked={formValues.piedDominant === option}
+                      onChange={() => updateField("piedDominant", option)}
+                      className="w-4 h-4 text-brand-500 bg-gray-100 border-gray-300 focus:ring-brand-500 dark:focus:ring-brand-600 dark:ring-offset-gray-800 dark:bg-gray-700 dark:border-gray-600"
+                    />
+                    <span className="text-sm text-gray-700 dark:text-gray-300">{option}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+            
+            <div className="sm:col-span-2 lg:col-span-3 mt-2">
+              <label className="mb-1.5 block text-xs font-medium text-gray-700 dark:text-gray-300">CLUB / ACADÉMIE ACTUELLE</label>
+              <input 
+                type="text" 
+                value={formValues.clubActuel || ""} 
+                onChange={(e) => updateField("clubActuel", e.target.value)} 
+                placeholder="Renseignez le club ou l'académie actuelle..." 
+                className={inputClassName} 
+              />
+            </div>
+
+            <div className="sm:col-span-2 lg:col-span-3 mt-2">
+              <label className="mb-1.5 block text-xs font-medium text-gray-700 dark:text-gray-300">EXPÉRIENCE (SÉLECTIONS, TOURNOIS, DISTINCTIONS)</label>
+              <textarea 
+                value={formValues.experienceSoccer || ""} 
+                onChange={(e) => updateField("experienceSoccer", e.target.value)} 
+                placeholder="Renseignez l'expérience du joueur..." 
+                className={`${inputClassName} min-h-[80px] resize-y`} 
+              />
+            </div>
+
+            <div className="sm:col-span-2 lg:col-span-3 pt-2">
+              <label className="mb-3 block text-xs font-medium text-gray-700 dark:text-gray-300">COMMENT AVEZ-VOUS ÉTÉ IDENTIFIÉ ?</label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {["Inscription libre", "Vertières Cup", "Recommandation d'un coach", "Watchlist FC TORO", "Flag Day Tournament", "Summer Camp FC TORO", "Sélection nationale"].map((option) => (
+                  <label key={option} className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="commentIdentifie"
+                      checked={formValues.commentIdentifie === option}
+                      onChange={() => updateField("commentIdentifie", option)}
+                      className="w-4 h-4 text-brand-500 bg-gray-100 border-gray-300 focus:ring-brand-500 dark:focus:ring-brand-600 dark:ring-offset-gray-800 dark:bg-gray-700 dark:border-gray-600"
+                    />
+                    <span className="text-sm text-gray-700 dark:text-gray-300">{option}</span>
+                  </label>
+                ))}
+                
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="commentIdentifie"
+                    checked={formValues.commentIdentifie !== "" && !["Inscription libre", "Vertières Cup", "Recommandation d'un coach", "Watchlist FC TORO", "Flag Day Tournament", "Summer Camp FC TORO", "Sélection nationale"].includes(formValues.commentIdentifie || "")}
+                    onChange={() => updateField("commentIdentifie", "Autre")}
+                    className="w-4 h-4 text-brand-500 bg-gray-100 border-gray-300 focus:ring-brand-500 dark:focus:ring-brand-600 dark:ring-offset-gray-800 dark:bg-gray-700 dark:border-gray-600"
+                  />
+                  <div className="flex-1">
+                    <input
+                      type="text"
+                      placeholder="Autre (préciser)"
+                      value={!["Inscription libre", "Vertières Cup", "Recommandation d'un coach", "Watchlist FC TORO", "Flag Day Tournament", "Summer Camp FC TORO", "Sélection nationale"].includes(formValues.commentIdentifie || "") ? formValues.commentIdentifie || "" : ""}
+                      onChange={(e) => updateField("commentIdentifie", e.target.value)}
+                      onFocus={() => {
+                        if (["Inscription libre", "Vertières Cup", "Recommandation d'un coach", "Watchlist FC TORO", "Flag Day Tournament", "Summer Camp FC TORO", "Sélection nationale"].includes(formValues.commentIdentifie || "")) {
+                          updateField("commentIdentifie", "");
+                        }
+                      }}
+                      className={`${inputClassName} text-sm py-1.5`}
+                    />
+                  </div>
+                </label>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -503,6 +627,102 @@ export default function PlayerForm({
               />
             </label>
           </div>
+
+          {/* Fiche 9ème (Detection uniquement) */}
+          {formValues.sourceDetection && (
+            <div className="p-4 rounded-xl border border-dashed border-gray-300 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/30 flex flex-col justify-between gap-3">
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <h5 className="text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wider">
+                    Fiche 9ème
+                  </h5>
+                  {formValues.fiche9eUrl && (
+                    <a
+                      href={formValues.fiche9eUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-brand-600 dark:text-brand-400 hover:underline font-semibold flex items-center gap-1"
+                    >
+                      Voir le document ↗
+                    </a>
+                  )}
+                </div>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  {formValues.fiche9eUrl ? "Document joint." : "Copie de la fiche 9ème (PDF/Image)."}
+                </p>
+              </div>
+
+              <label className="cursor-pointer shrink-0 rounded-lg border border-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 text-xs font-semibold px-3 py-2 shadow-xs transition-colors flex items-center justify-center gap-2">
+                <svg className="w-4 h-4 text-brand-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                </svg>
+                {formValues.fiche9eUrl ? "Remplacer la fiche 9ème" : "Ajouter la fiche 9ème"}
+                <input
+                  type="file"
+                  accept="image/*,application/pdf"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      const reader = new FileReader();
+                      reader.onloadend = () => {
+                        updateField("fiche9eUrl", reader.result as string);
+                      };
+                      reader.readAsDataURL(file);
+                    }
+                  }}
+                  className="hidden"
+                />
+              </label>
+            </div>
+          )}
+
+          {/* Carnet de Vaccination (Detection uniquement) */}
+          {formValues.sourceDetection && (
+            <div className="p-4 rounded-xl border border-dashed border-gray-300 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/30 flex flex-col justify-between gap-3">
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <h5 className="text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wider">
+                    Carnet de Vaccination
+                  </h5>
+                  {formValues.carnetVaccinationUrl && (
+                    <a
+                      href={formValues.carnetVaccinationUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-brand-600 dark:text-brand-400 hover:underline font-semibold flex items-center gap-1"
+                    >
+                      Voir le document ↗
+                    </a>
+                  )}
+                </div>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  {formValues.carnetVaccinationUrl ? "Document joint." : "Copie du carnet de vaccination (PDF/Image)."}
+                </p>
+              </div>
+
+              <label className="cursor-pointer shrink-0 rounded-lg border border-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 text-xs font-semibold px-3 py-2 shadow-xs transition-colors flex items-center justify-center gap-2">
+                <svg className="w-4 h-4 text-brand-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                </svg>
+                {formValues.carnetVaccinationUrl ? "Remplacer le carnet de vaccination" : "Ajouter le carnet de vaccination"}
+                <input
+                  type="file"
+                  accept="image/*,application/pdf"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      const reader = new FileReader();
+                      reader.onloadend = () => {
+                        updateField("carnetVaccinationUrl", reader.result as string);
+                      };
+                      reader.readAsDataURL(file);
+                    }
+                  }}
+                  className="hidden"
+                />
+              </label>
+            </div>
+          )}
         </div>
       </div>
 
@@ -525,6 +745,11 @@ export default function PlayerForm({
           </div>
 
           <div>
+            <label className="mb-1.5 block text-xs font-medium text-gray-700 dark:text-gray-300">Lien avec le joueur *</label>
+            <input value={formValues.parentLien} onChange={(e) => updateField("parentLien", e.target.value)} placeholder="Ex: Père, Mère, Tuteur..." className={inputClassName} />
+          </div>
+
+          <div>
             <label className="mb-1.5 block text-xs font-medium text-gray-700 dark:text-gray-300">E-mail *</label>
             <input type="email" value={formValues.email} onChange={(e) => { updateField("email", e.target.value); updateField("parentEmail", e.target.value); }} className={inputClassName} />
           </div>
@@ -534,7 +759,7 @@ export default function PlayerForm({
             <input value={formValues.telephone} onChange={(e) => { updateField("telephone", e.target.value); updateField("parentTelephone", e.target.value); }} placeholder="+509..." className={inputClassName} />
           </div>
 
-          <div>
+          <div className="sm:col-span-2">
             <label className="mb-1.5 block text-xs font-medium text-gray-700 dark:text-gray-300">Adresse (si différente)</label>
             <input value={formValues.parentAdresse} onChange={(e) => updateField("parentAdresse", e.target.value)} className={inputClassName} />
           </div>
@@ -542,6 +767,7 @@ export default function PlayerForm({
       </div>
 
       {/* SECTION 03: CONTACT D'URGENCE */}
+      {!formValues.sourceDetection && (
       <div className="space-y-4 rounded-xl border border-gray-200 bg-white p-6 shadow-xs dark:border-gray-800 dark:bg-gray-900/50">
         <div className="mb-4 flex items-center gap-3 border-b border-gray-200 pb-4 dark:border-gray-700">
           <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-gray-200 bg-gray-50 text-xs font-semibold text-gray-600 shadow-xs dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400">
@@ -580,6 +806,7 @@ export default function PlayerForm({
           </div>
         </div>
       </div>
+      )}
 
       {/* SECTION 04: UNIFORMES & TAILLES */}
       <div className="space-y-4 rounded-xl border border-gray-200 bg-white p-6 shadow-xs dark:border-gray-800 dark:bg-gray-900/50">
@@ -632,37 +859,55 @@ export default function PlayerForm({
       </div>
 
       {/* SECTION 05 & 06: PLAN ET MODE DE PAIEMENT */}
-      <div className="space-y-4 rounded-xl border border-gray-200 bg-white p-6 shadow-xs dark:border-gray-800 dark:bg-gray-900/50">
-        <div className="mb-4 flex items-center gap-3 border-b border-gray-200 pb-4 dark:border-gray-700">
-          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-gray-200 bg-gray-50 text-xs font-semibold text-gray-600 shadow-xs dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400">
-            5
-          </span>
-          <div>
-            <h4 className="text-sm font-semibold uppercase tracking-wider text-gray-800 dark:text-gray-200">Plan & Mode de Paiement</h4>
-            <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Sélectionnez le plan de paiement et le mode de règlement.</p>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label className="mb-1.5 block text-xs font-medium text-gray-700 dark:text-gray-300">Choix du Plan de Paiement *</label>
-            <select value={formValues.planPaiement} onChange={(e) => updateField("planPaiement", e.target.value)} className={selectClassName}>
-              <option value="PLAN #1 (Annuel)">PLAN #1 (Annuel) - Versement unique à l'inscription ($1,215)</option>
-              <option value="PLAN #2 (Semestriel)">PLAN #2 (Semestriel) - 2 versements égaux ($641.25 x 2)</option>
-              <option value="PLAN #3 (Mensuel)">PLAN #3 (Mensuel) - 9 versements ($155 / mois)</option>
-            </select>
+      {!(formValues.sourceDetection || (formValues.statutJoueur && formValues.statutJoueur !== "Normal" && !formValues.statutJoueur.toLowerCase().includes("demi-bourse"))) ? (
+        <div className="space-y-4 rounded-xl border border-gray-200 bg-white p-6 shadow-xs dark:border-gray-800 dark:bg-gray-900/50">
+          <div className="mb-4 flex items-center gap-3 border-b border-gray-200 pb-4 dark:border-gray-700">
+            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-gray-200 bg-gray-50 text-xs font-semibold text-gray-600 shadow-xs dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400">
+              5
+            </span>
+            <div>
+              <h4 className="text-sm font-semibold uppercase tracking-wider text-gray-800 dark:text-gray-200">Plan & Mode de Paiement</h4>
+              <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Sélectionnez le plan de paiement et le mode de règlement.</p>
+            </div>
           </div>
 
-          <div>
-            <label className="mb-1.5 block text-xs font-medium text-gray-700 dark:text-gray-300">Mode de règlement *</label>
-            <select value={formValues.modePaiementChoisi} onChange={(e) => updateField("modePaiementChoisi", e.target.value)} className={selectClassName}>
-              <option value="Cash/chèque">Cash / chèque</option>
-              <option value="Carte bancaire">Carte bancaire</option>
-              <option value="Transfert bancaire">Transfert bancaire</option>
-            </select>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="mb-1.5 block text-xs font-medium text-gray-700 dark:text-gray-300">Choix du Plan de Paiement *</label>
+              <select value={formValues.planPaiement} onChange={(e) => updateField("planPaiement", e.target.value)} className={selectClassName}>
+                <option value="PLAN #1 (Annuel)">PLAN #1 (Annuel) - Versement unique à l'inscription ($1,215)</option>
+                <option value="PLAN #2 (Semestriel)">PLAN #2 (Semestriel) - 2 versements égaux ($641.25 x 2)</option>
+                <option value="PLAN #3 (Mensuel)">PLAN #3 (Mensuel) - 9 versements ($155 / mois)</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="mb-1.5 block text-xs font-medium text-gray-700 dark:text-gray-300">Mode de règlement *</label>
+              <select value={formValues.modePaiementChoisi} onChange={(e) => updateField("modePaiementChoisi", e.target.value)} className={selectClassName}>
+                <option value="Cash/chèque">Cash / chèque</option>
+                <option value="Carte bancaire">Carte bancaire</option>
+                <option value="Transfert bancaire">Transfert bancaire</option>
+              </select>
+            </div>
           </div>
         </div>
-      </div>
+      ) : (
+        <div className="space-y-4 rounded-xl border border-gray-200 bg-white p-6 shadow-xs dark:border-gray-800 dark:bg-gray-900/50">
+          <div className="mb-4 flex items-center gap-3 border-b border-gray-200 pb-4 dark:border-gray-700">
+            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-gray-200 bg-gray-50 text-xs font-semibold text-gray-600 shadow-xs dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400">
+              5
+            </span>
+            <div>
+              <h4 className="text-sm font-semibold uppercase tracking-wider text-gray-800 dark:text-gray-200">Dossier Financier</h4>
+              <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Informations sur le statut financier particulier du joueur.</p>
+            </div>
+          </div>
+          <div className="mt-2 text-sm text-gray-700 dark:text-gray-300">
+            Ce joueur bénéficie d'un statut financier particulier : <strong>{formValues.statutJoueur || (formValues.sourceDetection ? "Détection / Sponsorisé" : "Spécial")}</strong>. 
+            Les champs de facturation standards sont désactivés pour ce profil.
+          </div>
+        </div>
+      )}
 
       {/* FOOTER ACTIONS */}
       <div className="flex flex-wrap items-center justify-end gap-3 pt-4 border-t border-gray-100 dark:border-gray-800">

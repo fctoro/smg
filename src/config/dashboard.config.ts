@@ -28,6 +28,8 @@ export const DEFAULT_CATEGORIES = [
   "U14",
   "U16",
   "U18",
+  "U19",
+  "U20",
 ];
 
 export interface DashboardWidgetConfig {

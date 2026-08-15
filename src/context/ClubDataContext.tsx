@@ -359,8 +359,9 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
               }
             }
 
-            // Génération du matricule PERMANENT basé sur la 1ère saison d'entrée (ex: FCT-2223-4129)
-            const matricule = generatePlayerMatricule(primaryRecord.EtudiantID, entrySeason);
+            // Génération du matricule PERMANENT basé sur la 1ère saison d'entrée (ex: FCT-2223-4129 ou DET-2223-4129)
+            const isDetection = group.some(g => (g.Info1 && String(g.Info1).includes("DETECTION")) || String(g.sourceDetection) === "true");
+            const matricule = generatePlayerMatricule(primaryRecord.EtudiantID, entrySeason, isDetection);
 
             // Fusion des champs d'information
             const photoUrl = group.find(g => g.PhotoUrl && !g.PhotoUrl.includes("silhouette"))?.PhotoUrl || primaryRecord.PhotoUrl || "/images/user/silhouette.svg";
@@ -389,13 +390,19 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
             const parentEmail = group.find(g => g.EmailParent)?.EmailParent || primaryRecord.EmailParent || email;
             const parentAdresse = group.find(g => g.AdresseParent)?.AdresseParent || primaryRecord.AdresseParent || adresse;
 
+            const photoIdentiteUrl = group.find(g => g.PhotoIdentiteUrl)?.PhotoIdentiteUrl || primaryRecord.PhotoIdentiteUrl || "";
+            const acteNaissanceUrl = group.find(g => g.ActeNaissanceUrl)?.ActeNaissanceUrl || primaryRecord.ActeNaissanceUrl || "";
+            const carteIdentiteParentUrl = group.find(g => g.CarteIdentiteParentUrl)?.CarteIdentiteParentUrl || primaryRecord.CarteIdentiteParentUrl || "";
+            const fiche9eUrl = group.find(g => g.Info2)?.Info2 || primaryRecord.Info2 || "";
+            const carnetVaccinationUrl = group.find(g => g.Info3)?.Info3 || primaryRecord.Info3 || "";
+
             // Détermination du statut réel du joueur
             const savedPlayerStatus = String(primaryRecord.StatutJoueur || "").trim().toLowerCase();
             let playerStatus: PlayerStatus = "actif";
 
             const isAlumni = group.some(g => g.EstAlumni === true || g.EstAlumni === 1 || String(g.EstAlumni).toLowerCase() === "true" || String(g.StatutJoueur).toLowerCase() === "alumni");
             const isAbandon = group.some(g => g.Abandon === true || g.Abandon === 1 || String(g.Abandon).toLowerCase() === "true" || String(g.StatutJoueur).toLowerCase().includes("abandon"));
-            const isInactive = group.some(g => g.Actif === false || g.Actif === 0 || String(g.Actif).toLowerCase() === "false" || String(g.StatutJoueur).toLowerCase().includes("inactif"));
+            const isInactive = group.every(g => g.Actif === false || g.Actif === 0 || String(g.Actif).toLowerCase() === "false" || String(g.StatutJoueur).toLowerCase().includes("inactif"));
             const isBlesse = group.some(g => String(g.StatutJoueur).toLowerCase().includes("bless"));
             const isSuspendu = group.some(g => String(g.StatutJoueur).toLowerCase().includes("suspend"));
 
@@ -417,13 +424,18 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
             for (const id of allGroupIds) {
               const st = playerStatusMap.get(String(id));
               if (st) {
-                finalStatutJoueur = st;
-                break;
+                if (["actif", "inactif", "blesse", "suspendu", "abandonne", "alumni"].includes(st.toLowerCase())) {
+                  playerStatus = st.toLowerCase() as PlayerStatus;
+                } else {
+                  finalStatutJoueur = st;
+                }
               }
             }
 
+            // Fallback pour le statut principal si finalStatutJoueur contenait un statut de base
             if (finalStatutJoueur && ["actif", "inactif", "blesse", "suspendu", "abandonne", "alumni"].includes(finalStatutJoueur.toLowerCase())) {
               playerStatus = finalStatutJoueur.toLowerCase() as PlayerStatus;
+              finalStatutJoueur = undefined;
             }
 
             let currentDisplaySeason = latestSeasonStr || primaryRecord.Saison || entrySeason || "";
@@ -455,6 +467,11 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
               nom: primaryRecord.Nom || "",
               prenom: primaryRecord.Prenom || "",
               photoUrl,
+              photoIdentiteUrl,
+              acteNaissanceUrl,
+              carteIdentiteParentUrl,
+              fiche9eUrl,
+              carnetVaccinationUrl,
               poste,
               sexe,
               categorie: (() => {
@@ -489,8 +506,9 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
 
                 return rawCat || "Senior";
               })(),
-              statut: playerStatus,
+               statut: playerStatus,
               statutJoueur: finalStatutJoueur,
+              sourceDetection: isDetection,
               cotisationDevise: primaryRecord.CotisationDevise || "US",
               telephone,
               email,
@@ -512,6 +530,21 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
               urgenceAdresse,
               tailleHaut: primaryRecord.TailleHaut || "M",
               tailleShort: primaryRecord.TailleShort || "M",
+              commentIdentifie: (() => {
+                const info1 = group.find(g => g.Info1)?.Info1 || "";
+                const match = String(info1).match(/IDENTIFIE:([^|]+)/);
+                return match ? match[1].trim() : "";
+              })(),
+              piedDominant: (() => {
+                const info1 = group.find(g => g.Info1)?.Info1 || "";
+                const match = String(info1).match(/PIED:([^|]+)/);
+                return match ? match[1].trim() : "";
+              })(),
+              clubActuel: (() => {
+                const info1 = group.find(g => g.Info1)?.Info1 || "";
+                const match = String(info1).match(/CLUB:([^|]+)/);
+                return match ? match[1].trim() : "";
+              })(),
             });
           });
 

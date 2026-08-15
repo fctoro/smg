@@ -7,6 +7,7 @@ import { Player, Effectif } from "@/types/club";
 import { getPlayerFullName } from "@/lib/club/metrics";
 import { CoachPlayerStatusModal } from "../modals/CoachPlayerStatusModal";
 import { PlayerViewModal } from "../modals/PlayerViewModal";
+import { CoachPlayerEvaluationModal } from "../modals/CoachPlayerEvaluationModal";
 import { RosterFormModal } from "../modals/RosterFormModal";
 import { fetchEffectifsByCoach, deleteEffectif } from "@/lib/club/effectifs";
 import { convertRostersToCSV, downloadCSV } from "@/lib/club/rosterExport";
@@ -26,6 +27,7 @@ export default function CoachPlayersPage() {
   const { userCategories, userEmail } = useUserRole();
   const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
   const [selectedViewPlayer, setSelectedViewPlayer] = useState<Player | null>(null);
+  const [selectedEvalPlayer, setSelectedEvalPlayer] = useState<Player | null>(null);
   
   // Tabs
   const [activeTab, setActiveTab] = useState<"liste" | "effectifs">("liste");
@@ -239,6 +241,7 @@ export default function CoachPlayersPage() {
             title="Effectif Joueurs"
             showToolbar={true}
             pageSize={10}
+            availableCategories={userCategories}
             exportButton={
               coachPlayers.length > 0 ? (
                 <button
@@ -254,6 +257,7 @@ export default function CoachPlayersPage() {
             }
             onViewPlayer={(player) => setSelectedViewPlayer(player)}
             onEditPlayer={(player) => setSelectedPlayer(player)}
+            onEvaluatePlayer={(player) => setSelectedEvalPlayer(player)}
             emptyMessage="Aucun joueur trouvé pour vos catégories assignées."
           />
         </div>
@@ -295,8 +299,16 @@ export default function CoachPlayersPage() {
                       </Link>
                     </div>
                   ) : (
-                    <div className="mb-4 text-sm text-gray-400 italic">Aucune tactique</div>
+                    <div className="mb-4 text-sm flex items-center gap-1.5 text-gray-500 dark:text-gray-400">
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 21v-4m0 0V5a2 2 0 012-2h6.5l1 1H21l-3 6 3 6h-8.5l-1-1H5a2 2 0 00-2 2zm9-13.5V9" />
+                      </svg>
+                      <Link href={`/coach?tab=tactiques&effectifId=${roster.id}`} className="hover:underline hover:text-brand-600 dark:hover:text-brand-400 transition-colors">
+                        Ouvrir sur le terrain (sans tactique)
+                      </Link>
+                    </div>
                   )}
+
 
                   <div className="flex gap-2 border-t border-gray-100 dark:border-gray-800 pt-4 mt-4">
                     <button
@@ -345,6 +357,12 @@ export default function CoachPlayersPage() {
         onClose={() => setSelectedViewPlayer(null)}
         player={selectedViewPlayer}
         hideParentsAndDocs={true}
+      />
+
+      <CoachPlayerEvaluationModal
+        isOpen={!!selectedEvalPlayer}
+        onClose={() => setSelectedEvalPlayer(null)}
+        player={selectedEvalPlayer}
       />
 
       <RosterFormModal

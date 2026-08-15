@@ -19,25 +19,42 @@ export async function GET(request: Request, context: any) {
       return NextResponse.json({ error: "ID manquant." }, { status: 400 });
     }
 
-    // Fetch the site_message
-    const { data: msgRows, error: msgErr } = await supabase
-      .from("site_messages")
-      .select("payload, type, email")
-      .eq("id", id);
+    let firstName = "";
+    let lastName = "";
 
-    if (msgErr || !msgRows || msgRows.length === 0) {
-      return NextResponse.json({ isDuplicate: false });
+    if (id.startsWith("det_")) {
+      const rawId = id.replace("det_", "");
+      const { data: detData, error: detErr } = await supabase
+        .from("detection_registrations")
+        .select("prenom, nom")
+        .eq("id", rawId)
+        .single();
+        
+      if (detErr || !detData) {
+        return NextResponse.json({ isDuplicate: false });
+      }
+      firstName = detData.prenom?.trim();
+      lastName = detData.nom?.trim();
+    } else {
+      // Fetch the site_message
+      const { data: msgRows, error: msgErr } = await supabase
+        .from("site_messages")
+        .select("payload, type, email")
+        .eq("id", id);
+
+      if (msgErr || !msgRows || msgRows.length === 0) {
+        return NextResponse.json({ isDuplicate: false });
+      }
+
+      const msg = msgRows[0];
+      if (msg.type !== "joueur" && msg.type !== "detection") {
+        return NextResponse.json({ isDuplicate: false });
+      }
+
+      const payload = msg.payload || {};
+      firstName = payload.child_first_name?.trim() || payload.prenom?.trim();
+      lastName = payload.child_last_name?.trim() || payload.nom?.trim();
     }
-
-    const msg = msgRows[0];
-    if (msg.type !== "joueur") {
-      return NextResponse.json({ isDuplicate: false });
-    }
-
-    let payload = msg.payload || {};
-
-    const firstName = payload.child_first_name?.trim();
-    const lastName = payload.child_last_name?.trim();
     
     if (!firstName || !lastName) {
        return NextResponse.json({ isDuplicate: false });
@@ -52,7 +69,8 @@ export async function GET(request: Request, context: any) {
       .from("tblEtudiants")
       .select("EtudiantID, Nom, Prenom")
       .ilike("Prenom", `%${normalizedFirst}%`)
-      .ilike("Nom", `%${normalizedLast}%`);
+      .ilike("Nom", `%${normalizedLast}%`)
+      .or("IsDeleted.eq.0,IsDeleted.is.null");
 
     if (!regErr && regRows && regRows.length > 0) {
       return NextResponse.json({

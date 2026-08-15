@@ -25,12 +25,18 @@ export const normalizePlayerFormValues = (
   acteNaissanceUrl: values.acteNaissanceUrl,
   carteIdentiteParentUrl: values.carteIdentiteParentUrl,
   dossierPdfUrl: values.dossierPdfUrl,
+  fiche9eUrl: values.fiche9eUrl,
+  carnetVaccinationUrl: values.carnetVaccinationUrl,
 
   programme: values.programme || "FC Toro (6 ans et plus)",
   ecole: values.ecole || "",
   experienceSoccer: values.experienceSoccer || "",
+  commentIdentifie: values.commentIdentifie || "",
+  piedDominant: values.piedDominant || "",
+  clubActuel: values.clubActuel || "",
 
   parentNomPrenom: values.parentNomPrenom || "",
+  parentLien: values.parentLien || "",
   parentEmail: values.parentEmail || "",
   parentTelephone: values.parentTelephone || "",
   parentAdresse: values.parentAdresse || "",
@@ -48,6 +54,8 @@ export const normalizePlayerFormValues = (
   planPaiement: values.planPaiement || "PLAN #1 (Annuel)",
   modePaiementChoisi: values.modePaiementChoisi || "Transfert bancaire",
   saison: String(values.saison || "").replace(/saison\s+/i, "").trim() || getCurrentSeason(),
+  statutJoueur: values.statutJoueur || "",
+  sourceDetection: values.sourceDetection || false,
 });
 
 export const toPlayerFormValues = (player: Player): PlayerFormValues => ({
@@ -70,12 +78,18 @@ export const toPlayerFormValues = (player: Player): PlayerFormValues => ({
     acteNaissanceUrl: player.acteNaissanceUrl,
     carteIdentiteParentUrl: player.carteIdentiteParentUrl,
     dossierPdfUrl: player.dossierPdfUrl,
+    fiche9eUrl: player.fiche9eUrl,
+    carnetVaccinationUrl: player.carnetVaccinationUrl,
 
     programme: player.programme,
     ecole: player.ecole,
     experienceSoccer: player.experienceSoccer,
+    commentIdentifie: player.commentIdentifie,
+    piedDominant: player.piedDominant,
+    clubActuel: player.clubActuel,
 
     parentNomPrenom: player.parentNomPrenom || "",
+    parentLien: player.parentLien || "",
     parentEmail: player.parentEmail || player.email || "",
     parentTelephone: player.parentTelephone || player.telephone || "",
     parentAdresse: player.parentAdresse || player.adresse || "",
@@ -93,6 +107,8 @@ export const toPlayerFormValues = (player: Player): PlayerFormValues => ({
     planPaiement: player.planPaiement,
     modePaiementChoisi: player.modePaiementChoisi,
     saison: player.saison,
+    statutJoueur: player.statutJoueur || "",
+    sourceDetection: (player as any).sourceDetection || false,
   }),
 });
 

@@ -69,16 +69,6 @@ export default function ClubDashboardPage() {
 
   const paymentSeries = getMonthlyPaymentsSeries(payments, isAllTime ? "all" : displayYear);
   const recentPlayers = useMemo(() => {
-    const pending2026 = players.filter(
-      (p) => (p.saison?.includes("2026") || p.saison === "2026-2027") && p.cotisationStatut === "pending"
-    );
-    if (pending2026.length > 0) {
-      return getRecentPlayers(pending2026, 6);
-    }
-    const all2026 = players.filter((p) => p.saison?.includes("2026") || p.saison === "2026-2027");
-    if (all2026.length > 0) {
-      return getRecentPlayers(all2026, 6);
-    }
     return getRecentPlayers(players, 6);
   }, [players]);
   const upcomingEvents = getUpcomingEvents(events, 4, now);

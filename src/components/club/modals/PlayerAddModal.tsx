@@ -34,13 +34,15 @@ export function PlayerAddModal({ isOpen, onClose }: PlayerAddModalProps) {
       const inserted = await addPlayerToSupabase(newPlayerLocal);
       if (inserted && inserted.EtudiantID) {
         const chosenSeasonStr = values.saison || getCurrentSeason();
-        const matriculeCode = generatePlayerMatricule(inserted.EtudiantID, chosenSeasonStr);
+        const isDetection = values.sourceDetection || false;
+        const matriculeCode = generatePlayerMatricule(inserted.EtudiantID, chosenSeasonStr, isDetection);
         
         const newPlayer: Player = { 
           ...newPlayerLocal, 
           id: String(inserted.EtudiantID),
           saison: chosenSeasonStr,
           matricule: matriculeCode,
+          sourceDetection: isDetection,
         };
         setPlayers((prevPlayers) => [newPlayer, ...prevPlayers]);
         

@@ -62,6 +62,7 @@ export const updatePlayerInSupabase = async (playerId: string, data: Partial<Pla
   if (data.dateNaissance !== undefined) updatePayload.DateNaissance = data.dateNaissance;
   if (data.photoUrl !== undefined && data.photoUrl !== "/images/user/silhouette.svg") updatePayload.PhotoIdentiteUrl = data.photoUrl;
   if (data.saison !== undefined) updatePayload.Saison = data.saison;
+  if (data.statutJoueur !== undefined) updatePayload.StatutJoueur = data.statutJoueur;
 
   if (data.urgenceNomPrenom !== undefined) updatePayload.UrgenceNomPrenom = data.urgenceNomPrenom;
   if (data.urgenceLien !== undefined) updatePayload.UrgenceLien = data.urgenceLien;
@@ -70,6 +71,16 @@ export const updatePlayerInSupabase = async (playerId: string, data: Partial<Pla
   if (data.urgenceAdresse !== undefined) updatePayload.UrgenceAdresse = data.urgenceAdresse;
   if (data.tailleHaut !== undefined) updatePayload.TailleHaut = data.tailleHaut;
   if (data.tailleShort !== undefined) updatePayload.TailleShort = data.tailleShort;
+  if (data.poste !== undefined) updatePayload.Poste = data.poste;
+  if ((data as any).experienceSoccer !== undefined) updatePayload.Experience = (data as any).experienceSoccer;
+
+  if ((data as any).commentIdentifie !== undefined || (data as any).piedDominant !== undefined || (data as any).clubActuel !== undefined) {
+    const existingInfo1 = (data as any).sourceDetection ? "SOURCE:DETECTION" : "";
+    updatePayload.Info1 = existingInfo1 + 
+      ((data as any).commentIdentifie ? `|IDENTIFIE:${(data as any).commentIdentifie}` : "") +
+      ((data as any).piedDominant ? `|PIED:${(data as any).piedDominant}` : "") +
+      ((data as any).clubActuel ? `|CLUB:${(data as any).clubActuel}` : "");
+  }
 
   if (data.parentNomPrenom !== undefined) {
     const parentParts = (data.parentNomPrenom || "").trim().split(" ");
@@ -134,12 +145,20 @@ export const updatePlayerInSupabase = async (playerId: string, data: Partial<Pla
     }
   }
   if (data.acteNaissanceUrl) {
-    const url = await handleDocUpload(data.acteNaissanceUrl, "acte_naissance");
+    const url = data.acteNaissanceUrl.startsWith("data:") ? await handleDocUpload(data.acteNaissanceUrl, "acte_naissance") : data.acteNaissanceUrl;
     if (url) updatePayload.ActeNaissanceUrl = url;
   }
   if (data.carteIdentiteParentUrl) {
-    const url = await handleDocUpload(data.carteIdentiteParentUrl, "carte_identite_parent");
+    const url = data.carteIdentiteParentUrl.startsWith("data:") ? await handleDocUpload(data.carteIdentiteParentUrl, "carte_identite_parent") : data.carteIdentiteParentUrl;
     if (url) updatePayload.CarteIdentiteParentUrl = url;
+  }
+  if ((data as any).fiche9eUrl) {
+    const url = (data as any).fiche9eUrl.startsWith("data:") ? await handleDocUpload((data as any).fiche9eUrl, "fiche9e") : (data as any).fiche9eUrl;
+    if (url) updatePayload.Info2 = url;
+  }
+  if ((data as any).carnetVaccinationUrl) {
+    const url = (data as any).carnetVaccinationUrl.startsWith("data:") ? await handleDocUpload((data as any).carnetVaccinationUrl, "vaccination") : (data as any).carnetVaccinationUrl;
+    if (url) updatePayload.Info3 = url;
   }
 
   const { updatePlayerAdmin } = await import("@/app/actions/club");
@@ -194,6 +213,13 @@ export const addPlayerToSupabase = async (data: Omit<Player & { photoIdentiteUrl
     UrgenceAdresse: data.urgenceAdresse || null,
     TailleHaut: data.tailleHaut || null,
     TailleShort: data.tailleShort || null,
+    StatutJoueur: data.statutJoueur || null,
+    Poste: data.poste || null,
+    Experience: (data as any).experienceSoccer || null,
+    Info1: ((data as any).sourceDetection ? "SOURCE:DETECTION" : "") + 
+           ((data as any).commentIdentifie ? `|IDENTIFIE:${(data as any).commentIdentifie}` : "") +
+           ((data as any).piedDominant ? `|PIED:${(data as any).piedDominant}` : "") +
+           ((data as any).clubActuel ? `|CLUB:${(data as any).clubActuel}` : ""),
   };
 
   const handleDocUpload = async (base64Str: string, docType: string) => {
@@ -227,9 +253,21 @@ export const addPlayerToSupabase = async (data: Omit<Player & { photoIdentiteUrl
     return null;
   };
 
-  if (data.photoIdentiteUrl) insertPayload.PhotoIdentiteUrl = await handleDocUpload(data.photoIdentiteUrl, "photo");
-  if (data.acteNaissanceUrl) insertPayload.ActeNaissanceUrl = await handleDocUpload(data.acteNaissanceUrl, "acte");
-  if (data.carteIdentiteParentUrl) insertPayload.CarteIdentiteParentUrl = await handleDocUpload(data.carteIdentiteParentUrl, "carte");
+  if (data.photoIdentiteUrl) {
+    insertPayload.PhotoIdentiteUrl = data.photoIdentiteUrl.startsWith("data:") ? await handleDocUpload(data.photoIdentiteUrl, "photo") : data.photoIdentiteUrl;
+  }
+  if (data.acteNaissanceUrl) {
+    insertPayload.ActeNaissanceUrl = data.acteNaissanceUrl.startsWith("data:") ? await handleDocUpload(data.acteNaissanceUrl, "acte") : data.acteNaissanceUrl;
+  }
+  if (data.carteIdentiteParentUrl) {
+    insertPayload.CarteIdentiteParentUrl = data.carteIdentiteParentUrl.startsWith("data:") ? await handleDocUpload(data.carteIdentiteParentUrl, "carte") : data.carteIdentiteParentUrl;
+  }
+  if ((data as any).fiche9eUrl) {
+    insertPayload.Info2 = (data as any).fiche9eUrl.startsWith("data:") ? await handleDocUpload((data as any).fiche9eUrl, "fiche9e") : (data as any).fiche9eUrl;
+  }
+  if ((data as any).carnetVaccinationUrl) {
+    insertPayload.Info3 = (data as any).carnetVaccinationUrl.startsWith("data:") ? await handleDocUpload((data as any).carnetVaccinationUrl, "vaccination") : (data as any).carnetVaccinationUrl;
+  }
 
   const { insertPlayerAdmin } = await import("@/app/actions/club");
   let result = await insertPlayerAdmin(insertPayload);

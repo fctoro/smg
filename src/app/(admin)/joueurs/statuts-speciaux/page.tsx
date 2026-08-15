@@ -247,16 +247,18 @@ export default function StatutsSpeciauxPage() {
     }
 
     if (stLower.includes("demi")) {
+      const hasPercent = status.includes("%");
       return (
         <span className="inline-flex items-center rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700 dark:bg-blue-500/10 dark:text-blue-400 border border-blue-200 dark:border-blue-500/20">
-          {status} (50%)
+          {hasPercent ? status : `${status} (50%)`}
         </span>
       );
     }
     if (stLower.includes("bourse") || stLower.includes("boursier")) {
+      const hasPercent = status.includes("%");
       return (
         <span className="inline-flex items-center rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/20">
-          {status} (100%)
+          {hasPercent ? status : `${status} (100%)`}
         </span>
       );
     }

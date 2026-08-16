@@ -30,6 +30,8 @@ export const DEFAULT_CATEGORIES = [
   "U18",
   "U19",
   "U20",
+  "fc toro",
+  "Senior",
 ];
 
 export interface DashboardWidgetConfig {

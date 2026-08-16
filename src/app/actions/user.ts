@@ -182,6 +182,10 @@ export async function createUser(formData: FormData) {
         console.error("Profile upsert error:", profileError);
         fs.appendFileSync('server_action.log', `profileError: ${JSON.stringify(profileError)}\n`);
       }
+
+      if (role.toLowerCase() === "coach") {
+        await syncCoachTable(email, fullName, categories);
+      }
     }
 
     fs.appendFileSync('server_action.log', `revalidating path\n`);
@@ -209,11 +213,12 @@ export async function updateUserAccess(userId: string, role: string, sections: s
     }
 
     const { data: profileData } = await supabaseAdmin.from("profiles").select("full_name").eq("id", userId).maybeSingle();
+    const { data: authUserData } = await supabaseAdmin.auth.admin.getUserById(userId);
+    const email = authUserData?.user?.email || "";
     let fullName = profileData?.full_name;
 
     if (!fullName) {
-      const { data: authUserData } = await supabaseAdmin.auth.admin.getUserById(userId);
-      fullName = authUserData?.user?.user_metadata?.full_name || authUserData?.user?.email || "Utilisateur";
+      fullName = authUserData?.user?.user_metadata?.full_name || email || "Utilisateur";
     }
 
     const { error: profileError } = await upsertProfile({
@@ -225,6 +230,10 @@ export async function updateUserAccess(userId: string, role: string, sections: s
 
     if (profileError) {
       return { error: profileError.message };
+    }
+
+    if (role.toLowerCase() === "coach" && email) {
+      await syncCoachTable(email, fullName, categories);
     }
 
     revalidatePath("/parametres/acces");
@@ -268,5 +277,79 @@ export async function updateUserPassword(userId: string, newPassword: string) {
     return { success: true };
   } catch (err: any) {
     return { error: err.message || "Impossible de modifier le mot de passe." };
+  }
+}
+
+async function syncCoachTable(email: string, fullName: string, categories: string[]) {
+  try {
+    if (!email) return;
+
+    const { data: existingCoach } = await supabaseAdmin
+      .from("tblCoachs")
+      .select("id, nom, prenom")
+      .ilike("email", email)
+      .maybeSingle();
+
+    if (existingCoach) {
+      await supabaseAdmin
+        .from("tblCoachs")
+        .update({ categories })
+        .eq("id", existingCoach.id);
+    } else {
+      let nom = "Coach";
+      let prenom = "Nouveau";
+      if (fullName) {
+        const parts = fullName.split(" ");
+        if (parts.length > 1) {
+          prenom = parts[0];
+          nom = parts.slice(1).join(" ");
+        } else {
+          nom = fullName;
+        }
+      }
+      await supabaseAdmin
+        .from("tblCoachs")
+        .insert([{
+          nom,
+          prenom,
+          email,
+          categories,
+          sexe: "Masculin",
+          saison: "2026-2027"
+        }]);
+    }
+  } catch (e) {
+    console.error("Error syncing coach to tblCoachs:", e);
+  }
+}
+
+export async function syncCoachAuthMetadata(email: string, categories: string[]) {
+  try {
+    if (!supabaseAdmin) return { success: false, error: "Service role Supabase indisponible." };
+    if (!email) return { success: false, error: "Email manquant." };
+
+    const { data: usersData, error: usersError } = await supabaseAdmin.auth.admin.listUsers();
+    if (usersError || !usersData?.users) {
+      return { success: false, error: usersError?.message || "Impossible de lister les utilisateurs." };
+    }
+
+    const user = usersData.users.find((u: any) => u.email?.toLowerCase() === email.toLowerCase());
+    if (user) {
+      const { error: updateErr } = await supabaseAdmin.auth.admin.updateUserById(user.id, {
+        user_metadata: {
+          ...user.user_metadata,
+          role: "Coach",
+          categories: categories
+        }
+      });
+
+      if (updateErr) {
+        return { success: false, error: updateErr.message };
+      }
+    }
+
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message };
   }
 }

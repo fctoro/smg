@@ -10,3 +10,9 @@ createUser auth done. authError: false
 upserting profile for user ba1e2d54-d161-4f51-b3f2-58697fd2eb13
 revalidating path
 done
+[2026-08-16T11:03:59.125Z] createUser called
+Email: rodjensky.piton@esih.edu, Role: Coach
+createUser auth done. authError: false
+upserting profile for user ffc91bb7-d1f5-4441-9c37-8e7e3fb40110
+revalidating path
+done

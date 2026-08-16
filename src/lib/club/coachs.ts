@@ -1,5 +1,6 @@
 import { supabase } from "@/lib/supabaseClient";
 import { Coach } from "@/types/club";
+import { syncCoachAuthMetadata } from "@/app/actions/user";
 
 export async function fetchCoaches(): Promise<Coach[]> {
   const { data, error } = await supabase.from("tblCoachs").select("*").order("nom", { ascending: true });
@@ -15,6 +16,13 @@ export async function createCoach(coach: Omit<Coach, "id" | "created_at">): Prom
   if (error) {
     return { error: error.message };
   }
+  
+  try {
+    await syncCoachAuthMetadata(coach.email, coach.categories);
+  } catch (e) {
+    console.error("Error syncing auth metadata in createCoach:", e);
+  }
+
   return { data: data as Coach };
 }
 
@@ -23,7 +31,17 @@ export async function updateCoach(id: string, updates: Partial<Coach>): Promise<
   if (error) {
     return { error: error.message };
   }
-  return { data: data as Coach };
+
+  const updatedCoach = data as Coach;
+  if (updatedCoach && updatedCoach.email && updatedCoach.categories) {
+    try {
+      await syncCoachAuthMetadata(updatedCoach.email, updatedCoach.categories);
+    } catch (e) {
+      console.error("Error syncing auth metadata in updateCoach:", e);
+    }
+  }
+
+  return { data: updatedCoach };
 }
 
 export async function deleteCoach(id: string): Promise<{ error?: string }> {

@@ -17,6 +17,7 @@ import { fetchEffectifById, updateEffectif, fetchEffectifsByCoach } from "@/lib/
 import { Player, Effectif } from "@/types/club";
 import { useRouter } from "next/navigation";
 import { useUserRole } from "@/context/UserRoleContext";
+import { useConfirm } from "@/hooks/useConfirm";
 
 type SlotRole = TacticalRole | "GK";
 
@@ -266,6 +267,7 @@ const buildAutoAssignments = (slots: FormationSlot[], players: Player[]) => {
 
 export default function CoachTacticsPage({ planId, effectifId }: { planId?: string | null, effectifId?: string | null }) {
   const router = useRouter();
+  const { confirm, ConfirmComponent } = useConfirm();
   const { players, hydrated } = useClubData();
   const [formationId, setFormationId] = useState(
     defaultFifaFormationId || fallbackFormation.id,
@@ -290,6 +292,8 @@ export default function CoachTacticsPage({ planId, effectifId }: { planId?: stri
   const [effectif, setEffectif] = useState<Effectif | null>(null);
   const [isEffectifModified, setIsEffectifModified] = useState(false);
   const [isSavingEffectif, setIsSavingEffectif] = useState(false);
+  const originalSquadIds = useRef<string[]>([]);
+  const originalAssignments = useRef<Record<string, string>>({});
 
   const [isPlanLoaded, setIsPlanLoaded] = useState(false);
   const { userEmail } = useUserRole();
@@ -311,15 +315,17 @@ export default function CoachTacticsPage({ planId, effectifId }: { planId?: stri
       fetchEffectifById(effectifId).then(data => {
         if (data) {
           setEffectif(data);
-          // Initialize squadIds with all roster players
           setSquadIds(data.joueurs || []);
+          originalSquadIds.current = data.joueurs || [];
           
-          // Try to load saved plan from localStorage using tactique_id or effectifId
           const planKey = data.tactique_id || effectifId;
           const plan = getTacticalPlan(planKey);
           if (plan) {
             setFormationId(plan.formationId);
             setAssignments(plan.assignments);
+            originalAssignments.current = plan.assignments || {};
+          } else {
+            originalAssignments.current = {};
           }
           setIsPlanLoaded(true);
         }
@@ -329,13 +335,20 @@ export default function CoachTacticsPage({ planId, effectifId }: { planId?: stri
       if (plan) {
         setFormationId(plan.formationId);
         setAssignments(plan.assignments);
-        // Restore squadIds from plan
+        originalAssignments.current = plan.assignments || {};
         const starterIds = Object.values(plan.assignments);
         const savedBenchIds = (plan as any).benchIds || [];
-        setSquadIds([...new Set([...starterIds, ...savedBenchIds])]);
+        const restoredSquad = [...new Set([...starterIds, ...savedBenchIds])];
+        setSquadIds(restoredSquad);
+        originalSquadIds.current = restoredSquad;
+      } else {
+        originalAssignments.current = {};
+        originalSquadIds.current = [];
       }
       setIsPlanLoaded(true);
     } else {
+      originalAssignments.current = {};
+      originalSquadIds.current = [];
       setIsPlanLoaded(true);
     }
   }, [planId, effectifId]);
@@ -442,7 +455,7 @@ export default function CoachTacticsPage({ planId, effectifId }: { planId?: stri
   }, [players, squadIds, selectedPlayerIds, searchBenchQuery]);
 
   const remainingPlayers = useMemo(() => {
-    let pool = players.filter(p => p.statut === "actif" && !squadIds.includes(p.id));
+    let pool = availablePlayers.filter(p => !squadIds.includes(p.id));
     if (effectif) {
       const targetCat = (effectif.categorie || "").trim().toLowerCase();
       pool = pool.filter(p => (p.categorie || "").trim().toLowerCase() === targetCat);
@@ -456,7 +469,7 @@ export default function CoachTacticsPage({ planId, effectifId }: { planId?: stri
       );
     }
     return pool.sort(byPlayerName);
-  }, [players, squadIds, effectif, searchRemainingQuery]);
+  }, [availablePlayers, squadIds, effectif, searchRemainingQuery]);
 
   // --- Squad Management ---
 
@@ -617,46 +630,67 @@ export default function CoachTacticsPage({ planId, effectifId }: { planId?: stri
 
   const saveEffectifMatch = async () => {
     if (!effectif) return;
-    setIsSavingEffectif(true);
-
-    // Save ALL squad members (terrain + bench), max 25
-    const newJoueurs: string[] = [...new Set(squadIds)].slice(0, 25);
-
-    // 1. Save tactical plan to localStorage under effectif.id
-    const stored = localStorage.getItem("fctoro_coach_plans");
-    let plans = [];
-    if (stored) {
-      try {
-        const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed)) plans = parsed;
-      } catch (e) {}
+    
+    const isDirty = 
+      hasUnsavedChanges || 
+      isEffectifModified || 
+      JSON.stringify([...squadIds].sort()) !== JSON.stringify([...originalSquadIds.current].sort()) ||
+      JSON.stringify(assignments) !== JSON.stringify(originalAssignments.current);
+    if (!isDirty) {
+      alert("Aucune modification à sauvegarder.");
+      return;
     }
-    plans = plans.filter((p: any) => p.id !== effectif.id);
-    plans.push({
-      id: effectif.id,
-      name: effectif.nom,
-      formationId: formationId,
-      assignments: assignments,
-      benchIds: benchPlayers.map(p => p.id),
-      createdAt: new Date().toISOString()
-    });
-    localStorage.setItem("fctoro_coach_plans", JSON.stringify(plans));
 
-    // 2. Save roster players and plan reference to Supabase
-    const { error } = await updateEffectif(effectif.id, { 
-      joueurs: newJoueurs,
-      tactique_id: effectif.id
-    });
+    confirm({
+      title: "Sauvegarder les modifications",
+      message: "Voulez-vous vraiment sauvegarder les modifications apportées à cet effectif ?",
+      confirmText: "Sauvegarder",
+      cancelText: "Annuler",
+      onConfirm: async () => {
+        setIsSavingEffectif(true);
 
-    setIsSavingEffectif(false);
-    if (!error) {
-      setIsEffectifModified(false);
-      setHasUnsavedChanges(false);
-      setEffectif({ ...effectif, joueurs: newJoueurs, tactique_id: effectif.id });
-      alert("Effectif et plan tactique sauvegardés avec succès !");
-    } else {
-      alert("Erreur lors de la sauvegarde.");
-    }
+        // Save ALL squad members (terrain + bench), max 25
+        const newJoueurs: string[] = [...new Set(squadIds)].slice(0, 25);
+
+        // 1. Save tactical plan to localStorage under effectif.id
+        const stored = localStorage.getItem("fctoro_coach_plans");
+        let plans = [];
+        if (stored) {
+          try {
+            const parsed = JSON.parse(stored);
+            if (Array.isArray(parsed)) plans = parsed;
+          } catch (e) {}
+        }
+        plans = plans.filter((p: any) => p.id !== effectif.id);
+        plans.push({
+          id: effectif.id,
+          name: effectif.nom,
+          formationId: formationId,
+          assignments: assignments,
+          benchIds: benchPlayers.map(p => p.id),
+          createdAt: new Date().toISOString()
+        });
+        localStorage.setItem("fctoro_coach_plans", JSON.stringify(plans));
+
+        // 2. Save roster players and plan reference to Supabase
+        const { error } = await updateEffectif(effectif.id, { 
+          joueurs: newJoueurs,
+          tactique_id: effectif.id
+        });
+
+        setIsSavingEffectif(false);
+        if (!error) {
+          setIsEffectifModified(false);
+          setHasUnsavedChanges(false);
+          setEffectif({ ...effectif, joueurs: newJoueurs, tactique_id: effectif.id });
+          originalSquadIds.current = newJoueurs;
+          originalAssignments.current = assignments;
+          alert("Effectif et plan tactique sauvegardés avec succès !");
+        } else {
+          alert("Erreur lors de la sauvegarde.");
+        }
+      }
+    });
   };
 
   const applySwap = (slotId: string, benchPlayerId: string) => {
@@ -778,6 +812,7 @@ export default function CoachTacticsPage({ planId, effectifId }: { planId?: stri
 
   return (
     <div className="space-y-6">
+      <ConfirmComponent />
       <PageBreadcrumb pageTitle="Tactiques & Terrain" />
 
       <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03]">
@@ -921,35 +956,54 @@ export default function CoachTacticsPage({ planId, effectifId }: { planId?: stri
                       key={r.id}
                       type="button"
                       onClick={() => {
-                        const isDirty = hasUnsavedChanges || isEffectifModified;
-                        if (isDirty && !window.confirm("Vous avez des modifications non sauvegardées. Continuer ?")) return;
+                        const isDirty = 
+                          hasUnsavedChanges || 
+                          isEffectifModified || 
+                          JSON.stringify([...squadIds].sort()) !== JSON.stringify([...originalSquadIds.current].sort()) ||
+                          JSON.stringify(assignments) !== JSON.stringify(originalAssignments.current);
+                        if (isDirty) {
+                          confirm({
+                            title: "Modifications non sauvegardées",
+                            message: "Voulez-vous vraiment charger un autre effectif ? Vos modifications non sauvegardées sur l'effectif actuel seront perdues.",
+                            confirmText: "Annuler les modifications",
+                            cancelText: "Retour",
+                            isDestructive: true,
+                            onConfirm: () => {
+                              setIsEffectifModified(false);
+                              setHasUnsavedChanges(false);
+                              hasAutoAssigned.current = false;
+                              router.push(`/coach?tab=tactiques&effectifId=${r.id}`);
+                            }
+                          });
+                          return;
+                        }
                         
                         hasAutoAssigned.current = false;
                         router.push(`/coach?tab=tactiques&effectifId=${r.id}`);
                       }}
-                      className={`w-full group relative flex items-center justify-between p-3.5 rounded-xl border transition-all duration-200 text-left ${
+                      className={`w-full group relative flex items-center justify-between p-4 rounded-xl border transition-all duration-300 text-left ${
                         isActive
-                          ? "border-brand-500 bg-brand-500/[0.04] shadow-xs pl-4 border-l-4 border-l-brand-500 dark:border-brand-500 dark:bg-brand-500/10"
-                          : "border-gray-100 bg-white hover:border-brand-300 hover:shadow-sm hover:translate-x-0.5 dark:border-gray-800 dark:bg-gray-800/40 dark:hover:border-brand-500/40"
+                          ? "border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-white/[0.04] shadow-xs"
+                          : "border-gray-200/80 bg-white hover:border-brand-500/20 hover:shadow-[0_4px_12px_-3px_rgba(0,0,0,0.06)] hover:-translate-y-0.5 dark:border-gray-800 dark:bg-gray-900/40 dark:hover:border-brand-500/30"
                       }`}
                     >
-                      <div className="min-w-0 pr-2">
-                        <p className={`text-sm font-semibold truncate ${
-                          isActive ? "text-brand-700 dark:text-brand-400" : "text-gray-800 dark:text-white/90 group-hover:text-brand-600 dark:group-hover:text-brand-400"
+                      <div className="min-w-0 pr-3">
+                        <p className={`text-[13px] font-bold tracking-tight truncate ${
+                          isActive ? "text-gray-900 dark:text-white" : "text-slate-800 dark:text-slate-200 group-hover:text-brand-600 dark:group-hover:text-brand-400 transition-colors duration-200"
                         }`}>
                           {r.nom}
                         </p>
-                        <div className="flex flex-wrap items-center gap-2 mt-1.5">
-                          <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider ${
+                        <div className="flex flex-wrap items-center gap-2 mt-2">
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[9px] font-extrabold uppercase tracking-wider border ${
                             isActive
-                              ? "bg-brand-100 text-brand-800 dark:bg-brand-500/20 dark:text-brand-300"
-                              : "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400"
+                              ? "bg-slate-100 text-slate-700 border-slate-200/50 dark:bg-slate-800 dark:text-slate-350 dark:border-slate-700/50"
+                              : "bg-slate-100 text-slate-650 border-transparent dark:bg-slate-850 dark:text-slate-400"
                           }`}>
                             {r.categorie}
                           </span>
                           {r.date_match && (
-                            <span className="text-[10px] text-gray-400 dark:text-gray-500 flex items-center gap-1">
-                              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <span className="text-[10px] text-slate-400 dark:text-slate-500 flex items-center gap-1 font-medium">
+                              <svg className="w-3.5 h-3.5 text-slate-350 dark:text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                               </svg>
                               {new Date(r.date_match).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}
@@ -957,16 +1011,17 @@ export default function CoachTacticsPage({ planId, effectifId }: { planId?: stri
                           )}
                         </div>
                       </div>
-                      <div className="flex items-center gap-1.5 shrink-0">
+                      <div className="flex items-center shrink-0 ml-2">
                         {isActive ? (
-                          <span className="flex h-2 w-2 relative">
-                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-brand-400 opacity-75"></span>
-                            <span className="relative inline-flex rounded-full h-2 w-2 bg-brand-500"></span>
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[9px] font-extrabold tracking-wider bg-brand-600 text-white dark:bg-brand-500/20 dark:text-brand-300 shadow-[0_1px_3px_rgba(185,28,28,0.15)] uppercase">
+                            ACTIF
                           </span>
                         ) : (
-                          <svg className="w-4 h-4 text-gray-400 group-hover:text-brand-500 group-hover:translate-x-0.5 transition-all duration-200" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                          </svg>
+                          <div className="h-7 w-7 rounded-full flex items-center justify-center bg-slate-50 text-slate-400 border border-slate-100 group-hover:bg-brand-500 group-hover:text-white group-hover:border-brand-500 transition-all duration-300">
+                            <svg className="w-3.5 h-3.5 transform group-hover:translate-x-0.5 transition-transform duration-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
+                            </svg>
+                          </div>
                         )}
                       </div>
                     </button>
@@ -1008,8 +1063,26 @@ export default function CoachTacticsPage({ planId, effectifId }: { planId?: stri
                 <button
                   type="button"
                   onClick={() => {
-                    const isDirty = hasUnsavedChanges || isEffectifModified;
-                    if (isDirty && !window.confirm("Vous avez des modifications non sauvegardées. Voulez-vous vraiment quitter ?")) return;
+                    const isDirty = 
+                      hasUnsavedChanges || 
+                      isEffectifModified || 
+                      JSON.stringify([...squadIds].sort()) !== JSON.stringify([...originalSquadIds.current].sort()) ||
+                      JSON.stringify(assignments) !== JSON.stringify(originalAssignments.current);
+                    if (isDirty) {
+                      confirm({
+                        title: "Modifications non sauvegardées",
+                        message: "Voulez-vous vraiment quitter ? Vos modifications non sauvegardées seront perdues.",
+                        confirmText: "Annuler les modifications",
+                        cancelText: "Retour",
+                        isDestructive: true,
+                        onConfirm: () => {
+                          setIsEffectifModified(false);
+                          setHasUnsavedChanges(false);
+                          router.push('/coach?tab=effectifs');
+                        }
+                      });
+                      return;
+                    }
                     router.push('/coach?tab=effectifs');
                   }}
                   className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 shadow-sm hover:bg-gray-50 hover:text-gray-900 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700 transition-all"

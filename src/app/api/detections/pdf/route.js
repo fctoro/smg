@@ -184,15 +184,41 @@ export async function GET(request) {
 
     if (metadata.numero_detection) {
       page.drawText(`N° ${metadata.numero_detection}`, {
-        x: width - 150,
-        y: height - 65,
-        size: 12,
+        x: 105,
+        y: height - 100,
+        size: 11,
         font: timesBoldFont,
         color: rgb(0.1, 0.1, 0.3),
       });
     }
 
-    let currentY = height - 130;
+    // Draw Candidate Photo at Top Right of Page 1
+    if (metadata.photo_recente_url) {
+      try {
+        const photoBytes = await resolvePhotoBytes(metadata.photo_recente_url);
+        if (photoBytes) {
+          const photoImage = await embedImage(pdfDoc, photoBytes);
+          page.drawRectangle({
+            x: width - 145,
+            y: height - 180,
+            width: 104,
+            height: 124,
+            borderColor: rgb(0.8, 0.8, 0.8),
+            borderWidth: 1,
+          });
+          page.drawImage(photoImage, {
+            x: width - 143,
+            y: height - 178,
+            width: 100,
+            height: 120,
+          });
+        }
+      } catch (error) {
+        console.warn("Photo top right placement error:", error.message);
+      }
+    }
+
+    let currentY = height - 140;
 
     const drawSectionHeader = (title) => {
       page.drawRectangle({
@@ -328,7 +354,6 @@ export async function GET(request) {
     drawFooter(page, 1);
 
     const attachmentsToEmbed = [
-      { key: "photo_recente", label: "PHOTO RÉCENTE DU JOUEUR", url: metadata.photo_recente_url },
       { key: "fiche_9e", label: "FICHE 9ÈME", url: metadata.fiche_9e_url },
       { key: "carnet_vaccination", label: "CARNET DE VACCINATION", url: metadata.carnet_vaccination_url },
       { key: "acte_naissance", label: "ACTE DE NAISSANCE", url: metadata.acte_naissance_url },

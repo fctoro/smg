@@ -2,9 +2,7 @@ require("dotenv").config({ path: ".env.local" });
 const { Client } = require("pg");
 
 async function addColumn() {
-  const url = process.env.DATABASE_URL
-    .replace("Fulmounproduction#2012,", encodeURIComponent("Fulmounproduction#2012,"))
-    .replace(",@", "@");
+  const url = process.env.DATABASE_URL;
     
   const client = new Client({
     connectionString: url

@@ -20,14 +20,17 @@
 # misc
 .DS_Store
 *.pem
+*.log
+*.log*
 
-# debug
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
+# local env files (ignore all .env files)
+.env
+.env*
+!.env.example
 
-# local env files
-.env*.local
+# scratch and temporary script directories
+/scratch/
+scratch/
 
 # vercel
 .vercel
@@ -35,3 +38,4 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+

@@ -1,5 +1,6 @@
+require('dotenv').config({ path: '.env.local' });
 const { Client } = require('pg');
-const client = new Client({ connectionString: 'postgresql://postgres:Fulmounproduction%232012,@db.efyjemzzapcrluqydwzj.supabase.co:5432/postgres' });
+const client = new Client({ connectionString: process.env.DATABASE_URL });
 client.connect().then(() => {
   client.query('ALTER TABLE "tblEtudiants" ADD COLUMN "Poste" text;').then(() => {
     console.log("Column added");
@@ -9,3 +10,4 @@ client.connect().then(() => {
     client.end();
   });
 }).catch(e => console.log("Connection error:", e));
+

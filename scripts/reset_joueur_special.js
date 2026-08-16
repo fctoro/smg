@@ -1,12 +1,9 @@
+require('dotenv').config({ path: '../.env.local' });
 const { Client } = require('pg');
 
-// Connexion à la base de données Supabase
+// Connexion à la base de données Supabase via variable d'environnement
 const client = new Client({
-  host: 'db.efyjemzzapcrluqydwzj.supabase.co',
-  port: 5432,
-  database: 'postgres',
-  user: 'postgres',
-  password: 'Fulmounproduction#2012,',
+  connectionString: process.env.DATABASE_URL
 });
 
 async function resetJoueurSpecial() {

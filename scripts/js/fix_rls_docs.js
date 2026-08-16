@@ -1,7 +1,8 @@
+require('dotenv').config({ path: '../../.env.local' });
 const { Client } = require('pg');
 
 const client = new Client({
-  connectionString: 'postgresql://postgres.xsfmhqdgqowgfoppohan:Fulmounproduction@2012!@aws-1-us-west-2.pooler.supabase.com:6543/postgres',
+  connectionString: process.env.DATABASE_URL,
 });
 
 async function run() {

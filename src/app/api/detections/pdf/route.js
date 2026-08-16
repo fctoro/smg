@@ -159,25 +159,18 @@ export async function GET(request) {
       console.warn("Logo error:", error.message);
     }
 
-    page.drawLine({
-      start: { x: 40, y: height - 105 },
-      end: { x: width - 40, y: height - 105 },
-      thickness: 2,
-      color: rgb(0.8, 0.1, 0.1),
-    });
-
     page.drawText("FC TORO - DÉTECTION", {
       x: 105,
-      y: height - 65,
-      size: 18,
+      y: height - 60,
+      size: 17,
       font: timesBoldFont,
       color: rgb(0.1, 0.1, 0.3),
     });
 
     page.drawText("FICHE DE CANDIDATURE DÉTECTION", {
       x: 105,
-      y: height - 85,
-      size: 11,
+      y: height - 78,
+      size: 10,
       font: timesBoldFont,
       color: rgb(0.8, 0.1, 0.1),
     });
@@ -185,40 +178,76 @@ export async function GET(request) {
     if (metadata.numero_detection) {
       page.drawText(`N° ${metadata.numero_detection}`, {
         x: 105,
-        y: height - 100,
-        size: 11,
+        y: height - 94,
+        size: 10,
         font: timesBoldFont,
         color: rgb(0.1, 0.1, 0.3),
       });
     }
 
-    // Draw Candidate Photo at Top Right of Page 1
-    if (metadata.photo_recente_url) {
+    // Red line under header stopping before photo
+    page.drawLine({
+      start: { x: 40, y: height - 110 },
+      end: { x: width - 130, y: height - 110 },
+      thickness: 2,
+      color: rgb(0.8, 0.1, 0.1),
+    });
+
+    // Draw Candidate Photo Box at Top Right of Page 1 (neat 76x92 size above currentY)
+    const photoUrl = metadata.photo_recente_url || metadata.photo_url || metadata.photo_id_url;
+    const photoBoxX = width - 116;
+    const photoBoxY = height - 115;
+    const photoBoxW = 76;
+    const photoBoxH = 92;
+
+    page.drawRectangle({
+      x: photoBoxX,
+      y: photoBoxY,
+      width: photoBoxW,
+      height: photoBoxH,
+      borderColor: rgb(0.75, 0.75, 0.75),
+      borderWidth: 1,
+      color: rgb(0.96, 0.96, 0.96),
+    });
+
+    let hasDrawnPhoto = false;
+
+    if (photoUrl) {
       try {
-        const photoBytes = await resolvePhotoBytes(metadata.photo_recente_url);
+        const photoBytes = await resolvePhotoBytes(photoUrl);
         if (photoBytes) {
           const photoImage = await embedImage(pdfDoc, photoBytes);
-          page.drawRectangle({
-            x: width - 145,
-            y: height - 180,
-            width: 104,
-            height: 124,
-            borderColor: rgb(0.8, 0.8, 0.8),
-            borderWidth: 1,
-          });
           page.drawImage(photoImage, {
-            x: width - 143,
-            y: height - 178,
-            width: 100,
-            height: 120,
+            x: photoBoxX + 2,
+            y: photoBoxY + 2,
+            width: photoBoxW - 4,
+            height: photoBoxH - 4,
           });
+          hasDrawnPhoto = true;
         }
       } catch (error) {
         console.warn("Photo top right placement error:", error.message);
       }
     }
 
-    let currentY = height - 140;
+    if (!hasDrawnPhoto) {
+      page.drawText("PHOTO", {
+        x: photoBoxX + 18,
+        y: photoBoxY + 50,
+        size: 9,
+        font: timesBoldFont,
+        color: rgb(0.65, 0.65, 0.65),
+      });
+      page.drawText("NON FOURNIE", {
+        x: photoBoxX + 8,
+        y: photoBoxY + 36,
+        size: 7,
+        font: timesRomanFont,
+        color: rgb(0.65, 0.65, 0.65),
+      });
+    }
+
+    let currentY = height - 135;
 
     const drawSectionHeader = (title) => {
       page.drawRectangle({

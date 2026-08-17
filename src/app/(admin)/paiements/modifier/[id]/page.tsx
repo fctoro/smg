@@ -36,6 +36,7 @@ export default function ModifyPaymentPage({ params }: { params: Promise<{ id: st
   const [paymentPhoto, setPaymentPhoto] = useState<File | null>(null);
   const [paymentPhotoPreview, setPaymentPhotoPreview] = useState<string | null>(null);
   const [paymentPhotoError, setPaymentPhotoError] = useState<string | null>(null);
+  const [existingPhotoUrl, setExistingPhotoUrl] = useState<string | null>(null);
   const [toast, setToast] = useState<{ message: string; type?: "success" | "error" | "info" } | null>(null);
 
   const searchContainerRef = { current: null as HTMLDivElement | null };
@@ -58,7 +59,13 @@ export default function ModifyPaymentPage({ params }: { params: Promise<{ id: st
       setMontant(payment.montant);
       setDevise(payment.devise);
       setTaux(payment.taux || 0);
-      setDescription(payment.remarque || "");
+      let rawRemarque = payment.remarque || "";
+      const proofMatch = rawRemarque.match(/\[JUSTIFICATIF:(.+?)\]/);
+      if (proofMatch) {
+        setExistingPhotoUrl(proofMatch[1]);
+        rawRemarque = rawRemarque.replace(/\[JUSTIFICATIF:.+?\]/, "").trim();
+      }
+      setDescription(rawRemarque);
       setPeriode(payment.periode || "");
       setStatut(payment.statut);
       setMethode(payment.methode);
@@ -88,6 +95,17 @@ export default function ModifyPaymentPage({ params }: { params: Promise<{ id: st
     setPaymentPhotoError(null);
   };
 
+  const handleRemovePhoto = () => {
+    if (paymentPhoto) {
+      setPaymentPhoto(null);
+      setPaymentPhotoPreview(null);
+    } else {
+      setExistingPhotoUrl(null);
+    }
+  };
+
+  const activePhotoUrl = paymentPhotoPreview || existingPhotoUrl;
+
   const handleSubmit = async () => {
     setError("");
 
@@ -110,10 +128,11 @@ export default function ModifyPaymentPage({ params }: { params: Promise<{ id: st
         paymentPhotoUrl = await uploadPaymentPhotoToSupabase(paymentPhoto);
       }
 
-      // Build remark with photo URL if provided
+      // Build remark with photo URL if provided or preserved
       let finalRemarque = description.trim() || "Paiement complémentaire";
-      if (paymentPhotoUrl) {
-        const paymentPhotoNote = ` [JUSTIFICATIF:${paymentPhotoUrl}]`;
+      const activePhotoUrl = paymentPhotoUrl || existingPhotoUrl;
+      if (activePhotoUrl) {
+        const paymentPhotoNote = ` [JUSTIFICATIF:${activePhotoUrl}]`;
         finalRemarque = `${finalRemarque}${paymentPhotoNote}`.trim();
       }
 
@@ -283,21 +302,54 @@ export default function ModifyPaymentPage({ params }: { params: Promise<{ id: st
             Justificatif de paiement (optionnel)
           </label>
           <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800/40">
-            <input
-              type="file"
-              accept="image/jpeg,image/png,image/webp,image/jpg"
-              onChange={handlePaymentPhotoChange}
-              className="block w-full text-sm text-gray-600 file:mr-4 file:rounded-lg file:border-0 file:bg-brand-500 file:px-4 file:py-2 file:text-sm file:font-medium file:text-white hover:file:bg-brand-600"
-            />
-            {paymentPhotoError && <p className="mt-2 text-sm text-red-600">{paymentPhotoError}</p>}
-            {paymentPhoto && !paymentPhotoError && (
-              <div className="mt-3 flex items-center gap-3">
-                <span className="text-sm text-gray-600 dark:text-gray-300">Fichier sélectionné : {paymentPhoto.name}</span>
-                {paymentPhotoPreview && (
-                  <img src={paymentPhotoPreview} alt="Aperçu du justificatif" className="h-16 w-16 rounded-lg object-cover border border-gray-200 dark:border-gray-700" />
+            <div className="flex flex-row items-center justify-between gap-4">
+              {/* Left: Preview & Input */}
+              <div className="flex flex-col sm:flex-row sm:items-center gap-4 flex-1 min-w-0">
+                {activePhotoUrl && (
+                  <div className="relative h-16 w-16 shrink-0 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden bg-white">
+                    <img src={activePhotoUrl} alt="Justificatif" className="h-full w-full object-cover" />
+                  </div>
                 )}
+                
+                <div className="flex-1 min-w-0 space-y-2">
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/jpg"
+                    onChange={handlePaymentPhotoChange}
+                    className="block w-full text-sm text-gray-600 file:mr-4 file:rounded-lg file:border-0 file:bg-brand-500 file:px-4 file:py-2 file:text-sm file:font-medium file:text-white hover:file:bg-brand-600"
+                  />
+                  
+                  {paymentPhotoError && <p className="text-xs text-red-650 font-semibold">{paymentPhotoError}</p>}
+                  
+                  {/* Status text */}
+                  <div className="text-xs text-gray-500 dark:text-gray-400">
+                    {paymentPhoto ? (
+                      <span className="text-brand-650 font-bold">Nouveau fichier : {paymentPhoto.name}</span>
+                    ) : existingPhotoUrl ? (
+                      <span>Justificatif actuellement enregistré.</span>
+                    ) : (
+                      <span>Aucun justificatif sélectionné. Formats: JPG, PNG, WEBP (max 5 Mo)</span>
+                    )}
+                  </div>
+                </div>
               </div>
-            )}
+
+              {/* Right: Actions Column */}
+              {activePhotoUrl && (
+                <div className="shrink-0 flex items-center border-l border-gray-200 dark:border-gray-700 pl-4 h-12">
+                  <button
+                    type="button"
+                    onClick={handleRemovePhoto}
+                    title="Supprimer le justificatif"
+                    className="h-9 w-9 rounded-lg flex items-center justify-center text-red-500 hover:text-red-650 hover:bg-red-50 dark:hover:bg-red-500/10 transition-all cursor-pointer"
+                  >
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 

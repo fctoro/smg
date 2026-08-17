@@ -546,7 +546,16 @@ export const updatePaymentInSupabase = async (paymentId: string, data: Partial<i
     }
   }
   if (data.datePaiement !== undefined) updatePayload.DateTransact = data.datePaiement;
-  if (data.methode !== undefined) updatePayload.ModePaiement = data.methode;
+  if (data.methode !== undefined) {
+    const modePaiementMap: Record<string, number> = {
+      'especes': 1,
+      'carte': 2,
+      'virement': 3,
+      'mobile': 4,
+      'cheque': 1
+    };
+    updatePayload.ModePaiement = modePaiementMap[data.methode] || 1;
+  }
   if (data.remarque !== undefined) updatePayload.Remarque = data.remarque;
   if (data.statut !== undefined) updatePayload.Statut = data.statut;
   if (data.periode !== undefined) updatePayload.Periode = data.periode;
@@ -616,7 +625,8 @@ export const addPaymentToSupabase = async (data: Omit<import("@/types/club").Pay
     'especes': 1,
     'carte': 2,
     'virement': 3,
-    'mobile': 4
+    'mobile': 4,
+    'cheque': 1
   };
 
   const insertPayload: any = {

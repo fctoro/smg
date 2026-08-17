@@ -17,12 +17,46 @@ const supabaseAdmin: any = process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.S
 
 export async function insertPlayerAdmin(insertPayload: any) {
   if (!supabaseAdmin) return { success: false, error: "Service role Supabase indisponible." };
-  const { data, error } = await supabaseAdmin
+
+  if (!insertPayload.EtudiantID) {
+    const { data: maxRow } = await supabaseAdmin
+      .from("tblEtudiants")
+      .select("EtudiantID")
+      .order("EtudiantID", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (maxRow?.EtudiantID && !isNaN(Number(maxRow.EtudiantID))) {
+      insertPayload.EtudiantID = Number(maxRow.EtudiantID) + 1;
+    }
+  }
+
+  let { data, error } = await supabaseAdmin
     .from("tblEtudiants")
     .insert(insertPayload)
     .select("EtudiantID")
     .single();
- 
+
+  if (error && (error.code === "23505" || error.message?.includes("PK_tblEtudiant") || error.message?.includes("duplicate key"))) {
+    const { data: freshMax } = await supabaseAdmin
+      .from("tblEtudiants")
+      .select("EtudiantID")
+      .order("EtudiantID", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (freshMax?.EtudiantID) {
+      insertPayload.EtudiantID = Number(freshMax.EtudiantID) + 1;
+      const retryRes = await supabaseAdmin
+        .from("tblEtudiants")
+        .insert(insertPayload)
+        .select("EtudiantID")
+        .single();
+      data = retryRes.data;
+      error = retryRes.error;
+    }
+  }
+
   if (error) {
     return { success: false, error: error.message };
   }

@@ -194,6 +194,10 @@ export const softDeletePlayerInSupabase = async (playerId: string) => {
 };
 
 export const addPlayerToSupabase = async (data: Omit<Player & { photoIdentiteUrl?: string; acteNaissanceUrl?: string; carteIdentiteParentUrl?: string }, "id" | "matricule">) => {
+  const parentParts = (data.parentNomPrenom || "").trim().split(" ");
+  const nomParent = parentParts[0] || null;
+  const prenomParent = parentParts.slice(1).join(" ") || null;
+
   const insertPayload: any = {
     Nom: data.nom,
     Prenom: data.prenom,
@@ -201,11 +205,18 @@ export const addPlayerToSupabase = async (data: Omit<Player & { photoIdentiteUrl
     Categorie: data.categorie,
     Telephone: data.telephone,
     Email: data.email,
+    Adresse: data.adresse || null,
     DateNaissance: data.dateNaissance || null,
     DtCreation: new Date().toISOString(),
     IsDeleted: data.statut === "abandonne" ? 1 : 0,
     EstAlumni: data.statut === "alumni",
     Saison: data.saison || null,
+    NomParent: nomParent,
+    PrenomParent: prenomParent,
+    TelephoneParent: data.parentTelephone || data.telephone || null,
+    EmailParent: data.parentEmail || data.email || null,
+    AdresseParent: data.parentAdresse || data.adresse || null,
+    LienParente: data.parentLien || null,
     UrgenceNomPrenom: data.urgenceNomPrenom || null,
     UrgenceLien: data.urgenceLien || null,
     UrgenceTelephone: data.urgenceTelephone || null,

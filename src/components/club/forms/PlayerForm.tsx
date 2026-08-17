@@ -39,7 +39,7 @@ const defaultValues: PlayerFormValues = {
   cotisationDevise: "US",
   cotisationStatut: "pending",
 
-  programme: "FC Toro (6 ans et plus)",
+  programme: "Ti Toro (2 à 5 ans)",
   ecole: "",
   experienceSoccer: "",
 
@@ -225,7 +225,10 @@ export default function PlayerForm({
               name="programme"
               value="Ti Toro (2 à 5 ans)"
               checked={formValues.programme?.includes("Ti Toro")}
-              onChange={(e) => updateField("programme", e.target.value)}
+              onChange={(e) => {
+                updateField("programme", e.target.value);
+                updateField("categorie", "ti toro");
+              }}
               className="h-4 w-4 text-brand-600 focus:ring-brand-500"
             />
             <div>
@@ -244,7 +247,12 @@ export default function PlayerForm({
               name="programme"
               value="FC Toro (6 ans et plus)"
               checked={!formValues.programme?.includes("Ti Toro")}
-              onChange={(e) => updateField("programme", e.target.value)}
+              onChange={(e) => {
+                updateField("programme", e.target.value);
+                if (formValues.categorie === "ti toro") {
+                  updateField("categorie", "U8");
+                }
+              }}
               className="h-4 w-4 text-brand-600 focus:ring-brand-500"
             />
             <div>

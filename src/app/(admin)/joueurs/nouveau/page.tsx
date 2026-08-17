@@ -109,6 +109,7 @@ function NewPlayerFormContent() {
                   parsedNom = parsedNom.substring(parsedPrenom.length).trim();
                 }
 
+                const isTiToroProg = String(reg.program || "").toLowerCase().includes("ti");
                 prefill = {
                   nom: parsedNom,
                   prenom: parsedPrenom,
@@ -117,7 +118,8 @@ function NewPlayerFormContent() {
                   telephone: reg.guardian_phone || msg.phone || "",
                   email: reg.guardian_email || msg.email || "",
                   adresse: reg.child_address || reg.guardian_address || "",
-                  categorie: reg.program === "tiToro" ? "ti toro" : "fc toro",
+                  categorie: isTiToroProg ? "ti toro" : "fc toro",
+                  programme: isTiToroProg ? "Ti Toro (2 à 5 ans)" : "FC Toro (6 ans et plus)",
                   experienceSoccer: reg.experience || reg.experience_soccer || reg.experience_foot || "",
                   parentNomPrenom: reg.guardian_name || (reg.guardian_first_name ? `${reg.guardian_first_name} ${reg.guardian_last_name || ""}`.trim() : ""),
                   parentEmail: reg.guardian_email || "",
@@ -159,6 +161,7 @@ function NewPlayerFormContent() {
                   parsedNom = parsedNom.substring(parsedPrenom.length).trim();
                 }
 
+                const isTiToroProg = String(p.program || "").toLowerCase().includes("ti");
                 prefill = {
                   nom: parsedNom,
                   prenom: parsedPrenom,
@@ -167,7 +170,8 @@ function NewPlayerFormContent() {
                   telephone: p.guardian_phone || msg.phone || "",
                   email: msg.email || p.guardian_email || "",
                   adresse: p.guardian_address || p.child_address || "",
-                  categorie: p.program === "tiToro" ? "ti toro" : "fc toro",
+                  categorie: isTiToroProg ? "ti toro" : "fc toro",
+                  programme: isTiToroProg ? "Ti Toro (2 à 5 ans)" : "FC Toro (6 ans et plus)",
                   experienceSoccer: p.experience || p.experience_soccer || p.ancienne_experience || p.experience_foot || "",
                   parentNomPrenom: p.guardian_first_name ? `${p.guardian_first_name} ${p.guardian_last_name || ""}`.trim() : (msg.name || ""),
                   parentEmail: p.guardian_email || msg.email || "",

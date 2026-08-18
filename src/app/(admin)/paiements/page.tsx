@@ -106,23 +106,33 @@ export default function PaymentsPage() {
     const paymentDevise = (currentPayment.devise || "US") as "US" | "HTG";
     const zero = { balance: 0, devise: paymentDevise };
     const player = playerMap.get(currentPayment.playerId);
-    if (!player) return zero;
+    if (!player) return { ...zero, dbg: "no_player" };
 
-    // Boursiers -> balance = 0
-    const playerStatus = (player.statutJoueur || "").toLowerCase();
+    // Boursiers (full) -> balance = 0
+    // We only zero the balance if it's explicitly a full bourse, not a demi-bourse
+    const playerStatus = (player.statutJoueur || "").toLowerCase().trim();
     if (
-      playerStatus.includes("bourse") ||
-      playerStatus.includes("boursier") ||
+      playerStatus === "bourse" ||
+      playerStatus === "boursier" ||
       (currentPayment.remarque || "").toLowerCase().includes("[plan:boursier]")
     ) {
-      return zero;
+      return { ...zero, dbg: `boursier_status_(${playerStatus})` };
     }
 
     // Lire le TOTAL_DUE (toujours stocké en USD)
     const totalDueMarker = currentPayment.remarque?.match(/\[TOTAL_DUE:\s*([\d.]+)\s*\]/i);
-    if (!totalDueMarker || !totalDueMarker[1]) return zero;
+    if (!totalDueMarker || !totalDueMarker[1]) return { ...zero, dbg: "no_marker" };
     const totalDueUSD = parseFloat(totalDueMarker[1]);
-    if (isNaN(totalDueUSD) || totalDueUSD <= 0) return zero;
+    if (isNaN(totalDueUSD) || totalDueUSD <= 0) return { ...zero, dbg: `nan_or_zero_(${totalDueUSD})` };
+
+    // FIX: Si c'est un paiement uniquement pour des kits/inscription (pas d'adhésion)
+    // mais qu'un plan a été sélectionné par erreur, le TOTAL_DUE inclut l'adhésion fantôme.
+    // On ignore ce TOTAL_DUE démesuré pour éviter d'afficher une fausse dette.
+    const remarkLower = (currentPayment.remarque || "").toLowerCase();
+    const isKitOnly = !remarkLower.includes("adhésion") && !remarkLower.includes("adhesion");
+    if (isKitOnly && totalDueUSD >= 900) {
+      return { ...zero, dbg: "isKitOnly" }; // On ignore la dette fantôme
+    }
 
     const isHTG = paymentDevise === "HTG";
 
@@ -137,23 +147,27 @@ export default function PaymentsPage() {
             taux = 130; // Fallback pour les anciens paiements corrompus (TauxChange=1 et pas de marqueur)
         }
       }
-      if (taux <= 1) return zero; // Impossible de convertir sans taux
+      if (taux <= 1) return { ...zero, dbg: `taux_le_1_(${taux})` }; // Impossible de convertir sans taux
       const totalDueHTG = totalDueUSD * taux;
       const paidHTG = currentPayment.montant; // montant stocké en HTG
       const balanceHTG = totalDueHTG - paidHTG;
       if (balanceHTG > 1) {
-        return { balance: Math.round(balanceHTG), devise: "HTG" };
+        return { balance: Math.round(balanceHTG), devise: "HTG", dbg: `HTG_PATH_balance_${balanceHTG}` };
+      } else {
+        return { ...zero, dbg: `HTG_PATH_balanceHTG_less_than_1_(${balanceHTG})` };
       }
     } else {
       // Travailler entièrement en USD
       const paidUSD = currentPayment.montant;
       const balanceUSD = totalDueUSD - paidUSD;
       if (balanceUSD > 0.01) {
-        return { balance: Number(balanceUSD.toFixed(2)), devise: "US" };
+        return { balance: Number(balanceUSD.toFixed(2)), devise: "US", dbg: `USD_PATH_balance_${balanceUSD}` };
+      } else {
+        return { balance: 0, devise: "US", dbg: `USD_PATH_balanceUSD_less_than_0.01_(${balanceUSD})` };
       }
     }
 
-    return zero;
+    return { ...zero, dbg: "END_REACHED" };
   };
 
   const hasPaymentPlan = (remark?: string) =>
@@ -487,10 +501,15 @@ export default function PaymentsPage() {
     setSelectedIds(new Set());
   };
 
-  const getPaymentPlanLabel = (remark?: string) =>
-    remark?.match(/\[PLAN:\s*(ANNUEL|SEMESTRIEL|MENSUEL)\]/i)?.[1] ||
-    remark?.match(/plan\s*:\s*(annuel|semestriel|mensuel)/i)?.[1] ||
-    "Plan manquant";
+  const getPaymentPlanLabel = (remark?: string) => {
+    const remarkLower = (remark || "").toLowerCase();
+    const isKitOnly = !remarkLower.includes("adhésion") && !remarkLower.includes("adhesion");
+    if (isKitOnly) return "Aucun";
+    
+    return remark?.match(/\[PLAN:\s*(ANNUEL|SEMESTRIEL|MENSUEL)\]/i)?.[1] ||
+      remark?.match(/plan\s*:\s*(annuel|semestriel|mensuel)/i)?.[1] ||
+      "Aucun";
+  };
 
   const getPaymentStatusLabel = (payment: (typeof payments)[number]) => {
     const marker = payment.remarque?.match(/\[STATUT:\s*(PAID|PENDING|LATE)\]/i)?.[1];

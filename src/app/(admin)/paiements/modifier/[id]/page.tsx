@@ -78,7 +78,14 @@ export default function ModifyPaymentPage({ params }: { params: Promise<{ id: st
       const dueMatch = rawRemarque.match(/\[TOTAL_DUE:\s*([\d.]+)\s*\]/i);
       if (dueMatch && dueMatch[1]) {
         parsedTotalDue = parseFloat(dueMatch[1]);
-        setTotalDue(parsedTotalDue);
+        const remarkLower = rawRemarque.toLowerCase();
+        const isKitOnly = !remarkLower.includes("adhésion") && !remarkLower.includes("adhesion");
+        if (isKitOnly && parsedTotalDue >= 900) {
+          // Ignore phantom debt
+          setTotalDue("");
+        } else {
+          setTotalDue(parsedTotalDue);
+        }
         rawRemarque = rawRemarque.replace(/\[TOTAL_DUE:\s*[\d.]+\s*\]/i, "").trim();
       } else {
         setTotalDue("");
@@ -121,6 +128,11 @@ export default function ModifyPaymentPage({ params }: { params: Promise<{ id: st
       if (adhesionMatch && planMatch) {
         setAdhesionInfo({ code: adhesionMatch[1], plan: planMatch[1] });
       }
+
+      // Strip the tags from description
+      rawRemarque = rawRemarque.replace(/\[ADHESION:\s*[A-Z_]+\s*\]/gi, "");
+      rawRemarque = rawRemarque.replace(/\[PLAN:\s*[A-Z]+\s*\]/gi, "");
+      rawRemarque = rawRemarque.replace(/\[STATUT:\s*[A-Z]+\s*\]/gi, "");
 
       setDescription(rawRemarque.replace(/\s+/g, " ").trim());
       setPeriode(payment.periode || "");

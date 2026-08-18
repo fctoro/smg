@@ -159,7 +159,15 @@ export async function generateReceiptPDFBase64(
     
     // Remplacer les séparateurs par des sauts de ligne
     cleaned = cleaned.replace(/\s*\|\s*/g, '\n');
-    cleaned = cleaned.replace(/\s*Plan:\s*/g, '\nPlan : ');
+    
+    // Si c'est un paiement sans adhésion, on supprime la mention "Plan: XXX" ajoutée par erreur
+    const isKitOnly = !remark.toLowerCase().includes("adhésion") && !remark.toLowerCase().includes("adhesion");
+    if (isKitOnly) {
+      cleaned = cleaned.replace(/\n?Plan\s*:\s*[^\n]+/gi, '');
+      cleaned = cleaned.replace(/^Plan\s*:\s*[^\n]+\n?/gi, '');
+    } else {
+      cleaned = cleaned.replace(/\s*Plan:\s*/g, '\nPlan : ');
+    }
     
     // Retirer complètement le mot "Rubriques:" pour ne garder que les noms des articles
     cleaned = cleaned.replace(/Rubriques\s*:\s*/gi, '');
@@ -251,8 +259,8 @@ export async function generateReceiptPDFBase64(
     }
   }
 
-  const playerStatus = (player.statutJoueur || "").toLowerCase();
-  const isBoursierReceipt = playerStatus.includes("bourse") || playerStatus.includes("boursier") ||
+  const playerStatus = (player.statutJoueur || "").toLowerCase().trim();
+  const isBoursierReceipt = playerStatus === "bourse" || playerStatus === "boursier" ||
     payments.some((p: any) => (p.remarque || "").toLowerCase().includes("[plan:boursier]"));
 
   let totalDueValue = 0; // toujours en USD
@@ -266,8 +274,20 @@ export async function generateReceiptPDFBase64(
   } else {
     payments.forEach((p: any) => {
       const dueMatch = p.remarque?.match(/\[TOTAL_DUE:\s*([\d.]+)\s*\]/i);
+      let isValidDue = false;
+      let parsedDue = 0;
       if (dueMatch && dueMatch[1]) {
-        totalDueValue += parseFloat(dueMatch[1]);
+        parsedDue = parseFloat(dueMatch[1]);
+        const remarkLower = (p.remarque || "").toLowerCase();
+        const isKitOnly = !remarkLower.includes("adhésion") && !remarkLower.includes("adhesion");
+        // Ignore phantom adhesion debt on kit-only payments
+        if (!(isKitOnly && parsedDue >= 900)) {
+          isValidDue = true;
+        }
+      }
+
+      if (isValidDue) {
+        totalDueValue += parsedDue;
       } else {
         // Fallback : utiliser le montant payé (pas de solde possible)
         const pTaux = p.taux || 0;

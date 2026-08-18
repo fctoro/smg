@@ -453,6 +453,23 @@ export function PaymentAddModal({ isOpen, onClose, initialPlayerId }: PaymentAdd
     setPlayerId(player.id);
     setPlayerSearch("");
     setShowPlayerDropdown(false);
+
+    // Auto-select adhesion based on player category if a plan is already selected but no adhesion is
+    if (selectedPlan !== "") {
+      setSelectedPricing((current) => {
+        const hasAdhesion = current.some((id) => {
+          const item = rubricOptions.find((r) => r.id === id);
+          return item?.estAdhesion || item?.id === "adhesion-fc" || item?.id === "adhesion-ti";
+        });
+
+        if (!hasAdhesion) {
+          const isTiToroPlayer = player.categorie?.toLowerCase().includes("ti toro") || player.programme?.toLowerCase().includes("ti toro");
+          const adhesionIdToSelect = isTiToroPlayer ? "adhesion-ti" : "adhesion-fc";
+          return [...current, adhesionIdToSelect];
+        }
+        return current;
+      });
+    }
   };
 
   const handlePricingChange = (itemId: string) => {
@@ -483,6 +500,18 @@ export function PaymentAddModal({ isOpen, onClose, initialPlayerId }: PaymentAdd
     const plan = paymentPlans.find((p) => p.id === planId);
     if (plan && selectedPlayer) {
       setDevise("US");
+      
+      // Auto-select adhesion based on player category if not already selected
+      const hasAdhesion = selectedPricing.some((id) => {
+        const item = rubricOptions.find((r) => r.id === id);
+        return item?.estAdhesion || item?.id === "adhesion-fc" || item?.id === "adhesion-ti";
+      });
+
+      if (!hasAdhesion && planId !== "") {
+        const isTiToroPlayer = selectedPlayer.categorie?.toLowerCase().includes("ti toro") || selectedPlayer.programme?.toLowerCase().includes("ti toro");
+        const adhesionIdToSelect = isTiToroPlayer ? "adhesion-ti" : "adhesion-fc";
+        setSelectedPricing((current) => [...current, adhesionIdToSelect]);
+      }
     }
   };
 
@@ -501,7 +530,7 @@ export function PaymentAddModal({ isOpen, onClose, initialPlayerId }: PaymentAdd
     const hasAdhesion = selectedPricingItems.some((item) => item.estAdhesion || item.id === "adhesion-fc" || item.id === "adhesion-ti");
 
     let adhesionAmount = 0;
-    if (hasAdhesion || selectedPlan) {
+    if (hasAdhesion) {
       adhesionAmount = isTiToro ? 1000 : 1350; // Prix de base
       if (selectedPlan === "annuel") {
         adhesionAmount = isTiToro ? 900 : 1215; // 10% de rabais

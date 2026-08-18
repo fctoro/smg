@@ -165,7 +165,9 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
   const [selectedPricing, setSelectedPricing] = useState<string[]>([]);
   const [selectedPlan, setSelectedPlan] = useState<string>("");
   const [nombreDeMois, setNombreDeMois] = useState<number>(1);
+  const [rabaisPercent, setRabaisPercent] = useState<number>(0);
   const [isUserEditedMontantDonne, setIsUserEditedMontantDonne] = useState(false);
+  const [isUserEditedMontantDu, setIsUserEditedMontantDu] = useState(false);
   const [paymentPhoto, setPaymentPhoto] = useState<File | null>(null);
   const [paymentPhotoPreview, setPaymentPhotoPreview] = useState<string | null>(null);
   const [paymentPhotoError, setPaymentPhotoError] = useState<string | null>(null);
@@ -219,7 +221,10 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
     setDatePaiement(new Date().toISOString().split("T")[0]);
     setSelectedPricing([]);
     setSelectedPlan("");
+    setRabaisPercent(0);
+    setNombreDeMois(1);
     setIsUserEditedMontantDonne(false);
+    setIsUserEditedMontantDu(false);
     setPaymentPhoto(null);
     setPaymentPhotoPreview(null);
     setPaymentPhotoError(null);
@@ -276,10 +281,17 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
         .filter((item) => !item.estAdhesion && item.id !== "adhesion-fc" && item.id !== "adhesion-ti")
         .map((item) => item.rubrique)
         .filter(Boolean).join(", ");
-      const totalDueInUSD = actualDevise === "HTG" ? (taux > 0 ? baseTotalDue / taux : baseTotalDue) : baseTotalDue;
+      // TOTAL_DUE doit refléter montantDuManuel (source de vérité), converti en USD si HTG
+      const totalDueInUSD = (actualDevise === "HTG" && taux > 0)
+        ? montantDuManuel / taux
+        : actualDevise === "HTG"
+          ? baseTotalDue          // fallback si pas de taux
+          : montantDuManuel;      // USD : déjà en USD
+      const rabaisMarker = (!isBoursierPlayer && rabaisPercent > 0) ? ` [RABAIS:${rabaisPercent}%]` : "";
+      const tauxMarker = (!isBoursierPlayer && actualDevise === "HTG" && taux > 0) ? ` [TAUX:${taux}]` : "";
       const paymentMarkers = isBoursierPlayer
         ? `[ADHESION:${adhesionCode}] [PLAN:BOURSIER] [STATUT:${statut.toUpperCase()}] [TOTAL_DUE:${totalDue}]`
-        : `${adhesionCode ? `[ADHESION:${adhesionCode}] ` : ""}[PLAN:${selectedPlan ? selectedPlan.toUpperCase() : "AUCUN"}] [STATUT:${statut.toUpperCase()}] [TOTAL_DUE:${totalDueInUSD}]`;
+        : `${adhesionCode ? `[ADHESION:${adhesionCode}] ` : ""}[PLAN:${selectedPlan ? selectedPlan.toUpperCase() : "AUCUN"}] [STATUT:${statut.toUpperCase()}]${rabaisMarker}${tauxMarker} [TOTAL_DUE:${totalDueInUSD}]`;
       const adhesionLabel = isBoursierPlayer
         ? `Boursier: ${nombreDeMois} mois × 2,500 HTG`
         : (selectedAdhesionItem ? (isTiToro ? "Adhésion: TI TORO" : "Adhésion: FC TORO") : "");
@@ -483,69 +495,54 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
 
     let adhesionAmount = 0;
     if (hasAdhesion || selectedPlan) {
-      adhesionAmount = isTiToro ? 1000 : 1350;
-      if (selectedPlan === "annuel") {
-        adhesionAmount = isTiToro ? 900 : 1215;
+      const plan = paymentPlans.find((p) => p.id === selectedPlan);
+      if (plan) {
+        const planBaseAmount = isTiToro ? plan.montantTIToro : plan.montantFCToro;
+        adhesionAmount = (selectedPlan === "mensuel") ? planBaseAmount * nombreDeMois : planBaseAmount;
       } else if (selectedAdhesionItem) {
         adhesionAmount = selectedAdhesionItem.montant;
+      } else {
+        adhesionAmount = isTiToro ? 1350 : 1350; // Fallback
       }
     }
 
-    return adhesionAmount + nonAdhesionSum;
-  }, [selectedPricingItems, selectedPlan, isTiToro, selectedAdhesionItem]);
+    // Rabais appliqué uniquement sur l'adhésion
+    const rabaisDecimal = Math.max(0, Math.min(100, rabaisPercent)) / 100;
+    const adhesionAfterRabais = adhesionAmount * (1 - rabaisDecimal);
 
-  const discountedDue = useMemo(() => {
-    return baseTotalDue; // Pas de réduction
-  }, [baseTotalDue]);
+    return adhesionAfterRabais + nonAdhesionSum;
+  }, [selectedPricingItems, selectedPlan, isTiToro, selectedAdhesionItem, rabaisPercent, nombreDeMois]);
+
+  const discountedDue = baseTotalDue; // rétrocompatibilité interne
 
   const isBoursier = useMemo(() => {
     return !!(selectedPlayer && (selectedPlayer.statutJoueur || "").toLowerCase().includes("bourse"));
   }, [selectedPlayer]);
 
-  const computedDue = useMemo(() => {
-    if (isBoursier) {
-      const boursierHTG = nombreDeMois * 2500;
-      return boursierHTG; // Toujours en HTG pour les boursiers
-    }
-
-    let defaultToPayUSD = discountedDue;
-    if (selectedPlan === "mensuel") {
-      const monthlyRate = isTiToro ? 115 : 155;
-      const nonAdhesionSum = selectedPricingItems
-        .filter((item) => !item.estAdhesion && item.id !== "adhesion-fc" && item.id !== "adhesion-ti")
-        .reduce((sum, item) => sum + item.montant, 0);
-      defaultToPayUSD = (nombreDeMois * monthlyRate) + nonAdhesionSum;
-    } else if (selectedPlan === "semestriel") {
-      const semesterRate = isTiToro ? 415 : 570;
-      const nonAdhesionSum = selectedPricingItems
-        .filter((item) => !item.estAdhesion && item.id !== "adhesion-fc" && item.id !== "adhesion-ti")
-        .reduce((sum, item) => sum + item.montant, 0);
-      defaultToPayUSD = semesterRate + nonAdhesionSum;
-    }
-
-    if (devise === "HTG" && taux > 0) {
-      return defaultToPayUSD * taux;
-    }
-    return defaultToPayUSD;
-  }, [isBoursier, nombreDeMois, selectedPlan, isTiToro, selectedPricingItems, discountedDue, devise, taux]);
-
   const hasPricingItems = selectedPricingItems.length > 0;
 
   // Ne pas modifier automatiquement les montants quand le plan change
   // Les montants sont basés sur les rubriques sélectionnées uniquement
+  // Réinitialiser le verrou si la devise, le taux, ou le montant de base change significativement
   useEffect(() => {
-    if (isBoursier) return; // Preserve boursier computed amount
-    if (isUserEditedMontantDonne) return; // Preserve manual user input
+    setIsUserEditedMontantDu(false);
+  }, [devise, taux, baseTotalDue]);
+
+  useEffect(() => {
+    if (isBoursier) return;
+    if (isUserEditedMontantDonne) return; // l'utilisateur a saisi montantDonne manuellement
 
     if (hasPricingItems) {
       const fullTotalDue = devise === "HTG" && taux > 0 ? discountedDue * taux : discountedDue;
-      setMontantDuManuel(fullTotalDue);
+      if (!isUserEditedMontantDu) {
+        setMontantDuManuel(fullTotalDue);
+      }
       setMontantDonne(fullTotalDue);
     } else {
-      setMontantDuManuel(0);
+      if (!isUserEditedMontantDu) setMontantDuManuel(0);
       setMontantDonne(0);
     }
-  }, [isBoursier, hasPricingItems, discountedDue, devise, taux, isUserEditedMontantDonne]);
+  }, [isBoursier, hasPricingItems, discountedDue, devise, taux, isUserEditedMontantDonne, isUserEditedMontantDu]);
 
   const remainingAmount = Math.max(0, montantDuManuel - montantDonne);
 
@@ -780,6 +777,45 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
               </div>
             )}
 
+            {/* Rabais sur adhésion */}
+            {!isBoursier && selectedAdhesionItem && (
+              <div className="md:col-span-2">
+                <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
+                  Rabais sur l&apos;adhésion (%)
+                </label>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    step={1}
+                    value={rabaisPercent || ""}
+                    onChange={(e) => {
+                      const val = Math.max(0, Math.min(100, Number(e.target.value)));
+                      setRabaisPercent(val);
+                      setIsUserEditedMontantDonne(false); // allow auto-recalculation
+                    }}
+                    placeholder="0"
+                    className={inputClassName + " max-w-[120px]"}
+                  />
+                  <span className="text-sm text-gray-500 dark:text-gray-400">%</span>
+                  {rabaisPercent > 0 && (() => {
+                    const adhesionBase = selectedAdhesionItem.montant;
+                    const rabaisAmt = +(adhesionBase * rabaisPercent / 100).toFixed(2);
+                    const afterRabais = +(adhesionBase - rabaisAmt).toFixed(2);
+                    return (
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400">
+                        🏷️ -{rabaisAmt}$ sur adhésion → {afterRabais}$ au lieu de {adhesionBase}$
+                      </span>
+                    );
+                  })()}
+                </div>
+                <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
+                  Le rabais s&apos;applique uniquement sur le montant de l&apos;adhésion, pas sur les autres rubriques.
+                </p>
+              </div>
+            )}
+
             {/* Montant dû, montant versé, devise (masqués pour les boursiers) */}
             {!isBoursier && (
               <>
@@ -792,12 +828,17 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
                     min={0}
                     step="0.01"
                     value={montantDuManuel || ""}
-                    onChange={(event) => setMontantDuManuel(Number(event.target.value))}
+                    onChange={(event) => {
+                      setMontantDuManuel(Number(event.target.value));
+                      setIsUserEditedMontantDu(true);
+                    }}
                     className={inputClassName}
                   />
                 </div>
                 <div>
-                  <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">Montant donné</label>
+                  <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
+                    Montant donné ({devise === "HTG" ? "Gourdes" : "USD"})
+                  </label>
                   <input
                     type="number"
                     min={0}

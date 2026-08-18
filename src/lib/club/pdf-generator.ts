@@ -238,21 +238,30 @@ export async function generateReceiptPDFBase64(
 
   const finalY = (doc as any).lastAutoTable.finalY || tableStartY;
 
-  // Extraction / Calcul du total dû pour ce reçu
-  const playerStatus = (player.statutJoueur || "").toLowerCase();
-  const isBoursierReceipt = playerStatus.includes("bourse") || playerStatus.includes("boursier") || payments.some((p: any) => (p.remarque || "").toLowerCase().includes("[plan:boursier]"));
+  const mainPayment = payments[0] || {};
+  const isHTG = mainPayment.devise === "HTG";
+  // Lire taux depuis la colonne DB, sinon depuis le marqueur [TAUX:XXX] dans la remarque
+  let taux = mainPayment.taux || 0;
+  if (isHTG && taux <= 1) {
+    const tauxMatch = (mainPayment.remarque || "").match(/\[TAUX:\s*([\d.]+)\s*\]/i);
+    if (tauxMatch && tauxMatch[1]) {
+        taux = parseFloat(tauxMatch[1]);
+    } else {
+        taux = 130; // Fallback pour les anciens paiements corrompus
+    }
+  }
 
-  let totalDueValue = 0;
-  
-  // Si totalRubriques est fourni, l'utiliser directement (basé sur les rubriques sélectionnées)
-  if (totalRubriques && totalRubriques > 0 && !isBoursierReceipt) {
-    totalDueValue = totalRubriques;
-  } else if (isBoursierReceipt) {
-    // Pour les boursiers, le montant total dû = montant versé (solde = 0)
+  const playerStatus = (player.statutJoueur || "").toLowerCase();
+  const isBoursierReceipt = playerStatus.includes("bourse") || playerStatus.includes("boursier") ||
+    payments.some((p: any) => (p.remarque || "").toLowerCase().includes("[plan:boursier]"));
+
+  let totalDueValue = 0; // toujours en USD
+
+  if (isBoursierReceipt) {
+    // Boursiers : total dû = montant versé → solde = 0
     payments.forEach((p: any) => {
-      const isHTGPay = p.devise === "HTG";
-      const pTaux = p.taux || 1000;
-      totalDueValue += isHTGPay ? (p.montant / pTaux) : p.montant;
+      const pTaux = p.taux || 0;
+      totalDueValue += (p.devise === "HTG" && pTaux > 0) ? p.montant / pTaux : p.montant;
     });
   } else {
     payments.forEach((p: any) => {
@@ -260,28 +269,36 @@ export async function generateReceiptPDFBase64(
       if (dueMatch && dueMatch[1]) {
         totalDueValue += parseFloat(dueMatch[1]);
       } else {
-        const isHTGPay = p.devise === "HTG";
-        const pTaux = p.taux || 1000;
-        totalDueValue += isHTGPay ? (p.montant / pTaux) : p.montant;
+        // Fallback : utiliser le montant payé (pas de solde possible)
+        const pTaux = p.taux || 0;
+        totalDueValue += (p.devise === "HTG" && pTaux > 0) ? p.montant / pTaux : p.montant;
       }
     });
   }
 
-  const mainPayment = payments[0] || {};
-  const isHTG = mainPayment.devise === "HTG";
-  const taux = mainPayment.taux || 1000;
+  // Libellé du montant total dû — convertir en HTG si nécessaire
+  const totalDueLabel = (() => {
+    if (totalDueValue <= 0) return totalPayeLabel;
+    if (isHTG && taux > 0) {
+      return formatClubCurrency(Math.round(totalDueValue * taux), "HTG");
+    }
+    return formatClubCurrency(totalDueValue, "US");
+  })();
 
-  // Libellé du montant total dû
-  const totalDueLabel = totalDueValue > 0 
-    ? (isHTG ? formatClubCurrency(Math.round(totalDueValue * taux), "HTG") : formatClubCurrency(totalDueValue, "US"))
-    : totalPayeLabel;
-
-  // Calcul du solde
-  const paidUSD = isHTG ? totalHTG / taux : totalUSD;
-  const balanceUSD = totalDueValue > 0 ? Math.max(0, totalDueValue - paidUSD) : 0;
-  const balanceLabel = isHTG 
-    ? formatClubCurrency(Math.round(balanceUSD * taux), "HTG")
-    : formatClubCurrency(balanceUSD, "US");
+  // Calcul du solde dans la devise native
+  let balanceLabel = isHTG ? formatClubCurrency(0, "HTG") : formatClubCurrency(0, "US");
+  let balanceNumeric = 0;
+  if (totalDueValue > 0) {
+    if (isHTG && taux > 0) {
+      const totalDueHTG = totalDueValue * taux;
+      const paidHTG = totalHTG; // montant versé en gourdes
+      balanceNumeric = Math.max(0, Math.round(totalDueHTG - paidHTG));
+      balanceLabel = formatClubCurrency(balanceNumeric, "HTG");
+    } else {
+      balanceNumeric = Math.max(0, totalDueValue - totalUSD);
+      balanceLabel = formatClubCurrency(Number(balanceNumeric.toFixed(2)), "US");
+    }
+  }
 
   let yPos = finalY + 10;
 
@@ -313,7 +330,7 @@ export async function generateReceiptPDFBase64(
   yPos += 7;
   doc.setFont("helvetica", "bold");
   doc.setFontSize(11);
-  if (balanceUSD > 0) {
+  if (balanceNumeric > 0) {
     doc.setTextColor(220, 38, 38); // Rouge si solde restant
     doc.text("SOLDE RESTANT :", 110, yPos);
     doc.text(balanceLabel, 196, yPos, { align: 'right' });

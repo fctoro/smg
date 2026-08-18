@@ -103,29 +103,52 @@ export default function PaymentsPage() {
 
   // Calcule la balance uniquement si [TOTAL_DUE:XXX] est présent dans la remarque
   const calculateBalance = (currentPayment: (typeof payments)[number]): { balance: number; devise: "US" | "HTG" } => {
-    const zero = { balance: 0, devise: (currentPayment.devise || "US") as "US" | "HTG" };
+    const paymentDevise = (currentPayment.devise || "US") as "US" | "HTG";
+    const zero = { balance: 0, devise: paymentDevise };
     const player = playerMap.get(currentPayment.playerId);
     if (!player) return zero;
 
     // Boursiers -> balance = 0
     const playerStatus = (player.statutJoueur || "").toLowerCase();
-    if (playerStatus.includes("bourse") || playerStatus.includes("boursier") || (currentPayment.remarque || "").toLowerCase().includes("[plan:boursier]")) {
+    if (
+      playerStatus.includes("bourse") ||
+      playerStatus.includes("boursier") ||
+      (currentPayment.remarque || "").toLowerCase().includes("[plan:boursier]")
+    ) {
       return zero;
     }
 
-    const isHTG = currentPayment.devise === "HTG";
-    const tauxConv = currentPayment.taux || 1000;
-    const paidUSD = isHTG ? currentPayment.montant / tauxConv : currentPayment.montant;
-
-    // Seul un marqueur [TOTAL_DUE:XXX] explicite génère un solde
+    // Lire le TOTAL_DUE (toujours stocké en USD)
     const totalDueMarker = currentPayment.remarque?.match(/\[TOTAL_DUE:\s*([\d.]+)\s*\]/i);
-    if (totalDueMarker && totalDueMarker[1]) {
-      const recordedTotalDueUSD = parseFloat(totalDueMarker[1]);
-      if (!isNaN(recordedTotalDueUSD) && recordedTotalDueUSD > paidUSD) {
-        const balanceUSD = recordedTotalDueUSD - paidUSD;
-        if (isHTG) {
-          return { balance: Math.round(balanceUSD * tauxConv), devise: "HTG" };
+    if (!totalDueMarker || !totalDueMarker[1]) return zero;
+    const totalDueUSD = parseFloat(totalDueMarker[1]);
+    if (isNaN(totalDueUSD) || totalDueUSD <= 0) return zero;
+
+    const isHTG = paymentDevise === "HTG";
+
+    if (isHTG) {
+      // Lire le taux depuis la colonne DB, sinon depuis le marqueur [TAUX:XXX] dans la remarque
+      let taux = currentPayment.taux || 0;
+      if (taux <= 1) {
+        const tauxMatch = currentPayment.remarque?.match(/\[TAUX:\s*([\d.]+)\s*\]/i);
+        if (tauxMatch && tauxMatch[1]) {
+            taux = parseFloat(tauxMatch[1]);
+        } else {
+            taux = 130; // Fallback pour les anciens paiements corrompus (TauxChange=1 et pas de marqueur)
         }
+      }
+      if (taux <= 1) return zero; // Impossible de convertir sans taux
+      const totalDueHTG = totalDueUSD * taux;
+      const paidHTG = currentPayment.montant; // montant stocké en HTG
+      const balanceHTG = totalDueHTG - paidHTG;
+      if (balanceHTG > 1) {
+        return { balance: Math.round(balanceHTG), devise: "HTG" };
+      }
+    } else {
+      // Travailler entièrement en USD
+      const paidUSD = currentPayment.montant;
+      const balanceUSD = totalDueUSD - paidUSD;
+      if (balanceUSD > 0.01) {
         return { balance: Number(balanceUSD.toFixed(2)), devise: "US" };
       }
     }

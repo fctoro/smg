@@ -102,7 +102,7 @@ export default function PaymentsPage() {
   );
 
   // Calcule la balance uniquement si [TOTAL_DUE:XXX] est présent dans la remarque
-  const calculateBalance = (currentPayment: (typeof payments)[number]): { balance: number; devise: "US" | "HTG" } => {
+  const calculateBalance = (currentPayment: (typeof payments)[number]): { balance: number; devise: "US" | "HTG"; dbg?: string } => {
     const paymentDevise = (currentPayment.devise || "US") as "US" | "HTG";
     const zero = { balance: 0, devise: paymentDevise };
     const player = playerMap.get(currentPayment.playerId);

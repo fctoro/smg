@@ -590,52 +590,54 @@ export default function BoiteDeReception() {
           </div>
           
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full md:w-auto select-none">
-            {/* Toggle Formulaire en Vrai 3D Néomorphique */}
-            <div className="flex items-center justify-between sm:justify-start gap-4 w-full sm:w-auto bg-gray-50 dark:bg-gray-900 rounded-2xl px-5 py-2.5 shadow-[4px_4px_10px_rgba(0,0,0,0.06),-4px_-4px_10px_rgba(255,255,255,0.9)] dark:shadow-[4px_4px_10px_rgba(0,0,0,0.4),-2px_-2px_10px_rgba(255,255,255,0.05)] border border-white/80 dark:border-gray-800">
-              <div className="flex flex-col text-left sm:text-right">
-                <span className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest leading-none mb-1.5">
-                  Formulaire
-                </span>
-                <span className={`text-xs font-black uppercase tracking-wide leading-none ${
-                  (activeTab === "inscription_joueur" ? inscriptionsOpen : detectionsOpen)
-                    ? "text-[#00965e]"
-                    : "text-red-650 dark:text-red-500"
-                }`}>
-                  {(activeTab === "inscription_joueur" ? inscriptionsOpen : detectionsOpen) ? "OUVERT" : "FERMÉ"}
-                </span>
-              </div>
-              
-              {/* Conteneurs alignés à droite sur mobile pour un rendu équilibré */}
-              <div className="flex items-center gap-4">
-                {/* Slot Concave (Encastré en 3D) */}
-                <div 
-                  onClick={handleToggleStatus}
-                  className={`w-14 h-7 rounded-full relative cursor-pointer transition-all duration-300 p-0.5 border shadow-[inset_2px_2px_4px_rgba(0,0,0,0.15),inset_-1px_-1px_2px_rgba(255,255,255,0.9)] dark:shadow-[inset_2px_2px_4px_rgba(0,0,0,0.5),inset_-1px_-1px_2px_rgba(255,255,255,0.05)] ${
-                    (activeTab === "inscription_joueur" ? inscriptionsOpen : detectionsOpen)
-                      ? "bg-[#00965e] border-[#008050]"
-                      : "bg-gray-200 border-gray-300 dark:bg-gray-800 dark:border-gray-700"
-                  }`}
-                >
-                  {/* Knob Convexe (Bouton relief en 3D) */}
-                  <div 
-                    className={`w-5 h-5 rounded-full absolute top-[3px] left-[3px] bg-white dark:bg-white shadow-[0_2px_5px_rgba(0,0,0,0.25)] transition-transform duration-300 ease-out transform ${
-                      (activeTab === "inscription_joueur" ? inscriptionsOpen : detectionsOpen)
-                        ? "translate-x-7"
-                        : "translate-x-0"
-                    }`}
-                  />
-                </div>
+            {/* Toggle Formulaire Ultra-Simple, Compact, sans Box avec Notification Badge */}
+            {(() => {
+              const isOpen = activeTab === "inscription_joueur" ? inscriptionsOpen : detectionsOpen;
+              const unreadCount = getCount(activeTab);
+              return (
+                <div className="flex items-center gap-2.5 select-none">
+                  {/* Labels */}
+                  <div className="flex flex-col text-left sm:text-right">
+                    <span className="text-[9px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest leading-none mb-0.5">
+                      Formulaire
+                    </span>
+                    <span className={`text-[11px] font-extrabold uppercase tracking-wide leading-none ${
+                      isOpen ? "text-[#00965e]" : "text-rose-500"
+                    }`}>
+                      {isOpen ? "OUVERT" : "FERMÉ"}
+                    </span>
+                  </div>
 
-                {/* Diode LED lumineuse fixe (non clignotante) avec halo réaliste et relief 3D */}
-                <div className="h-6 w-6 rounded-full bg-gray-200 dark:bg-gray-850 shadow-[inset_1px_1px_2px_rgba(0,0,0,0.15),inset_-1px_-1px_1px_rgba(255,255,255,0.8)] dark:shadow-[inset_1px_1px_2px_rgba(0,0,0,0.4),inset_-1px_-1px_1px_rgba(255,255,255,0.05)] flex items-center justify-center shrink-0">
-                  <span className={`h-2.5 w-2.5 rounded-full transition-all duration-300 ${
-                    (activeTab === "inscription_joueur" ? inscriptionsOpen : detectionsOpen)
-                      ? "bg-gradient-to-br from-[#00c87f] to-[#00965e] shadow-[0_0_8px_#00c87f,0_0_14px_rgba(0,200,127,0.6),inset_1px_1px_2px_rgba(255,255,255,0.5)]"
-                      : "bg-gradient-to-br from-gray-300 to-gray-400 dark:from-gray-700 dark:to-gray-800 shadow-[inset_1px_1px_2px_rgba(255,255,255,0.1)]"
-                  }`} />
+                  {/* Compact Switch Button */}
+                  <div 
+                    onClick={handleToggleStatus}
+                    className={`w-9 h-5 rounded-full relative cursor-pointer transition-colors duration-200 p-0.5 shadow-inner ${
+                      isOpen ? "bg-[#00965e]" : "bg-gray-300 dark:bg-gray-700"
+                    }`}
+                  >
+                    <div 
+                      className={`w-4 h-4 rounded-full bg-white shadow-sm transition-transform duration-200 ease-out transform ${
+                        isOpen ? "translate-x-4" : "translate-x-0"
+                      }`}
+                    />
+                  </div>
+
+                  {/* Notification Dot / Badge Indicator like tabs */}
+                  <div className="relative flex items-center justify-center shrink-0">
+                    <span className={`h-2.5 w-2.5 rounded-full transition-all duration-300 ${
+                      isOpen 
+                        ? "bg-[#00965e] shadow-[0_0_6px_rgba(0,150,94,0.7)]" 
+                        : "bg-rose-500 shadow-[0_0_6px_rgba(244,63,94,0.7)]"
+                    }`} />
+                    {unreadCount > 0 && (
+                      <span className="absolute -top-1.5 -right-1.5 flex h-3.5 min-w-[14px] items-center justify-center rounded-full bg-[#C8102E] px-1 text-[9px] font-black text-white shadow-xs ring-1 ring-white dark:ring-gray-900">
+                        {unreadCount}
+                      </span>
+                    )}
+                  </div>
                 </div>
-              </div>
-            </div>
+              );
+            })()}
 
             {/* Separator line */}
             <div className="h-6 w-[1px] bg-gray-200 dark:bg-gray-700 hidden sm:block" />

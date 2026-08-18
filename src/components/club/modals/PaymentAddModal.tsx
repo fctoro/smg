@@ -135,9 +135,10 @@ const paymentPlans: PaymentPlan[] = [
 interface PaymentAddModalProps {
   isOpen: boolean;
   onClose: () => void;
+  initialPlayerId?: string;
 }
 
-export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
+export function PaymentAddModal({ isOpen, onClose, initialPlayerId }: PaymentAddModalProps) {
   const { players, setPayments, rubriques } = useClubData();
 
   const rubricOptions = useMemo(() => {
@@ -152,6 +153,12 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
 
   const [playerId, setPlayerId] = useState("");
   const [playerSearch, setPlayerSearch] = useState("");
+
+  useEffect(() => {
+    if (isOpen && initialPlayerId) {
+      setPlayerId(initialPlayerId);
+    }
+  }, [isOpen, initialPlayerId]);
   const [showPlayerDropdown, setShowPlayerDropdown] = useState(false);
   const [montantDuManuel, setMontantDuManuel] = useState(0);
   const [montantDonne, setMontantDonne] = useState(0);

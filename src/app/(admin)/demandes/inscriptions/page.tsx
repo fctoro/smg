@@ -375,28 +375,28 @@ export default function BoiteDeReception() {
               "Prénom Joueur",
               "Sexe",
               "Date de Naissance",
-              "Lieu de Naissance",
-              "Adresse / Zone de Résidence",
+              "Commune / Zone de Résidence",
               "Téléphone",
               "Email",
               "Parent / Tuteur",
-              "Pied Dominant",
+              "Poste Principal",
+              "Poste Secondaire",
               "Club Actuel",
               "Niveau Actuel",
               "Date Demande"
             ]
           : [
-              "ID / Réf",
+              "Réf. Demande",
               "Statut",
               "Catégorie",
               "Contact (Parent)",
               "Email",
               "Téléphone",
               "Enfant / Joueur",
+              "Sexe",
               "Date de Naissance",
               "Adresse",
-              "Date Demande",
-              "Contenu"
+              "Date Demande"
             ];
 
         const rowsData: string[][] = [];
@@ -423,28 +423,40 @@ export default function BoiteDeReception() {
                 enfantPrenom,
                 msg.metadata?.sexe || "",
                 dateNaissance,
-                msg.metadata?.lieu_naissance || "",
-                adresse,
+                msg.metadata?.zone_residence || msg.metadata?.lieu_naissance || adresse,
                 msg.contact_telephone || "",
                 msg.contact_email || "",
                 msg.contact_nom || "",
-                msg.metadata?.pied_dominant || "",
+                (() => {
+                  const raw = msg.metadata?.pied_dominant || "";
+                  if (typeof raw === 'string' && raw.startsWith("{")) {
+                    try { return JSON.parse(raw).poste_principal || msg.metadata?.poste_principal || ""; } catch { return ""; }
+                  }
+                  return msg.metadata?.poste_principal || "";
+                })(),
+                (() => {
+                  const raw = msg.metadata?.pied_dominant || "";
+                  if (typeof raw === 'string' && raw.startsWith("{")) {
+                    try { return JSON.parse(raw).poste_secondaire || msg.metadata?.poste_secondaire || ""; } catch { return ""; }
+                  }
+                  return msg.metadata?.poste_secondaire || "";
+                })(),
                 msg.metadata?.club_actuel || "",
                 msg.metadata?.niveau_actuel || "",
                 formattedDate
               ]
             : [
-                msg.id,
-                msg.statut,
+                msg.metadata?.numero_inscription || `FCT-${String(msg.id).substring(0, 8).toUpperCase()}`,
+                msg.statut === "nouveau" ? "Nouveau" : msg.statut === "inscrit" ? "Inscrit" : msg.statut === "refuse" ? "Refusé" : msg.statut === "archive" ? "Archivé" : msg.statut,
                 getTabTitle(msg.type_message),
-                msg.contact_nom || "",
+                (msg.contact_nom || "").replace(/\s*\(Enfant:.*?\)\s*$/, "").trim(),
                 msg.contact_email || "",
                 msg.contact_telephone || "",
                 enfant,
+                msg.metadata?.sexe || msg.metadata?.child_gender || "",
                 dateNaissance,
                 adresse,
-                formattedDate,
-                msg.contenu?.replace(/\n/g, ' ') || ""
+                formattedDate
               ];
 
           rowsData.push(row);

@@ -21,6 +21,7 @@ interface PlayerViewModalProps {
   onClose: () => void;
   player: Player | null;
   hideParentsAndDocs?: boolean;
+  onAddPayment?: (player: Player) => void;
 }
 
 const getSafeAvatarSrc = (photoUrl?: string) => {
@@ -34,6 +35,7 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
   onClose,
   player,
   hideParentsAndDocs = false,
+  onAddPayment,
 }) => {
   const { payments } = useClubData();
   const { role, isCoach } = useUserRole();
@@ -155,7 +157,21 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
             </div>
           </div>
 
-          <div className="flex items-center gap-2 self-stretch sm:self-auto justify-end">
+          <div className="flex flex-wrap items-center gap-2 self-stretch sm:self-auto justify-end">
+            {onAddPayment && !isConfidential && (
+              <button
+                type="button"
+                onClick={() => onAddPayment(player)}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#107C41] hover:bg-[#0c5e31] text-xs font-bold text-white shadow-sm transition-all"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                  <rect x="2" y="5" width="20" height="14" rx="2" strokeLinecap="round" strokeLinejoin="round" />
+                  <line x1="2" y1="10" x2="22" y2="10" strokeLinecap="round" strokeLinejoin="round" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M7 15h3" />
+                </svg>
+                Effectuer un paiement
+              </button>
+            )}
             <span className="px-4 py-2 rounded-xl bg-brand-50 dark:bg-brand-900/20 border border-brand-200 dark:border-brand-800 text-xs font-bold text-brand-700 dark:text-brand-300">
               {programme}
             </span>
@@ -459,13 +475,24 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
           {/* Section Historique des Paiements */}
           {!isConfidential && (
             <div className="rounded-xl shadow-sm border border-gray-200 bg-white p-6 dark:border-gray-800 dark:bg-gray-900">
-              <div className="flex items-center gap-3 mb-5 border-b border-gray-100 dark:border-gray-800 pb-4">
-                <div className="p-2 bg-gray-100 dark:bg-gray-800 rounded-lg">
-                  <svg className="w-5 h-5 text-gray-600 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
+              <div className="flex items-center justify-between mb-5 border-b border-gray-100 dark:border-gray-800 pb-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-gray-100 dark:bg-gray-800 rounded-lg">
+                    <svg className="w-5 h-5 text-gray-600 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
+                  <h4 className="font-semibold text-gray-900 dark:text-white text-base">Historique des Paiements Effectués</h4>
                 </div>
-                <h4 className="font-semibold text-gray-900 dark:text-white text-base">Historique des Paiements Effectués</h4>
+                {onAddPayment && (
+                  <button
+                    type="button"
+                    onClick={() => onAddPayment(player)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-xs font-bold text-white shadow-xs transition-colors"
+                  >
+                    + Effectuer un paiement
+                  </button>
+                )}
               </div>
               <div className="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/[0.03]">
                 <div className="max-w-full overflow-x-auto">

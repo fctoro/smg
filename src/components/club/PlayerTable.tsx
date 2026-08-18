@@ -51,6 +51,7 @@ interface PlayerTableProps {
   onEditPlayer?: (player: Player) => void;
   onEvaluatePlayer?: (player: Player) => void;
   onDeletePlayer?: (player: Player) => void;
+  onAddPaymentForPlayer?: (player: Player) => void;
   actionButton?: React.ReactNode;
   exportButton?: React.ReactNode;
   availableCategories?: string[];
@@ -67,6 +68,7 @@ export default function PlayerTable({
   onEditPlayer,
   onEvaluatePlayer,
   onDeletePlayer,
+  onAddPaymentForPlayer,
   actionButton,
   exportButton,
   availableCategories,
@@ -484,6 +486,21 @@ export default function PlayerTable({
                         >
                           <EyeIcon className="size-5" />
                         </button>
+                        {onAddPaymentForPlayer && (
+                          <button
+                            type="button"
+                            className="inline-flex items-center justify-center text-emerald-600 transition hover:text-emerald-700 dark:text-emerald-400 dark:hover:text-emerald-300 cursor-pointer"
+                            onClick={() => onAddPaymentForPlayer(player)}
+                            aria-label="Effectuer un paiement"
+                            title="Effectuer un paiement pour ce joueur"
+                          >
+                            <svg className="size-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                              <rect x="2" y="5" width="20" height="14" rx="2" strokeLinecap="round" strokeLinejoin="round" />
+                              <line x1="2" y1="10" x2="22" y2="10" strokeLinecap="round" strokeLinejoin="round" />
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M7 15h3" />
+                            </svg>
+                          </button>
+                        )}
                         {onEvaluatePlayer && (
                           <button
                             type="button"

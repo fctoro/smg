@@ -19,6 +19,7 @@ import { usePermissions } from "@/hooks/usePermissions";
 import { PlayerViewModal } from "@/components/club/modals/PlayerViewModal";
 import { PlayerEditModal } from "@/components/club/modals/PlayerEditModal";
 import { PlayerAddModal } from "@/components/club/modals/PlayerAddModal";
+import { PaymentAddModal } from "@/components/club/modals/PaymentAddModal";
 import { ToastNotification } from "@/components/ui/toast/ToastNotification";
 import { Player } from "@/types/club";
 import { supabase } from "@/lib/supabaseClient";
@@ -42,6 +43,7 @@ function PlayersPageContent() {
 
   const [selectedViewPlayer, setSelectedViewPlayer] = useState<Player | null>(null);
   const [selectedEditPlayer, setSelectedEditPlayer] = useState<Player | null>(null);
+  const [selectedPaymentPlayer, setSelectedPaymentPlayer] = useState<Player | null>(null);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [highlightFields, setHighlightFields] = useState<string[]>([]);
 
@@ -236,7 +238,9 @@ function PlayersPageContent() {
         columns={tableColumns}
         onViewPlayer={(player) => setSelectedViewPlayer(player)}
         onEditPlayer={hasPermission("Joueurs", "edit") ? ((player) => setSelectedEditPlayer(player)) : undefined}
-        onDeletePlayer={hasPermission("Joueurs", "delete") ? ((player) => handleDeletePlayer(player.id)) : undefined}        actionButton={
+        onDeletePlayer={hasPermission("Joueurs", "delete") ? ((player) => handleDeletePlayer(player.id)) : undefined}
+        onAddPaymentForPlayer={hasPermission("Paiements", "create") || hasPermission("Paiements", "edit") ? ((player) => setSelectedPaymentPlayer(player)) : ((player) => setSelectedPaymentPlayer(player))}
+        actionButton={
           <div className="flex items-center gap-2">
             <Link
               href="/joueurs/statuts-speciaux"
@@ -292,6 +296,7 @@ function PlayersPageContent() {
         isOpen={!!selectedViewPlayer} 
         onClose={() => setSelectedViewPlayer(null)} 
         player={selectedViewPlayer} 
+        onAddPayment={(player) => setSelectedPaymentPlayer(player)}
       />
       
       <PlayerEditModal
@@ -309,6 +314,11 @@ function PlayersPageContent() {
       <PlayerAddModal
         isOpen={isAddModalOpen}
         onClose={() => setIsAddModalOpen(false)}
+      />
+      <PaymentAddModal
+        isOpen={!!selectedPaymentPlayer}
+        onClose={() => setSelectedPaymentPlayer(null)}
+        initialPlayerId={selectedPaymentPlayer?.id}
       />
       <ConfirmComponent />
       {toast && <ToastNotification message={toast.message} type={toast.type} onClose={() => setToast(null)} />}

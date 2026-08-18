@@ -337,3 +337,47 @@ export async function insertInvoiceAdmin(invoicePayload: Record<string, any>) {
     return { success: false, error: error?.message || "Impossible d’enregistrer la facture." };
   }
 }
+
+export async function getSiteStatus() {
+  if (!supabaseAdmin) {
+    return { success: false, error: "Service role Supabase indisponible." };
+  }
+
+  try {
+    const { data, error } = await supabaseAdmin
+      .from("site_status")
+      .select("inscriptions_ouvertes, detections_ouvertes")
+      .eq("id", 1)
+      .single();
+
+    if (error) throw error;
+    return { success: true, status: data };
+  } catch (error: any) {
+    return { 
+      success: false, 
+      error: error.message, 
+      status: { inscriptions_ouvertes: true, detections_ouvertes: true } 
+    };
+  }
+}
+
+export async function updateSiteStatus(field: "inscriptions_ouvertes" | "detections_ouvertes", isOpen: boolean) {
+  if (!supabaseAdmin) {
+    return { success: false, error: "Service role Supabase indisponible." };
+  }
+
+  try {
+    const { error } = await supabaseAdmin
+      .from("site_status")
+      .update({ 
+        [field]: isOpen,
+        updated_at: new Date().toISOString()
+      })
+      .eq("id", 1);
+
+    if (error) throw error;
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}

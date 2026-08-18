@@ -12,6 +12,7 @@ import { useConfirm } from "@/hooks/useConfirm";
 import { useClubData } from "@/context/ClubDataContext";
 import { TableBodySkeleton } from "@/components/ui/skeleton/Skeleton";
 import { fetchDocumentsForMessage, uploadDetectionDocument } from "@/lib/club/supabase-demandes";
+import { getSiteStatus, updateSiteStatus } from "@/app/actions/club";
 
 // Placeholder icon for document
 const DocumentIcon = () => (
@@ -221,6 +222,59 @@ export default function BoiteDeReception() {
     setTimeout(() => {
       document.getElementById("verification-result-container")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
     }, 100);
+  };
+
+  const [inscriptionsOpen, setInscriptionsOpen] = useState(true);
+  const [detectionsOpen, setDetectionsOpen] = useState(true);
+  const [isToggling, setIsToggling] = useState(false);
+
+  useEffect(() => {
+    async function fetchStatus() {
+      const res = await getSiteStatus();
+      if (res.success && res.status) {
+        setInscriptionsOpen(res.status.inscriptions_ouvertes);
+        setDetectionsOpen(res.status.detections_ouvertes);
+      }
+    }
+    fetchStatus();
+  }, []);
+
+  const handleToggleStatus = async () => {
+    if (isToggling) return;
+
+    const isCurrentlyOpen = activeTab === "inscription_joueur" ? inscriptionsOpen : detectionsOpen;
+    const targetField = activeTab === "inscription_joueur" ? "inscriptions_ouvertes" : "detections_ouvertes";
+    const label = activeTab === "inscription_joueur" ? "d'inscription" : "de détection";
+
+    const performToggle = async () => {
+      setIsToggling(true);
+      const res = await updateSiteStatus(targetField, !isCurrentlyOpen);
+      if (res.success) {
+        if (activeTab === "inscription_joueur") {
+          setInscriptionsOpen(!isCurrentlyOpen);
+        } else {
+          setDetectionsOpen(!isCurrentlyOpen);
+        }
+      } else {
+        alert("Impossible de modifier l'état du formulaire.");
+      }
+      setIsToggling(false);
+    };
+
+    const title = isCurrentlyOpen ? "Confirmer la fermeture" : "Confirmer l'ouverture";
+    const actionWord = isCurrentlyOpen ? "fermer" : "ouvrir";
+    const confirmText = isCurrentlyOpen ? "Fermer le formulaire" : "Ouvrir le formulaire";
+
+    confirm({
+      title: title,
+      message: `Voulez-vous vraiment ${actionWord} le formulaire ${label} sur le site ?`,
+      confirmText: confirmText,
+      cancelText: "Annuler",
+      isDestructive: isCurrentlyOpen,
+      onConfirm: () => {
+        performToggle();
+      }
+    });
   };
 
   useEffect(() => {
@@ -535,7 +589,55 @@ export default function BoiteDeReception() {
             <p className="text-sm text-gray-500 dark:text-gray-400">{getTabSubtitle(activeTab)}</p>
           </div>
           
-          <div className="flex items-center gap-3 w-full md:w-auto">
+          <div className="flex flex-row items-center gap-4 w-full md:w-auto justify-end select-none">
+            {/* Toggle Formulaire en Vrai 3D Néomorphique */}
+            <div className="flex items-center gap-4 bg-gray-50 dark:bg-gray-900 rounded-2xl px-5 py-2.5 shadow-[4px_4px_10px_rgba(0,0,0,0.06),-4px_-4px_10px_rgba(255,255,255,0.9)] dark:shadow-[4px_4px_10px_rgba(0,0,0,0.4),-2px_-2px_10px_rgba(255,255,255,0.05)] border border-white/80 dark:border-gray-800">
+              <div className="flex flex-col text-right">
+                <span className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest leading-none mb-1.5">
+                  Formulaire
+                </span>
+                <span className={`text-xs font-black uppercase tracking-wide leading-none ${
+                  (activeTab === "inscription_joueur" ? inscriptionsOpen : detectionsOpen)
+                    ? "text-[#00965e]"
+                    : "text-red-650 dark:text-red-500"
+                }`}>
+                  {(activeTab === "inscription_joueur" ? inscriptionsOpen : detectionsOpen) ? "OUVERT" : "FERMÉ"}
+                </span>
+              </div>
+              
+              {/* Slot Concave (Encastré en 3D) */}
+              <div 
+                onClick={handleToggleStatus}
+                className={`w-14 h-7 rounded-full relative cursor-pointer transition-all duration-300 p-0.5 border shadow-[inset_2px_2px_4px_rgba(0,0,0,0.15),inset_-1px_-1px_2px_rgba(255,255,255,0.9)] dark:shadow-[inset_2px_2px_4px_rgba(0,0,0,0.5),inset_-1px_-1px_2px_rgba(255,255,255,0.05)] ${
+                  (activeTab === "inscription_joueur" ? inscriptionsOpen : detectionsOpen)
+                    ? "bg-[#00965e] border-[#008050]"
+                    : "bg-gray-200 border-gray-300 dark:bg-gray-800 dark:border-gray-700"
+                }`}
+              >
+                {/* Knob Convexe (Bouton relief en 3D) */}
+                <div 
+                  className={`w-5 h-5 rounded-full absolute top-[3px] left-[3px] bg-white dark:bg-white shadow-[0_2px_5px_rgba(0,0,0,0.25)] transition-transform duration-300 ease-out transform ${
+                    (activeTab === "inscription_joueur" ? inscriptionsOpen : detectionsOpen)
+                      ? "translate-x-7"
+                      : "translate-x-0"
+                  }`}
+                />
+              </div>
+
+              {/* Diode LED lumineuse fixe (non clignotante) avec halo réaliste et relief 3D */}
+              <div className="h-6 w-6 rounded-full bg-gray-200 dark:bg-gray-850 shadow-[inset_1px_1px_2px_rgba(0,0,0,0.15),inset_-1px_-1px_1px_rgba(255,255,255,0.8)] dark:shadow-[inset_1px_1px_2px_rgba(0,0,0,0.4),inset_-1px_-1px_1px_rgba(255,255,255,0.05)] flex items-center justify-center shrink-0">
+                <span className={`h-2.5 w-2.5 rounded-full transition-all duration-300 ${
+                  (activeTab === "inscription_joueur" ? inscriptionsOpen : detectionsOpen)
+                    ? "bg-gradient-to-br from-[#00c87f] to-[#00965e] shadow-[0_0_8px_#00c87f,0_0_14px_rgba(0,200,127,0.6),inset_1px_1px_2px_rgba(255,255,255,0.5)]"
+                    : "bg-gradient-to-br from-gray-300 to-gray-400 dark:from-gray-700 dark:to-gray-800 shadow-[inset_1px_1px_2px_rgba(255,255,255,0.1)]"
+                }`} />
+              </div>
+            </div>
+
+            {/* Separator line */}
+            <div className="h-6 w-[1px] bg-gray-200 dark:bg-gray-700 hidden sm:block" />
+
+            {/* Bouton Exporter existant */}
             <button 
               onClick={handleExportCSV}
               className="inline-flex h-10 items-center justify-center gap-2 whitespace-nowrap rounded-lg bg-[#107C41] px-4 text-sm font-medium text-white shadow-theme-xs hover:bg-[#0c5e31] transition-colors"

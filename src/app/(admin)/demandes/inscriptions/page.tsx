@@ -589,10 +589,10 @@ export default function BoiteDeReception() {
             <p className="text-sm text-gray-500 dark:text-gray-400">{getTabSubtitle(activeTab)}</p>
           </div>
           
-          <div className="flex flex-row items-center gap-4 w-full md:w-auto justify-end select-none">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full md:w-auto select-none">
             {/* Toggle Formulaire en Vrai 3D Néomorphique */}
-            <div className="flex items-center gap-4 bg-gray-50 dark:bg-gray-900 rounded-2xl px-5 py-2.5 shadow-[4px_4px_10px_rgba(0,0,0,0.06),-4px_-4px_10px_rgba(255,255,255,0.9)] dark:shadow-[4px_4px_10px_rgba(0,0,0,0.4),-2px_-2px_10px_rgba(255,255,255,0.05)] border border-white/80 dark:border-gray-800">
-              <div className="flex flex-col text-right">
+            <div className="flex items-center justify-between sm:justify-start gap-4 w-full sm:w-auto bg-gray-50 dark:bg-gray-900 rounded-2xl px-5 py-2.5 shadow-[4px_4px_10px_rgba(0,0,0,0.06),-4px_-4px_10px_rgba(255,255,255,0.9)] dark:shadow-[4px_4px_10px_rgba(0,0,0,0.4),-2px_-2px_10px_rgba(255,255,255,0.05)] border border-white/80 dark:border-gray-800">
+              <div className="flex flex-col text-left sm:text-right">
                 <span className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest leading-none mb-1.5">
                   Formulaire
                 </span>
@@ -605,32 +605,35 @@ export default function BoiteDeReception() {
                 </span>
               </div>
               
-              {/* Slot Concave (Encastré en 3D) */}
-              <div 
-                onClick={handleToggleStatus}
-                className={`w-14 h-7 rounded-full relative cursor-pointer transition-all duration-300 p-0.5 border shadow-[inset_2px_2px_4px_rgba(0,0,0,0.15),inset_-1px_-1px_2px_rgba(255,255,255,0.9)] dark:shadow-[inset_2px_2px_4px_rgba(0,0,0,0.5),inset_-1px_-1px_2px_rgba(255,255,255,0.05)] ${
-                  (activeTab === "inscription_joueur" ? inscriptionsOpen : detectionsOpen)
-                    ? "bg-[#00965e] border-[#008050]"
-                    : "bg-gray-200 border-gray-300 dark:bg-gray-800 dark:border-gray-700"
-                }`}
-              >
-                {/* Knob Convexe (Bouton relief en 3D) */}
+              {/* Conteneurs alignés à droite sur mobile pour un rendu équilibré */}
+              <div className="flex items-center gap-4">
+                {/* Slot Concave (Encastré en 3D) */}
                 <div 
-                  className={`w-5 h-5 rounded-full absolute top-[3px] left-[3px] bg-white dark:bg-white shadow-[0_2px_5px_rgba(0,0,0,0.25)] transition-transform duration-300 ease-out transform ${
+                  onClick={handleToggleStatus}
+                  className={`w-14 h-7 rounded-full relative cursor-pointer transition-all duration-300 p-0.5 border shadow-[inset_2px_2px_4px_rgba(0,0,0,0.15),inset_-1px_-1px_2px_rgba(255,255,255,0.9)] dark:shadow-[inset_2px_2px_4px_rgba(0,0,0,0.5),inset_-1px_-1px_2px_rgba(255,255,255,0.05)] ${
                     (activeTab === "inscription_joueur" ? inscriptionsOpen : detectionsOpen)
-                      ? "translate-x-7"
-                      : "translate-x-0"
+                      ? "bg-[#00965e] border-[#008050]"
+                      : "bg-gray-200 border-gray-300 dark:bg-gray-800 dark:border-gray-700"
                   }`}
-                />
-              </div>
+                >
+                  {/* Knob Convexe (Bouton relief en 3D) */}
+                  <div 
+                    className={`w-5 h-5 rounded-full absolute top-[3px] left-[3px] bg-white dark:bg-white shadow-[0_2px_5px_rgba(0,0,0,0.25)] transition-transform duration-300 ease-out transform ${
+                      (activeTab === "inscription_joueur" ? inscriptionsOpen : detectionsOpen)
+                        ? "translate-x-7"
+                        : "translate-x-0"
+                    }`}
+                  />
+                </div>
 
-              {/* Diode LED lumineuse fixe (non clignotante) avec halo réaliste et relief 3D */}
-              <div className="h-6 w-6 rounded-full bg-gray-200 dark:bg-gray-850 shadow-[inset_1px_1px_2px_rgba(0,0,0,0.15),inset_-1px_-1px_1px_rgba(255,255,255,0.8)] dark:shadow-[inset_1px_1px_2px_rgba(0,0,0,0.4),inset_-1px_-1px_1px_rgba(255,255,255,0.05)] flex items-center justify-center shrink-0">
-                <span className={`h-2.5 w-2.5 rounded-full transition-all duration-300 ${
-                  (activeTab === "inscription_joueur" ? inscriptionsOpen : detectionsOpen)
-                    ? "bg-gradient-to-br from-[#00c87f] to-[#00965e] shadow-[0_0_8px_#00c87f,0_0_14px_rgba(0,200,127,0.6),inset_1px_1px_2px_rgba(255,255,255,0.5)]"
-                    : "bg-gradient-to-br from-gray-300 to-gray-400 dark:from-gray-700 dark:to-gray-800 shadow-[inset_1px_1px_2px_rgba(255,255,255,0.1)]"
-                }`} />
+                {/* Diode LED lumineuse fixe (non clignotante) avec halo réaliste et relief 3D */}
+                <div className="h-6 w-6 rounded-full bg-gray-200 dark:bg-gray-850 shadow-[inset_1px_1px_2px_rgba(0,0,0,0.15),inset_-1px_-1px_1px_rgba(255,255,255,0.8)] dark:shadow-[inset_1px_1px_2px_rgba(0,0,0,0.4),inset_-1px_-1px_1px_rgba(255,255,255,0.05)] flex items-center justify-center shrink-0">
+                  <span className={`h-2.5 w-2.5 rounded-full transition-all duration-300 ${
+                    (activeTab === "inscription_joueur" ? inscriptionsOpen : detectionsOpen)
+                      ? "bg-gradient-to-br from-[#00c87f] to-[#00965e] shadow-[0_0_8px_#00c87f,0_0_14px_rgba(0,200,127,0.6),inset_1px_1px_2px_rgba(255,255,255,0.5)]"
+                      : "bg-gradient-to-br from-gray-300 to-gray-400 dark:from-gray-700 dark:to-gray-800 shadow-[inset_1px_1px_2px_rgba(255,255,255,0.1)]"
+                  }`} />
+                </div>
               </div>
             </div>
 
@@ -640,7 +643,7 @@ export default function BoiteDeReception() {
             {/* Bouton Exporter existant */}
             <button 
               onClick={handleExportCSV}
-              className="inline-flex h-10 items-center justify-center gap-2 whitespace-nowrap rounded-lg bg-[#107C41] px-4 text-sm font-medium text-white shadow-theme-xs hover:bg-[#0c5e31] transition-colors"
+              className="inline-flex h-10 w-full sm:w-auto items-center justify-center gap-2 whitespace-nowrap rounded-lg bg-[#107C41] px-4 text-sm font-medium text-white shadow-theme-xs hover:bg-[#0c5e31] transition-colors"
             >
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>

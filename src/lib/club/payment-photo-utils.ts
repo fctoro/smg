@@ -1,19 +1,20 @@
 import { supabase } from "@/lib/supabaseClient";
 
-const MAX_PAYMENT_PHOTO_SIZE = 5 * 1024 * 1024;
-const ALLOWED_PAYMENT_PHOTO_TYPES = ["image/jpeg", "image/png", "image/webp", "image/jpg"];
+const MAX_PAYMENT_PHOTO_SIZE = 10 * 1024 * 1024; // 10 Mo
+
+export function isPdfProof(urlOrFileName: string | null | undefined): boolean {
+  if (!urlOrFileName) return false;
+  const lower = urlOrFileName.toLowerCase();
+  return lower.includes(".pdf") || lower.startsWith("data:application/pdf");
+}
 
 export function validatePaymentPhotoFile(file: File | null) {
   if (!file) {
     return { valid: false, error: "Aucun fichier sélectionné." };
   }
 
-  if (!ALLOWED_PAYMENT_PHOTO_TYPES.includes(file.type)) {
-    return { valid: false, error: "Format non pris en charge. Utilisez JPG, PNG ou WEBP." };
-  }
-
   if (file.size > MAX_PAYMENT_PHOTO_SIZE) {
-    return { valid: false, error: "La photo doit être inférieure ou égale à 5 Mo." };
+    return { valid: false, error: "Le fichier justificatif doit être inférieur ou égal à 10 Mo." };
   }
 
   return { valid: true };
@@ -28,17 +29,26 @@ export async function uploadPaymentPhotoToSupabase(file: File | null) {
   if (!file) return null;
 
   try {
-    const extension = file.type === "image/png"
-      ? "png"
-      : file.type === "image/webp"
-        ? "webp"
-        : "jpg";
+    let extension = "jpg";
+    if (file.name && file.name.includes(".")) {
+      const parts = file.name.split(".");
+      extension = parts[parts.length - 1].toLowerCase();
+    } else if (file.type === "application/pdf") {
+      extension = "pdf";
+    } else if (file.type === "image/png") {
+      extension = "png";
+    } else if (file.type === "image/webp") {
+      extension = "webp";
+    } else if (file.type.startsWith("image/")) {
+      extension = file.type.split("/")[1] || "jpg";
+    }
+
     const fileName = `payment_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${extension}`;
     const bucket = process.env.NEXT_PUBLIC_SUPABASE_STORAGE_BUCKET || "videos";
 
     const { data: uploadData, error: uploadError } = await supabase.storage
       .from(bucket)
-      .upload(fileName, file, { contentType: file.type });
+      .upload(fileName, file, { contentType: file.type || "application/octet-stream" });
 
     if (uploadError || !uploadData) {
       console.error("Erreur d’upload du justificatif de paiement:", uploadError);

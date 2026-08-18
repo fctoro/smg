@@ -6,7 +6,7 @@ import { useClubData } from "@/context/ClubDataContext";
 import { PaymentMethod, PaymentStatus, Player } from "@/types/club";
 import { getPlayerFullName } from "@/lib/club/metrics";
 import { addPaymentToSupabase, addInvoiceToSupabase } from "@/lib/club/supabase-crud";
-import { validatePaymentPhotoFile, getPaymentPhotoPreviewUrl, uploadPaymentPhotoToSupabase } from "@/lib/club/payment-photo-utils";
+import { validatePaymentPhotoFile, getPaymentPhotoPreviewUrl, uploadPaymentPhotoToSupabase, isPdfProof } from "@/lib/club/payment-photo-utils";
 import { calculateDiscountedAmount } from "@/lib/club/payment-reduction-utils";
 import { generateReceiptPDFBase64 } from "@/lib/club/pdf-generator";
 import { ToastNotification } from "@/components/ui/toast/ToastNotification";
@@ -1140,20 +1140,31 @@ export function PaymentAddModal({ isOpen, onClose, initialPlayerId }: PaymentAdd
 
           <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800/40">
             <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-400">
-              Photo du paiement / justificatif (JPG, PNG, WEBP, max 5 Mo)
+              Justificatif de paiement / document scanné (JPG, PNG, PDF... max 10 Mo)
             </label>
             <input
               type="file"
-              accept="image/jpeg,image/png,image/webp,image/jpg"
+              accept="image/*,application/pdf,.pdf,.jpg,.jpeg,.png,.webp"
               onChange={handlePaymentPhotoChange}
               className="block w-full text-sm text-gray-600 file:mr-4 file:rounded-lg file:border-0 file:bg-brand-500 file:px-4 file:py-2 file:text-sm file:font-medium file:text-white hover:file:bg-brand-600"
             />
             {paymentPhotoError && <p className="mt-2 text-sm text-red-600">{paymentPhotoError}</p>}
             {paymentPhoto && !paymentPhotoError && (
               <div className="mt-3 flex items-center gap-3">
-                <span className="text-sm text-gray-600 dark:text-gray-300">Fichier sélectionné : {paymentPhoto.name}</span>
-                {paymentPhotoPreview && (
-                  <img src={paymentPhotoPreview} alt="Aperçu du justificatif" className="h-16 w-16 rounded-lg object-cover border border-gray-200 dark:border-gray-700" />
+                {isPdfProof(paymentPhoto.name) ? (
+                  <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-700 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-300">
+                    <svg className="h-5 w-5 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                    </svg>
+                    <span>Document PDF : {paymentPhoto.name}</span>
+                  </div>
+                ) : (
+                  <>
+                    <span className="text-sm text-gray-600 dark:text-gray-300">Fichier sélectionné : {paymentPhoto.name}</span>
+                    {paymentPhotoPreview && (
+                      <img src={paymentPhotoPreview} alt="Aperçu du justificatif" className="h-16 w-16 rounded-lg object-cover border border-gray-200 dark:border-gray-700" />
+                    )}
+                  </>
                 )}
               </div>
             )}

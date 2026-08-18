@@ -20,7 +20,7 @@ import { formatClubCurrency, formatClubDate, getPlayerFullName } from "@/lib/clu
 import { updatePaymentInSupabase, deletePaymentInSupabase } from "@/lib/club/supabase-crud";
 import { calculateDiscountedAmount, parseReductionFromRemark } from "@/lib/club/payment-reduction-utils";
 import { ImageModal } from "@/components/club/modals/ImageModal";
-import { extractPhotoUrlFromRemark } from "@/lib/club/payment-photo-utils";
+import { extractPhotoUrlFromRemark, isPdfProof } from "@/lib/club/payment-photo-utils";
 import { BellIcon, PencilIcon, TrashBinIcon } from "@/icons";
 import { ActiveBellIcon } from "@/icons/ActiveBellIcon";
 import { ConfirmModal } from "@/components/ui/modal/ConfirmModal";
@@ -824,6 +824,7 @@ export default function PaymentsPage() {
                         {(() => {
                           const photoUrl = extractPhotoUrlFromRemark(payment.remarque);
                           if (!photoUrl) return <span className="text-gray-400">-</span>;
+                          const isPdf = isPdfProof(photoUrl);
                           return (
                             <div className="flex items-center gap-2">
                               <button
@@ -831,14 +832,27 @@ export default function PaymentsPage() {
                                   setSelectedPaymentImage(photoUrl);
                                   setIsImageModalOpen(true);
                                 }}
-                                className="relative flex h-12 w-12 items-center justify-center overflow-hidden rounded border border-gray-200 bg-gray-50 hover:border-brand-500 hover:opacity-90 transition-all focus:outline-none"
-                                title="Voir le justificatif en grand"
+                                className={`relative flex h-12 w-12 items-center justify-center overflow-hidden rounded border transition-all focus:outline-none ${
+                                  isPdf
+                                    ? "flex-col border-red-200 bg-red-50 hover:border-red-400 hover:bg-red-100 dark:border-red-900/50 dark:bg-red-950/30"
+                                    : "border-gray-200 bg-gray-50 hover:border-brand-500 hover:opacity-90 dark:border-gray-700 dark:bg-gray-800"
+                                }`}
+                                title={isPdf ? "Voir le document PDF" : "Voir le justificatif en grand"}
                               >
-                                <img
-                                  src={photoUrl}
-                                  alt="Justificatif"
-                                  className="h-full w-full object-cover"
-                                />
+                                {isPdf ? (
+                                  <>
+                                    <svg className="w-5 h-5 text-red-600 dark:text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                                    </svg>
+                                    <span className="text-[9px] font-bold text-red-700 dark:text-red-300">PDF</span>
+                                  </>
+                                ) : (
+                                  <img
+                                    src={photoUrl}
+                                    alt="Justificatif"
+                                    className="h-full w-full object-cover"
+                                  />
+                                )}
                               </button>
                             </div>
                           );

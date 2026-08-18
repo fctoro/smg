@@ -1,17 +1,18 @@
-const MAX_PAYMENT_PHOTO_SIZE = 5 * 1024 * 1024;
-const ALLOWED_PAYMENT_PHOTO_TYPES = ["image/jpeg", "image/png", "image/webp", "image/jpg"];
+const MAX_PAYMENT_PHOTO_SIZE = 10 * 1024 * 1024;
+
+function isPdfProof(urlOrFileName) {
+  if (!urlOrFileName) return false;
+  const lower = String(urlOrFileName).toLowerCase();
+  return lower.includes(".pdf") || lower.startsWith("data:application/pdf");
+}
 
 function validatePaymentPhotoFile(file) {
   if (!file) {
     return { valid: false, error: "Aucun fichier sélectionné." };
   }
 
-  if (!ALLOWED_PAYMENT_PHOTO_TYPES.includes(file.type)) {
-    return { valid: false, error: "Format non pris en charge. Utilisez JPG, PNG ou WEBP." };
-  }
-
   if (file.size > MAX_PAYMENT_PHOTO_SIZE) {
-    return { valid: false, error: "La photo doit être inférieure ou égale à 5 Mo." };
+    return { valid: false, error: "Le fichier justificatif doit être inférieur ou égal à 10 Mo." };
   }
 
   return { valid: true };
@@ -23,6 +24,7 @@ function getPaymentPhotoPreviewUrl(file) {
 }
 
 module.exports = {
+  isPdfProof,
   validatePaymentPhotoFile,
   getPaymentPhotoPreviewUrl,
 };

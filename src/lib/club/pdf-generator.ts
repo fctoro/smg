@@ -3,6 +3,7 @@ import { FC_TORO_LOGO } from "@/lib/club/pdfAssets";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { Player } from "@/types/club";
+import { PDFDocument } from "pdf-lib";
 
 export async function generateReceiptPDFBase64(
   player: Player,
@@ -359,7 +360,7 @@ export async function generateReceiptPDFBase64(
   doc.text("Signature autorisée", 14, footerY + 30);
   doc.line(14, footerY + 40, 60, footerY + 40);
 
-  if (proofImageBase64) {
+  if (proofImageBase64 && (proofImageBase64.startsWith("data:image/") || proofImageBase64.includes("image/"))) {
     try {
       let imgFormat = 'JPEG';
       if (proofImageBase64.includes('image/png')) imgFormat = 'PNG';
@@ -399,6 +400,28 @@ export async function generateReceiptPDFBase64(
       doc.addImage(proofImageBase64, imgFormat, xOffset, 25, printWidth, printHeight, undefined, 'FAST');
     } catch (err) {
       console.warn("Could not add proof image to PDF", err);
+    }
+  }
+
+  // Si le justificatif est un document PDF scanné, on fusionne ses pages dans le reçu
+  const isPdfDoc = proofImageBase64 && (proofImageBase64.startsWith("data:application/pdf") || proofImageBase64.includes("application/pdf"));
+  if (isPdfDoc) {
+    try {
+      const receiptPdfData = doc.output("arraybuffer");
+      const mergedPdf = await PDFDocument.load(receiptPdfData);
+
+      const proofBase64Clean = proofImageBase64.includes("base64,")
+        ? proofImageBase64.split("base64,")[1]
+        : proofImageBase64;
+      const proofBytes = Uint8Array.from(atob(proofBase64Clean), (c) => c.charCodeAt(0));
+      const proofPdf = await PDFDocument.load(proofBytes);
+
+      const copiedPages = await mergedPdf.copyPages(proofPdf, proofPdf.getPageIndices());
+      copiedPages.forEach((page) => mergedPdf.addPage(page));
+
+      return await mergedPdf.saveAsBase64({ dataUri: true });
+    } catch (err) {
+      console.warn("Could not merge PDF proof into receipt PDF", err);
     }
   }
 

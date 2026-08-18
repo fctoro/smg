@@ -7,7 +7,7 @@ import { useClubData } from "@/context/ClubDataContext";
 import { PaymentMethod, PaymentStatus } from "@/types/club";
 import { getPlayerFullName } from "@/lib/club/metrics";
 import { updatePaymentInSupabase } from "@/lib/club/supabase-crud";
-import { validatePaymentPhotoFile, getPaymentPhotoPreviewUrl, uploadPaymentPhotoToSupabase } from "@/lib/club/payment-photo-utils";
+import { validatePaymentPhotoFile, getPaymentPhotoPreviewUrl, uploadPaymentPhotoToSupabase, isPdfProof } from "@/lib/club/payment-photo-utils";
 import { ToastNotification } from "@/components/ui/toast/ToastNotification";
 
 const inputClassName =
@@ -500,15 +500,30 @@ export default function ModifyPaymentPage({ params }: { params: Promise<{ id: st
               {/* Left: Preview & Input */}
               <div className="flex flex-col sm:flex-row sm:items-center gap-4 flex-1 min-w-0">
                 {activePhotoUrl && (
-                  <div className="relative h-16 w-16 shrink-0 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden bg-white">
-                    <img src={activePhotoUrl} alt="Justificatif" className="h-full w-full object-cover" />
+                  <div className="relative h-16 w-16 shrink-0 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden bg-white dark:bg-gray-800 flex items-center justify-center">
+                    {isPdfProof(paymentPhoto?.name || activePhotoUrl) ? (
+                      <a
+                        href={activePhotoUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex flex-col items-center justify-center text-red-600 hover:text-red-700 p-1"
+                        title="Ouvrir le document PDF"
+                      >
+                        <svg className="w-6 h-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                        </svg>
+                        <span className="text-[9px] font-bold text-red-700 dark:text-red-300">PDF</span>
+                      </a>
+                    ) : (
+                      <img src={activePhotoUrl} alt="Justificatif" className="h-full w-full object-cover" />
+                    )}
                   </div>
                 )}
                 
                 <div className="flex-1 min-w-0 space-y-2">
                   <input
                     type="file"
-                    accept="image/jpeg,image/png,image/webp,image/jpg"
+                    accept="image/*,application/pdf,.pdf,.jpg,.jpeg,.png,.webp"
                     onChange={handlePaymentPhotoChange}
                     className="block w-full text-sm text-gray-600 file:mr-4 file:rounded-lg file:border-0 file:bg-brand-500 file:px-4 file:py-2 file:text-sm file:font-medium file:text-white hover:file:bg-brand-600"
                   />
@@ -522,7 +537,7 @@ export default function ModifyPaymentPage({ params }: { params: Promise<{ id: st
                     ) : existingPhotoUrl ? (
                       <span>Justificatif actuellement enregistré.</span>
                     ) : (
-                      <span>Aucun justificatif sélectionné. Formats: JPG, PNG, WEBP (max 5 Mo)</span>
+                      <span>Aucun justificatif sélectionné. Formats: JPG, PNG, PDF... (max 10 Mo)</span>
                     )}
                   </div>
                 </div>

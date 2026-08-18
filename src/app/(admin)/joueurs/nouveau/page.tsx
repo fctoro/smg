@@ -49,6 +49,19 @@ function NewPlayerFormContent() {
                 parsedNom = parsedNom.substring(parsedPrenom.length).trim();
               }
 
+              // Parse pied_dominant which may be a JSON string containing positions
+              let piedDominantVal = det.pied_dominant || "";
+              let postePrincipalVal = "";
+              let posteSecondaireVal = "";
+              if (piedDominantVal.startsWith("{")) {
+                try {
+                  const parsed = JSON.parse(piedDominantVal);
+                  piedDominantVal = parsed.pied || "";
+                  postePrincipalVal = parsed.poste_principal || "";
+                  posteSecondaireVal = parsed.poste_secondaire || "";
+                } catch (e) { /* keep raw value */ }
+              }
+
               prefill = {
                 nom: parsedNom,
                 prenom: parsedPrenom,
@@ -70,6 +83,9 @@ function NewPlayerFormContent() {
                 carteIdentiteParentUrl: det.piece_identite_parent_url || "",
                 fiche9eUrl: det.fiche_9e_url || "",
                 carnetVaccinationUrl: det.carnet_vaccination_url || "",
+                piedDominant: piedDominantVal,
+                postePrincipal: postePrincipalVal,
+                posteSecondaire: posteSecondaireVal,
               };
             }
           } else {
@@ -182,6 +198,8 @@ function NewPlayerFormContent() {
                   urgenceLien: p.emergency_contact_relation || "",
                   urgenceEmail: p.emergency_contact_email || "",
                   urgenceAdresse: p.emergency_contact_address || "",
+                  postePrincipal: p.poste_principal || "",
+                  posteSecondaire: p.poste_secondaire || "",
                 };
               }
             }

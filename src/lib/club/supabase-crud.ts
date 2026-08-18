@@ -74,11 +74,13 @@ export const updatePlayerInSupabase = async (playerId: string, data: Partial<Pla
   if (data.poste !== undefined) updatePayload.Poste = data.poste;
   if ((data as any).experienceSoccer !== undefined) updatePayload.Experience = (data as any).experienceSoccer;
 
-  if ((data as any).commentIdentifie !== undefined || (data as any).piedDominant !== undefined || (data as any).clubActuel !== undefined) {
+  if ((data as any).commentIdentifie !== undefined || (data as any).piedDominant !== undefined || (data as any).postePrincipal !== undefined || (data as any).posteSecondaire !== undefined || (data as any).clubActuel !== undefined) {
     const existingInfo1 = (data as any).sourceDetection ? "SOURCE:DETECTION" : "";
     updatePayload.Info1 = existingInfo1 + 
       ((data as any).commentIdentifie ? `|IDENTIFIE:${(data as any).commentIdentifie}` : "") +
       ((data as any).piedDominant ? `|PIED:${(data as any).piedDominant}` : "") +
+      ((data as any).postePrincipal ? `|POSTE_P:${(data as any).postePrincipal}` : "") +
+      ((data as any).posteSecondaire ? `|POSTE_S:${(data as any).posteSecondaire}` : "") +
       ((data as any).clubActuel ? `|CLUB:${(data as any).clubActuel}` : "");
   }
 
@@ -230,6 +232,8 @@ export const addPlayerToSupabase = async (data: Omit<Player & { photoIdentiteUrl
     Info1: ((data as any).sourceDetection ? "SOURCE:DETECTION" : "") + 
            ((data as any).commentIdentifie ? `|IDENTIFIE:${(data as any).commentIdentifie}` : "") +
            ((data as any).piedDominant ? `|PIED:${(data as any).piedDominant}` : "") +
+           ((data as any).postePrincipal ? `|POSTE_P:${(data as any).postePrincipal}` : "") +
+           ((data as any).posteSecondaire ? `|POSTE_S:${(data as any).posteSecondaire}` : "") +
            ((data as any).clubActuel ? `|CLUB:${(data as any).clubActuel}` : ""),
   };
 

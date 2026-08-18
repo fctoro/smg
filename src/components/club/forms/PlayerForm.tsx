@@ -29,6 +29,8 @@ const defaultValues: PlayerFormValues = {
   prenom: "",
   dateNaissance: "",
   poste: "Milieu",
+  postePrincipal: "",
+  posteSecondaire: "",
   sexe: "Masculin",
   categorie: "ti toro",
   telephone: "",
@@ -372,6 +374,16 @@ export default function PlayerForm({
           <div>
             <label className="mb-1.5 block text-xs font-medium text-gray-700 dark:text-gray-300">Poste</label>
             <input value={formValues.poste} onChange={(e) => updateField("poste", e.target.value)} className={inputClassName} />
+          </div>
+
+          <div>
+            <label className="mb-1.5 block text-xs font-medium text-gray-700 dark:text-gray-300">Poste principal</label>
+            <input value={formValues.postePrincipal || ""} onChange={(e) => updateField("postePrincipal", e.target.value)} className={inputClassName} placeholder="Ex: Milieu de terrain" />
+          </div>
+
+          <div>
+            <label className="mb-1.5 block text-xs font-medium text-gray-700 dark:text-gray-300">Poste secondaire</label>
+            <input value={formValues.posteSecondaire || ""} onChange={(e) => updateField("posteSecondaire", e.target.value)} className={inputClassName} placeholder="Ex: Attaquant" />
           </div>
 
           <div>

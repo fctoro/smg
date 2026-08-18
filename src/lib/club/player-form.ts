@@ -33,6 +33,8 @@ export const normalizePlayerFormValues = (
   experienceSoccer: values.experienceSoccer || "",
   commentIdentifie: values.commentIdentifie || "",
   piedDominant: values.piedDominant || "",
+  postePrincipal: values.postePrincipal || "",
+  posteSecondaire: values.posteSecondaire || "",
   clubActuel: values.clubActuel || "",
 
   parentNomPrenom: values.parentNomPrenom || "",
@@ -86,6 +88,8 @@ export const toPlayerFormValues = (player: Player): PlayerFormValues => ({
     experienceSoccer: player.experienceSoccer,
     commentIdentifie: player.commentIdentifie,
     piedDominant: player.piedDominant,
+    postePrincipal: player.postePrincipal,
+    posteSecondaire: player.posteSecondaire,
     clubActuel: player.clubActuel,
 
     parentNomPrenom: player.parentNomPrenom || "",

@@ -98,6 +98,8 @@ export interface Player {
   experienceSoccer?: string;
   commentIdentifie?: string;
   piedDominant?: string;
+  postePrincipal?: string;
+  posteSecondaire?: string;
   clubActuel?: string;
 
   parentNomPrenom?: string;
@@ -259,6 +261,8 @@ export interface PlayerFormValues {
   experienceSoccer?: string;
   commentIdentifie?: string;
   piedDominant?: string;
+  postePrincipal?: string;
+  posteSecondaire?: string;
   clubActuel?: string;
 
   parentNomPrenom?: string;

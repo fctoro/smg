@@ -545,6 +545,16 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
                 const match = String(info1).match(/CLUB:([^|]+)/);
                 return match ? match[1].trim() : "";
               })(),
+              postePrincipal: (() => {
+                const info1 = group.find(g => g.Info1)?.Info1 || "";
+                const match = String(info1).match(/POSTE_P:([^|]+)/);
+                return match ? match[1].trim() : "";
+              })(),
+              posteSecondaire: (() => {
+                const info1 = group.find(g => g.Info1)?.Info1 || "";
+                const match = String(info1).match(/POSTE_S:([^|]+)/);
+                return match ? match[1].trim() : "";
+              })(),
             });
           });
 

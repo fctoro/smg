@@ -535,7 +535,7 @@ export const deleteParentInSupabase = async (playerId: string | string[]) => {
 
 export const updatePaymentInSupabase = async (paymentId: string, data: Partial<import("@/types/club").Payment>) => {
   const updatePayload: any = {};
-  if (data.playerId !== undefined) updatePayload.EtudiantId = parseInt(data.playerId, 10);
+  if (data.playerId !== undefined) updatePayload.EtudiantId = resolveEtudiantId(data.playerId);
   if (data.montant !== undefined) {
     if (data.devise === "HTG") {
       updatePayload.MntPayeGd = data.montant;

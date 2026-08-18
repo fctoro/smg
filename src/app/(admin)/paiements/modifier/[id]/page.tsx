@@ -51,6 +51,13 @@ export default function ModifyPaymentPage({ params }: { params: Promise<{ id: st
     return fullName.includes(query) || matricule.includes(query);
   });
 
+  const [totalDue, setTotalDue] = useState<number | "">("");
+  const [rabaisType, setRabaisType] = useState<"percent" | "amount">("percent");
+  const [rabaisValue, setRabaisValue] = useState<number>(0);
+  const [baseTotalDueForRabais, setBaseTotalDueForRabais] = useState<number>(0);
+  
+  const [adhesionInfo, setAdhesionInfo] = useState<{ code: string; plan: string } | null>(null);
+
   useEffect(() => {
     // Load existing payment data
     const payment = payments.find(p => p.id === resolvedParams.id);
@@ -60,12 +67,62 @@ export default function ModifyPaymentPage({ params }: { params: Promise<{ id: st
       setDevise(payment.devise);
       setTaux(payment.taux || 0);
       let rawRemarque = payment.remarque || "";
+      
       const proofMatch = rawRemarque.match(/\[JUSTIFICATIF:(.+?)\]/);
       if (proofMatch) {
         setExistingPhotoUrl(proofMatch[1]);
         rawRemarque = rawRemarque.replace(/\[JUSTIFICATIF:.+?\]/, "").trim();
       }
-      setDescription(rawRemarque);
+
+      let parsedTotalDue = 0;
+      const dueMatch = rawRemarque.match(/\[TOTAL_DUE:\s*([\d.]+)\s*\]/i);
+      if (dueMatch && dueMatch[1]) {
+        parsedTotalDue = parseFloat(dueMatch[1]);
+        setTotalDue(parsedTotalDue);
+        rawRemarque = rawRemarque.replace(/\[TOTAL_DUE:\s*[\d.]+\s*\]/i, "").trim();
+      } else {
+        setTotalDue("");
+      }
+
+      let parsedRabaisType: "percent" | "amount" = "percent";
+      let parsedRabaisValue = 0;
+      
+      const rabaisPctMatch = rawRemarque.match(/\[RABAIS:\s*([\d.]+)%\s*\]/i);
+      if (rabaisPctMatch && rabaisPctMatch[1]) {
+        parsedRabaisValue = parseFloat(rabaisPctMatch[1]);
+        parsedRabaisType = "percent";
+        rawRemarque = rawRemarque.replace(/\[RABAIS:\s*[\d.]+%\s*\]/i, "").trim();
+      } else {
+        const rabaisAmtMatch = rawRemarque.match(/\[RABAIS:\s*\$([\d.]+)\s*\]/i);
+        if (rabaisAmtMatch && rabaisAmtMatch[1]) {
+          parsedRabaisValue = parseFloat(rabaisAmtMatch[1]);
+          parsedRabaisType = "amount";
+          rawRemarque = rawRemarque.replace(/\[RABAIS:\s*\$[\d.]+\s*\]/i, "").trim();
+        }
+      }
+      
+      setRabaisType(parsedRabaisType);
+      setRabaisValue(parsedRabaisValue);
+
+      if (parsedTotalDue > 0) {
+        if (parsedRabaisType === "percent" && parsedRabaisValue > 0 && parsedRabaisValue < 100) {
+          setBaseTotalDueForRabais(parsedTotalDue / (1 - parsedRabaisValue / 100));
+        } else if (parsedRabaisType === "amount" && parsedRabaisValue > 0) {
+          setBaseTotalDueForRabais(parsedTotalDue + parsedRabaisValue);
+        } else {
+          setBaseTotalDueForRabais(parsedTotalDue);
+        }
+      }
+
+      const adhesionMatch = rawRemarque.match(/\[ADHESION:\s*([A-Z_]+)\s*\]/i);
+      const planMatch = rawRemarque.match(/\[PLAN:\s*([A-Z]+)\s*\]/i);
+      
+      let currentBaseAdhesion = 0;
+      if (adhesionMatch && planMatch) {
+        setAdhesionInfo({ code: adhesionMatch[1], plan: planMatch[1] });
+      }
+
+      setDescription(rawRemarque.replace(/\s+/g, " ").trim());
       setPeriode(payment.periode || "");
       setStatut(payment.statut);
       setMethode(payment.methode);
@@ -73,6 +130,20 @@ export default function ModifyPaymentPage({ params }: { params: Promise<{ id: st
     }
     setLoading(false);
   }, [resolvedParams.id, payments]);
+
+  const handleRabaisChange = (val: number, type: "percent" | "amount") => {
+    const safeVal = isNaN(val) ? 0 : val;
+    setRabaisValue(safeVal);
+    setRabaisType(type);
+    
+    if (baseTotalDueForRabais > 0) {
+      if (type === "percent") {
+        setTotalDue(baseTotalDueForRabais * (1 - (safeVal / 100)));
+      } else {
+        setTotalDue(Math.max(0, baseTotalDueForRabais - safeVal));
+      }
+    }
+  };
 
   const handlePaymentPhotoChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0] ?? null;
@@ -129,10 +200,15 @@ export default function ModifyPaymentPage({ params }: { params: Promise<{ id: st
       }
 
       // Build remark with photo URL if provided or preserved
-      let finalRemarque = description.trim() || "Paiement complémentaire";
-      const activePhotoUrl = paymentPhotoUrl || existingPhotoUrl;
-      if (activePhotoUrl) {
-        const paymentPhotoNote = ` [JUSTIFICATIF:${activePhotoUrl}]`;
+      const adhesionPart = adhesionInfo ? `[ADHESION:${adhesionInfo.code}] [PLAN:${adhesionInfo.plan}] ` : "";
+      const rabaisPart = rabaisValue > 0 ? `[RABAIS:${rabaisType === "percent" ? `${rabaisValue}%` : `$${rabaisValue}`}] ` : "";
+      const totalDuePart = typeof totalDue === "number" ? `[TOTAL_DUE:${totalDue}] ` : "";
+      
+      let finalRemarque = `${adhesionPart}${rabaisPart}${totalDuePart}${description.trim()}`.trim() || "Paiement complémentaire";
+      
+      const photoUrlToSave = paymentPhotoUrl || existingPhotoUrl;
+      if (photoUrlToSave) {
+        const paymentPhotoNote = ` [JUSTIFICATIF:${photoUrlToSave}]`;
         finalRemarque = `${finalRemarque}${paymentPhotoNote}`.trim();
       }
 
@@ -147,7 +223,7 @@ export default function ModifyPaymentPage({ params }: { params: Promise<{ id: st
         periode,
         methode,
         remarque: finalRemarque,
-        datePaiement: statut === "paid" ? datePaiement || undefined : undefined,
+        datePaiement: datePaiement || undefined,
       };
 
       await updatePaymentInSupabase(resolvedParams.id, paymentData);
@@ -203,6 +279,64 @@ export default function ModifyPaymentPage({ params }: { params: Promise<{ id: st
               onChange={(event) => setMontant(Number(event.target.value))}
               className={inputClassName}
             />
+          </div>
+          <div>
+            <label className="mb-1.5 flex items-center justify-between text-sm font-medium text-gray-700 dark:text-gray-400">
+              <span>Montant total dû (USD)</span>
+            </label>
+            <input
+              type="number"
+              min={0}
+              step="0.01"
+              value={totalDue === "" ? "" : totalDue}
+              onChange={(event) => {
+                const val = event.target.value ? Number(event.target.value) : "";
+                setTotalDue(val);
+                if (val !== "") {
+                  setBaseTotalDueForRabais(val);
+                  setRabaisValue(0); // Reset rabais because they are manually overriding
+                }
+              }}
+              className={inputClassName}
+            />
+          </div>
+          <div>
+            <label className="mb-1.5 flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-400">
+              <span>Rabais accordé</span>
+              <div className="flex bg-gray-100 dark:bg-gray-800 rounded-md overflow-hidden text-xs">
+                <button
+                  type="button"
+                  onClick={() => handleRabaisChange(rabaisValue, "percent")}
+                  className={`px-2 py-0.5 ${rabaisType === "percent" ? "bg-indigo-500 text-white" : "text-gray-600 dark:text-gray-400"}`}
+                >
+                  %
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleRabaisChange(rabaisValue, "amount")}
+                  className={`px-2 py-0.5 ${rabaisType === "amount" ? "bg-indigo-500 text-white" : "text-gray-600 dark:text-gray-400"}`}
+                >
+                  $ USD
+                </button>
+              </div>
+            </label>
+            <div className="relative">
+              <input
+                type="number"
+                min={0}
+                max={rabaisType === "percent" ? 100 : undefined}
+                value={rabaisValue || ""}
+                onChange={(event) => {
+                  const val = event.target.value ? parseFloat(event.target.value) : 0;
+                  handleRabaisChange(val, rabaisType);
+                }}
+                className={inputClassName}
+                placeholder={rabaisType === "percent" ? "Ex: 10" : "Ex: 150"}
+              />
+              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3">
+                <span className="text-gray-500 sm:text-sm">{rabaisType === "percent" ? "%" : "$"}</span>
+              </div>
+            </div>
           </div>
           <div>
             <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
@@ -295,6 +429,66 @@ export default function ModifyPaymentPage({ params }: { params: Promise<{ id: st
             />
           </div>
         </div>
+
+        {typeof totalDue === "number" && totalDue >= 0 && (
+          <div className="mt-6 rounded-xl border border-indigo-100 bg-white shadow-sm dark:border-indigo-900/50 dark:bg-[#1a2332] overflow-hidden">
+            <div className="flex items-center gap-3 border-b border-indigo-50 bg-indigo-50/50 px-4 py-3 dark:border-indigo-900/40 dark:bg-indigo-900/20">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-indigo-600 dark:bg-indigo-900/50 dark:text-indigo-400">
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                </svg>
+              </div>
+              <div>
+                <h4 className="text-sm font-semibold text-indigo-950 dark:text-indigo-100">Bilan Financier</h4>
+                <p className="text-xs text-indigo-600/80 dark:text-indigo-300/80">Solde après ce paiement</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4 px-4 py-4 md:grid-cols-3">
+              <div className="rounded-xl border border-gray-100 bg-gray-50/50 p-3 dark:border-gray-800/60 dark:bg-gray-800/30">
+                <p className="text-[11px] font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                  Dette Actuelle
+                </p>
+                <p className="mt-1 text-xl font-bold text-gray-900 dark:text-white">
+                  {devise === "HTG" && taux > 0 
+                    ? `${(totalDue * taux).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} HTG`
+                    : `$${totalDue.toFixed(2)}`}
+                </p>
+              </div>
+              <div className="rounded-xl border border-gray-100 bg-gray-50/50 p-3 dark:border-gray-800/60 dark:bg-gray-800/30">
+                <p className="text-[11px] font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                  Acompte (Ce paiement)
+                </p>
+                <p className="mt-1 text-xl font-bold text-gray-900 dark:text-white">
+                  -{devise === "HTG" 
+                    ? `${montant.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} HTG`
+                    : `$${montant.toFixed(2)}`}
+                </p>
+              </div>
+              <div className={`col-span-2 rounded-xl border p-3 md:col-span-1 ${
+                (totalDue - (devise === "HTG" && taux > 0 ? montant / taux : devise === "US" ? montant : 0)) > 0
+                  ? "border-orange-200 bg-orange-50/50 dark:border-orange-900/30 dark:bg-orange-900/20"
+                  : "border-green-200 bg-green-50/50 dark:border-green-900/30 dark:bg-green-900/20"
+              }`}>
+                <p className={`text-[11px] font-medium uppercase tracking-wide ${
+                  (totalDue - (devise === "HTG" && taux > 0 ? montant / taux : devise === "US" ? montant : 0)) > 0
+                    ? "text-orange-600 dark:text-orange-400"
+                    : "text-green-600 dark:text-green-400"
+                }`}>
+                  Nouveau Solde Restant
+                </p>
+                <p className={`mt-1 text-2xl font-bold ${
+                  (totalDue - (devise === "HTG" && taux > 0 ? montant / taux : devise === "US" ? montant : 0)) > 0
+                    ? "text-orange-600 dark:text-orange-400"
+                    : "text-green-600 dark:text-green-400"
+                }`}>
+                  {devise === "HTG" && taux > 0
+                    ? `${Math.max(0, (totalDue * taux) - montant).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} HTG`
+                    : `$${Math.max(0, totalDue - (devise === "HTG" && taux > 0 ? montant / taux : devise === "US" ? montant : 0)).toFixed(2)}`}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Photo upload section */}
         <div className="md:col-span-2 xl:col-span-3">

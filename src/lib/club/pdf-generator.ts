@@ -330,12 +330,11 @@ export async function generateReceiptPDFBase64(
   yPos += 7;
   doc.setFont("helvetica", "bold");
   doc.setFontSize(11);
+  doc.setTextColor(grayDark[0], grayDark[1], grayDark[2]);
   if (balanceNumeric > 0) {
-    doc.setTextColor(220, 38, 38); // Rouge si solde restant
     doc.text("SOLDE RESTANT :", 110, yPos);
     doc.text(balanceLabel, 196, yPos, { align: 'right' });
   } else {
-    doc.setTextColor(22, 163, 74); // Vert si 0 solde (RÉGLÉ)
     doc.text("SOLDE RESTANT :", 110, yPos);
     doc.text(isHTG ? "0 G" : "US$0", 196, yPos, { align: 'right' });
   }

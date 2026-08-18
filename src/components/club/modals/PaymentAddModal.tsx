@@ -495,14 +495,15 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
 
     let adhesionAmount = 0;
     if (hasAdhesion || selectedPlan) {
-      const plan = paymentPlans.find((p) => p.id === selectedPlan);
-      if (plan) {
-        const planBaseAmount = isTiToro ? plan.montantTIToro : plan.montantFCToro;
-        adhesionAmount = (selectedPlan === "mensuel") ? planBaseAmount * nombreDeMois : planBaseAmount;
+      adhesionAmount = isTiToro ? 1000 : 1350; // Prix de base
+      if (selectedPlan === "annuel") {
+        adhesionAmount = isTiToro ? 900 : 1215; // 10% de rabais
+      } else if (selectedPlan === "semestriel") {
+        adhesionAmount = isTiToro ? 950 : 1282.5; // 5% de rabais
+      } else if (selectedPlan === "mensuel") {
+        adhesionAmount = isTiToro ? 1035 : 1395; // Plein tarif majoré
       } else if (selectedAdhesionItem) {
         adhesionAmount = selectedAdhesionItem.montant;
-      } else {
-        adhesionAmount = isTiToro ? 1350 : 1350; // Fallback
       }
     }
 
@@ -511,7 +512,7 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
     const adhesionAfterRabais = adhesionAmount * (1 - rabaisDecimal);
 
     return adhesionAfterRabais + nonAdhesionSum;
-  }, [selectedPricingItems, selectedPlan, isTiToro, selectedAdhesionItem, rabaisPercent, nombreDeMois]);
+  }, [selectedPricingItems, selectedPlan, isTiToro, selectedAdhesionItem, rabaisPercent]);
 
   const discountedDue = baseTotalDue; // rétrocompatibilité interne
 
@@ -530,17 +531,18 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
 
   useEffect(() => {
     if (isBoursier) return;
-    if (isUserEditedMontantDonne) return; // l'utilisateur a saisi montantDonne manuellement
 
     if (hasPricingItems) {
       const fullTotalDue = devise === "HTG" && taux > 0 ? discountedDue * taux : discountedDue;
       if (!isUserEditedMontantDu) {
         setMontantDuManuel(fullTotalDue);
       }
-      setMontantDonne(fullTotalDue);
+      if (!isUserEditedMontantDonne) {
+        setMontantDonne(fullTotalDue);
+      }
     } else {
       if (!isUserEditedMontantDu) setMontantDuManuel(0);
-      setMontantDonne(0);
+      if (!isUserEditedMontantDonne) setMontantDonne(0);
     }
   }, [isBoursier, hasPricingItems, discountedDue, devise, taux, isUserEditedMontantDonne, isUserEditedMontantDu]);
 
@@ -781,37 +783,49 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
             {!isBoursier && selectedAdhesionItem && (
               <div className="md:col-span-2">
                 <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
-                  Rabais sur l&apos;adhésion (%)
+                  Remise sur l'adhésion
                 </label>
-                <div className="flex items-center gap-3">
-                  <input
-                    type="number"
-                    min={0}
-                    max={100}
-                    step={1}
-                    value={rabaisPercent || ""}
-                    onChange={(e) => {
-                      const val = Math.max(0, Math.min(100, Number(e.target.value)));
-                      setRabaisPercent(val);
-                      setIsUserEditedMontantDonne(false); // allow auto-recalculation
-                    }}
-                    placeholder="0"
-                    className={inputClassName + " max-w-[120px]"}
-                  />
-                  <span className="text-sm text-gray-500 dark:text-gray-400">%</span>
+                <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                  <div className="relative max-w-[140px]">
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={rabaisPercent || ""}
+                      onChange={(event) => setRabaisPercent(Number(event.target.value))}
+                      className={inputClassName}
+                      placeholder="Ex: 10"
+                    />
+                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3">
+                      <span className="text-gray-500 font-medium sm:text-sm">%</span>
+                    </div>
+                  </div>
+                  
                   {rabaisPercent > 0 && (() => {
                     const adhesionBase = selectedAdhesionItem.montant;
                     const rabaisAmt = +(adhesionBase * rabaisPercent / 100).toFixed(2);
                     const afterRabais = +(adhesionBase - rabaisAmt).toFixed(2);
                     return (
-                      <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400">
-                        🏷️ -{rabaisAmt}$ sur adhésion → {afterRabais}$ au lieu de {adhesionBase}$
-                      </span>
+                      <div className="flex items-center gap-3 pl-1">
+                        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-500/20">
+                          <svg className="h-4 w-4 text-emerald-600 dark:text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                          </svg>
+                        </div>
+                        <div className="flex flex-col">
+                          <span className="text-[13px] font-semibold text-gray-900 dark:text-white">
+                            Nouveau tarif : ${afterRabais}
+                          </span>
+                          <span className="text-[11px] font-medium text-gray-500 dark:text-gray-400">
+                            Économie de ${rabaisAmt} <span className="ml-1 line-through opacity-70">${adhesionBase}</span>
+                          </span>
+                        </div>
+                      </div>
                     );
                   })()}
                 </div>
-                <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
-                  Le rabais s&apos;applique uniquement sur le montant de l&apos;adhésion, pas sur les autres rubriques.
+                <p className="mt-1.5 text-[11px] text-gray-500 dark:text-gray-400">
+                  Cette remise s'applique exclusivement sur le montant de l'adhésion, les autres rubriques ne sont pas concernées.
                 </p>
               </div>
             )}
@@ -1010,17 +1024,48 @@ export function PaymentAddModal({ isOpen, onClose }: PaymentAddModalProps) {
                 )}
 
                 {selectedPlanData && selectedPlan !== "annuel" && (
-                  <div className="mt-2.5 rounded-lg border border-blue-100 bg-blue-50/70 p-3 dark:border-blue-900/30 dark:bg-blue-900/20">
-                    <p className="text-xs font-semibold text-blue-900 dark:text-blue-200">
-                      ℹ️ {selectedPlanData.plan} : {selectedPlanData.modalites}
-                    </p>
-                    <p className="mt-1 text-xs font-bold text-blue-700 dark:text-blue-300">
-                      {selectedPlan === "mensuel" ? (
-                        <>Montant total calculé ({nombreDeMois} mois) : ${nombreDeMois * (isTiToro ? selectedPlanData.montantTIToro : selectedPlanData.montantFCToro)}</>
-                      ) : (
-                        <>Tarif par versement semestriel : ${isTiToro ? selectedPlanData.montantTIToro : selectedPlanData.montantFCToro} ({selectedPlanData.avantage})</>
-                      )}
-                    </p>
+                  <div className="mt-4 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-900">
+                    <div className="flex items-center gap-3 border-b border-gray-100 bg-gray-50/50 px-4 py-3 dark:border-gray-800/60 dark:bg-gray-800/20">
+                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-500 shadow-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400">
+                        <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                      </div>
+                      <div className="flex flex-col">
+                        <h4 className="text-[13px] font-semibold text-gray-900 dark:text-white">{selectedPlanData.plan}</h4>
+                        <p className="text-[11px] text-gray-500 dark:text-gray-400">{selectedPlanData.modalites}</p>
+                      </div>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-4 px-4 py-4">
+                      <div>
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 dark:text-gray-500">
+                          {selectedPlan === "mensuel" ? "Mensualité" : "Acompte requis"}
+                        </p>
+                        <p className="mt-1 text-xl font-bold text-gray-900 dark:text-white">
+                          {devise === "HTG" 
+                            ? `${(selectedPlan === "mensuel" ? montantDuManuel / 9 : montantDuManuel / 2).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} HTG`
+                            : `$${(selectedPlan === "mensuel" ? montantDuManuel / 9 : montantDuManuel / 2).toFixed(2)}`}
+                        </p>
+                        <span className="mt-1.5 inline-flex items-center rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-600 border border-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700">
+                          {selectedPlanData.avantage}
+                        </span>
+                      </div>
+                      
+                      <div>
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 dark:text-gray-500">
+                          Dette Annuelle
+                        </p>
+                        <p className="mt-1 text-xl font-bold text-gray-900 dark:text-white">
+                          {devise === "HTG"
+                            ? `${montantDuManuel.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} HTG`
+                            : `$${montantDuManuel.toFixed(2)}`}
+                        </p>
+                        <span className="mt-1.5 block text-[10px] text-gray-400 dark:text-gray-500">
+                          {selectedPlan === "mensuel" ? "Total sur 9 mois" : "Total sur 2 versements"}
+                        </span>
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>

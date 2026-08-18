@@ -1,6 +1,11 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  ...({
+    eslint: {
+      ignoreDuringBuilds: true,
+    },
+  } as any),
   async headers() {
     return [
       {
@@ -54,9 +59,6 @@ const nextConfig: NextConfig = {
         hostname: "www.ixpap.com",
       },
     ],
-  },
-  eslint: {
-    ignoreDuringBuilds: true,
   },
   typescript: {
     ignoreBuildErrors: true,

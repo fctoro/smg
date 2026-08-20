@@ -359,7 +359,7 @@ export async function generateReceiptPDFBase64(
     doc.text(balanceLabel, 196, yPos, { align: 'right' });
   } else {
     doc.text("SOLDE RESTANT :", 110, yPos);
-    doc.text(isHTG ? "0 G" : "US$0", 196, yPos, { align: 'right' });
+    doc.text(isHTG ? "0 HTG" : "US$0", 196, yPos, { align: 'right' });
   }
 
   const footerY = Math.max(finalY + 15, yPos + 10);

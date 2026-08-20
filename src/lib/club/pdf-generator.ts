@@ -214,7 +214,7 @@ export async function generateReceiptPDFBase64(
     theme: 'plain',
     styles: { 
       fontSize: 9, 
-      cellPadding: 6,
+      cellPadding: { top: 4, bottom: 4, left: 2, right: 2 },
     },
     headStyles: { 
       fillColor: false,
@@ -224,11 +224,11 @@ export async function generateReceiptPDFBase64(
     },
     bodyStyles: { textColor: grayDark },
     columnStyles: {
-      0: { cellWidth: 25, halign: 'left' },
-      1: { cellWidth: 40, halign: 'left' },
+      0: { cellWidth: 24, halign: 'left' },
+      1: { cellWidth: 38, halign: 'left' },
       2: { cellWidth: 'auto', halign: 'left' },
-      3: { cellWidth: 20, halign: 'left' },
-      4: { cellWidth: 25, fontStyle: 'bold', halign: 'right' }
+      3: { cellWidth: 26, halign: 'left' },
+      4: { cellWidth: 32, fontStyle: 'bold', halign: 'right' }
     },
     didParseCell: function (data: any) {
       if (data.section === 'head' && data.column.index === 4) {

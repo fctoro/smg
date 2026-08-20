@@ -427,7 +427,7 @@ export default function RecusJoueursPage() {
       theme: "plain",
       styles: {
         fontSize: 9,
-        cellPadding: 6,
+        cellPadding: { top: 4, bottom: 4, left: 2, right: 2 },
       },
       headStyles: {
         fillColor: false,
@@ -437,10 +437,10 @@ export default function RecusJoueursPage() {
       },
       bodyStyles: { textColor: grayDark },
       columnStyles: {
-        0: { cellWidth: 30, halign: "left" },
+        0: { cellWidth: 26, halign: "left" },
         1: { cellWidth: "auto", halign: "left" },
-        2: { cellWidth: 25, halign: "left" },
-        3: { cellWidth: 30, fontStyle: "bold", halign: "right" },
+        2: { cellWidth: 26, halign: "left" },
+        3: { cellWidth: 32, fontStyle: "bold", halign: "right" },
       },
       didParseCell: function (data: any) {
         if (data.section === "head" && data.column.index === 3) {

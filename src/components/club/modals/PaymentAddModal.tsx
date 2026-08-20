@@ -139,7 +139,13 @@ interface PaymentAddModalProps {
 }
 
 export function PaymentAddModal({ isOpen, onClose, initialPlayerId }: PaymentAddModalProps) {
-  const { players, setPayments, rubriques } = useClubData();
+  const { players, setPayments, rubriques, refreshRubriques } = useClubData();
+
+  useEffect(() => {
+    if (isOpen && refreshRubriques) {
+      refreshRubriques();
+    }
+  }, [isOpen, refreshRubriques]);
 
   const rubricOptions = useMemo(() => {
     return (rubriques || []).filter((item) => item.actif !== false && item.categorie !== "Payroll");

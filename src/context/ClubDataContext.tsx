@@ -2,7 +2,7 @@
 
 import { getSeasonCode, generatePlayerMatricule } from "@/lib/club/season";
 
-import React, { createContext, useContext, useEffect, useState, useMemo } from "react";
+import React, { createContext, useContext, useEffect, useState, useMemo, useCallback } from "react";
 import {
   mockAlumni,
   mockEmployees,
@@ -60,6 +60,7 @@ interface ClubDataContextValue {
   setPayrollRecords: SetState<PayrollRecord[]>;
   rubriques: PricingItem[];
   setRubriques: SetState<PricingItem[]>;
+  refreshRubriques: () => Promise<PricingItem[] | undefined>;
   addRubrique: (data: Omit<PricingItem, "id"> & { id?: string }) => Promise<PricingItem>;
   updateRubrique: (id: string, data: Partial<PricingItem>) => Promise<void>;
   deleteRubrique: (id: string) => Promise<void>;
@@ -172,8 +173,38 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
   const [payments, setPayments] = useState<Payment[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [payrollRecords, setPayrollRecords] = useState<PayrollRecord[]>([]);
-  const [rubriques, setRubriques] = useState<PricingItem[]>(DEFAULT_PRICING_ITEMS);
+  const [rubriques, setRubriques] = useState<PricingItem[]>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const item = window.localStorage.getItem("club-data-rubriques-v1");
+        if (item) {
+          const parsed = JSON.parse(item);
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        }
+      } catch (err) {
+        console.warn("Rubriques initial cache parse error:", err);
+      }
+    }
+    return DEFAULT_PRICING_ITEMS;
+  });
   const [hydrated, setHydrated] = useState(false);
+
+  const refreshRubriques = useCallback(async () => {
+    try {
+      const loadedRubriques = await fetchRubriquesFromSupabase();
+      if (loadedRubriques && loadedRubriques.length > 0) {
+        setRubriques(loadedRubriques);
+        safeSetItem("club-data-rubriques-v1", loadedRubriques);
+      }
+      return loadedRubriques;
+    } catch (err) {
+      console.warn("Erreur chargement rapide des rubriques :", err);
+    }
+  }, []);
+
+  useEffect(() => {
+    refreshRubriques();
+  }, [refreshRubriques]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -857,20 +888,30 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
 
   const addRubrique = async (data: Omit<PricingItem, "id"> & { id?: string }) => {
     const created = await addRubriqueToSupabase(data);
-    setRubriques((prev) => [...prev.filter((r) => r.id !== created.id), created]);
+    setRubriques((prev) => {
+      const updated = [...prev.filter((r) => r.id !== created.id), created];
+      safeSetItem("club-data-rubriques-v1", updated);
+      return updated;
+    });
     return created;
   };
 
   const updateRubrique = async (id: string, data: Partial<PricingItem>) => {
     await updateRubriqueInSupabase(id, data);
-    setRubriques((prev) =>
-      prev.map((r) => (r.id === id ? { ...r, ...data } : r))
-    );
+    setRubriques((prev) => {
+      const updated = prev.map((r) => (r.id === id ? { ...r, ...data } : r));
+      safeSetItem("club-data-rubriques-v1", updated);
+      return updated;
+    });
   };
 
   const deleteRubrique = async (id: string) => {
     await deleteRubriqueInSupabase(id);
-    setRubriques((prev) => prev.filter((r) => r.id !== id));
+    setRubriques((prev) => {
+      const updated = prev.filter((r) => r.id !== id);
+      safeSetItem("club-data-rubriques-v1", updated);
+      return updated;
+    });
   };
 
   const alumni = useMemo(() => players.filter(p => p.statut === "alumni"), [players]);
@@ -898,6 +939,7 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
         setPayrollRecords,
         rubriques,
         setRubriques,
+        refreshRubriques,
         addRubrique,
         updateRubrique,
         deleteRubrique,

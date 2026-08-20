@@ -129,7 +129,13 @@ const paymentPlans: PaymentPlan[] = [
 
 export default function NewPaymentPage() {
   const router = useRouter();
-  const { players, setPayments, rubriques } = useClubData();
+  const { players, setPayments, rubriques, refreshRubriques } = useClubData();
+
+  useEffect(() => {
+    if (refreshRubriques) {
+      refreshRubriques();
+    }
+  }, [refreshRubriques]);
 
   const pricingItems = useMemo(() => {
     return (rubriques || []).filter((item) => item.actif !== false);

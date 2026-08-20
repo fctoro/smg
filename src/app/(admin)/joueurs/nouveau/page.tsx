@@ -113,16 +113,34 @@ function NewPlayerFormContent() {
                   .from("player_registrations")
                   .select("*")
                   .eq("guardian_email", msg.email || p.guardian_email)
-                  .order("created_at", { ascending: false })
-                  .limit(1);
-                if (allRegs && allRegs.length > 0) reg = allRegs[0];
+                  .order("created_at", { ascending: false });
+
+                if (allRegs && allRegs.length > 0) {
+                  if (allRegs.length === 1) {
+                    reg = allRegs[0];
+                  } else {
+                    const targetFirst = (p.enfant_prenom || p.child_first_name || p.prenom || "").trim().toLowerCase();
+                    const targetLast = (p.enfant_nom || p.child_last_name || p.nom || "").trim().toLowerCase();
+                    const matched = allRegs.find((r: any) => {
+                      const cFirst = (r.child_first_name || "").toLowerCase();
+                      const cLast = (r.child_last_name || "").toLowerCase();
+                      return (targetFirst && (cFirst.includes(targetFirst) || targetFirst.includes(cFirst))) ||
+                             (targetLast && (cLast.includes(targetLast) || targetLast.includes(cLast)));
+                    });
+                    reg = matched || allRegs[0];
+                  }
+                }
               }
 
               if (reg) {
-                const parsedPrenom = (reg.child_first_name || "").trim();
+                let parsedPrenom = (reg.child_first_name || "").trim();
                 let parsedNom = (reg.child_last_name || "").trim();
                 if (parsedPrenom && parsedNom.toLowerCase().startsWith(parsedPrenom.toLowerCase())) {
                   parsedNom = parsedNom.substring(parsedPrenom.length).trim();
+                } else if (!parsedPrenom && parsedNom.includes(" ")) {
+                  const parts = parsedNom.split(" ");
+                  parsedNom = parts.pop() || "";
+                  parsedPrenom = parts.join(" ");
                 }
 
                 const isTiToroProg = String(reg.program || "").toLowerCase().includes("ti");
@@ -171,10 +189,14 @@ function NewPlayerFormContent() {
                   });
                 }
               } else {
-                const parsedPrenom = (p.enfant_prenom || p.child_first_name || p.prenom || msg.contact_prenom || "").toString().trim();
+                let parsedPrenom = (p.enfant_prenom || p.child_first_name || p.prenom || msg.contact_prenom || "").toString().trim();
                 let parsedNom = (p.enfant_nom || p.child_last_name || p.nom || msg.contact_nom || "").toString().trim();
                 if (parsedPrenom && parsedNom.toLowerCase().startsWith(parsedPrenom.toLowerCase())) {
                   parsedNom = parsedNom.substring(parsedPrenom.length).trim();
+                } else if (!parsedPrenom && parsedNom.includes(" ")) {
+                  const parts = parsedNom.split(" ");
+                  parsedNom = parts.pop() || "";
+                  parsedPrenom = parts.join(" ");
                 }
 
                 const isTiToroProg = String(p.program || "").toLowerCase().includes("ti");

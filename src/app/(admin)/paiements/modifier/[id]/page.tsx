@@ -426,7 +426,7 @@ export default function ModifyPaymentPage({ params }: { params: Promise<{ id: st
               <option value="carte">Carte</option>
               <option value="especes">Especes</option>
               <option value="cheque">Chèque</option>
-              <option value="mobile">Mobile</option>
+              <option value="mobile">Dépôt bancaire</option>
             </select>
           </div>
           <div>

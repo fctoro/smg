@@ -1,5 +1,5 @@
 import { formatClubCurrency, formatClubDate, getPlayerFullName } from "@/lib/club/metrics";
-import { FC_TORO_LOGO } from "@/lib/club/pdfAssets";
+import { FC_TORO_LOGO, OCTACORE_LOGO } from "@/lib/club/pdfAssets";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { Player } from "@/types/club";
@@ -142,14 +142,16 @@ export async function generateReceiptPDFBase64(
   const tableRows: any[] = [];
 
   const mapMode = (mode: any) => {
-    const modeStr = String(mode).toLowerCase();
+    const modeStr = String(mode || "").toLowerCase().trim();
     if (modeStr === "1") return "Espèces";
     if (modeStr === "2") return "Virement";
     if (modeStr === "3") return "Chèque";
     if (modeStr === "4") return "Carte";
-    if (modeStr === "5") return "Moncash";
+    if (modeStr === "5" || modeStr === "mobile" || modeStr === "depot" || modeStr === "dépôt" || modeStr.includes("depot") || modeStr.includes("dépôt")) return "Dépôt bancaire";
     if (modeStr === "virement") return "Virement";
-    if (modeStr === "especes" || modeStr === "espèces") return "Espèces";
+    if (modeStr === "especes" || modeStr === "espèces" || modeStr === "espece" || modeStr === "espèce") return "Espèces";
+    if (modeStr === "cheque" || modeStr === "chèque") return "Chèque";
+    if (modeStr === "carte") return "Carte";
     return String(mode || "-");
   };
 
@@ -214,7 +216,7 @@ export async function generateReceiptPDFBase64(
     theme: 'plain',
     styles: { 
       fontSize: 9, 
-      cellPadding: 6,
+      cellPadding: { top: 4, bottom: 4, left: 2, right: 2 },
     },
     headStyles: { 
       fillColor: false,
@@ -224,11 +226,11 @@ export async function generateReceiptPDFBase64(
     },
     bodyStyles: { textColor: grayDark },
     columnStyles: {
-      0: { cellWidth: 25, halign: 'left' },
-      1: { cellWidth: 40, halign: 'left' },
+      0: { cellWidth: 24, halign: 'left' },
+      1: { cellWidth: 38, halign: 'left' },
       2: { cellWidth: 'auto', halign: 'left' },
-      3: { cellWidth: 20, halign: 'left' },
-      4: { cellWidth: 25, fontStyle: 'bold', halign: 'right' }
+      3: { cellWidth: 26, halign: 'left' },
+      4: { cellWidth: 32, fontStyle: 'bold', halign: 'right' }
     },
     didParseCell: function (data: any) {
       if (data.section === 'head' && data.column.index === 4) {
@@ -357,7 +359,7 @@ export async function generateReceiptPDFBase64(
     doc.text(balanceLabel, 196, yPos, { align: 'right' });
   } else {
     doc.text("SOLDE RESTANT :", 110, yPos);
-    doc.text(isHTG ? "0 G" : "US$0", 196, yPos, { align: 'right' });
+    doc.text(isHTG ? "0 HTG" : "US$0", 196, yPos, { align: 'right' });
   }
 
   const footerY = Math.max(finalY + 15, yPos + 10);
@@ -421,6 +423,64 @@ export async function generateReceiptPDFBase64(
     } catch (err) {
       console.warn("Could not add proof image to PDF", err);
     }
+  }
+
+  // --- Appliquer le footer Octacore sur TOUTES les pages du document ---
+  try {
+    const pageCount = doc.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i);
+      const bottomLineY = 282;
+      doc.setDrawColor(grayLight[0], grayLight[1], grayLight[2]);
+      doc.setLineWidth(0.3);
+      doc.line(14, bottomLineY, 196, bottomLineY);
+
+      const logoH = 3.5;
+      const logoW = logoH * 5.638; // ~19.73 mm
+      const gap = 2;
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(7.5);
+
+      const textPrefix = "Powered by";
+      const textSeparator = "•";
+      const textUrl = "www.octacore.io";
+
+      const wPrefix = doc.getTextWidth(textPrefix);
+      const wSep = doc.getTextWidth(textSeparator);
+      const wUrl = doc.getTextWidth(textUrl);
+
+      const totalBlockW = wPrefix + gap + logoW + gap + wSep + gap + wUrl;
+      const startX = (210 - totalBlockW) / 2;
+      const textY = 287.3;
+
+      let curX = startX;
+
+      // 1. "Powered by"
+      doc.setTextColor(grayMedium[0], grayMedium[1], grayMedium[2]);
+      doc.text(textPrefix, curX, textY);
+      curX += wPrefix + gap;
+
+      // 2. Logo OCTACORE
+      if (OCTACORE_LOGO) {
+        doc.addImage(OCTACORE_LOGO, "PNG", curX, 284.4, logoW, logoH, undefined, "FAST");
+      }
+      curX += logoW + gap;
+
+      // 3. "•"
+      doc.setTextColor(grayMedium[0], grayMedium[1], grayMedium[2]);
+      doc.text(textSeparator, curX, textY);
+      curX += wSep + gap;
+
+      // 4. "www.octacore.io"
+      doc.setTextColor(59, 130, 246);
+      doc.text(textUrl, curX, textY);
+
+      // Lien cliquable interactif dans le PDF vers https://octacore.io
+      doc.link(startX, 283.5, totalBlockW, 6, { url: "https://octacore.io" });
+    }
+  } catch (err) {
+    console.warn("Could not render Octacore footer on all pages", err);
   }
 
   // Si le justificatif est un document PDF scanné, on fusionne ses pages dans le reçu

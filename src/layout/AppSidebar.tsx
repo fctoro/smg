@@ -86,7 +86,7 @@ const adminNavItems: NavItem[] = [
   },
   {
     icon: <DocsIcon />,
-    name: "RP Parents",
+    name: "RP Joueurs",
     path: "/recus",
     new: true,
     sections: ["Paiements"],

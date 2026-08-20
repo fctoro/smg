@@ -175,21 +175,39 @@ export default function BoiteDeReception() {
     }
 
     if (!existingPlayer) {
-      let nom = (selectedMessage.metadata.enfant_nom || selectedMessage.metadata.child_last_name || "").toString().toLowerCase().trim();
-      let prenom = (selectedMessage.metadata.enfant_prenom || selectedMessage.metadata.child_first_name || "").toString().toLowerCase().trim();
+      let rawNom = (selectedMessage.metadata.enfant_nom || selectedMessage.metadata.child_last_name || selectedMessage.metadata.nom || "").toString().trim();
+      let rawPrenom = (selectedMessage.metadata.enfant_prenom || selectedMessage.metadata.child_first_name || selectedMessage.metadata.prenom || "").toString().trim();
+      
+      const combinedCandidate = `${rawPrenom} ${rawNom}`.trim().toLowerCase();
+      const candidateTokens = combinedCandidate.split(/\s+/).filter(t => t.length > 1);
 
-      if (nom && !prenom && nom.includes(" ")) {
-        const parts = nom.split(" ");
-        prenom = parts[0];
-        nom = parts.slice(1).join(" ");
-      }
+      if (candidateTokens.length > 0) {
+        // Distinctive first token is the primary given name (e.g., "daryl" or "henzo")
+        const primaryFirstToken = candidateTokens[0];
+        // Distinctive last token is the family name (e.g., "jean")
+        const familyNameToken = candidateTokens[candidateTokens.length - 1];
 
-      if (nom || prenom) {
-        existingPlayer = players.find(
-          (p) => 
-            (nom && p.nom.toLowerCase().includes(nom) && prenom && p.prenom.toLowerCase().includes(prenom)) ||
-            (nom && p.nom.toLowerCase().includes(prenom) && prenom && p.prenom.toLowerCase().includes(nom))
-        );
+        existingPlayer = players.find((p) => {
+          const pNom = (p.nom || "").toLowerCase().trim();
+          const pPrenom = (p.prenom || "").toLowerCase().trim();
+          const pFull = `${pPrenom} ${pNom}`.trim();
+          const pTokens = pFull.split(/\s+/).filter(t => t.length > 1);
+
+          // Both brothers have same family name, so we MUST ensure the given name token matches
+          const hasPrimaryFirst = pTokens.some(t => t === primaryFirstToken || (primaryFirstToken.length > 3 && t.startsWith(primaryFirstToken)));
+          const hasFamilyName = candidateTokens.length > 1 ? pTokens.some(t => t === familyNameToken || (familyNameToken.length > 3 && t.startsWith(familyNameToken))) : true;
+
+          if (hasPrimaryFirst && hasFamilyName) {
+            return true;
+          }
+
+          // Exact full-string match fallback
+          if (pFull === combinedCandidate || (pNom === rawNom.toLowerCase() && pPrenom === rawPrenom.toLowerCase())) {
+            return true;
+          }
+
+          return false;
+        });
       }
     }
 

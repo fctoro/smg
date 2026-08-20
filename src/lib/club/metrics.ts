@@ -18,17 +18,16 @@ export const formatClubDate = (date: string) => {
 
 export const formatClubNumber = (value: number | null | undefined): string => {
   if (value === null || value === undefined || isNaN(value)) return "0";
-  return new Intl.NumberFormat("fr-FR").format(value);
+  return new Intl.NumberFormat("en-US").format(value);
 };
 
 export const formatClubCurrency = (amount: number | null | undefined, devise: "US" | "HTG" = "US") => {
   const safeAmount = amount && !isNaN(amount) ? amount : 0;
   if (devise === "HTG") {
-    return new Intl.NumberFormat("fr-FR", {
-      style: "currency",
-      currency: "HTG",
+    const formatted = new Intl.NumberFormat("en-US", {
       maximumFractionDigits: 0,
-    }).format(safeAmount).replace("HTG", "HTG");
+    }).format(safeAmount);
+    return `${formatted} HTG`;
   }
   return new Intl.NumberFormat("en-US", {
     style: "currency",

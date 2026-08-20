@@ -283,7 +283,13 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
           validEtudiants.forEach((d: any) => {
             const normNom = (d.Nom || "").trim().toLowerCase().replace(/\s+/g, " ");
             const normPrenom = (d.Prenom || "").trim().toLowerCase().replace(/\s+/g, " ");
-            const key = `${normNom}_${normPrenom}`;
+            
+            // Si le prénom est manquant, trop court (<2 lettres) ou identique au nom, ne pas fusionner pour éviter d'écraser des frères ou personnes distinctes
+            let key = `${normNom}_${normPrenom}`;
+            if (!normPrenom || normPrenom.length < 2 || normNom === normPrenom) {
+              key = `id_${d.EtudiantID}`;
+            }
+            
             if (!nameGroups.has(key)) {
               nameGroups.set(key, []);
             }

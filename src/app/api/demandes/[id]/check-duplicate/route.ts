@@ -52,36 +52,51 @@ export async function GET(request: Request, context: any) {
       }
 
       const payload = msg.payload || {};
-      firstName = payload.child_first_name?.trim() || payload.prenom?.trim();
-      lastName = payload.child_last_name?.trim() || payload.nom?.trim();
+      firstName = payload.child_first_name?.trim() || payload.prenom?.trim() || payload.enfant_prenom?.trim() || "";
+      lastName = payload.child_last_name?.trim() || payload.nom?.trim() || payload.enfant_nom?.trim() || "";
+
+      if (!firstName && lastName.includes(" ")) {
+        const parts = lastName.split(" ");
+        lastName = parts.pop() || "";
+        firstName = parts.join(" ");
+      }
     }
     
-    if (!firstName || !lastName) {
+    if (!firstName && !lastName) {
        return NextResponse.json({ isDuplicate: false });
     }
 
     const normalizedFirst = firstName.toLowerCase();
     const normalizedLast = lastName.toLowerCase();
+    const firstTokens = normalizedFirst.split(/\s+/).filter(t => t.length > 1);
+    const primaryFirst = firstTokens[0] || normalizedFirst;
 
     // Check in tblEtudiants
-    // We check if any student exists with the same name (case-insensitive approximation)
     const { data: regRows, error: regErr } = await supabase
       .from("tblEtudiants")
       .select("EtudiantID, Nom, Prenom")
-      .ilike("Prenom", `%${normalizedFirst}%`)
       .ilike("Nom", `%${normalizedLast}%`)
       .or("IsDeleted.eq.0,IsDeleted.is.null");
 
     if (!regErr && regRows && regRows.length > 0) {
-      return NextResponse.json({
-        isDuplicate: true,
-        source: "tblEtudiants",
-        player: {
-          id: String(regRows[0].EtudiantID),
-          child_first_name: regRows[0].Prenom,
-          child_last_name: regRows[0].Nom
-        }
+      const match = regRows.find((r: any) => {
+        const rPrenom = (r.Prenom || "").toLowerCase();
+        const rNom = (r.Nom || "").toLowerCase();
+        const rFull = `${rPrenom} ${rNom}`.trim();
+        return primaryFirst ? (rPrenom.includes(primaryFirst) || rFull.includes(primaryFirst)) : rNom === normalizedLast;
       });
+
+      if (match) {
+        return NextResponse.json({
+          isDuplicate: true,
+          source: "tblEtudiants",
+          player: {
+            id: String(match.EtudiantID),
+            child_first_name: match.Prenom,
+            child_last_name: match.Nom
+          }
+        });
+      }
     }
 
     return NextResponse.json({ isDuplicate: false });

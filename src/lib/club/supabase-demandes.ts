@@ -449,19 +449,34 @@ export const fetchDocumentsForMessage = async (id: string, email: string, msg?: 
   }
 
   // Original logic for inscriptions
-  const { data: msgData } = await supabase.from('site_messages').select('created_at').eq('id', id).single();
+  const { data: msgData } = await supabase.from('site_messages').select('created_at, payload').eq('id', id).single();
   const targetTime = msgData?.created_at ? new Date(msgData.created_at).getTime() : Date.now();
+  const payload = msgData?.payload || msg?.metadata || {};
+  const targetChildFirst = (payload.child_first_name || payload.prenom || payload.enfant_prenom || '').trim().toLowerCase();
+  const targetChildLast = (payload.child_last_name || payload.nom || payload.enfant_nom || '').trim().toLowerCase();
 
-  const { data: allRegs } = await supabase.from('player_registrations').select('id, created_at').eq('guardian_email', email);
+  const { data: allRegs } = await supabase.from('player_registrations').select('id, created_at, child_first_name, child_last_name').eq('guardian_email', email);
   if (!allRegs || allRegs.length === 0) return [];
 
   let regId = allRegs[0].id;
-  let minDiff = Infinity;
-  for (const r of allRegs) {
-    const diff = Math.abs(new Date(r.created_at).getTime() - targetTime);
-    if (diff < minDiff) {
-      minDiff = diff;
-      regId = r.id;
+  if (allRegs.length > 1 && (targetChildFirst || targetChildLast)) {
+    const matched = allRegs.find((r: any) => {
+      const cFirst = (r.child_first_name || '').toLowerCase();
+      const cLast = (r.child_last_name || '').toLowerCase();
+      return (targetChildFirst && (cFirst.includes(targetChildFirst) || targetChildFirst.includes(cFirst))) ||
+             (targetChildLast && (cLast.includes(targetChildLast) || targetChildLast.includes(cLast)));
+    });
+    if (matched) {
+      regId = matched.id;
+    }
+  } else {
+    let minDiff = Infinity;
+    for (const r of allRegs) {
+      const diff = Math.abs(new Date(r.created_at).getTime() - targetTime);
+      if (diff < minDiff) {
+        minDiff = diff;
+        regId = r.id;
+      }
     }
   }
 
@@ -472,6 +487,11 @@ export const fetchDocumentsForMessage = async (id: string, email: string, msg?: 
 export const fetchFullRegistrationDataForPlayer = async (player: any) => {
   try {
     const emailToSearch = player?.email || player?.parentEmail;
+    const playerNom = (player?.nom || "").trim().toLowerCase();
+    const playerPrenom = (player?.prenom || "").trim().toLowerCase();
+    const playerFullName = `${playerPrenom} ${playerNom}`.trim();
+    const playerTokens = playerFullName.split(/\s+/).filter(Boolean);
+
     let reg: any = null;
 
     if (emailToSearch) {
@@ -479,25 +499,51 @@ export const fetchFullRegistrationDataForPlayer = async (player: any) => {
         .from('player_registrations')
         .select('*')
         .eq('guardian_email', emailToSearch)
-        .order('created_at', { ascending: false })
-        .limit(1);
+        .order('created_at', { ascending: false });
 
       if (allRegs && allRegs.length > 0) {
-        reg = allRegs[0];
+        if (allRegs.length === 1) {
+          reg = allRegs[0];
+        } else {
+          // Frères/Sœurs partageant le même email de parent : matching précis par nom de l'enfant
+          let bestScore = -1;
+          for (const candidate of allRegs) {
+            const cFirst = (candidate.child_first_name || "").trim().toLowerCase();
+            const cLast = (candidate.child_last_name || "").trim().toLowerCase();
+            const cFull = `${cFirst} ${cLast}`.trim();
+            const cTokens = cFull.split(/\s+/).filter(Boolean);
+
+            let score = 0;
+            for (const token of playerTokens) {
+              if (token.length > 1 && cTokens.some(ct => ct.includes(token) || token.includes(ct))) {
+                score++;
+              }
+            }
+            if (cFirst && playerPrenom.includes(cFirst)) score += 2;
+            if (cLast && playerNom.includes(cLast)) score += 2;
+
+            if (score > bestScore) {
+              bestScore = score;
+              reg = candidate;
+            }
+          }
+          if (!reg) reg = allRegs[0];
+        }
       }
     }
 
-    if (!reg && player?.nom && player?.prenom) {
+    if (!reg && playerNom && playerPrenom) {
       const { data: nameRegs } = await supabase
         .from('player_registrations')
         .select('*')
-        .ilike('child_last_name', `%${player.nom}%`)
-        .ilike('child_first_name', `%${player.prenom}%`)
-        .order('created_at', { ascending: false })
-        .limit(1);
+        .ilike('child_last_name', `%${playerNom}%`)
+        .order('created_at', { ascending: false });
 
       if (nameRegs && nameRegs.length > 0) {
-        reg = nameRegs[0];
+        reg = nameRegs.find((r: any) => {
+          const cFirst = (r.child_first_name || "").toLowerCase();
+          return playerTokens.some(tok => tok.length > 2 && cFirst.includes(tok));
+        }) || nameRegs[0];
       }
     }
 

@@ -1120,7 +1120,7 @@ export function PaymentAddModal({ isOpen, onClose, initialPlayerId }: PaymentAdd
                 <option value="carte">Carte bancaire</option>
                 <option value="especes">Espèces</option>
                 <option value="cheque">Chèque</option>
-                <option value="mobile">Paiement Mobile</option>
+                <option value="mobile">Dépôt bancaire</option>
               </select>
             </div>
 

@@ -127,7 +127,7 @@ export const PlayerEditModal: React.FC<PlayerEditModalProps> = ({
             onCancel={onClose}
             categories={categories}
             highlightFields={highlightFields}
-            draftKey={player.id}
+            draftKey={`v4_${player.id}`}
             playerId={player.id}
           />
         </div>

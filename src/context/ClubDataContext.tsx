@@ -565,8 +565,8 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
               urgenceTelephone,
               urgenceEmail,
               urgenceAdresse,
-              tailleHaut: primaryRecord.TailleHaut || "M",
-              tailleShort: primaryRecord.TailleShort || "M",
+              tailleHaut: primaryRecord.TailleHaut || "Choisir",
+              tailleShort: primaryRecord.TailleShort || "Choisir",
               commentIdentifie: (() => {
                 const info1 = group.find(g => g.Info1)?.Info1 || "";
                 const match = String(info1).match(/IDENTIFIE:([^|]+)/);

@@ -134,7 +134,7 @@ export default function BoiteDeReception() {
           if (contentType && contentType.includes("application/json")) {
             return res.json();
           } else {
-            console.error("API returned non-JSON response");
+            console.warn("API returned non-JSON response");
             return { error: true };
           }
         })

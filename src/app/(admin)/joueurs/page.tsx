@@ -78,13 +78,65 @@ function PlayersPageContent() {
                 updatedPlayer.dateNaissance = meta.child_birth_date || meta.child_dob;
                 fieldsToHighlight.push("dateNaissance");
               }
+              if ((!updatedPlayer.urgenceNomPrenom || updatedPlayer.urgenceNomPrenom === "Choisir") && (meta.emergency_name || meta.emergency_contact_name)) {
+                updatedPlayer.urgenceNomPrenom = meta.emergency_name || meta.emergency_contact_name;
+                fieldsToHighlight.push("urgenceNomPrenom");
+              }
+              if (!updatedPlayer.urgenceTelephone && (meta.emergency_phone || meta.emergency_contact_phone)) {
+                updatedPlayer.urgenceTelephone = meta.emergency_phone || meta.emergency_contact_phone;
+                fieldsToHighlight.push("urgenceTelephone");
+              }
+              if (!updatedPlayer.urgenceLien && (meta.emergency_relation || meta.emergency_contact_relation)) {
+                updatedPlayer.urgenceLien = meta.emergency_relation || meta.emergency_contact_relation;
+                fieldsToHighlight.push("urgenceLien");
+              }
+              if (!updatedPlayer.urgenceEmail && (meta.emergency_email || meta.emergency_contact_email)) {
+                updatedPlayer.urgenceEmail = meta.emergency_email || meta.emergency_contact_email;
+                fieldsToHighlight.push("urgenceEmail");
+              }
+              if (!updatedPlayer.urgenceAdresse && (meta.emergency_address || meta.emergency_contact_address)) {
+                updatedPlayer.urgenceAdresse = meta.emergency_address || meta.emergency_contact_address;
+                fieldsToHighlight.push("urgenceAdresse");
+              }
+              if ((!updatedPlayer.tailleHaut || updatedPlayer.tailleHaut === "Choisir") && meta.uniform_top_size) {
+                updatedPlayer.tailleHaut = meta.uniform_top_size;
+                fieldsToHighlight.push("tailleHaut");
+              }
+              if ((!updatedPlayer.tailleShort || updatedPlayer.tailleShort === "Choisir") && meta.uniform_short_size) {
+                updatedPlayer.tailleShort = meta.uniform_short_size;
+                fieldsToHighlight.push("tailleShort");
+              }
+              if (!updatedPlayer.numerosPreferes && meta.preferred_numbers) {
+                updatedPlayer.numerosPreferes = meta.preferred_numbers;
+                fieldsToHighlight.push("numerosPreferes");
+              }
               
-              // Fetch docs
+              // Fetch docs and full registration data
               const emailToSearch = message.contact_email || meta.guardian_email;
               if (emailToSearch) {
-                const { data: allRegs } = await supabase.from('player_registrations').select('id').eq('guardian_email', emailToSearch).order('created_at', { ascending: false }).limit(1);
+                const { data: allRegs } = await supabase.from('player_registrations').select('*').eq('guardian_email', emailToSearch).order('created_at', { ascending: false }).limit(1);
                 if (allRegs && allRegs.length > 0) {
-                  const { data: docs } = await supabase.from('player_registration_documents').select('*').eq('registration_id', allRegs[0].id);
+                  const reg = allRegs[0];
+                  
+                  // Merge any missing fields from player_registrations directly
+                  if (!updatedPlayer.numerosPreferes && reg.preferred_numbers) {
+                    updatedPlayer.numerosPreferes = reg.preferred_numbers;
+                    fieldsToHighlight.push("numerosPreferes");
+                  }
+                  if ((!updatedPlayer.tailleHaut || updatedPlayer.tailleHaut === "Choisir") && reg.uniform_top_size) {
+                    updatedPlayer.tailleHaut = reg.uniform_top_size;
+                    if (!fieldsToHighlight.includes("tailleHaut")) fieldsToHighlight.push("tailleHaut");
+                  }
+                  if ((!updatedPlayer.tailleShort || updatedPlayer.tailleShort === "Choisir") && reg.uniform_short_size) {
+                    updatedPlayer.tailleShort = reg.uniform_short_size;
+                    if (!fieldsToHighlight.includes("tailleShort")) fieldsToHighlight.push("tailleShort");
+                  }
+                  if ((!updatedPlayer.urgenceNomPrenom || updatedPlayer.urgenceNomPrenom === "Choisir") && reg.emergency_name) {
+                    updatedPlayer.urgenceNomPrenom = reg.emergency_name;
+                    if (!fieldsToHighlight.includes("urgenceNomPrenom")) fieldsToHighlight.push("urgenceNomPrenom");
+                  }
+
+                  const { data: docs } = await supabase.from('player_registration_documents').select('*').eq('registration_id', reg.id);
                   if (docs && docs.length > 0) {
                     docs.forEach((doc: any) => {
                       if (doc.path) {

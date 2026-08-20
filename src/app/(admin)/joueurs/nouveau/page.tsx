@@ -159,11 +159,11 @@ function NewPlayerFormContent() {
                   parentEmail: reg.guardian_email || "",
                   parentTelephone: reg.guardian_phone || "",
                   parentAdresse: reg.guardian_address || "",
-                  urgenceNomPrenom: reg.emergency_name || p.emergency_contact_name || "",
-                  urgenceTelephone: reg.emergency_phone || p.emergency_contact_phone || "",
-                  urgenceLien: reg.emergency_relation || p.emergency_contact_relation || "",
-                  urgenceEmail: reg.emergency_email || p.emergency_contact_email || "",
-                  urgenceAdresse: reg.emergency_address || p.emergency_contact_address || "",
+                  urgenceNomPrenom: reg.emergency_name || p.emergency_name || p.emergency_contact_name || "",
+                  urgenceTelephone: reg.emergency_phone || p.emergency_phone || p.emergency_contact_phone || "",
+                  urgenceLien: reg.emergency_relation || p.emergency_relation || p.emergency_contact_relation || "",
+                  urgenceEmail: reg.emergency_email || p.emergency_email || p.emergency_contact_email || "",
+                  urgenceAdresse: reg.emergency_address || p.emergency_address || p.emergency_contact_address || "",
                   tailleHaut: reg.uniform_top_size || "",
                   tailleShort: reg.uniform_short_size || "",
                   numerosPreferes: reg.preferred_numbers || "",
@@ -215,11 +215,14 @@ function NewPlayerFormContent() {
                   parentEmail: p.guardian_email || msg.email || "",
                   parentTelephone: p.guardian_phone || msg.phone || "",
                   parentAdresse: p.guardian_address || "",
-                  urgenceNomPrenom: p.emergency_contact_name || "",
-                  urgenceTelephone: p.emergency_contact_phone || "",
-                  urgenceLien: p.emergency_contact_relation || "",
-                  urgenceEmail: p.emergency_contact_email || "",
-                  urgenceAdresse: p.emergency_contact_address || "",
+                  urgenceNomPrenom: p.emergency_name || p.emergency_contact_name || "",
+                  urgenceTelephone: p.emergency_phone || p.emergency_contact_phone || "",
+                  urgenceLien: p.emergency_relation || p.emergency_contact_relation || "",
+                  urgenceEmail: p.emergency_email || p.emergency_contact_email || "",
+                  urgenceAdresse: p.emergency_address || p.emergency_contact_address || "",
+                  tailleHaut: p.uniform_top_size || "",
+                  tailleShort: p.uniform_short_size || "",
+                  numerosPreferes: p.preferred_numbers || "",
                   postePrincipal: p.poste_principal || "",
                   posteSecondaire: p.poste_secondaire || "",
                 };
@@ -320,7 +323,8 @@ function NewPlayerFormContent() {
           categories={categories}
           onCancel={() => router.push("/joueurs")}
           onSubmit={handleSubmit}
-          submitLabel="Enregistrer"
+          submitLabel="Inscrire le joueur"
+          draftKey={`new_player_v2_${searchParams.get("demandeId") || "manual"}`}
         />
       </div>
       <div className="flex justify-end">

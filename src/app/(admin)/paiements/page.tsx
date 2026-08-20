@@ -20,7 +20,7 @@ import { formatClubCurrency, formatClubDate, getPlayerFullName } from "@/lib/clu
 import { updatePaymentInSupabase, deletePaymentInSupabase } from "@/lib/club/supabase-crud";
 import { calculateDiscountedAmount, parseReductionFromRemark } from "@/lib/club/payment-reduction-utils";
 import { ImageModal } from "@/components/club/modals/ImageModal";
-import { extractPhotoUrlFromRemark, isPdfProof } from "@/lib/club/payment-photo-utils";
+import { extractPhotoUrlFromRemark, extractPhotoUrlsFromRemark, isPdfProof, validatePaymentPhotoFile, getPaymentPhotoPreviewUrl, uploadPaymentPhotoToSupabase } from "@/lib/club/payment-photo-utils";
 import { BellIcon, PencilIcon, TrashBinIcon } from "@/icons";
 import { ActiveBellIcon } from "@/icons/ActiveBellIcon";
 import { ConfirmModal } from "@/components/ui/modal/ConfirmModal";
@@ -87,6 +87,12 @@ export default function PaymentsPage() {
   const [isCustomMessageModalOpen, setIsCustomMessageModalOpen] = useState(false);
   const [customMessageText, setCustomMessageText] = useState("");
   const [paymentToDelete, setPaymentToDelete] = useState<string | null>(null);
+
+  const [paymentPhoto, setPaymentPhoto] = useState<File | null>(null);
+  const [paymentPhotoPreview, setPaymentPhotoPreview] = useState<string | null>(null);
+  const [paymentPhotoError, setPaymentPhotoError] = useState<string | null>(null);
+  const [nombreDeMois, setNombreDeMois] = useState<number>(1);
+  const [isMonthlyPlan, setIsMonthlyPlan] = useState<boolean>(false);
 
   const playerMap = useMemo(
     () => new Map(players.map((player) => [player.id, player])),
@@ -178,12 +184,54 @@ export default function PaymentsPage() {
     setNewAmount(0);
     setNewPaymentDate(payment.datePaiement || new Date().toISOString().slice(0, 10));
     setEditError("");
+    setPaymentPhoto(null);
+    setPaymentPhotoPreview(null);
+    setPaymentPhotoError(null);
+
+    const planLabel = getPaymentPlanLabel(payment.remarque);
+    const remarkLower = (payment.remarque || "").toLowerCase();
+    const isMonthly = planLabel.toUpperCase() === "MENSUEL" || remarkLower.includes("[plan:mensuel]") || remarkLower.includes("mensuel");
+    setIsMonthlyPlan(isMonthly);
+
+    const moisMatch = payment.remarque?.match(/\[MOIS_PAYES:\s*(\d+)\s*\]/i) || payment.remarque?.match(/(\d+)\s*mois/i);
+    if (moisMatch && moisMatch[1]) {
+      setNombreDeMois(parseInt(moisMatch[1], 10) || 1);
+    } else {
+      setNombreDeMois(1);
+    }
   };
 
   const closeEditModal = () => {
     if (isSaving) return;
     setEditingPayment(null);
     setEditError("");
+    if (paymentPhotoPreview?.startsWith("blob:")) {
+      URL.revokeObjectURL(paymentPhotoPreview);
+    }
+    setPaymentPhoto(null);
+    setPaymentPhotoPreview(null);
+    setPaymentPhotoError(null);
+  };
+
+  const handlePaymentPhotoChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0] ?? null;
+    const validation = validatePaymentPhotoFile(file);
+
+    if (!validation.valid) {
+      setPaymentPhoto(null);
+      setPaymentPhotoPreview(null);
+      setPaymentPhotoError(validation.error ?? "Erreur de validation du fichier.");
+      return;
+    }
+
+    if (paymentPhotoPreview?.startsWith("blob:")) {
+      URL.revokeObjectURL(paymentPhotoPreview);
+    }
+
+    const previewUrl = getPaymentPhotoPreviewUrl(file);
+    setPaymentPhoto(file);
+    setPaymentPhotoPreview(previewUrl);
+    setPaymentPhotoError(null);
   };
 
   const handleEditPayment = async () => {
@@ -195,25 +243,98 @@ export default function PaymentsPage() {
     setIsSaving(true);
     setEditError("");
     try {
+      const uploadPromise = paymentPhoto ? uploadPaymentPhotoToSupabase(paymentPhoto) : Promise.resolve(null);
+      const paymentPhotoUrl = await uploadPromise;
+
       const totalAmountPaid = editingPayment.montant + newAmount;
       const montantUS = editingPayment.devise === "US"
         ? totalAmountPaid
         : (editingPayment.taux ? totalAmountPaid / editingPayment.taux : 0);
       const montantHTG = editingPayment.devise === "HTG" ? totalAmountPaid : 0;
+      
+      const paymentPhotoNote = paymentPhotoUrl ? ` [JUSTIFICATIF:${paymentPhotoUrl}]` : paymentPhoto ? ` [JUSTIFICATIF:${paymentPhoto.name}]` : "";
+
+      let baseRemarque = editingPayment.remarque || "";
+      if (isMonthlyPlan) {
+        if (/\[MOIS_PAYES:\s*\d+\s*\]/i.test(baseRemarque)) {
+          baseRemarque = baseRemarque.replace(/\[MOIS_PAYES:\s*\d+\s*\]/gi, `[MOIS_PAYES:${nombreDeMois}]`);
+        } else {
+          baseRemarque = `${baseRemarque} [MOIS_PAYES:${nombreDeMois}]`;
+        }
+      }
+
+      const finalRemarque = `${baseRemarque}${paymentPhotoNote}`.trim();
+
       await updatePaymentInSupabase(editingPayment.id, {
         montant: totalAmountPaid,
         montantUS,
         montantHTG,
         devise: editingPayment.devise,
         datePaiement: newPaymentDate,
+        remarque: finalRemarque,
       });
       setPayments((currentPayments) =>
         currentPayments.map((payment) =>
           payment.id === editingPayment.id
-            ? { ...payment, montant: totalAmountPaid, montantUS, montantHTG, datePaiement: newPaymentDate }
+            ? { ...payment, montant: totalAmountPaid, montantUS, montantHTG, datePaiement: newPaymentDate, remarque: finalRemarque }
             : payment,
         ),
       );
+
+      // Envoi automatique de mail de reçu
+      const player = playerMap.get(editingPayment.playerId);
+      if (player) {
+        const emailToSend = player.parentEmail || player.email;
+        if (emailToSend) {
+          try {
+            const updatedPaymentForPdf = {
+              id: editingPayment.id,
+              playerId: editingPayment.playerId,
+              montant: totalAmountPaid,
+              montantUS,
+              montantHTG,
+              devise: editingPayment.devise,
+              datePaiement: newPaymentDate,
+              remarque: finalRemarque,
+            };
+            const nomParts = (player.parentNomPrenom || "").split(" ");
+            const parentNom = nomParts[0] || "";
+            const parentPrenom = nomParts.slice(1).join(" ") || "";
+
+            const totalRubriquesMatch = finalRemarque.match(/\[TOTAL_DUE:\s*([\d.]+)\s*\]/i);
+            const totalRubriques = totalRubriquesMatch ? parseFloat(totalRubriquesMatch[1]) : undefined;
+
+            const receiptBase64 = await generateReceiptPDFBase64(
+              player,
+              [updatedPaymentForPdf],
+              parentNom,
+              parentPrenom,
+              player.parentTelephone || player.telephone || "",
+              emailToSend,
+              player.parentAdresse || player.adresse || "",
+              paymentPhotoPreview,
+              false,
+              totalRubriques
+            );
+
+            const mntStr = editingPayment.devise === "HTG" ? `${newAmount} HTG` : `${newAmount} USD`;
+            await fetch("/api/send-receipt", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                email: emailToSend,
+                parentName: player.parentNomPrenom || getPlayerFullName(player),
+                receiptBase64,
+                receiptNumber: `SOLDE-${Date.now()}`,
+                amount: mntStr,
+              }),
+            });
+          } catch (emailErr) {
+            console.error("Erreur lors de l'envoi du mail de solde:", emailErr);
+          }
+        }
+      }
+
       setEditingPayment(null);
     } catch (error) {
       setEditError(error instanceof Error ? error.message : "Impossible d'enregistrer la modification.");
@@ -822,38 +943,44 @@ export default function PaymentsPage() {
                       </TableCell>
                       <TableCell className="py-3 text-theme-sm">
                         {(() => {
-                          const photoUrl = extractPhotoUrlFromRemark(payment.remarque);
-                          if (!photoUrl) return <span className="text-gray-400">-</span>;
-                          const isPdf = isPdfProof(photoUrl);
+                          const photoUrls = extractPhotoUrlsFromRemark(payment.remarque);
+                          if (photoUrls.length === 0) return <span className="text-gray-400">-</span>;
                           return (
-                            <div className="flex items-center gap-2">
-                              <button
-                                onClick={() => {
-                                  setSelectedPaymentImage(photoUrl);
-                                  setIsImageModalOpen(true);
-                                }}
-                                className={`relative flex h-12 w-12 items-center justify-center overflow-hidden rounded border transition-all focus:outline-none ${
-                                  isPdf
-                                    ? "flex-col border-red-200 bg-red-50 hover:border-red-400 hover:bg-red-100 dark:border-red-900/50 dark:bg-red-950/30"
-                                    : "border-gray-200 bg-gray-50 hover:border-brand-500 hover:opacity-90 dark:border-gray-700 dark:bg-gray-800"
-                                }`}
-                                title={isPdf ? "Voir le document PDF" : "Voir le justificatif en grand"}
-                              >
-                                {isPdf ? (
-                                  <>
-                                    <svg className="w-5 h-5 text-red-600 dark:text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                                    </svg>
-                                    <span className="text-[9px] font-bold text-red-700 dark:text-red-300">PDF</span>
-                                  </>
-                                ) : (
-                                  <img
-                                    src={photoUrl}
-                                    alt="Justificatif"
-                                    className="h-full w-full object-cover"
-                                  />
-                                )}
-                              </button>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              {photoUrls.map((url, idx) => {
+                                const isPdf = isPdfProof(url);
+                                return (
+                                  <button
+                                    key={idx}
+                                    type="button"
+                                    onClick={() => {
+                                      setSelectedPaymentImage(url);
+                                      setIsImageModalOpen(true);
+                                    }}
+                                    className={`relative flex h-10 w-10 items-center justify-center overflow-hidden rounded border transition-all focus:outline-none ${
+                                      isPdf
+                                        ? "flex-col border-red-200 bg-red-50 hover:border-red-400 hover:bg-red-100 dark:border-red-900/50 dark:bg-red-950/30"
+                                        : "border-gray-200 bg-gray-50 hover:border-brand-500 hover:opacity-90 dark:border-gray-700 dark:bg-gray-800"
+                                    }`}
+                                    title={isPdf ? `Voir le document PDF #${idx + 1}` : `Voir le justificatif #${idx + 1}`}
+                                  >
+                                    {isPdf ? (
+                                      <>
+                                        <svg className="w-4 h-4 text-red-600 dark:text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                                        </svg>
+                                        <span className="text-[8px] font-bold text-red-700 dark:text-red-300">PDF</span>
+                                      </>
+                                    ) : (
+                                      <img
+                                        src={url}
+                                        alt={`Justificatif ${idx + 1}`}
+                                        className="h-full w-full object-cover"
+                                      />
+                                    )}
+                                  </button>
+                                );
+                              })}
                             </div>
                           );
                         })()}
@@ -917,7 +1044,7 @@ export default function PaymentsPage() {
 
       {editingPayment && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 sm:p-6 overflow-y-auto"
           role="dialog"
           aria-modal="true"
           aria-labelledby="edit-payment-title"
@@ -925,13 +1052,13 @@ export default function PaymentsPage() {
             if (event.target === event.currentTarget) closeEditModal();
           }}
         >
-          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl dark:bg-gray-900">
-            <div className="mb-5 flex items-start justify-between gap-4">
+          <div className="w-full max-w-md max-h-[85vh] flex flex-col rounded-xl bg-white p-6 shadow-xl dark:bg-gray-900 my-auto">
+            <div className="mb-4 flex items-start justify-between gap-4 shrink-0 pb-3 border-b border-gray-100 dark:border-gray-800">
               <div>
                 <h2 id="edit-payment-title" className="text-lg font-semibold text-gray-800 dark:text-white">
-                  Modifier le paiement
+                  Modifier le paiement / Solde
                 </h2>
-                <p className="mt-2 text-lg font-bold text-gray-900 dark:text-white">
+                <p className="mt-1 text-base font-bold text-brand-600 dark:text-brand-400">
                   {getPlayerFullName(playerMap.get(editingPayment.playerId)!)}
                 </p>
               </div>
@@ -939,7 +1066,7 @@ export default function PaymentsPage() {
                 ×
               </button>
             </div>
-            <div className="space-y-4">
+            <div className="flex-1 min-h-0 overflow-y-auto pr-1.5 space-y-4 custom-scrollbar">
               <div>
                 <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">Joueur</label>
                 <p className="rounded-lg bg-gray-100 px-3 py-2 text-sm font-semibold text-gray-700 dark:bg-gray-800 dark:text-gray-300">
@@ -963,9 +1090,60 @@ export default function PaymentsPage() {
                 <label htmlFor="new-payment-date" className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">Date du paiement</label>
                 <input id="new-payment-date" type="date" value={newPaymentDate} onChange={(event) => setNewPaymentDate(event.target.value)} className="h-11 w-full rounded-lg border border-gray-300 px-3 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white" />
               </div>
+
+              {isMonthlyPlan && (
+                <div>
+                  <label htmlFor="nombre-mois-payes" className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">Nombre de mois payés</label>
+                  <input id="nombre-mois-payes" type="number" min="1" step="1" value={nombreDeMois} onChange={(event) => setNombreDeMois(Math.max(1, parseInt(event.target.value) || 1))} className="h-11 w-full rounded-lg border border-gray-300 px-3 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white" />
+                </div>
+              )}
+
+              {(() => {
+                const existingPhotos = extractPhotoUrlsFromRemark(editingPayment.remarque);
+                if (existingPhotos.length === 0) return null;
+                return (
+                  <div>
+                    <label className="mb-1.5 block text-xs font-medium text-gray-500 dark:text-gray-400">Justificatif(s) déjà joint(s) :</label>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {existingPhotos.map((url, idx) => (
+                        <a key={idx} href={url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 rounded-md border border-gray-200 bg-gray-50 px-2.5 py-1 text-xs font-medium text-brand-600 hover:bg-gray-100 dark:border-gray-700 dark:bg-gray-800 dark:text-brand-400">
+                          📎 Document #{idx + 1}
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
+              
+              <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800/40">
+                <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-400">
+                  Justificatif de paiement (Optionnel)
+                </label>
+                <input
+                  type="file"
+                  accept="image/*,application/pdf,.pdf,.jpg,.jpeg,.png,.webp"
+                  onChange={handlePaymentPhotoChange}
+                  className="block w-full text-sm text-gray-600 file:mr-4 file:rounded-lg file:border-0 file:bg-brand-500 file:px-4 file:py-2 file:text-sm file:font-medium file:text-white hover:file:bg-brand-600"
+                />
+                {paymentPhotoError && <p className="mt-2 text-sm text-red-600">{paymentPhotoError}</p>}
+                {paymentPhoto && !paymentPhotoError && (
+                  <div className="mt-3 flex items-center gap-3">
+                    {isPdfProof(paymentPhoto.name) ? (
+                      <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-700 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-300">
+                        <svg className="h-5 w-5 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                        </svg>
+                        <span>Document PDF : {paymentPhoto.name}</span>
+                      </div>
+                    ) : (
+                      <img src={paymentPhotoPreview || ""} alt="Aperçu" className="h-16 w-16 rounded-lg object-cover shadow-sm" />
+                    )}
+                  </div>
+                )}
+              </div>
               {editError && <p className="text-sm text-red-600">{editError}</p>}
             </div>
-            <div className="mt-6 flex justify-end gap-3">
+            <div className="mt-4 pt-3 border-t border-gray-100 dark:border-gray-800 flex justify-end gap-3 shrink-0">
               <button type="button" onClick={closeEditModal} disabled={isSaving} className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 dark:border-gray-700 dark:text-gray-300">Annuler</button>
               <button type="button" onClick={handleEditPayment} disabled={isSaving} className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-medium text-white hover:bg-brand-600 disabled:opacity-50">{isSaving ? "Enregistrement..." : "Enregistrer"}</button>
             </div>

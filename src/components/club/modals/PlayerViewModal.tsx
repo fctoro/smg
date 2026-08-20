@@ -30,6 +30,95 @@ const getSafeAvatarSrc = (photoUrl?: string) => {
   return "/images/user/silhouette.svg";
 };
 
+const getPlayerFinancialSummary = (player: Player, playerPayments: any[]) => {
+  const playerStatus = ((player as any).statutJoueur || "").toLowerCase().trim();
+  const isBoursier = playerStatus === "bourse" || playerStatus === "boursier" || playerPayments.some(p => (p.remarque || "").toLowerCase().includes("[plan:boursier]"));
+
+  const totalPaidUSD = playerPayments.reduce((acc, p) => acc + (p.montantUS || (p.devise === "US" ? p.montant : 0)), 0);
+
+  if (isBoursier) {
+    return {
+      isBoursier: true,
+      hasNoPayments: false,
+      balance: 0,
+      devise: "US" as const,
+      isPaidInFull: true,
+      isMonthlyPlan: false,
+      monthsPaid: 0,
+      totalPaidUSD,
+    };
+  }
+
+  if (playerPayments.length === 0) {
+    return {
+      isBoursier: false,
+      hasNoPayments: true,
+      balance: 0,
+      devise: "US" as const,
+      isPaidInFull: false,
+      isMonthlyPlan: (player.planPaiement || "").toLowerCase().includes("mensuel"),
+      monthsPaid: 0,
+      totalPaidUSD: 0,
+    };
+  }
+
+  let totalBalance = 0;
+  let detectedDevise: "US" | "HTG" = "US";
+  let maxMonthsPaid = 0;
+  let isMonthlyPlan = (player.planPaiement || "").toLowerCase().includes("mensuel");
+
+  playerPayments.forEach((p) => {
+    const remark = p.remarque || "";
+    const remarkLower = remark.toLowerCase();
+
+    if (remarkLower.includes("[plan:mensuel]") || remarkLower.includes("mensuel")) {
+      isMonthlyPlan = true;
+    }
+
+    const moisMatch = remark.match(/\[MOIS_PAYES:\s*(\d+)\s*\]/i) || remark.match(/(\d+)\s*mois/i);
+    if (moisMatch && moisMatch[1]) {
+      const m = parseInt(moisMatch[1], 10);
+      if (m > maxMonthsPaid) maxMonthsPaid = m;
+    }
+
+    const totalDueMatch = remark.match(/\[TOTAL_DUE:\s*([\d.]+)\s*\]/i);
+    if (totalDueMatch && totalDueMatch[1]) {
+      const totalDueUSD = parseFloat(totalDueMatch[1]);
+      if (!isNaN(totalDueUSD) && totalDueUSD > 0) {
+        const isKitOnly = !remarkLower.includes("adhésion") && !remarkLower.includes("adhesion");
+        if (!isKitOnly || totalDueUSD < 900) {
+          const devise = (p.devise || "US") as "US" | "HTG";
+          detectedDevise = devise;
+          if (devise === "HTG") {
+            let taux = p.taux || 0;
+            if (taux <= 1) {
+              const tauxMatch = remark.match(/\[TAUX:\s*([\d.]+)\s*\]/i);
+              taux = tauxMatch ? parseFloat(tauxMatch[1]) : 130;
+            }
+            const totalDueHTG = totalDueUSD * taux;
+            const balHTG = totalDueHTG - p.montant;
+            if (balHTG > 1) totalBalance += balHTG;
+          } else {
+            const balUSD = totalDueUSD - p.montant;
+            if (balUSD > 0.01) totalBalance += balUSD;
+          }
+        }
+      }
+    }
+  });
+
+  return {
+    isBoursier: false,
+    hasNoPayments: false,
+    balance: Math.round(totalBalance * 100) / 100,
+    devise: detectedDevise,
+    isPaidInFull: totalBalance <= 0.01,
+    isMonthlyPlan,
+    monthsPaid: maxMonthsPaid || (isMonthlyPlan && playerPayments.length > 0 ? 1 : 0),
+    totalPaidUSD,
+  };
+};
+
 export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
   isOpen,
   onClose,
@@ -67,7 +156,8 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
 
   if (!player) return null;
 
-  const playerPayments = payments.filter((p) => p.playerId === player.id);
+  const playerPayments = payments.filter((p) => String(p.playerId) === String(player.id));
+  const finSummary = getPlayerFinancialSummary(player, playerPayments);
   const totalPages = Math.max(1, Math.ceil(playerPayments.length / currentPageSize));
   const currentPageSafe = Math.min(currentPage, totalPages);
   const pagedPayments = playerPayments.slice(
@@ -149,6 +239,17 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
                   "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300"
                 }`}>
                   {playerStatusLabel[player.statut as keyof typeof playerStatusLabel] || player.statut}
+                </span>
+                <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                  finSummary.isBoursier ? "bg-purple-100 text-purple-700 dark:bg-purple-500/15 dark:text-purple-400" :
+                  finSummary.hasNoPayments ? "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300" :
+                  finSummary.isPaidInFull ? "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-400" :
+                  "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400"
+                }`}>
+                  {finSummary.isBoursier ? "🎓 Boursier (Exonéré)" :
+                   finSummary.hasNoPayments ? "⚪ Aucun versement" :
+                   finSummary.isPaidInFull ? "✓ À jour (Payé)" :
+                   `⚠️ Solde dû : ${formatClubCurrency(finSummary.balance, finSummary.devise)}`}
                 </span>
                 <span className="text-xs text-gray-400">
                   Inscrit le {formatClubDate(player.dateInscription)}
@@ -349,27 +450,43 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
                 <h4 className="font-semibold text-gray-900 dark:text-white text-base">Dossier Financier</h4>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-5">
                 <div>
                   <span className="block text-xs font-medium text-gray-500 mb-1">Statut Joueur / Plan</span>
                   <span className="block text-sm font-semibold text-gray-900 dark:text-white">{(player as any).statutJoueur || planPaiement}</span>
                 </div>
-                {(!(player as any).statutJoueur || (player as any).statutJoueur.toLowerCase().includes("demi-bourse")) && (
-                  <>
-                    <div>
-                      <span className="block text-xs font-medium text-gray-500 mb-1">Mode de règlement</span>
-                      <span className="block text-sm font-semibold text-gray-900 dark:text-white">{modePaiementChoisi}</span>
-                    </div>
-                    <div>
-                      <span className="block text-xs font-medium text-gray-500 mb-1">Montant Total Payé</span>
-                      <span className="block text-sm font-bold text-emerald-600 dark:text-emerald-400">{formatClubCurrency(player.cotisationMontant, player.cotisationDevise)}</span>
-                    </div>
-                    <div>
-                      <span className="block text-xs font-medium text-gray-500 mb-1">Dernier versement</span>
-                      <span className="block text-sm font-semibold text-gray-900 dark:text-white">{formatClubDate(player.dernierPaiement)}</span>
-                    </div>
-                  </>
+                <div>
+                  <span className="block text-xs font-medium text-gray-500 mb-1">Statut du Règlement</span>
+                  <span className={`block text-sm font-bold ${
+                    finSummary.isBoursier ? "text-purple-600 dark:text-purple-400" :
+                    finSummary.hasNoPayments ? "text-gray-500 dark:text-gray-400" :
+                    finSummary.isPaidInFull ? "text-emerald-600 dark:text-emerald-400" :
+                    "text-red-600 dark:text-red-400"
+                  }`}>
+                    {finSummary.isBoursier ? "Boursier (Exonéré)" :
+                     finSummary.hasNoPayments ? "Aucun versement enregistré" :
+                     finSummary.isPaidInFull ? "À jour (Payé)" :
+                     `Solde dû : ${formatClubCurrency(finSummary.balance, finSummary.devise)}`}
+                  </span>
+                </div>
+                {finSummary.isMonthlyPlan && (
+                  <div>
+                    <span className="block text-xs font-medium text-gray-500 mb-1">Mois Réglé(s)</span>
+                    <span className="block text-sm font-bold text-brand-600 dark:text-brand-400">
+                      {finSummary.monthsPaid} mois payé(s)
+                    </span>
+                  </div>
                 )}
+                <div>
+                  <span className="block text-xs font-medium text-gray-500 mb-1">Montant Total Payé</span>
+                  <span className="block text-sm font-bold text-emerald-600 dark:text-emerald-400">
+                    {formatClubCurrency(player.cotisationMontant || finSummary.totalPaidUSD, player.cotisationDevise || "US")}
+                  </span>
+                </div>
+                <div>
+                  <span className="block text-xs font-medium text-gray-500 mb-1">Dernier versement</span>
+                  <span className="block text-sm font-semibold text-gray-900 dark:text-white">{formatClubDate(player.dernierPaiement)}</span>
+                </div>
               </div>
             </div>
           )}

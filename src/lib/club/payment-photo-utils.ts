@@ -63,13 +63,13 @@ export async function uploadPaymentPhotoToSupabase(file: File | null) {
   }
 }
 
+export function extractPhotoUrlsFromRemark(remark: string | undefined): string[] {
+  if (!remark) return [];
+  const matches = [...remark.matchAll(/\[JUSTIFICATIF:(https?:\/\/[^\]]+)\]/gi)];
+  return matches.map((m) => m[1]);
+}
+
 export function extractPhotoUrlFromRemark(remark: string | undefined): string | null {
-  if (!remark) return null;
-  
-  const match = remark.match(/\[JUSTIFICATIF:(https?:\/\/[^\]]+)\]/);
-  if (match) {
-    return match[1];
-  }
-  
-  return null;
+  const urls = extractPhotoUrlsFromRemark(remark);
+  return urls.length > 0 ? urls[0] : null;
 }

@@ -296,9 +296,10 @@ export function PaymentAddModal({ isOpen, onClose, initialPlayerId }: PaymentAdd
           : montantDuManuel;      // USD : déjà en USD
       const rabaisMarker = (!isBoursierPlayer && rabaisPercent > 0) ? ` [RABAIS:${rabaisPercent}%]` : "";
       const tauxMarker = (!isBoursierPlayer && actualDevise === "HTG" && taux > 0) ? ` [TAUX:${taux}]` : "";
+      const moisMarker = selectedPlan === "mensuel" ? ` [MOIS_PAYES:${nombreDeMois}]` : "";
       const paymentMarkers = isBoursierPlayer
         ? `[ADHESION:${adhesionCode}] [PLAN:BOURSIER] [STATUT:${statut.toUpperCase()}] [TOTAL_DUE:${totalDue}]`
-        : `${adhesionCode ? `[ADHESION:${adhesionCode}] ` : ""}[PLAN:${selectedPlan ? selectedPlan.toUpperCase() : "AUCUN"}] [STATUT:${statut.toUpperCase()}]${rabaisMarker}${tauxMarker} [TOTAL_DUE:${totalDueInUSD}]`;
+        : `${adhesionCode ? `[ADHESION:${adhesionCode}] ` : ""}[PLAN:${selectedPlan ? selectedPlan.toUpperCase() : "AUCUN"}]${moisMarker} [STATUT:${statut.toUpperCase()}]${rabaisMarker}${tauxMarker} [TOTAL_DUE:${totalDueInUSD}]`;
       const adhesionLabel = isBoursierPlayer
         ? `Boursier: ${nombreDeMois} mois × 2,500 HTG`
         : (selectedAdhesionItem ? (isTiToro ? "Adhésion: TI TORO" : "Adhésion: FC TORO") : "");

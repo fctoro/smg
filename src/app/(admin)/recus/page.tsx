@@ -4,7 +4,7 @@ import React, { useState, useMemo } from "react";
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import { useClubData } from "@/context/ClubDataContext";
 import { formatClubCurrency, formatClubDate, getPlayerFullName } from "@/lib/club/metrics";
-import { FC_TORO_LOGO } from "@/lib/club/pdfAssets";
+import { FC_TORO_LOGO, OCTACORE_LOGO } from "@/lib/club/pdfAssets";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { Dropdown } from "@/components/ui/dropdown";
@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/table";
 import { TableBodySkeleton } from "@/components/ui/skeleton/Skeleton";
 import { Player } from "@/types/club";
+import { useConfirm } from "@/hooks/useConfirm";
 
 function getDeterministicDigits(id: string): string {
   let hash = 0;
@@ -31,6 +32,7 @@ function getDeterministicDigits(id: string): string {
 
 export default function RecusJoueursPage() {
   const { players, payments, hydrated } = useClubData();
+  const { confirm, ConfirmComponent } = useConfirm();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedSeason, setSelectedSeason] = useState("all");
   const [selectedCategory, setSelectedCategory] = useState("all");
@@ -160,94 +162,104 @@ export default function RecusJoueursPage() {
   // Fonctions d'exportation CSV et Excel
   const handleExportCSV = () => {
     setIsExportOpen(false);
-    const headers = [
-      "N° Rapport",
-      "Matricule",
-      "Joueur",
-      "Catégorie",
-      "Programme",
-      "Parent",
-      "Téléphone",
-      "Email",
-      "Nombre Versements",
-      "Total Payé",
-    ];
-    let csvContent = headers.join(",") + "\n";
-    filteredPlayers.forEach((p) => {
-      const row = [
-        p.receiptNo,
-        p.matricule,
-        p.fullName,
-        p.categorie,
-        p.programme,
-        p.parentNomPrenom,
-        p.parentTelephone,
-        p.parentEmail,
-        String(p.playerPayments.length),
-        p.totalPaye,
-      ];
-      const csvRow = row.map(
-        (field) => `"${(field || "").toString().replace(/"/g, '""')}"`,
-      );
-      csvContent += csvRow.join(",") + "\n";
+    confirm({
+      title: "Exporter la liste",
+      message: "Voulez-vous vraiment exporter la liste des RP Joueurs au format CSV ?",
+      confirmText: "Exporter",
+      cancelText: "Annuler",
+      onConfirm: () => {
+        const headers = [
+          "N° Rapport",
+          "Matricule",
+          "Joueur",
+          "Catégorie",
+          "Programme",
+          "Parent",
+          "Téléphone",
+          "Email",
+          "Nombre Versements",
+          "Total Payé",
+        ];
+        let csvContent = headers.join(",") + "\n";
+        filteredPlayers.forEach((p) => {
+          const row = [
+            p.receiptNo,
+            p.matricule,
+            p.fullName,
+            p.categorie,
+            p.programme,
+            p.parentNomPrenom,
+            p.parentTelephone,
+            p.parentEmail,
+            String(p.playerPayments.length),
+            p.totalPaye,
+          ];
+          const csvRow = row.map(
+            (field) => `"${(field || "").toString().replace(/"/g, '""')}"`,
+          );
+          csvContent += csvRow.join(",") + "\n";
+        });
+        const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.setAttribute("download", "rp_joueurs.csv");
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      },
     });
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.setAttribute("download", "rp_joueurs.csv");
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
   };
 
   const handleExportExcel = () => {
-    if (
-      !window.confirm(
-        "Voulez-vous vraiment exporter la liste des RP Joueurs au format Excel ?",
-      )
-    )
-      return;
     setIsExportOpen(false);
-    const headers = [
-      "N° Rapport",
-      "Matricule",
-      "Joueur",
-      "Catégorie",
-      "Programme",
-      "Parent",
-      "Téléphone",
-      "Email",
-      "Nombre Versements",
-      "Total Payé",
-    ];
-    let csvContent = "\uFEFF" + headers.join(";") + "\n";
-    filteredPlayers.forEach((p) => {
-      const row = [
-        p.receiptNo,
-        p.matricule,
-        p.fullName,
-        p.categorie,
-        p.programme,
-        p.parentNomPrenom,
-        p.parentTelephone,
-        p.parentEmail,
-        String(p.playerPayments.length),
-        p.totalPaye,
-      ];
-      const csvRow = row.map(
-        (field) => `"${(field || "").toString().replace(/"/g, '""')}"`,
-      );
-      csvContent += csvRow.join(";") + "\n";
+    confirm({
+      title: "Exporter la liste",
+      message: "Voulez-vous vraiment exporter la liste des RP Joueurs au format Excel ?",
+      confirmText: "Exporter",
+      cancelText: "Annuler",
+      onConfirm: () => {
+        const headers = [
+          "N° Rapport",
+          "Matricule",
+          "Joueur",
+          "Catégorie",
+          "Programme",
+          "Parent",
+          "Téléphone",
+          "Email",
+          "Nombre Versements",
+          "Total Payé",
+        ];
+        let csvContent = "\uFEFF" + headers.join(";") + "\n";
+        filteredPlayers.forEach((p) => {
+          const row = [
+            p.receiptNo,
+            p.matricule,
+            p.fullName,
+            p.categorie,
+            p.programme,
+            p.parentNomPrenom,
+            p.parentTelephone,
+            p.parentEmail,
+            String(p.playerPayments.length),
+            p.totalPaye,
+          ];
+          const csvRow = row.map(
+            (field) => `"${(field || "").toString().replace(/"/g, '""')}"`,
+          );
+          csvContent += csvRow.join(";") + "\n";
+        });
+        const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.setAttribute("download", "rp_joueurs_excel.csv");
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      },
     });
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.setAttribute("download", "rp_joueurs_excel.csv");
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
   };
 
   // Génération de Rapport RP Joueur PDF
@@ -501,6 +513,64 @@ export default function RecusJoueursPage() {
     doc.setTextColor(grayMedium[0], grayMedium[1], grayMedium[2]);
     doc.text("Signature autorisée", 14, finalY + 35);
     doc.line(14, finalY + 45, 60, finalY + 45);
+
+    // --- Footer Branding Octacore appliqué sur TOUTES les pages ---
+    try {
+      const pageCount = doc.getNumberOfPages();
+      for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        const bottomLineY = 282;
+        doc.setDrawColor(grayLight[0], grayLight[1], grayLight[2]);
+        doc.setLineWidth(0.3);
+        doc.line(14, bottomLineY, 196, bottomLineY);
+
+        const logoH = 3.5;
+        const logoW = logoH * 5.638; // ~19.73 mm
+        const gap = 2;
+
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(7.5);
+
+        const textPrefix = "Powered by";
+        const textSeparator = "•";
+        const textUrl = "www.octacore.io";
+
+        const wPrefix = doc.getTextWidth(textPrefix);
+        const wSep = doc.getTextWidth(textSeparator);
+        const wUrl = doc.getTextWidth(textUrl);
+
+        const totalBlockW = wPrefix + gap + logoW + gap + wSep + gap + wUrl;
+        const startX = (210 - totalBlockW) / 2;
+        const textY = 287.3;
+
+        let curX = startX;
+
+        // 1. "Powered by"
+        doc.setTextColor(grayMedium[0], grayMedium[1], grayMedium[2]);
+        doc.text(textPrefix, curX, textY);
+        curX += wPrefix + gap;
+
+        // 2. Logo OCTACORE
+        if (OCTACORE_LOGO) {
+          doc.addImage(OCTACORE_LOGO, "PNG", curX, 284.4, logoW, logoH, undefined, "FAST");
+        }
+        curX += logoW + gap;
+
+        // 3. "•"
+        doc.setTextColor(grayMedium[0], grayMedium[1], grayMedium[2]);
+        doc.text(textSeparator, curX, textY);
+        curX += wSep + gap;
+
+        // 4. "www.octacore.io"
+        doc.setTextColor(59, 130, 246);
+        doc.text(textUrl, curX, textY);
+
+        // Lien cliquable interactif dans le PDF vers https://octacore.io
+        doc.link(startX, 283.5, totalBlockW, 6, { url: "https://octacore.io" });
+      }
+    } catch (err) {
+      console.warn("Could not render Octacore footer on all pages", err);
+    }
 
     doc.save(
       `Rapport_Joueur_${playerFullName.replace(/\s+/g, "_")}_${
@@ -833,6 +903,7 @@ export default function RecusJoueursPage() {
           />
         </div>
       </div>
+      <ConfirmComponent />
     </div>
   );
 }

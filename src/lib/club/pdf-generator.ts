@@ -1,5 +1,5 @@
 import { formatClubCurrency, formatClubDate, getPlayerFullName } from "@/lib/club/metrics";
-import { FC_TORO_LOGO } from "@/lib/club/pdfAssets";
+import { FC_TORO_LOGO, OCTACORE_LOGO } from "@/lib/club/pdfAssets";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { Player } from "@/types/club";
@@ -423,6 +423,64 @@ export async function generateReceiptPDFBase64(
     } catch (err) {
       console.warn("Could not add proof image to PDF", err);
     }
+  }
+
+  // --- Appliquer le footer Octacore sur TOUTES les pages du document ---
+  try {
+    const pageCount = doc.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i);
+      const bottomLineY = 282;
+      doc.setDrawColor(grayLight[0], grayLight[1], grayLight[2]);
+      doc.setLineWidth(0.3);
+      doc.line(14, bottomLineY, 196, bottomLineY);
+
+      const logoH = 3.5;
+      const logoW = logoH * 5.638; // ~19.73 mm
+      const gap = 2;
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(7.5);
+
+      const textPrefix = "Powered by";
+      const textSeparator = "•";
+      const textUrl = "www.octacore.io";
+
+      const wPrefix = doc.getTextWidth(textPrefix);
+      const wSep = doc.getTextWidth(textSeparator);
+      const wUrl = doc.getTextWidth(textUrl);
+
+      const totalBlockW = wPrefix + gap + logoW + gap + wSep + gap + wUrl;
+      const startX = (210 - totalBlockW) / 2;
+      const textY = 287.3;
+
+      let curX = startX;
+
+      // 1. "Powered by"
+      doc.setTextColor(grayMedium[0], grayMedium[1], grayMedium[2]);
+      doc.text(textPrefix, curX, textY);
+      curX += wPrefix + gap;
+
+      // 2. Logo OCTACORE
+      if (OCTACORE_LOGO) {
+        doc.addImage(OCTACORE_LOGO, "PNG", curX, 284.4, logoW, logoH, undefined, "FAST");
+      }
+      curX += logoW + gap;
+
+      // 3. "•"
+      doc.setTextColor(grayMedium[0], grayMedium[1], grayMedium[2]);
+      doc.text(textSeparator, curX, textY);
+      curX += wSep + gap;
+
+      // 4. "www.octacore.io"
+      doc.setTextColor(59, 130, 246);
+      doc.text(textUrl, curX, textY);
+
+      // Lien cliquable interactif dans le PDF vers https://octacore.io
+      doc.link(startX, 283.5, totalBlockW, 6, { url: "https://octacore.io" });
+    }
+  } catch (err) {
+    console.warn("Could not render Octacore footer on all pages", err);
   }
 
   // Si le justificatif est un document PDF scanné, on fusionne ses pages dans le reçu

@@ -26,6 +26,7 @@ import { ActiveBellIcon } from "@/icons/ActiveBellIcon";
 import { ConfirmModal } from "@/components/ui/modal/ConfirmModal";
 import { CustomReminderMessageModal } from "@/components/club/modals/CustomReminderMessageModal";
 import { generateReceiptPDFBase64 } from "@/lib/club/pdf-generator";
+import { useConfirm } from "@/hooks/useConfirm";
 
 interface PaymentPlan {
   id: string;
@@ -64,6 +65,7 @@ import { TableBodySkeleton } from "@/components/ui/skeleton/Skeleton";
 
 export default function PaymentsPage() {
   const { payments, players, setPayments, hydrated, rubriques } = useClubData();
+  const { confirm, ConfirmComponent } = useConfirm();
   const [searchQuery, setSearchQuery] = useState("");
   const [deviseFilter, setDeviseFilter] = useState("all");
   const [selectedSeason, setSelectedSeason] = useState("all");
@@ -458,47 +460,52 @@ export default function PaymentsPage() {
   const handleSendReminders = async () => {
     if (selectedIds.size === 0) return;
     
-    if (!window.confirm(`Confirmez-vous l'envoi de ${selectedIds.size} rappel(s) ?`)) return;
-
-    setIsSendingReminders(true);
-    const selectedList = targetPlayers.filter(tp => selectedIds.has(tp.player.id));
-    
-    let successCount = 0;
-    let errorCount = 0;
-
-    for (const tp of selectedList) {
-      try {
-        const payload: any = {
-          email: tp.email,
-          playerName: getPlayerFullName(tp.player),
-          recipientName: tp.parentName,
-        };
-        if (reminderMode === "custom") {
-          payload.customMessage = customMessageText;
-          payload.customSubject = "Message Important du FC TORO";
-        }
-        // TODO: Gérer semestriel plus tard si nécessaire
-
-        const response = await fetch("/api/send-reminder", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        });
+    confirm({
+      title: "Envoyer les rappels",
+      message: `Confirmez-vous l'envoi de ${selectedIds.size} rappel(s) de paiement ?`,
+      confirmText: "Envoyer",
+      cancelText: "Annuler",
+      onConfirm: async () => {
+        setIsSendingReminders(true);
+        const selectedList = targetPlayers.filter(tp => selectedIds.has(tp.player.id));
         
-        if (response.ok) {
-          successCount++;
-        } else {
-          errorCount++;
-        }
-      } catch (err) {
-        errorCount++;
-      }
-    }
+        let successCount = 0;
+        let errorCount = 0;
 
-    setIsSendingReminders(false);
-    alert(`Envoi terminé : ${successCount} succès, ${errorCount} erreurs.`);
-    setReminderMode("none");
-    setSelectedIds(new Set());
+        for (const tp of selectedList) {
+          try {
+            const payload: any = {
+              email: tp.email,
+              playerName: getPlayerFullName(tp.player),
+              recipientName: tp.parentName,
+            };
+            if (reminderMode === "custom") {
+              payload.customMessage = customMessageText;
+              payload.customSubject = "Message Important du FC TORO";
+            }
+
+            const response = await fetch("/api/send-reminder", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(payload),
+            });
+
+            if (response.ok) {
+              successCount++;
+            } else {
+              errorCount++;
+            }
+          } catch {
+            errorCount++;
+          }
+        }
+
+        setIsSendingReminders(false);
+        setReminderMode("none");
+        setSelectedIds(new Set());
+        alert(`Rappels envoyés avec succès : ${successCount} réussi(s), ${errorCount} échoué(s).`);
+      },
+    });
   };
 
   const getPaymentPlanLabel = (remark?: string) => {
@@ -527,45 +534,60 @@ export default function PaymentsPage() {
 
   const handleExportCSV = () => {
     setIsExportOpen(false);
-    const headers = ["Joueur", "Montant", "Date Paiement", "Informations"];
-    let csvContent = headers.join(",") + "\n";
-    filteredPayments.forEach(payment => {
-      const player = playerMap.get(payment.playerId)!;
-      const playerName = getPlayerFullName(player);
-      const row = [playerName, String(payment.montant), payment.datePaiement || "", payment.remarque || ""];
-      const csvRow = row.map(field => `"${(field || "").toString().replace(/"/g, '""')}"`);
-      csvContent += csvRow.join(",") + "\n";
+    confirm({
+      title: "Exporter la liste",
+      message: "Voulez-vous vraiment exporter la liste des paiements au format CSV ?",
+      confirmText: "Exporter",
+      cancelText: "Annuler",
+      onConfirm: () => {
+        const headers = ["Joueur", "Montant", "Date Paiement", "Informations"];
+        let csvContent = headers.join(",") + "\n";
+        filteredPayments.forEach(payment => {
+          const player = playerMap.get(payment.playerId)!;
+          const playerName = getPlayerFullName(player);
+          const row = [playerName, String(payment.montant), payment.datePaiement || "", payment.remarque || ""];
+          const csvRow = row.map(field => `"${(field || "").toString().replace(/"/g, '""')}"`);
+          csvContent += csvRow.join(",") + "\n";
+        });
+        const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.setAttribute("download", "paiements.csv");
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      }
     });
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.setAttribute("download", "paiements.csv");
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
   };
 
   const handleExportExcel = () => {
-    if (!window.confirm("Voulez-vous vraiment exporter la liste des paiements au format Excel ?")) return;
     setIsExportOpen(false);
-    const headers = ["Joueur", "Montant", "Date Paiement", "Informations"];
-    let csvContent = "\uFEFF" + headers.join(";") + "\n";
-    filteredPayments.forEach(payment => {
-      const player = playerMap.get(payment.playerId)!;
-      const playerName = getPlayerFullName(player);
-      const row = [playerName, String(payment.montant), payment.datePaiement || "", payment.remarque || ""];
-      const csvRow = row.map(field => `"${(field || "").toString().replace(/"/g, '""')}"`);
-      csvContent += csvRow.join(";") + "\n";
+    confirm({
+      title: "Exporter la liste",
+      message: "Voulez-vous vraiment exporter la liste des paiements au format Excel ?",
+      confirmText: "Exporter",
+      cancelText: "Annuler",
+      onConfirm: () => {
+        const headers = ["Joueur", "Montant", "Date Paiement", "Informations"];
+        let csvContent = "\uFEFF" + headers.join(";") + "\n";
+        filteredPayments.forEach(payment => {
+          const player = playerMap.get(payment.playerId)!;
+          const playerName = getPlayerFullName(player);
+          const row = [playerName, String(payment.montant), payment.datePaiement || "", payment.remarque || ""];
+          const csvRow = row.map(field => `"${(field || "").toString().replace(/"/g, '""')}"`);
+          csvContent += csvRow.join(";") + "\n";
+        });
+        const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.setAttribute("download", "paiements_excel.csv");
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      }
     });
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.setAttribute("download", "paiements_excel.csv");
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
   };
 
   return (
@@ -1022,6 +1044,8 @@ export default function PaymentsPage() {
         cancelText="Annuler"
         isDestructive={true}
       />
+
+      <ConfirmComponent />
     </div>
   );
 }

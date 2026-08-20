@@ -25,6 +25,10 @@ const formatMethodName = (method: string) => {
       return "Chèque";
     case "carte":
       return "Carte bancaire";
+    case "mobile":
+    case "depot":
+    case "dépôt":
+      return "Dépôt bancaire";
     case "moncash":
       return "MonCash";
     case "natcash":

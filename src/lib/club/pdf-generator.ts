@@ -142,14 +142,16 @@ export async function generateReceiptPDFBase64(
   const tableRows: any[] = [];
 
   const mapMode = (mode: any) => {
-    const modeStr = String(mode).toLowerCase();
+    const modeStr = String(mode || "").toLowerCase().trim();
     if (modeStr === "1") return "Espèces";
     if (modeStr === "2") return "Virement";
     if (modeStr === "3") return "Chèque";
     if (modeStr === "4") return "Carte";
-    if (modeStr === "5") return "Moncash";
+    if (modeStr === "5" || modeStr === "mobile" || modeStr === "depot" || modeStr === "dépôt" || modeStr.includes("depot") || modeStr.includes("dépôt")) return "Dépôt bancaire";
     if (modeStr === "virement") return "Virement";
-    if (modeStr === "especes" || modeStr === "espèces") return "Espèces";
+    if (modeStr === "especes" || modeStr === "espèces" || modeStr === "espece" || modeStr === "espèce") return "Espèces";
+    if (modeStr === "cheque" || modeStr === "chèque") return "Chèque";
+    if (modeStr === "carte") return "Carte";
     return String(mode || "-");
   };
 

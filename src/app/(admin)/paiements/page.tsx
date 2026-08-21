@@ -184,7 +184,8 @@ export default function PaymentsPage() {
   const openEditModal = (payment: (typeof payments)[number]) => {
     setEditingPayment(payment);
     setNewAmount(0);
-    setNewPaymentDate(payment.datePaiement || new Date().toISOString().slice(0, 10));
+    const todayStr = new Date().toLocaleDateString("sv"); // Format YYYY-MM-DD en heure locale
+    setNewPaymentDate(todayStr);
     setEditError("");
     setPaymentPhoto(null);
     setPaymentPhotoPreview(null);

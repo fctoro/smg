@@ -25,14 +25,16 @@ export const formatClubCurrency = (amount: number | null | undefined, devise: "U
   const safeAmount = amount && !isNaN(amount) ? amount : 0;
   if (devise === "HTG") {
     const formatted = new Intl.NumberFormat("en-US", {
-      maximumFractionDigits: 0,
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
     }).format(safeAmount);
     return `${formatted} HTG`;
   }
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: "USD",
-    maximumFractionDigits: 0,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
   }).format(safeAmount).replace("$", "US$");
 };
 

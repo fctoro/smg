@@ -56,8 +56,8 @@ const defaultValues: PlayerFormValues = {
   urgenceEmail: "",
   urgenceAdresse: "",
 
-  tailleHaut: "M",
-  tailleShort: "M",
+  tailleHaut: "Choisir",
+  tailleShort: "Choisir",
   numerosPreferes: "",
 
   planPaiement: "PLAN #1 (Annuel)",
@@ -376,15 +376,19 @@ export default function PlayerForm({
             <input value={formValues.poste} onChange={(e) => updateField("poste", e.target.value)} className={inputClassName} />
           </div>
 
-          <div>
-            <label className="mb-1.5 block text-xs font-medium text-gray-700 dark:text-gray-300">Poste principal</label>
-            <input value={formValues.postePrincipal || ""} onChange={(e) => updateField("postePrincipal", e.target.value)} className={inputClassName} placeholder="Ex: Milieu de terrain" />
-          </div>
+          {formValues.sourceDetection && (
+            <>
+              <div>
+                <label className="mb-1.5 block text-xs font-medium text-gray-700 dark:text-gray-300">Poste principal</label>
+                <input value={formValues.postePrincipal || ""} onChange={(e) => updateField("postePrincipal", e.target.value)} className={inputClassName} placeholder="Ex: Milieu de terrain" />
+              </div>
 
-          <div>
-            <label className="mb-1.5 block text-xs font-medium text-gray-700 dark:text-gray-300">Poste secondaire</label>
-            <input value={formValues.posteSecondaire || ""} onChange={(e) => updateField("posteSecondaire", e.target.value)} className={inputClassName} placeholder="Ex: Attaquant" />
-          </div>
+              <div>
+                <label className="mb-1.5 block text-xs font-medium text-gray-700 dark:text-gray-300">Poste secondaire</label>
+                <input value={formValues.posteSecondaire || ""} onChange={(e) => updateField("posteSecondaire", e.target.value)} className={inputClassName} placeholder="Ex: Attaquant" />
+              </div>
+            </>
+          )}
 
           <div>
             <label className="mb-1.5 block text-xs font-medium text-gray-700 dark:text-gray-300">Statut *</label>
@@ -449,46 +453,54 @@ export default function PlayerForm({
             </div>
           )}
 
-          <div className="sm:col-span-2 lg:col-span-3 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <div className="sm:col-span-2 lg:col-span-3">
-              <label className="mb-3 block text-xs font-medium text-gray-700 dark:text-gray-300">PIED DOMINANT *</label>
-              <div className="flex gap-4">
-                {["Droit", "Gauche", "Les deux"].map((option) => (
-                  <label key={option} className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="piedDominant"
-                      checked={formValues.piedDominant === option}
-                      onChange={() => updateField("piedDominant", option)}
-                      className="w-4 h-4 text-brand-500 bg-gray-100 border-gray-300 focus:ring-brand-500 dark:focus:ring-brand-600 dark:ring-offset-gray-800 dark:bg-gray-700 dark:border-gray-600"
-                    />
-                    <span className="text-sm text-gray-700 dark:text-gray-300">{option}</span>
-                  </label>
-                ))}
+          {/* DETECTION ONLY FIELDS */}
+          {formValues.sourceDetection && (
+            <div className="sm:col-span-2 lg:col-span-3 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="sm:col-span-2 lg:col-span-3">
+                <label className="mb-3 block text-xs font-medium text-gray-700 dark:text-gray-300">PIED DOMINANT *</label>
+                <div className="flex gap-4">
+                  {["Droit", "Gauche", "Les deux"].map((option) => (
+                    <label key={option} className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="piedDominant"
+                        checked={formValues.piedDominant === option}
+                        onChange={() => updateField("piedDominant", option)}
+                        className="w-4 h-4 text-brand-500 bg-gray-100 border-gray-300 focus:ring-brand-500 dark:focus:ring-brand-600 dark:ring-offset-gray-800 dark:bg-gray-700 dark:border-gray-600"
+                      />
+                      <span className="text-sm text-gray-700 dark:text-gray-300">{option}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+              
+              <div className="sm:col-span-2 lg:col-span-3 mt-2">
+                <label className="mb-1.5 block text-xs font-medium text-gray-700 dark:text-gray-300">CLUB / ACADÉMIE ACTUELLE</label>
+                <input 
+                  type="text" 
+                  value={formValues.clubActuel || ""} 
+                  onChange={(e) => updateField("clubActuel", e.target.value)} 
+                  placeholder="Renseignez le club ou l'académie actuelle..." 
+                  className={inputClassName} 
+                />
               </div>
             </div>
-            
-            <div className="sm:col-span-2 lg:col-span-3 mt-2">
-              <label className="mb-1.5 block text-xs font-medium text-gray-700 dark:text-gray-300">CLUB / ACADÉMIE ACTUELLE</label>
-              <input 
-                type="text" 
-                value={formValues.clubActuel || ""} 
-                onChange={(e) => updateField("clubActuel", e.target.value)} 
-                placeholder="Renseignez le club ou l'académie actuelle..." 
-                className={inputClassName} 
-              />
-            </div>
+          )}
 
-            <div className="sm:col-span-2 lg:col-span-3 mt-2">
-              <label className="mb-1.5 block text-xs font-medium text-gray-700 dark:text-gray-300">EXPÉRIENCE (SÉLECTIONS, TOURNOIS, DISTINCTIONS)</label>
-              <textarea 
-                value={formValues.experienceSoccer || ""} 
-                onChange={(e) => updateField("experienceSoccer", e.target.value)} 
-                placeholder="Renseignez l'expérience du joueur..." 
-                className={`${inputClassName} min-h-[80px] resize-y`} 
-              />
-            </div>
+          {/* EXPERIENCE (SHARED, BUT LABEL CHANGES) */}
+          <div className="sm:col-span-2 lg:col-span-3 mt-2">
+            <label className="mb-1.5 block text-xs font-medium text-gray-700 dark:text-gray-300">
+              {formValues.sourceDetection ? "EXPÉRIENCE (SÉLECTIONS, TOURNOIS, DISTINCTIONS)" : "ANCIENNE EXPÉRIENCE SOCCER"}
+            </label>
+            <textarea 
+              value={formValues.experienceSoccer || ""} 
+              onChange={(e) => updateField("experienceSoccer", e.target.value)} 
+              placeholder={formValues.sourceDetection ? "Renseignez l'expérience du joueur..." : "Clubs précédents ou Nouveau"} 
+              className={`${inputClassName} min-h-[80px] resize-y`} 
+            />
+          </div>
 
+          {formValues.sourceDetection && (
             <div className="sm:col-span-2 lg:col-span-3 pt-2">
               <label className="mb-3 block text-xs font-medium text-gray-700 dark:text-gray-300">COMMENT AVEZ-VOUS ÉTÉ IDENTIFIÉ ?</label>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -530,7 +542,7 @@ export default function PlayerForm({
                 </label>
               </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
 
@@ -844,6 +856,7 @@ export default function PlayerForm({
           <div>
             <label className="mb-1.5 block text-xs font-medium text-gray-700 dark:text-gray-300">Taille du Haut (Top) *</label>
             <select value={formValues.tailleHaut} onChange={(e) => updateField("tailleHaut", e.target.value)} className={selectClassName}>
+              <option value="Choisir">Choisir</option>
               <option value="YXS">YXS (Youth Extra Small)</option>
               <option value="YS">YS (Youth Small)</option>
               <option value="YM">YM (Youth Medium)</option>
@@ -859,6 +872,7 @@ export default function PlayerForm({
           <div>
             <label className="mb-1.5 block text-xs font-medium text-gray-700 dark:text-gray-300">Taille du Short *</label>
             <select value={formValues.tailleShort} onChange={(e) => updateField("tailleShort", e.target.value)} className={selectClassName}>
+              <option value="Choisir">Choisir</option>
               <option value="YXS">YXS (Youth Extra Small)</option>
               <option value="YS">YS (Youth Small)</option>
               <option value="YM">YM (Youth Medium)</option>

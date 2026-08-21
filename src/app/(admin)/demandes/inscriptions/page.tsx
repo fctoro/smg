@@ -134,7 +134,7 @@ export default function BoiteDeReception() {
           if (contentType && contentType.includes("application/json")) {
             return res.json();
           } else {
-            console.error("API returned non-JSON response");
+            console.warn("API returned non-JSON response");
             return { error: true };
           }
         })
@@ -801,9 +801,16 @@ export default function BoiteDeReception() {
                     </td>
                     <td className="px-4 py-4 align-top">
                       <div className="flex flex-col gap-1">
-                        <span className="inline-flex w-fit rounded-full bg-warning-100 px-2 py-0.5 text-xs font-medium text-warning-800 dark:bg-warning-500/20 dark:text-warning-400">
-                          {getTabTitle(msg.type_message)}
-                        </span>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="inline-flex w-fit rounded-full bg-warning-100 px-2 py-0.5 text-xs font-medium text-warning-800 dark:bg-warning-500/20 dark:text-warning-400">
+                            {getTabTitle(msg.type_message)}
+                          </span>
+                          {msg.metadata?.is_existing_player && msg.statut !== "inscrit" && (
+                            <span className="inline-flex w-fit items-center rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-semibold text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+                              Joueur déjà en base
+                            </span>
+                          )}
+                        </div>
                         <span className="text-gray-500 dark:text-gray-400 truncate max-w-[200px]" title={msg.contenu || `Nouvelle ${getTabTitle(msg.type_message)}...`}>
                           {msg.contenu || `Nouvelle ${getTabTitle(msg.type_message)}...`}
                         </span>

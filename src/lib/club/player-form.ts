@@ -49,8 +49,8 @@ export const normalizePlayerFormValues = (
   urgenceEmail: values.urgenceEmail || "",
   urgenceAdresse: values.urgenceAdresse || "",
 
-  tailleHaut: values.tailleHaut || "M",
-  tailleShort: values.tailleShort || "M",
+  tailleHaut: values.tailleHaut || "Choisir",
+  tailleShort: values.tailleShort || "Choisir",
   numerosPreferes: values.numerosPreferes || "",
 
   planPaiement: values.planPaiement || "PLAN #1 (Annuel)",

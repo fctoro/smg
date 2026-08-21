@@ -128,17 +128,14 @@ export const fetchSiteMessages = async (): Promise<SiteMessage[]> => {
 
       // Look up status in the site_messages table, fallback to 'nouveau'
       const smgMsg = detectionStatusMap.get(String(d.id)) || {};
-      let actualStatus = smgMsg.status || d.status;
+      const actualStatus = smgMsg.status || d.status;
       const isRead = smgMsg.is_read || d.is_read;
-
-      if (enrolledPlayerNames.has(normName) && actualStatus !== 'archived') {
-        actualStatus = 'enrolled';
-      }
+      const isAlreadyInDB = enrolledPlayerNames.has(normName);
 
       allMessages.push({
         id: `det_${d.id}`,
         type_message: 'detection',
-        statut: actualStatus === 'enrolled' ? 'inscrit' : actualStatus === 'archived' ? 'archive' : isRead ? 'lu' : 'nouveau',
+        statut: actualStatus === 'enrolled' ? 'inscrit' : actualStatus === 'rejected' ? 'refuse' : actualStatus === 'archived' ? 'archive' : isRead ? 'lu' : 'nouveau',
         contact_nom: d.parent_nom || childFullName || d.nom || "",
         contact_email: d.parent_email || d.email || "",
         contact_telephone: d.parent_telephone || d.telephone || "",
@@ -176,6 +173,7 @@ export const fetchSiteMessages = async (): Promise<SiteMessage[]> => {
           source_table: 'detection_registrations',
           raw_db_id: d.id,
           site_message_id: smgMsg.site_message_id,
+          is_existing_player: isAlreadyInDB,
         },
       } as SiteMessage);
     });
@@ -201,11 +199,9 @@ export const fetchSiteMessages = async (): Promise<SiteMessage[]> => {
         ? `${m.payload.child_first_name} ${m.payload.child_last_name || ''}`.trim() 
         : undefined;
 
-      let msgStatus = m.status;
+      const msgStatus = m.status;
       const normSearchName = childName || contactName;
-      if (enrolledPlayerNames.has(normSearchName) && msgStatus !== 'archived') {
-        msgStatus = 'enrolled';
-      }
+      const isAlreadyInDB = enrolledPlayerNames.has(normSearchName);
 
       allMessages.push({
         id: String(m.id),
@@ -218,7 +214,7 @@ export const fetchSiteMessages = async (): Promise<SiteMessage[]> => {
         contenu: m.message || "",
         reference_id: String(m.id),
         created_at: m.created_at || new Date().toISOString(),
-        metadata: { ...m.payload, enfant_nom: enfantNom, source_table: 'site_messages' },
+        metadata: { ...m.payload, enfant_nom: enfantNom, source_table: 'site_messages', is_existing_player: isAlreadyInDB },
       } as SiteMessage);
     });
   }

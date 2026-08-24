@@ -34,6 +34,7 @@ export const PlayerEditModal: React.FC<PlayerEditModalProps> = ({
   clubActuel,
 }) => {
   const { players, setPlayers } = useClubData();
+  const [toast, setToast] = useState<{ message: string; type?: "success" | "error" | "info" } | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const categories = useMemo(
@@ -140,6 +141,7 @@ export const PlayerEditModal: React.FC<PlayerEditModalProps> = ({
             highlightFields={highlightFields}
             draftKey={`v4_${player.id}`}
             playerId={player.id}
+            isSubmitting={isSubmitting}
           />
         </div>
       </div>

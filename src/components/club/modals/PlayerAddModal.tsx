@@ -18,6 +18,7 @@ interface PlayerAddModalProps {
 export function PlayerAddModal({ isOpen, onClose }: PlayerAddModalProps) {
   const { players, setPlayers } = useClubData();
   const [toast, setToast] = useState<{ message: string; type?: "success" | "error" | "info" } | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   
   const categories = useMemo(
     () => [...new Set([...DEFAULT_CATEGORIES, ...players.map((player) => player.categorie)])],
@@ -25,8 +26,7 @@ export function PlayerAddModal({ isOpen, onClose }: PlayerAddModalProps) {
   );
 
   const handleSubmit = async (values: PlayerFormValues) => {
-    // Note: The temporary alert that was present in the old page is preserved if requested,
-    // but here we allow the actual creation logic to run if it wasn't disabled.
+    setIsSubmitting(true);
     try {
       const today = new Date().toISOString().slice(0, 10);
       const newPlayerLocal = createPlayerFromForm(`temp-${Date.now()}`, values, today);
@@ -80,6 +80,8 @@ export function PlayerAddModal({ isOpen, onClose }: PlayerAddModalProps) {
     } catch (error) {
       console.error(error);
       setToast({ message: "Erreur lors de la création. Veuillez réessayer.", type: "error" });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -103,11 +105,12 @@ export function PlayerAddModal({ isOpen, onClose }: PlayerAddModalProps) {
 
         <div className="max-h-[70vh] overflow-y-auto pr-2 px-1 -mx-1 mt-5 custom-scrollbar">
           <PlayerForm
-            initialValues={{}} // Empty initial values for a new player
+            initialValues={{}}
+            categories={categories}
             onSubmit={handleSubmit}
             onCancel={onClose}
-            categories={categories}
             submitLabel="Enregistrer"
+            isSubmitting={isSubmitting}
           />
         </div>
       </div>

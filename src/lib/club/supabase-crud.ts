@@ -114,13 +114,12 @@ export const updatePlayerInSupabase = async (playerId: string, data: Partial<Pla
     if (data.photoUrl.startsWith("data:")) {
       const url = await handleDocUpload(data.photoUrl, "photo_joueur");
       if (url) {
-        updatePayload.PhotoUrl = url;
         updatePayload.PhotoIdentiteUrl = url;
         uploadedPhotoUrl = url;
         uploadedPhotoIdentiteUrl = url;
       }
     } else {
-      updatePayload.PhotoUrl = data.photoUrl;
+      updatePayload.PhotoIdentiteUrl = data.photoUrl;
       uploadedPhotoUrl = data.photoUrl;
     }
   }
@@ -131,10 +130,6 @@ export const updatePlayerInSupabase = async (playerId: string, data: Partial<Pla
       if (url) {
         updatePayload.PhotoIdentiteUrl = url;
         uploadedPhotoIdentiteUrl = url;
-        if (!updatePayload.PhotoUrl) {
-          updatePayload.PhotoUrl = url;
-          uploadedPhotoUrl = url;
-        }
       }
     } else {
       updatePayload.PhotoIdentiteUrl = data.photoIdentiteUrl;
@@ -215,6 +210,7 @@ export const updatePlayerInSupabase = async (playerId: string, data: Partial<Pla
     delete updatePayload.TailleHaut;
     delete updatePayload.TailleShort;
     delete updatePayload.Saison;
+    delete updatePayload.PhotoUrl;
     result = await updatePlayerAdmin(resolveEtudiantId(playerId), updatePayload);
   }
 
@@ -344,7 +340,6 @@ export const addPlayerToSupabase = async (data: Omit<Player & { photoIdentiteUrl
     StatutJoueur: data.statutJoueur || null,
     Poste: data.poste || null,
     Experience: (data as any).experienceSoccer || null,
-    PhotoUrl: photoUrl || null,
     PhotoIdentiteUrl: photoIdentiteUrl || null,
     ActeNaissanceUrl: acteNaissanceUrl || null,
     CarteIdentiteParentUrl: carteIdentiteParentUrl || null,
@@ -377,6 +372,7 @@ export const addPlayerToSupabase = async (data: Omit<Player & { photoIdentiteUrl
     delete insertPayload.TailleHaut;
     delete insertPayload.TailleShort;
     delete insertPayload.Saison;
+    delete insertPayload.PhotoUrl;
     result = await insertPlayerAdmin(insertPayload);
   }
 

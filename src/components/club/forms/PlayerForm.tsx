@@ -15,6 +15,7 @@ interface PlayerFormProps {
   highlightFields?: string[];
   draftKey?: string;
   playerId?: string;
+  isSubmitting?: boolean;
 }
 
 const inputClassName =
@@ -46,9 +47,22 @@ const defaultValues: PlayerFormValues = {
   experienceSoccer: "",
 
   parentNomPrenom: "",
+  parentLien: "",
   parentEmail: "",
   parentTelephone: "",
   parentAdresse: "",
+
+  commentIdentifie: "",
+  piedDominant: "",
+  clubActuel: "",
+  sourceDetection: false,
+  statutJoueur: "Normal",
+
+  photoIdentiteUrl: "",
+  acteNaissanceUrl: "",
+  carteIdentiteParentUrl: "",
+  fiche9eUrl: "",
+  carnetVaccinationUrl: "",
 
   urgenceNomPrenom: "",
   urgenceLien: "",
@@ -75,6 +89,7 @@ export default function PlayerForm({
   highlightFields = [],
   draftKey,
   playerId,
+  isSubmitting = false,
 }: PlayerFormProps) {
   const [formValues, setFormValues] = useState<PlayerFormValues>({
     ...defaultValues,
@@ -965,9 +980,10 @@ export default function PlayerForm({
         </button>
         <button
           type="submit"
-          className="rounded-xl bg-brand-500 px-6 py-2.5 text-sm font-bold text-white hover:bg-brand-600 shadow-md"
+          disabled={isSubmitting}
+          className={`rounded-xl bg-brand-500 px-6 py-2.5 text-sm font-bold text-white shadow-md ${isSubmitting ? 'opacity-50 cursor-not-allowed' : 'hover:bg-brand-600'}`}
         >
-          {submitLabel}
+          {isSubmitting ? "En cours..." : submitLabel}
         </button>
       </div>
     </form>

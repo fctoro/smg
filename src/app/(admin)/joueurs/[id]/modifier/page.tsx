@@ -46,21 +46,32 @@ export default function EditPlayerPage() {
     const today = new Date().toISOString().slice(0, 10);
     
     try {
-      await updatePlayerInSupabase(playerId, normalized);
+      const updatedDocs = await updatePlayerInSupabase(playerId, normalized);
       
       setPlayers((prevPlayers) =>
-        prevPlayers.map((player) =>
-          player.id === playerId
-            ? {
-                ...player,
-                ...normalized,
-                dernierPaiement:
-                  normalized.cotisationStatut === "paid"
-                    ? today
-                    : player.dernierPaiement,
-              }
-            : player,
-        ),
+        prevPlayers.map((player) => {
+          if (player.id !== playerId) return player;
+          const updated = {
+            ...player,
+            ...normalized,
+            ...(updatedDocs?.photoUrl ? { photoUrl: updatedDocs.photoUrl } : {}),
+            ...(updatedDocs?.photoIdentiteUrl ? { photoIdentiteUrl: updatedDocs.photoIdentiteUrl } : {}),
+            ...(updatedDocs?.acteNaissanceUrl ? { acteNaissanceUrl: updatedDocs.acteNaissanceUrl } : {}),
+            ...(updatedDocs?.carteIdentiteParentUrl ? { carteIdentiteParentUrl: updatedDocs.carteIdentiteParentUrl } : {}),
+            ...(updatedDocs?.fiche9eUrl ? { fiche9eUrl: updatedDocs.fiche9eUrl } : {}),
+            ...(updatedDocs?.carnetVaccinationUrl ? { carnetVaccinationUrl: updatedDocs.carnetVaccinationUrl } : {}),
+            dernierPaiement:
+              normalized.cotisationStatut === "paid"
+                ? today
+                : player.dernierPaiement,
+          };
+          if (updated.photoIdentiteUrl?.startsWith("data:")) delete (updated as any).photoIdentiteUrl;
+          if (updated.acteNaissanceUrl?.startsWith("data:")) delete (updated as any).acteNaissanceUrl;
+          if (updated.carteIdentiteParentUrl?.startsWith("data:")) delete (updated as any).carteIdentiteParentUrl;
+          if (updated.fiche9eUrl?.startsWith("data:")) delete (updated as any).fiche9eUrl;
+          if (updated.carnetVaccinationUrl?.startsWith("data:")) delete (updated as any).carnetVaccinationUrl;
+          return updated;
+        }),
       );
       
       if (values.programmesAssignesIds) {

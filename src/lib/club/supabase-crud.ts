@@ -103,65 +103,105 @@ export const updatePlayerInSupabase = async (playerId: string, data: Partial<Pla
   }
 
   // Handle new document uploads
-  const handleDocUpload = async (base64Str: string, docType: string) => {
-    if (!base64Str.startsWith("data:")) return base64Str; // Already a URL
-    try {
-      const isPdf = base64Str.startsWith("data:application/pdf");
-      const ext = isPdf ? "pdf" : "jpg";
-      const base64Data = base64Str.split(",")[1];
-      const byteCharacters = atob(base64Data);
-      const byteNumbers = new Array(byteCharacters.length);
-      for (let i = 0; i < byteCharacters.length; i++) {
-        byteNumbers[i] = byteCharacters.charCodeAt(i);
-      }
-      const byteArray = new Uint8Array(byteNumbers);
-      const fileBlob = new Blob([byteArray], { type: isPdf ? "application/pdf" : "image/jpeg" });
-      
-      const fileName = `${docType}_${Date.now()}_${Math.random().toString(36).substring(7)}.${ext}`;
-      const bucket = process.env.SUPABASE_STORAGE_BUCKET || "videos";
-      const { error: uploadError } = await supabase.storage.from(bucket).upload(fileName, fileBlob);
-      
-      if (!uploadError) {
-        const { data: publicUrlData } = supabase.storage.from(bucket).getPublicUrl(fileName);
-        return publicUrlData.publicUrl;
-      }
-    } catch (e) {
-      console.error(`Error uploading ${docType}:`, e);
-    }
-    return null;
-  };
+  let uploadedPhotoUrl: string | undefined = undefined;
+  let uploadedPhotoIdentiteUrl: string | undefined = undefined;
+  let uploadedActeNaissanceUrl: string | undefined = undefined;
+  let uploadedCarteIdentiteParentUrl: string | undefined = undefined;
+  let uploadedFiche9eUrl: string | undefined = undefined;
+  let uploadedCarnetVaccinationUrl: string | undefined = undefined;
 
-  if (data.photoUrl && data.photoUrl.startsWith("data:")) {
-    const url = await handleDocUpload(data.photoUrl, "photo_joueur");
-    if (url) {
-      updatePayload.PhotoIdentiteUrl = url;
-      updatePayload.PhotoUrl = url;
+  if (data.photoUrl && data.photoUrl !== "/images/user/silhouette.svg") {
+    if (data.photoUrl.startsWith("data:")) {
+      const url = await handleDocUpload(data.photoUrl, "photo_joueur");
+      if (url) {
+        updatePayload.PhotoUrl = url;
+        updatePayload.PhotoIdentiteUrl = url;
+        uploadedPhotoUrl = url;
+        uploadedPhotoIdentiteUrl = url;
+      }
+    } else {
+      updatePayload.PhotoUrl = data.photoUrl;
+      uploadedPhotoUrl = data.photoUrl;
     }
   }
 
   if (data.photoIdentiteUrl) {
-    const url = await handleDocUpload(data.photoIdentiteUrl, "photo_identite");
-    if (url) {
-      updatePayload.PhotoIdentiteUrl = url;
-      updatePayload.PhotoUrl = url;
+    if (data.photoIdentiteUrl.startsWith("data:")) {
+      const url = await handleDocUpload(data.photoIdentiteUrl, "photo_identite");
+      if (url) {
+        updatePayload.PhotoIdentiteUrl = url;
+        uploadedPhotoIdentiteUrl = url;
+        if (!updatePayload.PhotoUrl) {
+          updatePayload.PhotoUrl = url;
+          uploadedPhotoUrl = url;
+        }
+      }
+    } else {
+      updatePayload.PhotoIdentiteUrl = data.photoIdentiteUrl;
+      uploadedPhotoIdentiteUrl = data.photoIdentiteUrl;
     }
   }
+
   if (data.acteNaissanceUrl) {
-    const url = data.acteNaissanceUrl.startsWith("data:") ? await handleDocUpload(data.acteNaissanceUrl, "acte_naissance") : data.acteNaissanceUrl;
-    if (url) updatePayload.ActeNaissanceUrl = url;
+    if (data.acteNaissanceUrl.startsWith("data:")) {
+      const url = await handleDocUpload(data.acteNaissanceUrl, "acte_naissance");
+      if (url) {
+        updatePayload.ActeNaissanceUrl = url;
+        uploadedActeNaissanceUrl = url;
+      }
+    } else {
+      updatePayload.ActeNaissanceUrl = data.acteNaissanceUrl;
+      uploadedActeNaissanceUrl = data.acteNaissanceUrl;
+    }
   }
+
   if (data.carteIdentiteParentUrl) {
-    const url = data.carteIdentiteParentUrl.startsWith("data:") ? await handleDocUpload(data.carteIdentiteParentUrl, "carte_identite_parent") : data.carteIdentiteParentUrl;
-    if (url) updatePayload.CarteIdentiteParentUrl = url;
+    if (data.carteIdentiteParentUrl.startsWith("data:")) {
+      const url = await handleDocUpload(data.carteIdentiteParentUrl, "carte_identite_parent");
+      if (url) {
+        updatePayload.CarteIdentiteParentUrl = url;
+        uploadedCarteIdentiteParentUrl = url;
+      }
+    } else {
+      updatePayload.CarteIdentiteParentUrl = data.carteIdentiteParentUrl;
+      uploadedCarteIdentiteParentUrl = data.carteIdentiteParentUrl;
+    }
   }
+
   if ((data as any).fiche9eUrl) {
-    const url = (data as any).fiche9eUrl.startsWith("data:") ? await handleDocUpload((data as any).fiche9eUrl, "fiche9e") : (data as any).fiche9eUrl;
-    if (url) updatePayload.Info2 = url;
+    const fVal = (data as any).fiche9eUrl;
+    if (fVal.startsWith("data:")) {
+      const url = await handleDocUpload(fVal, "fiche9e");
+      if (url) {
+        updatePayload.Info2 = url;
+        uploadedFiche9eUrl = url;
+      }
+    } else {
+      updatePayload.Info2 = fVal;
+      uploadedFiche9eUrl = fVal;
+    }
   }
+
   if ((data as any).carnetVaccinationUrl) {
-    const url = (data as any).carnetVaccinationUrl.startsWith("data:") ? await handleDocUpload((data as any).carnetVaccinationUrl, "vaccination") : (data as any).carnetVaccinationUrl;
-    if (url) updatePayload.Info3 = url;
+    const cVal = (data as any).carnetVaccinationUrl;
+    if (cVal.startsWith("data:")) {
+      const url = await handleDocUpload(cVal, "vaccination");
+      if (url) {
+        updatePayload.Info3 = url;
+        uploadedCarnetVaccinationUrl = url;
+      }
+    } else {
+      updatePayload.Info3 = cVal;
+      uploadedCarnetVaccinationUrl = cVal;
+    }
   }
+
+  // Ensure NO base64 Data URLs remain in updatePayload before sending to server action
+  Object.keys(updatePayload).forEach((key) => {
+    if (typeof updatePayload[key] === "string" && updatePayload[key].startsWith("data:")) {
+      delete updatePayload[key];
+    }
+  });
 
   const { updatePlayerAdmin } = await import("@/app/actions/club");
   let result = await updatePlayerAdmin(resolveEtudiantId(playerId), updatePayload);
@@ -181,6 +221,15 @@ export const updatePlayerInSupabase = async (playerId: string, data: Partial<Pla
   if (!result.success) {
     console.warn("Mise à jour directe Supabase ignorée (état local mis à jour) :", result.error);
   }
+
+  return {
+    photoUrl: uploadedPhotoUrl,
+    photoIdentiteUrl: uploadedPhotoIdentiteUrl,
+    acteNaissanceUrl: uploadedActeNaissanceUrl,
+    carteIdentiteParentUrl: uploadedCarteIdentiteParentUrl,
+    fiche9eUrl: uploadedFiche9eUrl,
+    carnetVaccinationUrl: uploadedCarnetVaccinationUrl,
+  };
 };
 
 export const softDeletePlayerInSupabase = async (playerId: string) => {
@@ -195,10 +244,76 @@ export const softDeletePlayerInSupabase = async (playerId: string) => {
   }
 };
 
+const handleDocUpload = async (base64Str: string, docType: string): Promise<string | null> => {
+  if (!base64Str || typeof base64Str !== "string") return null;
+  if (!base64Str.startsWith("data:")) return base64Str; // Already a URL
+
+  try {
+    const match = base64Str.match(/^data:([^;]+);base64,/);
+    const mimeType = match ? match[1] : "image/jpeg";
+
+    let ext = "jpg";
+    if (mimeType.includes("pdf")) ext = "pdf";
+    else if (mimeType.includes("png")) ext = "png";
+    else if (mimeType.includes("webp")) ext = "webp";
+    else if (mimeType.includes("gif")) ext = "gif";
+    else if (mimeType.includes("svg")) ext = "svg";
+
+    const base64Data = base64Str.includes(",") ? base64Str.split(",")[1] : base64Str;
+    const byteCharacters = atob(base64Data);
+    const byteNumbers = new Array(byteCharacters.length);
+    for (let i = 0; i < byteCharacters.length; i++) {
+      byteNumbers[i] = byteCharacters.charCodeAt(i);
+    }
+    const byteArray = new Uint8Array(byteNumbers);
+    const fileBlob = new Blob([byteArray], { type: mimeType });
+
+    const fileName = `${docType}_${Date.now()}_${Math.random().toString(36).substring(7)}.${ext}`;
+    const bucket = process.env.NEXT_PUBLIC_SUPABASE_STORAGE_BUCKET || process.env.SUPABASE_STORAGE_BUCKET || "videos";
+
+    const { data: uploadData, error: uploadError } = await supabase.storage
+      .from(bucket)
+      .upload(fileName, fileBlob, { contentType: mimeType, upsert: true });
+
+    if (!uploadError) {
+      const { data: publicUrlData } = supabase.storage.from(bucket).getPublicUrl(fileName);
+      return publicUrlData.publicUrl;
+    } else {
+      console.error(`Supabase Storage upload error for ${docType}:`, uploadError);
+    }
+  } catch (e) {
+    console.error(`Error in handleDocUpload for ${docType}:`, e);
+  }
+  return null;
+};
+
 export const addPlayerToSupabase = async (data: Omit<Player & { photoIdentiteUrl?: string; acteNaissanceUrl?: string; carteIdentiteParentUrl?: string }, "id" | "matricule">) => {
   const parentParts = (data.parentNomPrenom || "").trim().split(" ");
   const nomParent = parentParts[0] || null;
   const prenomParent = parentParts.slice(1).join(" ") || null;
+
+  let photoIdentiteUrl = data.photoIdentiteUrl
+    ? (data.photoIdentiteUrl.startsWith("data:") ? await handleDocUpload(data.photoIdentiteUrl, "photo") : data.photoIdentiteUrl)
+    : null;
+  let photoUrl = data.photoUrl && data.photoUrl !== "/images/user/silhouette.svg"
+    ? (data.photoUrl.startsWith("data:") ? await handleDocUpload(data.photoUrl, "photo_user") : data.photoUrl)
+    : null;
+
+  if (!photoIdentiteUrl && photoUrl) photoIdentiteUrl = photoUrl;
+  if (!photoUrl && photoIdentiteUrl) photoUrl = photoIdentiteUrl;
+
+  const acteNaissanceUrl = data.acteNaissanceUrl
+    ? (data.acteNaissanceUrl.startsWith("data:") ? await handleDocUpload(data.acteNaissanceUrl, "acte") : data.acteNaissanceUrl)
+    : null;
+  const carteIdentiteParentUrl = data.carteIdentiteParentUrl
+    ? (data.carteIdentiteParentUrl.startsWith("data:") ? await handleDocUpload(data.carteIdentiteParentUrl, "carte") : data.carteIdentiteParentUrl)
+    : null;
+  const fiche9eUrl = (data as any).fiche9eUrl
+    ? ((data as any).fiche9eUrl.startsWith("data:") ? await handleDocUpload((data as any).fiche9eUrl, "fiche9e") : (data as any).fiche9eUrl)
+    : null;
+  const carnetVaccinationUrl = (data as any).carnetVaccinationUrl
+    ? ((data as any).carnetVaccinationUrl.startsWith("data:") ? await handleDocUpload((data as any).carnetVaccinationUrl, "vaccination") : (data as any).carnetVaccinationUrl)
+    : null;
 
   const insertPayload: any = {
     Nom: data.nom,
@@ -229,6 +344,12 @@ export const addPlayerToSupabase = async (data: Omit<Player & { photoIdentiteUrl
     StatutJoueur: data.statutJoueur || null,
     Poste: data.poste || null,
     Experience: (data as any).experienceSoccer || null,
+    PhotoUrl: photoUrl || null,
+    PhotoIdentiteUrl: photoIdentiteUrl || null,
+    ActeNaissanceUrl: acteNaissanceUrl || null,
+    CarteIdentiteParentUrl: carteIdentiteParentUrl || null,
+    Info2: fiche9eUrl || null,
+    Info3: carnetVaccinationUrl || null,
     Info1: ((data as any).sourceDetection ? "SOURCE:DETECTION" : "") + 
            ((data as any).commentIdentifie ? `|IDENTIFIE:${(data as any).commentIdentifie}` : "") +
            ((data as any).piedDominant ? `|PIED:${(data as any).piedDominant}` : "") +
@@ -237,52 +358,12 @@ export const addPlayerToSupabase = async (data: Omit<Player & { photoIdentiteUrl
            ((data as any).clubActuel ? `|CLUB:${(data as any).clubActuel}` : ""),
   };
 
-  const handleDocUpload = async (base64Str: string, docType: string) => {
-    if (!base64Str || !base64Str.startsWith("data:")) return null;
-    try {
-      const isPdf = base64Str.startsWith("data:application/pdf");
-      const ext = isPdf ? "pdf" : "jpg";
-      const base64Data = base64Str.split(",")[1];
-      const byteCharacters = atob(base64Data);
-      const byteNumbers = new Array(byteCharacters.length);
-      for (let i = 0; i < byteCharacters.length; i++) {
-        byteNumbers[i] = byteCharacters.charCodeAt(i);
-      }
-      const byteArray = new Uint8Array(byteNumbers);
-      const fileBlob = new Blob([byteArray], { type: isPdf ? "application/pdf" : "image/jpeg" });
-      
-      const fileName = `${docType}_${Date.now()}_${Math.random().toString(36).substring(7)}.${ext}`;
-      const bucket = process.env.SUPABASE_STORAGE_BUCKET || "videos";
-      
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from(bucket)
-        .upload(fileName, fileBlob, { contentType: isPdf ? "application/pdf" : "image/jpeg" });
-        
-      if (!uploadError) {
-        const { data: publicUrlData } = supabase.storage.from(bucket).getPublicUrl(fileName);
-        return publicUrlData.publicUrl;
-      }
-    } catch (e) {
-      console.error(`Error uploading ${docType}:`, e);
+  // Strip any residual base64 strings from insertPayload before sending to server action
+  Object.keys(insertPayload).forEach((key) => {
+    if (typeof insertPayload[key] === "string" && insertPayload[key].startsWith("data:")) {
+      insertPayload[key] = null;
     }
-    return null;
-  };
-
-  if (data.photoIdentiteUrl) {
-    insertPayload.PhotoIdentiteUrl = data.photoIdentiteUrl.startsWith("data:") ? await handleDocUpload(data.photoIdentiteUrl, "photo") : data.photoIdentiteUrl;
-  }
-  if (data.acteNaissanceUrl) {
-    insertPayload.ActeNaissanceUrl = data.acteNaissanceUrl.startsWith("data:") ? await handleDocUpload(data.acteNaissanceUrl, "acte") : data.acteNaissanceUrl;
-  }
-  if (data.carteIdentiteParentUrl) {
-    insertPayload.CarteIdentiteParentUrl = data.carteIdentiteParentUrl.startsWith("data:") ? await handleDocUpload(data.carteIdentiteParentUrl, "carte") : data.carteIdentiteParentUrl;
-  }
-  if ((data as any).fiche9eUrl) {
-    insertPayload.Info2 = (data as any).fiche9eUrl.startsWith("data:") ? await handleDocUpload((data as any).fiche9eUrl, "fiche9e") : (data as any).fiche9eUrl;
-  }
-  if ((data as any).carnetVaccinationUrl) {
-    insertPayload.Info3 = (data as any).carnetVaccinationUrl.startsWith("data:") ? await handleDocUpload((data as any).carnetVaccinationUrl, "vaccination") : (data as any).carnetVaccinationUrl;
-  }
+  });
 
   const { insertPlayerAdmin } = await import("@/app/actions/club");
   let result = await insertPlayerAdmin(insertPayload);
@@ -320,7 +401,15 @@ export const addPlayerToSupabase = async (data: Omit<Player & { photoIdentiteUrl
     }
   }
 
-  return { EtudiantID: newEtudiantId };
+  return {
+    EtudiantID: newEtudiantId,
+    photoUrl: photoUrl || undefined,
+    photoIdentiteUrl: photoIdentiteUrl || undefined,
+    acteNaissanceUrl: acteNaissanceUrl || undefined,
+    carteIdentiteParentUrl: carteIdentiteParentUrl || undefined,
+    fiche9eUrl: fiche9eUrl || undefined,
+    carnetVaccinationUrl: carnetVaccinationUrl || undefined,
+  };
 };
 
 // --- EMPLOYEES (tblEmployes) ---

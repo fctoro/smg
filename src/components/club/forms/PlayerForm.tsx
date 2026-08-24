@@ -142,7 +142,18 @@ export default function PlayerForm({
 
   useEffect(() => {
     if (draftKey) {
-      sessionStorage.setItem(`draft_${draftKey}`, JSON.stringify(formValues));
+      try {
+        const cleanDraft: Record<string, any> = { ...formValues };
+        // Strip large base64 Data URLs before saving draft to avoid sessionStorage QuotaExceededError
+        Object.keys(cleanDraft).forEach((key) => {
+          if (typeof cleanDraft[key] === "string" && cleanDraft[key].startsWith("data:")) {
+            delete cleanDraft[key];
+          }
+        });
+        sessionStorage.setItem(`draft_${draftKey}`, JSON.stringify(cleanDraft));
+      } catch (e) {
+        console.warn("Unable to save form draft to sessionStorage:", e);
+      }
     }
   }, [formValues, draftKey]);
 

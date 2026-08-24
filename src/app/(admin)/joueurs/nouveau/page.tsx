@@ -281,7 +281,20 @@ function NewPlayerFormContent() {
           saison: chosenSeasonStr,
           matricule: matriculeCode,
           sourceDetection: isDetection,
+          ...(inserted.photoUrl ? { photoUrl: inserted.photoUrl } : {}),
+          ...(inserted.photoIdentiteUrl ? { photoIdentiteUrl: inserted.photoIdentiteUrl } : {}),
+          ...(inserted.acteNaissanceUrl ? { acteNaissanceUrl: inserted.acteNaissanceUrl } : {}),
+          ...(inserted.carteIdentiteParentUrl ? { carteIdentiteParentUrl: inserted.carteIdentiteParentUrl } : {}),
+          ...(inserted.fiche9eUrl ? { fiche9eUrl: inserted.fiche9eUrl } : {}),
+          ...(inserted.carnetVaccinationUrl ? { carnetVaccinationUrl: inserted.carnetVaccinationUrl } : {}),
         };
+        // Clean any leftover base64 strings from local state
+        if (newPlayer.photoIdentiteUrl?.startsWith("data:")) delete (newPlayer as any).photoIdentiteUrl;
+        if (newPlayer.acteNaissanceUrl?.startsWith("data:")) delete (newPlayer as any).acteNaissanceUrl;
+        if (newPlayer.carteIdentiteParentUrl?.startsWith("data:")) delete (newPlayer as any).carteIdentiteParentUrl;
+        if (newPlayer.fiche9eUrl?.startsWith("data:")) delete (newPlayer as any).fiche9eUrl;
+        if (newPlayer.carnetVaccinationUrl?.startsWith("data:")) delete (newPlayer as any).carnetVaccinationUrl;
+
         setPlayers((prevPlayers) => [newPlayer, ...prevPlayers]);
         
         if (values.programmesAssignesIds && values.programmesAssignesIds.length > 0) {

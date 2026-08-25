@@ -64,7 +64,7 @@ import { PaymentAddModal } from "@/components/club/modals/PaymentAddModal";
 import { TableBodySkeleton } from "@/components/ui/skeleton/Skeleton";
 
 export default function PaymentsPage() {
-  const { payments, players, setPayments, hydrated, rubriques } = useClubData();
+  const { payments, players, parents, setPayments, hydrated, rubriques } = useClubData();
   const { confirm, ConfirmComponent } = useConfirm();
   const [searchQuery, setSearchQuery] = useState("");
   const [deviseFilter, setDeviseFilter] = useState("all");
@@ -99,6 +99,11 @@ export default function PaymentsPage() {
   const playerMap = useMemo(
     () => new Map(players.map((player) => [player.id, player])),
     [players],
+  );
+
+  const parentMap = useMemo(
+    () => new Map((parents || []).map((parent) => [parent.id, parent])),
+    [parents],
   );
 
   const seasons = useMemo(
@@ -654,6 +659,91 @@ export default function PaymentsPage() {
     currentPageSafe * currentPageSize,
   );
 
+  const getExportDataRows = () => {
+    return filteredPayments.map((payment) => {
+      const player = playerMap.get(payment.playerId);
+      const playerName = player ? getPlayerFullName(player) : "Joueur Inconnu";
+      const playerMatricule = player?.matricule || "-";
+      const playerCategory = player?.categorie || "-";
+      const playerPoste = player?.poste || "-";
+      const playerDob = player?.dateNaissance ? formatClubDate(player.dateNaissance) : "-";
+      const playerStatusPlan = (player as any)?.statutJoueur || player?.planPaiement || "Standard";
+
+      const parentId = (player as any)?.parentId || (player as any)?.tuteur_id;
+      const parent = parentId ? parentMap.get(String(parentId)) : undefined;
+      const parentName = parent ? `${parent.nom || ""} ${parent.prenom || ""}`.trim() : (player?.parentNomPrenom || "-");
+      const parentPhone = parent?.telephone || player?.parentTelephone || "-";
+
+      const devise = (payment.devise || "US") as "US" | "HTG";
+      const montantPaid = payment.montant;
+
+      const b = calculateBalance(payment);
+      const totalDueUSD = payment.remarque?.match(/\[TOTAL_DUE:\s*([\d.]+)\s*\]/i)?.[1];
+      const totalDueFormatted = totalDueUSD ? formatClubCurrency(parseFloat(totalDueUSD), "US") : "-";
+      const balanceFormatted = b.balance > 0 ? formatClubCurrency(b.balance, b.devise) : (b.balance < 0 ? `Trop-perçu: ${formatClubCurrency(Math.abs(b.balance), b.devise)}` : "0");
+      const statutReglement = b.balance > 0 ? `Solde dû (${formatClubCurrency(b.balance, b.devise)})` : "À jour";
+
+      const remarkLower = (payment.remarque || "").toLowerCase();
+      const planLabel = remarkLower.includes("mensuel") ? "Mensuel" : (remarkLower.includes("annuel") ? "Annuel" : (remarkLower.includes("semestriel") ? "Semestriel" : "Comptant"));
+      const moisMatch = payment.remarque?.match(/\[MOIS_PAYES:\s*(\d+)\s*\]/i) || payment.remarque?.match(/(\d+)\s*mois/i);
+      const moisPayes = moisMatch && moisMatch[1] ? `${moisMatch[1]} mois` : (planLabel === "Mensuel" ? "1 mois" : "-");
+
+      let cleanRubriques = (payment.remarque || "")
+        .replace(/\[.*?\]\s*/g, '')
+        .replace(/\s*\|\s*/g, ' - ')
+        .replace(/Rubriques\s*:\s*/gi, '')
+        .trim();
+      if (!cleanRubriques) cleanRubriques = (payment as any).description || "Cotisation";
+
+      const mapModeStr = (m: any) => {
+        const s = String(m || "").toLowerCase().trim();
+        if (s === "1" || s.includes("espece") || s.includes("espèce")) return "Espèces";
+        if (s === "2" || s.includes("virement")) return "Virement";
+        if (s === "3" || s.includes("cheque") || s.includes("chèque")) return "Chèque";
+        if (s === "4" || s.includes("carte")) return "Carte";
+        if (s === "5" || s.includes("depot") || s.includes("dépôt")) return "Dépôt bancaire";
+        return String(m || "Espèces");
+      };
+
+      const photoMatches = extractPhotoUrlsFromRemark(payment.remarque);
+      const justificatifs = photoMatches.length > 0 ? `Oui (${photoMatches.length} pièce(s))` : "Non";
+
+      return [
+        playerMatricule,
+        playerName,
+        playerCategory,
+        planLabel,
+        cleanRubriques,
+        moisPayes,
+        `${montantPaid} ${devise}`,
+        devise,
+        payment.taux ? String(payment.taux) : "-",
+        totalDueFormatted,
+        balanceFormatted,
+        mapModeStr(payment.methode),
+        justificatifs,
+        payment.datePaiement ? formatClubDate(payment.datePaiement) : "-",
+      ];
+    });
+  };
+
+  const exportHeaders = [
+    "Matricule",
+    "Joueur (Nom & Prénom)",
+    "Catégorie",
+    "Plan de Règlement",
+    "Articles / Rubriques Payés (Reçu)",
+    "Nbre Mois Payés",
+    "Montant Versé",
+    "Devise",
+    "Taux de Change",
+    "Montant Total Dû (Dossier)",
+    "Solde Restant Dû (Balance)",
+    "Mode de Paiement",
+    "Justificatif Joint",
+    "Date du Paiement",
+  ];
+
   const handleExportCSV = () => {
     setIsExportOpen(false);
     confirm({
@@ -662,24 +752,21 @@ export default function PaymentsPage() {
       confirmText: "Exporter",
       cancelText: "Annuler",
       onConfirm: () => {
-        const headers = ["Joueur", "Montant", "Date Paiement", "Informations"];
-        let csvContent = headers.join(",") + "\n";
-        filteredPayments.forEach(payment => {
-          const player = playerMap.get(payment.playerId)!;
-          const playerName = getPlayerFullName(player);
-          const row = [playerName, String(payment.montant), payment.datePaiement || "", payment.remarque || ""];
-          const csvRow = row.map(field => `"${(field || "").toString().replace(/"/g, '""')}"`);
+        let csvContent = exportHeaders.map(h => `"${h}"`).join(",") + "\n";
+        const rows = getExportDataRows();
+        rows.forEach((row) => {
+          const csvRow = row.map((field) => `"${(field || "").toString().replace(/"/g, '""')}"`);
           csvContent += csvRow.join(",") + "\n";
         });
         const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
         const url = URL.createObjectURL(blob);
         const link = document.createElement("a");
         link.href = url;
-        link.setAttribute("download", "paiements.csv");
+        link.setAttribute("download", `paiements_fc_toro_${new Date().toISOString().slice(0, 10)}.csv`);
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
-      }
+      },
     });
   };
 
@@ -687,28 +774,25 @@ export default function PaymentsPage() {
     setIsExportOpen(false);
     confirm({
       title: "Exporter la liste",
-      message: "Voulez-vous vraiment exporter la liste des paiements au format Excel ?",
+      message: "Voulez-vous vraiment exporter la liste des paiements au format Excel (CSV optimisé Excel) ?",
       confirmText: "Exporter",
       cancelText: "Annuler",
       onConfirm: () => {
-        const headers = ["Joueur", "Montant", "Date Paiement", "Informations"];
-        let csvContent = "\uFEFF" + headers.join(";") + "\n";
-        filteredPayments.forEach(payment => {
-          const player = playerMap.get(payment.playerId)!;
-          const playerName = getPlayerFullName(player);
-          const row = [playerName, String(payment.montant), payment.datePaiement || "", payment.remarque || ""];
-          const csvRow = row.map(field => `"${(field || "").toString().replace(/"/g, '""')}"`);
+        let csvContent = "\uFEFF" + exportHeaders.map(h => `"${h}"`).join(";") + "\n";
+        const rows = getExportDataRows();
+        rows.forEach((row) => {
+          const csvRow = row.map((field) => `"${(field || "").toString().replace(/"/g, '""')}"`);
           csvContent += csvRow.join(";") + "\n";
         });
         const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
         const url = URL.createObjectURL(blob);
         const link = document.createElement("a");
         link.href = url;
-        link.setAttribute("download", "paiements_excel.csv");
+        link.setAttribute("download", `paiements_fc_toro_${new Date().toISOString().slice(0, 10)}.csv`);
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
-      }
+      },
     });
   };
 
@@ -1107,7 +1191,7 @@ export default function PaymentsPage() {
               </div>
               <div>
                 <label htmlFor="new-payment-amount" className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">Différence à ajouter</label>
-                <input id="new-payment-amount" type="number" min="0.01" step="0.01" value={newAmount} onChange={(event) => setNewAmount(Number(event.target.value))} className="h-11 w-full rounded-lg border border-gray-300 px-3 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white" />
+                <input id="new-payment-amount" type="number" min="0.01" step="0.01" value={newAmount === 0 ? "" : newAmount} onChange={(event) => setNewAmount(event.target.value === "" ? 0 : Number(event.target.value))} placeholder="Saisissez le montant..." className="h-11 w-full rounded-lg border border-gray-300 px-3 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white" />
               </div>
               <div>
                 <label htmlFor="new-payment-date" className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">Date du paiement</label>

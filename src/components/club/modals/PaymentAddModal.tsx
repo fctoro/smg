@@ -534,25 +534,19 @@ export function PaymentAddModal({ isOpen, onClose, initialPlayerId }: PaymentAdd
       .filter((item) => !item.estAdhesion && item.id !== "adhesion-fc" && item.id !== "adhesion-ti")
       .reduce((sum, item) => sum + item.montant, 0);
 
-    const hasAdhesion = selectedPricingItems.some((item) => item.estAdhesion || item.id === "adhesion-fc" || item.id === "adhesion-ti");
-
-    let adhesionAmount = 0;
-    if (hasAdhesion) {
-      adhesionAmount = isTiToro ? 1000 : 1350; // Prix de base
-      if (selectedPlan === "annuel") {
-        adhesionAmount = isTiToro ? 900 : 1215; // 10% de rabais
-      } else if (selectedPlan === "semestriel") {
-        adhesionAmount = isTiToro ? 950 : 1282.5; // 5% de rabais
-      } else if (selectedPlan === "mensuel") {
-        adhesionAmount = isTiToro ? 1035 : 1395; // Plein tarif majoré
-      } else if (selectedAdhesionItem) {
-        adhesionAmount = selectedAdhesionItem.montant;
-      }
+    let adhesionBase = 0;
+    if (selectedAdhesionItem) {
+      adhesionBase = selectedAdhesionItem.montant;
+    } else if (selectedPricingItems.some((item) => item.estAdhesion || item.id === "adhesion-fc" || item.id === "adhesion-ti")) {
+      adhesionBase = isTiToro ? 1000 : 1350;
+    } else if (selectedPlan) {
+      adhesionBase = isTiToro ? 1000 : 1350;
     }
 
-    // Rabais appliqué uniquement sur l'adhésion
-    const rabaisDecimal = Math.max(0, Math.min(100, rabaisPercent)) / 100;
-    const adhesionAfterRabais = adhesionAmount * (1 - rabaisDecimal);
+    // Rabais appliqué uniquement et précisément sur le montant réel de l'adhésion
+    const rabaisDecimal = Math.max(0, Math.min(100, rabaisPercent || 0)) / 100;
+    const rabaisAmount = adhesionBase * rabaisDecimal;
+    const adhesionAfterRabais = Math.max(0, adhesionBase - rabaisAmount);
 
     return adhesionAfterRabais + nonAdhesionSum;
   }, [selectedPricingItems, selectedPlan, isTiToro, selectedAdhesionItem, rabaisPercent]);
@@ -834,8 +828,8 @@ export function PaymentAddModal({ isOpen, onClose, initialPlayerId }: PaymentAdd
                       type="number"
                       min="0"
                       max="100"
-                      value={rabaisPercent || ""}
-                      onChange={(event) => setRabaisPercent(Number(event.target.value))}
+                      value={rabaisPercent === 0 ? "" : rabaisPercent}
+                      onChange={(event) => setRabaisPercent(event.target.value === "" ? 0 : Number(event.target.value))}
                       className={inputClassName}
                       placeholder="Ex: 10"
                     />
@@ -844,7 +838,7 @@ export function PaymentAddModal({ isOpen, onClose, initialPlayerId }: PaymentAdd
                     </div>
                   </div>
                   
-                  {rabaisPercent > 0 && (() => {
+                  {rabaisPercent > 0 && selectedAdhesionItem && (() => {
                     const adhesionBase = selectedAdhesionItem.montant;
                     const rabaisAmt = +(adhesionBase * rabaisPercent / 100).toFixed(2);
                     const afterRabais = +(adhesionBase - rabaisAmt).toFixed(2);
@@ -884,11 +878,13 @@ export function PaymentAddModal({ isOpen, onClose, initialPlayerId }: PaymentAdd
                     type="number"
                     min={0}
                     step="0.01"
-                    value={montantDuManuel || ""}
+                    value={montantDuManuel === 0 ? "" : montantDuManuel}
                     onChange={(event) => {
-                      setMontantDuManuel(Number(event.target.value));
+                      const val = event.target.value;
+                      setMontantDuManuel(val === "" ? 0 : Number(val));
                       setIsUserEditedMontantDu(true);
                     }}
+                    placeholder="0.00"
                     className={inputClassName}
                   />
                 </div>
@@ -900,11 +896,13 @@ export function PaymentAddModal({ isOpen, onClose, initialPlayerId }: PaymentAdd
                     type="number"
                     min={0}
                     step="0.01"
-                    value={montantDonne || ""}
+                    value={montantDonne === 0 ? "" : montantDonne}
                     onChange={(event) => {
-                      setMontantDonne(Number(event.target.value));
+                      const val = event.target.value;
+                      setMontantDonne(val === "" ? 0 : Number(val));
                       setIsUserEditedMontantDonne(true);
                     }}
+                    placeholder="0.00"
                     className={inputClassName}
                   />
                 </div>

@@ -425,13 +425,10 @@ export default function NewPaymentPage() {
     const hasAdhesion = selectedPricingItems.some((item) => item.estAdhesion || item.id === "adhesion-fc" || item.id === "adhesion-ti");
 
     let adhesionAmount = 0;
-    if (hasAdhesion || selectedPlan) {
+    if (selectedAdhesionItem) {
+      adhesionAmount = selectedAdhesionItem.montant;
+    } else if (hasAdhesion || selectedPlan) {
       adhesionAmount = isTiToro ? 1000 : 1350;
-      if (selectedPlan === "annuel") {
-        adhesionAmount = isTiToro ? 900 : 1215;
-      } else if (selectedAdhesionItem) {
-        adhesionAmount = selectedAdhesionItem.montant;
-      }
     }
 
     const totalUSD = adhesionAmount + nonAdhesionSum;

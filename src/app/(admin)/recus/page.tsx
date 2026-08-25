@@ -174,9 +174,6 @@ export default function RecusJoueursPage() {
           "Joueur",
           "Catégorie",
           "Programme",
-          "Parent",
-          "Téléphone",
-          "Email",
           "Nombre Versements",
           "Total Payé",
         ];
@@ -188,9 +185,6 @@ export default function RecusJoueursPage() {
             p.fullName,
             p.categorie,
             p.programme,
-            p.parentNomPrenom,
-            p.parentTelephone,
-            p.parentEmail,
             String(p.playerPayments.length),
             p.totalPaye,
           ];
@@ -203,7 +197,7 @@ export default function RecusJoueursPage() {
         const url = URL.createObjectURL(blob);
         const link = document.createElement("a");
         link.href = url;
-        link.setAttribute("download", "rp_joueurs.csv");
+        link.setAttribute("download", `rp_joueurs_${new Date().toISOString().slice(0, 10)}.csv`);
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
@@ -225,9 +219,6 @@ export default function RecusJoueursPage() {
           "Joueur",
           "Catégorie",
           "Programme",
-          "Parent",
-          "Téléphone",
-          "Email",
           "Nombre Versements",
           "Total Payé",
         ];
@@ -239,9 +230,6 @@ export default function RecusJoueursPage() {
             p.fullName,
             p.categorie,
             p.programme,
-            p.parentNomPrenom,
-            p.parentTelephone,
-            p.parentEmail,
             String(p.playerPayments.length),
             p.totalPaye,
           ];
@@ -254,7 +242,7 @@ export default function RecusJoueursPage() {
         const url = URL.createObjectURL(blob);
         const link = document.createElement("a");
         link.href = url;
-        link.setAttribute("download", "rp_joueurs_excel.csv");
+        link.setAttribute("download", `rp_joueurs_${new Date().toISOString().slice(0, 10)}.csv`);
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);

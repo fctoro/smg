@@ -303,7 +303,38 @@ export default function BoiteDeReception() {
     setLoading(true);
     try {
       const data = await fetchSiteMessages();
-      setMessages(data || []);
+      
+      // DAcduplication: EmpAccher l'affichage de deux inscriptions identiques
+      const dedupedData = (data || []).reduce((acc: typeof data, msg: any) => {
+        const enfantNom = (msg.metadata?.nom || msg.metadata?.enfant_nom || msg.metadata?.child_last_name || "").toString().trim().toLowerCase();
+        const enfantPrenom = (msg.metadata?.prenom || msg.metadata?.enfant_prenom || msg.metadata?.child_first_name || "").toString().trim().toLowerCase();
+        
+        // Si on a pas de nom d'enfant, on ne dAcduplique pas pour ne pas cacher de vrais messages
+        if (!enfantNom || !enfantPrenom) {
+          acc.push(msg);
+          return acc;
+        }
+
+        const uniqueKey = `${msg.type_message}_${enfantNom}_${enfantPrenom}`;
+
+        const existingIndex = acc.findIndex((m: any) => {
+          const mEnfantNom = (m.metadata?.nom || m.metadata?.enfant_nom || m.metadata?.child_last_name || "").toString().trim().toLowerCase();
+          const mEnfantPrenom = (m.metadata?.prenom || m.metadata?.enfant_prenom || m.metadata?.child_first_name || "").toString().trim().toLowerCase();
+          return `${m.type_message}_${mEnfantNom}_${mEnfantPrenom}` === uniqueKey;
+        });
+
+        if (existingIndex >= 0) {
+          // Si le message courant est plus rAcent, on remplace l'ancien par celui-ci
+          if (new Date(msg.created_at) > new Date(acc[existingIndex].created_at)) {
+            acc[existingIndex] = msg;
+          }
+        } else {
+          acc.push(msg);
+        }
+        return acc;
+      }, []);
+
+      setMessages(dedupedData);
     } catch (err) {
       console.error(err);
     } finally {
@@ -794,9 +825,11 @@ export default function BoiteDeReception() {
                           ? "border-warning-500 text-warning-500 hover:bg-warning-50"
                           : msg.statut === "inscrit"
                           ? "border-brand-500 bg-brand-50 text-brand-600 dark:bg-brand-500/20 dark:text-brand-400 cursor-default"
+                          : msg.statut === "refuse"
+                          ? "border-error-500 text-error-500 hover:bg-error-50 dark:bg-error-500/10"
                           : "border-success-500 text-success-500 hover:bg-success-50"
                       }`}>
-                        {msg.statut === "inscrit" ? "Joueur Inscrit !" : msg.statut}
+                        {msg.statut === "inscrit" ? "Inscrit" : msg.statut === "refuse" ? "Refusé" : msg.statut}
                       </button>
                     </td>
                     <td className="px-4 py-4 align-top">
@@ -1150,11 +1183,18 @@ export default function BoiteDeReception() {
             {/* Footer Buttons */}
             <div className="p-5 border-t border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/50 flex flex-col sm:flex-row justify-end gap-3">
               <button
-                onClick={async () => {
-                  const newStatus = selectedMessage.type_message === "detection" ? "refuse" : "archive";
-                  await updateMessageStatus(selectedMessage.id, newStatus);
-                  setMessages(prev => prev.map(m => m.id === selectedMessage.id ? { ...m, statut: newStatus } : m));
-                  setSelectedMessage(null);
+                onClick={() => {
+                  confirm({
+                    title: "Refuser la demande",
+                    message: "Êtes-vous sûr de vouloir refuser cette inscription ?",
+                    isDestructive: true,
+                    onConfirm: async () => {
+                      const newStatus = "refuse";
+                      await updateMessageStatus(selectedMessage.id, newStatus);
+                      setMessages(prev => prev.map(m => m.id === selectedMessage.id ? { ...m, statut: newStatus as any } : m));
+                      setSelectedMessage(null);
+                    }
+                  });
                 }}
                 className="w-full sm:w-auto rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 px-6 py-2.5 text-sm font-bold text-error-600 shadow-sm hover:bg-error-50 hover:border-error-200 dark:hover:bg-error-900/20 dark:hover:border-error-900/50 transition-all"
               >

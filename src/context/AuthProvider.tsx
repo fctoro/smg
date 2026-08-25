@@ -4,7 +4,7 @@ import React, { useEffect, useState, useCallback } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 
-const INACTIVITY_TIMEOUT = 30 * 60 * 1000; // 30 minutes in ms
+const INACTIVITY_TIMEOUT = 12 * 60 * 60 * 1000; // 12 hours in ms
 
 export default function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();

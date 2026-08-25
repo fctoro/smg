@@ -304,6 +304,12 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
             if (nom === "test") return false;
             if (/^x+$/i.test(prenom)) return false; // Exclusion si le prénom est juste "x" ou "xx"
 
+            // Masquer les joueurs qui n'ont pas encore été validés par l'admin (venant du site public par ex)
+            const statutJoueur = String(d.StatutJoueur || "").toLowerCase().trim();
+            if (statutJoueur === "en attente" || statutJoueur === "a venir" || statutJoueur === "A venir" || statutJoueur === "nouveau") {
+              return false;
+            }
+
             return true;
           });
           

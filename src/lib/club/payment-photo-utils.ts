@@ -25,6 +25,22 @@ export function getPaymentPhotoPreviewUrl(file: File | null) {
   return URL.createObjectURL(file);
 }
 
+export async function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+export async function filesToBase64(files: (File | null)[]): Promise<string[]> {
+  if (!files || files.length === 0) return [];
+  const validFiles = files.filter((f): f is File => f !== null);
+  const promises = validFiles.map((file) => fileToBase64(file));
+  return Promise.all(promises);
+}
+
 export async function uploadPaymentPhotoToSupabase(file: File | null) {
   if (!file) return null;
 
@@ -61,6 +77,14 @@ export async function uploadPaymentPhotoToSupabase(file: File | null) {
     console.error("Erreur d’upload du justificatif de paiement:", error);
     return null;
   }
+}
+
+export async function uploadPaymentPhotosToSupabase(files: (File | null)[]): Promise<string[]> {
+  if (!files || files.length === 0) return [];
+  const validFiles = files.filter((f): f is File => f !== null);
+  const uploadPromises = validFiles.map((file) => uploadPaymentPhotoToSupabase(file));
+  const results = await Promise.all(uploadPromises);
+  return results.filter((url): url is string => Boolean(url));
 }
 
 export function extractPhotoUrlsFromRemark(remark: string | undefined): string[] {

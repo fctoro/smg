@@ -306,7 +306,7 @@ export default function PlayerForm({
             onChange={(e) => updateField("saison", e.target.value)} 
             className={selectClassName}
           >
-            {getDynamicSeasonOptions(3, 1).map((s) => (
+            {getDynamicSeasonOptions(3, 0).map((s) => (
               <option key={s} value={s}>{s}</option>
             ))}
           </select>

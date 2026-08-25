@@ -133,6 +133,6 @@ export const createPlayerFromForm = (
     ...normalized,
     photoUrl: avatar,
     dateInscription,
-    dernierPaiement: dateInscription,
+    dernierPaiement: "",
   };
 };

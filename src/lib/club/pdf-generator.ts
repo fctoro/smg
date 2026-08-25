@@ -13,7 +13,7 @@ export async function generateReceiptPDFBase64(
   parentTelephone?: string,
   parentEmail?: string,
   parentAddress?: string,
-  proofImageBase64?: string | null,
+  proofImageBase64?: string | string[] | null,
   autoPrint: boolean = false,
   totalRubriques?: number
 ): Promise<string> {
@@ -382,30 +382,72 @@ export async function generateReceiptPDFBase64(
   doc.text("Signature autorisée", 14, footerY + 30);
   doc.line(14, footerY + 40, 60, footerY + 40);
 
-  if (proofImageBase64 && (proofImageBase64.startsWith("data:image/") || proofImageBase64.includes("image/"))) {
+  const proofList: string[] = Array.isArray(proofImageBase64)
+    ? proofImageBase64.filter(Boolean) as string[]
+    : proofImageBase64
+    ? [proofImageBase64]
+    : [];
+
+  const imageProofs: string[] = [];
+  const pdfProofs: string[] = [];
+
+  for (const rawItem of proofList) {
+    if (!rawItem) continue;
+    let item = rawItem;
+
+    // Si c'est une URL blob: ou http:, la convertir en base64 pour jsPDF / pdf-lib
+    if (item.startsWith("blob:") || item.startsWith("http://") || item.startsWith("https://")) {
+      try {
+        const res = await fetch(item);
+        const blob = await res.blob();
+        const b64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
+        });
+        if (b64) item = b64;
+      } catch (fetchErr) {
+        console.warn("Erreur chargement preuve dans pdf-generator:", item, fetchErr);
+      }
+    }
+
+    if (item.startsWith("data:application/pdf") || item.includes("application/pdf")) {
+      pdfProofs.push(item);
+    } else if (item.startsWith("data:image/") || item.includes("image/") || item.startsWith("data:")) {
+      imageProofs.push(item);
+    }
+  }
+
+  // 1. Ajouter chaque image sur sa propre page dédiée
+  for (let idx = 0; idx < imageProofs.length; idx++) {
+    const imgData = imageProofs[idx];
     try {
       let imgFormat = 'JPEG';
-      if (proofImageBase64.includes('image/png')) imgFormat = 'PNG';
-      if (proofImageBase64.includes('image/webp')) imgFormat = 'WEBP';
+      if (imgData.includes('image/png')) imgFormat = 'PNG';
+      if (imgData.includes('image/webp')) imgFormat = 'WEBP';
       
-      // Obtenir les dimensions réelles de l'image
       const img = new Image();
-      img.src = proofImageBase64;
       await new Promise((resolve) => {
-        img.onload = resolve;
-        img.onerror = resolve;
+        img.onload = () => resolve(true);
+        img.onerror = () => resolve(false);
+        img.src = imgData;
+        if (img.complete) resolve(true);
       });
 
       const imgWidth = img.width || 180;
       const imgHeight = img.height || 250;
       const ratio = imgWidth / imgHeight;
 
-      // Ajouter une nouvelle page pour le justificatif
+      // Ajouter une nouvelle page dédiée pour cette pièce justificative
       doc.addPage();
       doc.setFont("helvetica", "bold");
       doc.setFontSize(14);
       doc.setTextColor(black[0], black[1], black[2]);
-      doc.text("DOCUMENT JUSTIFICATIF", 14, 20);
+      const proofHeader = imageProofs.length > 1
+        ? `DOCUMENT JUSTIFICATIF (${idx + 1}/${imageProofs.length})`
+        : "DOCUMENT JUSTIFICATIF";
+      doc.text(proofHeader, 14, 20);
 
       let printWidth = 180;
       let printHeight = printWidth / ratio;
@@ -419,7 +461,7 @@ export async function generateReceiptPDFBase64(
       // Centrer l'image horizontalement (la largeur dispo est 180, marge gauche 14)
       const xOffset = 14 + (180 - printWidth) / 2;
       
-      doc.addImage(proofImageBase64, imgFormat, xOffset, 25, printWidth, printHeight, undefined, 'FAST');
+      doc.addImage(imgData, imgFormat, xOffset, 25, printWidth, printHeight, undefined, 'FAST');
     } catch (err) {
       console.warn("Could not add proof image to PDF", err);
     }
@@ -483,25 +525,30 @@ export async function generateReceiptPDFBase64(
     console.warn("Could not render Octacore footer on all pages", err);
   }
 
-  // Si le justificatif est un document PDF scanné, on fusionne ses pages dans le reçu
-  const isPdfDoc = proofImageBase64 && (proofImageBase64.startsWith("data:application/pdf") || proofImageBase64.includes("application/pdf"));
-  if (isPdfDoc) {
+  // Si le justificatif comporte des documents PDF scannés, on fusionne leurs pages
+  if (pdfProofs.length > 0) {
     try {
       const receiptPdfData = doc.output("arraybuffer");
       const mergedPdf = await PDFDocument.load(receiptPdfData);
 
-      const proofBase64Clean = proofImageBase64.includes("base64,")
-        ? proofImageBase64.split("base64,")[1]
-        : proofImageBase64;
-      const proofBytes = Uint8Array.from(atob(proofBase64Clean), (c) => c.charCodeAt(0));
-      const proofPdf = await PDFDocument.load(proofBytes);
+      for (const pdfItem of pdfProofs) {
+        try {
+          const proofBase64Clean = pdfItem.includes("base64,")
+            ? pdfItem.split("base64,")[1]
+            : pdfItem;
+          const proofBytes = Uint8Array.from(atob(proofBase64Clean), (c) => c.charCodeAt(0));
+          const proofPdf = await PDFDocument.load(proofBytes);
 
-      const copiedPages = await mergedPdf.copyPages(proofPdf, proofPdf.getPageIndices());
-      copiedPages.forEach((page) => mergedPdf.addPage(page));
+          const copiedPages = await mergedPdf.copyPages(proofPdf, proofPdf.getPageIndices());
+          copiedPages.forEach((page) => mergedPdf.addPage(page));
+        } catch (singleErr) {
+          console.warn("Could not merge individual PDF proof", singleErr);
+        }
+      }
 
       return await mergedPdf.saveAsBase64({ dataUri: true });
     } catch (err) {
-      console.warn("Could not merge PDF proof into receipt PDF", err);
+      console.warn("Could not merge PDF proofs into receipt PDF", err);
     }
   }
 

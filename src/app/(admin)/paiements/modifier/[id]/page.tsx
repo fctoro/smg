@@ -7,7 +7,7 @@ import { useClubData } from "@/context/ClubDataContext";
 import { PaymentMethod, PaymentStatus } from "@/types/club";
 import { getPlayerFullName } from "@/lib/club/metrics";
 import { updatePaymentInSupabase } from "@/lib/club/supabase-crud";
-import { validatePaymentPhotoFile, getPaymentPhotoPreviewUrl, uploadPaymentPhotoToSupabase, isPdfProof } from "@/lib/club/payment-photo-utils";
+import { validatePaymentPhotoFile, getPaymentPhotoPreviewUrl, uploadPaymentPhotosToSupabase, isPdfProof, extractPhotoUrlsFromRemark } from "@/lib/club/payment-photo-utils";
 import { ToastNotification } from "@/components/ui/toast/ToastNotification";
 
 const inputClassName =
@@ -33,10 +33,10 @@ export default function ModifyPaymentPage({ params }: { params: Promise<{ id: st
   const [datePaiement, setDatePaiement] = useState("");
   const [error, setError] = useState<string>("");
   const [loading, setLoading] = useState(true);
-  const [paymentPhoto, setPaymentPhoto] = useState<File | null>(null);
-  const [paymentPhotoPreview, setPaymentPhotoPreview] = useState<string | null>(null);
+  const [existingPhotoUrls, setExistingPhotoUrls] = useState<string[]>([]);
+  const [newPaymentPhotos, setNewPaymentPhotos] = useState<File[]>([]);
+  const [newPhotoPreviews, setNewPhotoPreviews] = useState<{ file: File; url: string; name: string; isPdf: boolean }[]>([]);
   const [paymentPhotoError, setPaymentPhotoError] = useState<string | null>(null);
-  const [existingPhotoUrl, setExistingPhotoUrl] = useState<string | null>(null);
   const [toast, setToast] = useState<{ message: string; type?: "success" | "error" | "info" } | null>(null);
 
   const searchContainerRef = { current: null as HTMLDivElement | null };
@@ -68,10 +68,10 @@ export default function ModifyPaymentPage({ params }: { params: Promise<{ id: st
       setTaux(payment.taux || 0);
       let rawRemarque = payment.remarque || "";
       
-      const proofMatch = rawRemarque.match(/\[JUSTIFICATIF:(.+?)\]/);
-      if (proofMatch) {
-        setExistingPhotoUrl(proofMatch[1]);
-        rawRemarque = rawRemarque.replace(/\[JUSTIFICATIF:.+?\]/, "").trim();
+      const proofMatches = extractPhotoUrlsFromRemark(rawRemarque);
+      if (proofMatches.length > 0) {
+        setExistingPhotoUrls(proofMatches);
+        rawRemarque = rawRemarque.replace(/\[JUSTIFICATIF:.+?\]/g, "").trim();
       }
 
       let parsedTotalDue = 0;
@@ -158,36 +158,55 @@ export default function ModifyPaymentPage({ params }: { params: Promise<{ id: st
   };
 
   const handlePaymentPhotoChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0] ?? null;
-    const validation = validatePaymentPhotoFile(file);
+    const selectedFiles = Array.from(event.target.files || []);
+    if (selectedFiles.length === 0) return;
 
-    if (!validation.valid) {
-      setPaymentPhoto(null);
-      setPaymentPhotoPreview(null);
-      setPaymentPhotoError(validation.error ?? "Erreur de validation du fichier.");
-      return;
+    const newPreviews: { file: File; url: string; name: string; isPdf: boolean }[] = [];
+    let hasError = false;
+
+    for (const file of selectedFiles) {
+      const validation = validatePaymentPhotoFile(file);
+      if (!validation.valid) {
+        setPaymentPhotoError(validation.error ?? "Erreur de validation d'un fichier.");
+        hasError = true;
+        break;
+      }
+      newPreviews.push({
+        file,
+        url: getPaymentPhotoPreviewUrl(file) || "",
+        name: file.name,
+        isPdf: isPdfProof(file.name),
+      });
     }
 
-    if (paymentPhotoPreview?.startsWith("blob:")) {
-      URL.revokeObjectURL(paymentPhotoPreview);
+    if (!hasError) {
+      setNewPaymentPhotos((prev) => [...prev, ...selectedFiles]);
+      setNewPhotoPreviews((prev) => [...prev, ...newPreviews]);
+      setPaymentPhotoError(null);
     }
-
-    const previewUrl = getPaymentPhotoPreviewUrl(file);
-    setPaymentPhoto(file);
-    setPaymentPhotoPreview(previewUrl);
-    setPaymentPhotoError(null);
+    event.target.value = "";
   };
 
-  const handleRemovePhoto = () => {
-    if (paymentPhoto) {
-      setPaymentPhoto(null);
-      setPaymentPhotoPreview(null);
-    } else {
-      setExistingPhotoUrl(null);
-    }
+  const handleRemoveExistingPhoto = (index: number) => {
+    setExistingPhotoUrls((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const activePhotoUrl = paymentPhotoPreview || existingPhotoUrl;
+  const handleRemoveNewPhoto = (index: number) => {
+    setNewPhotoPreviews((prev) => {
+      const item = prev[index];
+      if (item?.url?.startsWith("blob:")) URL.revokeObjectURL(item.url);
+      return prev.filter((_, i) => i !== index);
+    });
+    setNewPaymentPhotos((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  useEffect(() => {
+    return () => {
+      newPhotoPreviews.forEach((p) => {
+        if (p.url.startsWith("blob:")) URL.revokeObjectURL(p.url);
+      });
+    };
+  }, [newPhotoPreviews]);
 
   const handleSubmit = async () => {
     setError("");
@@ -205,23 +224,24 @@ export default function ModifyPaymentPage({ params }: { params: Promise<{ id: st
       const montantUS = devise === "US" ? montant : (taux > 0 ? montant / taux : 0);
       const montantHTG = devise === "HTG" ? montant : 0;
 
-      // Upload photo if provided
-      let paymentPhotoUrl = null;
-      if (paymentPhoto) {
-        paymentPhotoUrl = await uploadPaymentPhotoToSupabase(paymentPhoto);
-      }
+      // Upload newly added photos if any
+      const newlyUploadedUrls = newPaymentPhotos.length > 0
+        ? await uploadPaymentPhotosToSupabase(newPaymentPhotos)
+        : [];
 
-      // Build remark with photo URL if provided or preserved
+      // Combine preserved existing URLs + newly uploaded URLs
+      const allPhotoUrls = [...existingPhotoUrls, ...newlyUploadedUrls];
+
+      // Build remark with photo URLs
       const adhesionPart = adhesionInfo ? `[ADHESION:${adhesionInfo.code}] [PLAN:${adhesionInfo.plan}] ` : "";
       const rabaisPart = rabaisValue > 0 ? `[RABAIS:${rabaisType === "percent" ? `${rabaisValue}%` : `$${rabaisValue}`}] ` : "";
       const totalDuePart = typeof totalDue === "number" ? `[TOTAL_DUE:${totalDue}] ` : "";
       
       let finalRemarque = `${adhesionPart}${rabaisPart}${totalDuePart}${description.trim()}`.trim() || "Paiement complémentaire";
       
-      const photoUrlToSave = paymentPhotoUrl || existingPhotoUrl;
-      if (photoUrlToSave) {
-        const paymentPhotoNote = ` [JUSTIFICATIF:${photoUrlToSave}]`;
-        finalRemarque = `${finalRemarque}${paymentPhotoNote}`.trim();
+      if (allPhotoUrls.length > 0) {
+        const paymentPhotoNotes = allPhotoUrls.map((u) => ` [JUSTIFICATIF:${u}]`).join("");
+        finalRemarque = `${finalRemarque}${paymentPhotoNotes}`.trim();
       }
 
       const paymentData = {
@@ -504,73 +524,108 @@ export default function ModifyPaymentPage({ params }: { params: Promise<{ id: st
 
         {/* Photo upload section */}
         <div className="md:col-span-2 xl:col-span-3">
-          <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
-            Justificatif de paiement (optionnel)
-          </label>
-          <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800/40">
-            <div className="flex flex-row items-center justify-between gap-4">
-              {/* Left: Preview & Input */}
-              <div className="flex flex-col sm:flex-row sm:items-center gap-4 flex-1 min-w-0">
-                {activePhotoUrl && (
-                  <div className="relative h-16 w-16 shrink-0 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden bg-white dark:bg-gray-800 flex items-center justify-center">
-                    {isPdfProof(paymentPhoto?.name || activePhotoUrl) ? (
-                      <a
-                        href={activePhotoUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex flex-col items-center justify-center text-red-600 hover:text-red-700 p-1"
-                        title="Ouvrir le document PDF"
+          <div className="flex items-center justify-between mb-1.5">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-400">
+              Pièces justificatives / documents scannés (JPG, PNG, PDF... max 10 Mo par fichier)
+            </label>
+            {(existingPhotoUrls.length + newPhotoPreviews.length) > 0 && (
+              <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-brand-50 text-brand-600 dark:bg-brand-500/20 dark:text-brand-400">
+                {existingPhotoUrls.length + newPhotoPreviews.length} pièce{(existingPhotoUrls.length + newPhotoPreviews.length) > 1 ? "s" : ""}
+              </span>
+            )}
+          </div>
+          <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800/40 space-y-3">
+            <input
+              type="file"
+              multiple
+              accept="image/*,application/pdf,.pdf,.jpg,.jpeg,.png,.webp"
+              onChange={handlePaymentPhotoChange}
+              className="block w-full text-sm text-gray-600 file:mr-4 file:rounded-lg file:border-0 file:bg-brand-500 file:px-4 file:py-2 file:text-sm file:font-medium file:text-white hover:file:bg-brand-600 cursor-pointer"
+            />
+            {paymentPhotoError && <p className="text-xs text-red-650 font-semibold">{paymentPhotoError}</p>}
+            
+            {/* Grid of existing + newly added proofs */}
+            {(existingPhotoUrls.length > 0 || newPhotoPreviews.length > 0) && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 pt-2 border-t border-gray-200 dark:border-gray-700">
+                {/* Existing uploaded photos */}
+                {existingPhotoUrls.map((url, idx) => {
+                  const isPdf = isPdfProof(url);
+                  return (
+                    <div key={`existing-${idx}`} className="relative flex items-center gap-2.5 p-2 rounded-xl border border-gray-200 bg-white shadow-xs dark:border-gray-700 dark:bg-gray-800">
+                      {isPdf ? (
+                        <a
+                          href={url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="h-12 w-12 shrink-0 flex flex-col items-center justify-center rounded-lg bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 dark:bg-red-950/30 dark:border-red-900/40"
+                          title="Ouvrir le PDF"
+                        >
+                          <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                          </svg>
+                          <span className="text-[8px] font-bold">PDF</span>
+                        </a>
+                      ) : (
+                        <a href={url} target="_blank" rel="noopener noreferrer" className="h-12 w-12 shrink-0">
+                          <img src={url} alt="Justificatif" className="h-12 w-12 rounded-lg object-cover border border-gray-200 dark:border-gray-700" />
+                        </a>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-semibold text-gray-900 dark:text-white truncate">
+                          Justificatif #{idx + 1}
+                        </p>
+                        <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium">
+                          Enregistré sur le serveur
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveExistingPhoto(idx)}
+                        className="p-1 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                        title="Supprimer cette pièce"
                       >
-                        <svg className="w-6 h-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </div>
+                  );
+                })}
+
+                {/* Newly added photos */}
+                {newPhotoPreviews.map((item, idx) => (
+                  <div key={`new-${idx}`} className="relative flex items-center gap-2.5 p-2 rounded-xl border border-brand-200 bg-brand-50/40 shadow-xs dark:border-brand-800 dark:bg-brand-950/20">
+                    {item.isPdf ? (
+                      <div className="h-12 w-12 shrink-0 flex items-center justify-center rounded-lg bg-red-50 text-red-600 border border-red-200 dark:bg-red-950/30 dark:border-red-900/40">
+                        <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
                         </svg>
-                        <span className="text-[9px] font-bold text-red-700 dark:text-red-300">PDF</span>
-                      </a>
+                      </div>
                     ) : (
-                      <img src={activePhotoUrl} alt="Justificatif" className="h-full w-full object-cover" />
+                      <img src={item.url} alt={item.name} className="h-12 w-12 shrink-0 rounded-lg object-cover border border-gray-200 dark:border-gray-700" />
                     )}
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-semibold text-gray-900 dark:text-white truncate" title={item.name}>
+                        {item.name}
+                      </p>
+                      <p className="text-[11px] text-brand-600 dark:text-brand-400 font-medium">
+                        Nouveau à téléverser
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveNewPhoto(idx)}
+                      className="p-1 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                      title="Supprimer cette pièce"
+                    >
+                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
                   </div>
-                )}
-                
-                <div className="flex-1 min-w-0 space-y-2">
-                  <input
-                    type="file"
-                    accept="image/*,application/pdf,.pdf,.jpg,.jpeg,.png,.webp"
-                    onChange={handlePaymentPhotoChange}
-                    className="block w-full text-sm text-gray-600 file:mr-4 file:rounded-lg file:border-0 file:bg-brand-500 file:px-4 file:py-2 file:text-sm file:font-medium file:text-white hover:file:bg-brand-600"
-                  />
-                  
-                  {paymentPhotoError && <p className="text-xs text-red-650 font-semibold">{paymentPhotoError}</p>}
-                  
-                  {/* Status text */}
-                  <div className="text-xs text-gray-500 dark:text-gray-400">
-                    {paymentPhoto ? (
-                      <span className="text-brand-650 font-bold">Nouveau fichier : {paymentPhoto.name}</span>
-                    ) : existingPhotoUrl ? (
-                      <span>Justificatif actuellement enregistré.</span>
-                    ) : (
-                      <span>Aucun justificatif sélectionné. Formats: JPG, PNG, PDF... (max 10 Mo)</span>
-                    )}
-                  </div>
-                </div>
+                ))}
               </div>
-
-              {/* Right: Actions Column */}
-              {activePhotoUrl && (
-                <div className="shrink-0 flex items-center border-l border-gray-200 dark:border-gray-700 pl-4 h-12">
-                  <button
-                    type="button"
-                    onClick={handleRemovePhoto}
-                    title="Supprimer le justificatif"
-                    className="h-9 w-9 rounded-lg flex items-center justify-center text-red-500 hover:text-red-650 hover:bg-red-50 dark:hover:bg-red-500/10 transition-all cursor-pointer"
-                  >
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                  </button>
-                </div>
-              )}
-            </div>
+            )}
           </div>
         </div>
 

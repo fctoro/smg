@@ -20,7 +20,7 @@ import { formatClubCurrency, formatClubDate, getPlayerFullName } from "@/lib/clu
 import { updatePaymentInSupabase, deletePaymentInSupabase } from "@/lib/club/supabase-crud";
 import { calculateDiscountedAmount, parseReductionFromRemark } from "@/lib/club/payment-reduction-utils";
 import { ImageModal } from "@/components/club/modals/ImageModal";
-import { extractPhotoUrlFromRemark, extractPhotoUrlsFromRemark, isPdfProof, validatePaymentPhotoFile, getPaymentPhotoPreviewUrl, uploadPaymentPhotoToSupabase } from "@/lib/club/payment-photo-utils";
+import { extractPhotoUrlFromRemark, extractPhotoUrlsFromRemark, isPdfProof, validatePaymentPhotoFile, getPaymentPhotoPreviewUrl, uploadPaymentPhotosToSupabase, filesToBase64 } from "@/lib/club/payment-photo-utils";
 import { BellIcon, PencilIcon, TrashBinIcon } from "@/icons";
 import { ActiveBellIcon } from "@/icons/ActiveBellIcon";
 import { ConfirmModal } from "@/components/ui/modal/ConfirmModal";
@@ -90,8 +90,8 @@ export default function PaymentsPage() {
   const [customMessageText, setCustomMessageText] = useState("");
   const [paymentToDelete, setPaymentToDelete] = useState<string | null>(null);
 
-  const [paymentPhoto, setPaymentPhoto] = useState<File | null>(null);
-  const [paymentPhotoPreview, setPaymentPhotoPreview] = useState<string | null>(null);
+  const [paymentPhotos, setPaymentPhotos] = useState<File[]>([]);
+  const [paymentPhotoPreviews, setPaymentPhotoPreviews] = useState<{ file: File; url: string; name: string; isPdf: boolean }[]>([]);
   const [paymentPhotoError, setPaymentPhotoError] = useState<string | null>(null);
   const [nombreDeMois, setNombreDeMois] = useState<number>(1);
   const [isMonthlyPlan, setIsMonthlyPlan] = useState<boolean>(false);
@@ -192,8 +192,11 @@ export default function PaymentsPage() {
     const todayStr = new Date().toLocaleDateString("sv"); // Format YYYY-MM-DD en heure locale
     setNewPaymentDate(todayStr);
     setEditError("");
-    setPaymentPhoto(null);
-    setPaymentPhotoPreview(null);
+    paymentPhotoPreviews.forEach((p) => {
+      if (p.url.startsWith("blob:")) URL.revokeObjectURL(p.url);
+    });
+    setPaymentPhotos([]);
+    setPaymentPhotoPreviews([]);
     setPaymentPhotoError(null);
 
     const planLabel = getPaymentPlanLabel(payment.remarque);
@@ -213,33 +216,51 @@ export default function PaymentsPage() {
     if (isSaving) return;
     setEditingPayment(null);
     setEditError("");
-    if (paymentPhotoPreview?.startsWith("blob:")) {
-      URL.revokeObjectURL(paymentPhotoPreview);
-    }
-    setPaymentPhoto(null);
-    setPaymentPhotoPreview(null);
+    paymentPhotoPreviews.forEach((p) => {
+      if (p.url.startsWith("blob:")) URL.revokeObjectURL(p.url);
+    });
+    setPaymentPhotos([]);
+    setPaymentPhotoPreviews([]);
     setPaymentPhotoError(null);
   };
 
   const handlePaymentPhotoChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0] ?? null;
-    const validation = validatePaymentPhotoFile(file);
+    const selectedFiles = Array.from(event.target.files || []);
+    if (selectedFiles.length === 0) return;
 
-    if (!validation.valid) {
-      setPaymentPhoto(null);
-      setPaymentPhotoPreview(null);
-      setPaymentPhotoError(validation.error ?? "Erreur de validation du fichier.");
-      return;
+    const newPreviews: { file: File; url: string; name: string; isPdf: boolean }[] = [];
+    let hasError = false;
+
+    for (const file of selectedFiles) {
+      const validation = validatePaymentPhotoFile(file);
+      if (!validation.valid) {
+        setPaymentPhotoError(validation.error ?? "Erreur de validation d'un fichier.");
+        hasError = true;
+        break;
+      }
+      newPreviews.push({
+        file,
+        url: getPaymentPhotoPreviewUrl(file) || "",
+        name: file.name,
+        isPdf: isPdfProof(file.name),
+      });
     }
 
-    if (paymentPhotoPreview?.startsWith("blob:")) {
-      URL.revokeObjectURL(paymentPhotoPreview);
+    if (!hasError) {
+      setPaymentPhotos((prev) => [...prev, ...selectedFiles]);
+      setPaymentPhotoPreviews((prev) => [...prev, ...newPreviews]);
+      setPaymentPhotoError(null);
     }
+    event.target.value = "";
+  };
 
-    const previewUrl = getPaymentPhotoPreviewUrl(file);
-    setPaymentPhoto(file);
-    setPaymentPhotoPreview(previewUrl);
-    setPaymentPhotoError(null);
+  const handleRemovePhoto = (index: number) => {
+    setPaymentPhotoPreviews((prev) => {
+      const item = prev[index];
+      if (item?.url?.startsWith("blob:")) URL.revokeObjectURL(item.url);
+      return prev.filter((_, i) => i !== index);
+    });
+    setPaymentPhotos((prev) => prev.filter((_, i) => i !== index));
   };
 
   const handleEditPayment = async () => {
@@ -251,8 +272,8 @@ export default function PaymentsPage() {
     setIsSaving(true);
     setEditError("");
     try {
-      const uploadPromise = paymentPhoto ? uploadPaymentPhotoToSupabase(paymentPhoto) : Promise.resolve(null);
-      const paymentPhotoUrl = await uploadPromise;
+      const uploadPromise = paymentPhotos.length > 0 ? uploadPaymentPhotosToSupabase(paymentPhotos) : Promise.resolve([]);
+      const paymentPhotoUrls = await uploadPromise;
 
       const totalAmountPaid = editingPayment.montant + newAmount;
       const montantUS = editingPayment.devise === "US"
@@ -260,7 +281,9 @@ export default function PaymentsPage() {
         : (editingPayment.taux ? totalAmountPaid / editingPayment.taux : 0);
       const montantHTG = editingPayment.devise === "HTG" ? totalAmountPaid : 0;
       
-      const paymentPhotoNote = paymentPhotoUrl ? ` [JUSTIFICATIF:${paymentPhotoUrl}]` : paymentPhoto ? ` [JUSTIFICATIF:${paymentPhoto.name}]` : "";
+      const paymentPhotoNotes = (paymentPhotoUrls && paymentPhotoUrls.length > 0)
+        ? paymentPhotoUrls.map((url) => ` [JUSTIFICATIF:${url}]`).join("")
+        : paymentPhotos.map((p) => ` [JUSTIFICATIF:${p.name}]`).join("");
 
       let baseRemarque = editingPayment.remarque || "";
       if (isMonthlyPlan) {
@@ -271,7 +294,7 @@ export default function PaymentsPage() {
         }
       }
 
-      const finalRemarque = `${baseRemarque}${paymentPhotoNote}`.trim();
+      const finalRemarque = `${baseRemarque}${paymentPhotoNotes}`.trim();
 
       await updatePaymentInSupabase(editingPayment.id, {
         montant: totalAmountPaid,
@@ -312,6 +335,8 @@ export default function PaymentsPage() {
             const totalRubriquesMatch = finalRemarque.match(/\[TOTAL_DUE:\s*([\d.]+)\s*\]/i);
             const totalRubriques = totalRubriquesMatch ? parseFloat(totalRubriquesMatch[1]) : undefined;
 
+            const proofBase64List = await filesToBase64(paymentPhotos);
+
             const receiptBase64 = await generateReceiptPDFBase64(
               player,
               [updatedPaymentForPdf],
@@ -320,7 +345,7 @@ export default function PaymentsPage() {
               player.parentTelephone || player.telephone || "",
               emailToSend,
               player.parentAdresse || player.adresse || "",
-              paymentPhotoPreview,
+              proofBase64List,
               false,
               totalRubriques
             );
@@ -343,7 +368,7 @@ export default function PaymentsPage() {
         }
       }
 
-      setEditingPayment(null);
+      closeEditModal();
     } catch (error) {
       setEditError(error instanceof Error ? error.message : "Impossible d'enregistrer la modification.");
     } finally {
@@ -377,20 +402,21 @@ export default function PaymentsPage() {
       const parentNom = nomParts[0] || "";
       const parentPrenom = nomParts.slice(1).join(" ") || "";
       
-      let proofBase64: string | null = null;
-      const proofMatch = payment.remarque?.match(/\[JUSTIFICATIF:(.+?)\]/);
-      if (proofMatch && proofMatch[1]) {
+      const proofUrls = extractPhotoUrlsFromRemark(payment.remarque);
+      const proofBase64List: string[] = [];
+      for (const proofUrl of proofUrls) {
         try {
-          const res = await fetch(proofMatch[1]);
+          const res = await fetch(proofUrl);
           const blob = await res.blob();
-          proofBase64 = await new Promise<string>((resolve, reject) => {
+          const b64 = await new Promise<string>((resolve, reject) => {
             const reader = new FileReader();
             reader.onloadend = () => resolve(reader.result as string);
             reader.onerror = reject;
             reader.readAsDataURL(blob);
           });
+          if (b64) proofBase64List.push(b64);
         } catch (e) {
-          console.warn("Erreur lors de la récupération de la preuve", e);
+          console.warn("Erreur lors de la récupération de la preuve", proofUrl, e);
         }
       }
       
@@ -406,7 +432,7 @@ export default function PaymentsPage() {
         player.parentTelephone || player.telephone || "",
         player.parentEmail || player.email || "",
         player.parentAdresse || player.adresse || "",
-        proofBase64,
+        proofBase64List,
         false,
         totalRubriques
       );
@@ -444,20 +470,21 @@ export default function PaymentsPage() {
       const parentNom = nomParts[0] || "";
       const parentPrenom = nomParts.slice(1).join(" ") || "";
       
-      let proofBase64: string | null = null;
-      const proofMatch = payment.remarque?.match(/\[JUSTIFICATIF:(.+?)\]/);
-      if (proofMatch && proofMatch[1]) {
+      const proofUrls = extractPhotoUrlsFromRemark(payment.remarque);
+      const proofBase64List: string[] = [];
+      for (const proofUrl of proofUrls) {
         try {
-          const res = await fetch(proofMatch[1]);
+          const res = await fetch(proofUrl);
           const blob = await res.blob();
-          proofBase64 = await new Promise<string>((resolve, reject) => {
+          const b64 = await new Promise<string>((resolve, reject) => {
             const reader = new FileReader();
             reader.onloadend = () => resolve(reader.result as string);
             reader.onerror = reject;
             reader.readAsDataURL(blob);
           });
+          if (b64) proofBase64List.push(b64);
         } catch (e) {
-          console.warn("Erreur lors de la récupération de la preuve", e);
+          console.warn("Erreur lors de la récupération de la preuve", proofUrl, e);
         }
       }
       
@@ -473,7 +500,7 @@ export default function PaymentsPage() {
         player.parentTelephone || player.telephone || "",
         player.parentEmail || player.email || "",
         player.parentAdresse || player.adresse || "",
-        proofBase64,
+        proofBase64List,
         true,
         totalRubriques
       );
@@ -1223,28 +1250,58 @@ export default function PaymentsPage() {
               })()}
               
               <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800/40">
-                <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-400">
-                  Justificatif de paiement (Optionnel)
-                </label>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-400">
+                    Nouveau(x) justificatif(s) (Optionnel - JPG, PNG, PDF... max 10 Mo)
+                  </label>
+                  {paymentPhotoPreviews.length > 0 && (
+                    <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-brand-50 text-brand-600 dark:bg-brand-500/20 dark:text-brand-400">
+                      {paymentPhotoPreviews.length} pièce{paymentPhotoPreviews.length > 1 ? "s" : ""}
+                    </span>
+                  )}
+                </div>
                 <input
                   type="file"
+                  multiple
                   accept="image/*,application/pdf,.pdf,.jpg,.jpeg,.png,.webp"
                   onChange={handlePaymentPhotoChange}
-                  className="block w-full text-sm text-gray-600 file:mr-4 file:rounded-lg file:border-0 file:bg-brand-500 file:px-4 file:py-2 file:text-sm file:font-medium file:text-white hover:file:bg-brand-600"
+                  className="block w-full text-sm text-gray-600 file:mr-4 file:rounded-lg file:border-0 file:bg-brand-500 file:px-4 file:py-2 file:text-sm file:font-medium file:text-white hover:file:bg-brand-600 cursor-pointer"
                 />
                 {paymentPhotoError && <p className="mt-2 text-sm text-red-600">{paymentPhotoError}</p>}
-                {paymentPhoto && !paymentPhotoError && (
-                  <div className="mt-3 flex items-center gap-3">
-                    {isPdfProof(paymentPhoto.name) ? (
-                      <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-700 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-300">
-                        <svg className="h-5 w-5 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                        </svg>
-                        <span>Document PDF : {paymentPhoto.name}</span>
+                
+                {paymentPhotoPreviews.length > 0 && (
+                  <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    {paymentPhotoPreviews.map((item, idx) => (
+                      <div key={idx} className="relative flex items-center gap-2.5 p-2 rounded-xl border border-gray-200 bg-white shadow-xs dark:border-gray-700 dark:bg-gray-800">
+                        {item.isPdf ? (
+                          <div className="h-10 w-10 shrink-0 flex items-center justify-center rounded-lg bg-red-50 text-red-600 border border-red-200 dark:bg-red-950/30 dark:border-red-900/40">
+                            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                            </svg>
+                          </div>
+                        ) : (
+                          <img src={item.url} alt={item.name} className="h-10 w-10 shrink-0 rounded-lg object-cover border border-gray-200 dark:border-gray-700" />
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-semibold text-gray-900 dark:text-white truncate" title={item.name}>
+                            {item.name}
+                          </p>
+                          <p className="text-[10px] text-gray-500 dark:text-gray-400">
+                            Pièce #{idx + 1}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleRemovePhoto(idx)}
+                          className="p-1 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                          title="Supprimer cette pièce"
+                        >
+                          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
                       </div>
-                    ) : (
-                      <img src={paymentPhotoPreview || ""} alt="Aperçu" className="h-16 w-16 rounded-lg object-cover shadow-sm" />
-                    )}
+                    ))}
                   </div>
                 )}
               </div>

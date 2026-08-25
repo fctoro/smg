@@ -7,7 +7,7 @@ import { useClubData } from "@/context/ClubDataContext";
 import { PaymentMethod, PaymentStatus, Player } from "@/types/club";
 import { getPlayerFullName } from "@/lib/club/metrics";
 import { addPaymentToSupabase, addInvoiceToSupabase } from "@/lib/club/supabase-crud";
-import { validatePaymentPhotoFile, getPaymentPhotoPreviewUrl, uploadPaymentPhotoToSupabase, isPdfProof } from "@/lib/club/payment-photo-utils";
+import { validatePaymentPhotoFile, getPaymentPhotoPreviewUrl, uploadPaymentPhotosToSupabase, isPdfProof } from "@/lib/club/payment-photo-utils";
 
 const inputClassName =
   "h-11 w-full rounded-lg border border-gray-300 bg-transparent px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs placeholder:text-gray-400 focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90";
@@ -158,8 +158,8 @@ export default function NewPaymentPage() {
   const [montantDonne, setMontantDonne] = useState<number>(0);
   const [error, setError] = useState<string>("");
 
-  const [paymentPhoto, setPaymentPhoto] = useState<File | null>(null);
-  const [paymentPhotoPreview, setPaymentPhotoPreview] = useState<string | null>(null);
+  const [paymentPhotos, setPaymentPhotos] = useState<File[]>([]);
+  const [paymentPhotoPreviews, setPaymentPhotoPreviews] = useState<{ file: File; url: string; name: string; isPdf: boolean }[]>([]);
   const [paymentPhotoError, setPaymentPhotoError] = useState<string | null>(null);
 
   const playerOptions = useMemo(() => players, [players]);
@@ -203,36 +203,52 @@ export default function NewPaymentPage() {
     }
   }, [selectedPlayer]);
 
-
-
   const handlePaymentPhotoChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0] ?? null;
-    const validation = validatePaymentPhotoFile(file);
+    const selectedFiles = Array.from(event.target.files || []);
+    if (selectedFiles.length === 0) return;
 
-    if (!validation.valid) {
-      setPaymentPhoto(null);
-      setPaymentPhotoPreview(null);
-      setPaymentPhotoError(validation.error ?? "Erreur de validation du fichier.");
-      return;
+    const newPreviews: { file: File; url: string; name: string; isPdf: boolean }[] = [];
+    let hasError = false;
+
+    for (const file of selectedFiles) {
+      const validation = validatePaymentPhotoFile(file);
+      if (!validation.valid) {
+        setPaymentPhotoError(validation.error ?? "Erreur de validation d'un fichier.");
+        hasError = true;
+        break;
+      }
+      newPreviews.push({
+        file,
+        url: getPaymentPhotoPreviewUrl(file) || "",
+        name: file.name,
+        isPdf: isPdfProof(file.name),
+      });
     }
 
-    if (paymentPhotoPreview?.startsWith("blob:")) {
-      URL.revokeObjectURL(paymentPhotoPreview);
+    if (!hasError) {
+      setPaymentPhotos((prev) => [...prev, ...selectedFiles]);
+      setPaymentPhotoPreviews((prev) => [...prev, ...newPreviews]);
+      setPaymentPhotoError(null);
     }
+    event.target.value = "";
+  };
 
-    const previewUrl = getPaymentPhotoPreviewUrl(file);
-    setPaymentPhoto(file);
-    setPaymentPhotoPreview(previewUrl);
-    setPaymentPhotoError(null);
+  const handleRemovePhoto = (index: number) => {
+    setPaymentPhotoPreviews((prev) => {
+      const item = prev[index];
+      if (item?.url?.startsWith("blob:")) URL.revokeObjectURL(item.url);
+      return prev.filter((_, i) => i !== index);
+    });
+    setPaymentPhotos((prev) => prev.filter((_, i) => i !== index));
   };
 
   useEffect(() => {
     return () => {
-      if (paymentPhotoPreview?.startsWith("blob:")) {
-        URL.revokeObjectURL(paymentPhotoPreview);
-      }
+      paymentPhotoPreviews.forEach((p) => {
+        if (p.url.startsWith("blob:")) URL.revokeObjectURL(p.url);
+      });
     };
-  }, [paymentPhotoPreview]);
+  }, [paymentPhotoPreviews]);
 
   const handleSubmit = async () => {
     setError("");
@@ -307,7 +323,7 @@ export default function NewPaymentPage() {
       const totalDueInUSD = devise === "HTG" ? (taux > 0 ? montantAvecPlan / taux : montantAvecPlan) : montantAvecPlan;
       const paymentMarkers = `[ADHESION:${adhesionCode}] [PLAN:${planCode}] [STATUT:${statusCode}] [TOTAL_DUE:${totalDueInUSD}]`;
       const finalRemarque = `${paymentMarkers} ${description.trim()} ${adhesionRemark} ${planRemark}`.trim();
-      const uploadPromise = paymentPhoto ? uploadPaymentPhotoToSupabase(paymentPhoto) : Promise.resolve(null);
+      const uploadPromise = paymentPhotos.length > 0 ? uploadPaymentPhotosToSupabase(paymentPhotos) : Promise.resolve([]);
 
       // Create invoice first
       const invoiceData = {
@@ -326,14 +342,16 @@ export default function NewPaymentPage() {
       };
 
       console.log("📄 Création de la facture et upload photo...");
-      const [paymentPhotoUrl, invoice] = await Promise.all([
+      const [paymentPhotoUrls, invoice] = await Promise.all([
         uploadPromise,
         addInvoiceToSupabase(invoiceData)
       ]);
       console.log("✅ Facture créée:", invoice);
 
-      const paymentPhotoNote = paymentPhotoUrl ? ` [JUSTIFICATIF:${paymentPhotoUrl}]` : paymentPhoto ? ` [JUSTIFICATIF:${paymentPhoto.name}]` : "";
-      const finalRemarqueWithPhoto = `${finalRemarque}${paymentPhotoNote}`.trim();
+      const paymentPhotoNotes = (paymentPhotoUrls && paymentPhotoUrls.length > 0)
+        ? paymentPhotoUrls.map((url) => ` [JUSTIFICATIF:${url}]`).join("")
+        : paymentPhotos.map((p) => ` [JUSTIFICATIF:${p.name}]`).join("");
+      const finalRemarqueWithPhoto = `${finalRemarque}${paymentPhotoNotes}`.trim();
 
       const dataToInsert = {
         playerId,
@@ -813,33 +831,58 @@ export default function NewPaymentPage() {
         </div>
 
         <div className="mt-4 rounded-xl border border-dashed border-gray-300 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800/40">
-          <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-400">
-            Justificatif de paiement / document scanné (JPG, PNG, PDF... max 10 Mo)
-          </label>
+          <div className="flex items-center justify-between mb-2">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-400">
+              Pièces justificatives / documents scannés (JPG, PNG, PDF... max 10 Mo par fichier)
+            </label>
+            {paymentPhotoPreviews.length > 0 && (
+              <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-brand-50 text-brand-600 dark:bg-brand-500/20 dark:text-brand-400">
+                {paymentPhotoPreviews.length} pièce{paymentPhotoPreviews.length > 1 ? "s" : ""}
+              </span>
+            )}
+          </div>
           <input
             type="file"
+            multiple
             accept="image/*,application/pdf,.pdf,.jpg,.jpeg,.png,.webp"
             onChange={handlePaymentPhotoChange}
-            className="block w-full text-sm text-gray-600 file:mr-4 file:rounded-lg file:border-0 file:bg-brand-500 file:px-4 file:py-2 file:text-sm file:font-medium file:text-white hover:file:bg-brand-600"
+            className="block w-full text-sm text-gray-600 file:mr-4 file:rounded-lg file:border-0 file:bg-brand-500 file:px-4 file:py-2 file:text-sm file:font-medium file:text-white hover:file:bg-brand-600 cursor-pointer"
           />
           {paymentPhotoError && <p className="mt-2 text-sm text-red-600">{paymentPhotoError}</p>}
-          {paymentPhoto && !paymentPhotoError && (
-            <div className="mt-3 flex items-center gap-3">
-              {isPdfProof(paymentPhoto.name) ? (
-                <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-700 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-300">
-                  <svg className="h-5 w-5 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                  </svg>
-                  <span>Document PDF : {paymentPhoto.name}</span>
-                </div>
-              ) : (
-                <>
-                  <span className="text-sm text-gray-600 dark:text-gray-300">Fichier sélectionné : {paymentPhoto.name}</span>
-                  {paymentPhotoPreview && (
-                    <img src={paymentPhotoPreview} alt="Aperçu du justificatif" className="h-16 w-16 rounded-lg object-cover border border-gray-200 dark:border-gray-700" />
+          
+          {paymentPhotoPreviews.length > 0 && (
+            <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+              {paymentPhotoPreviews.map((item, idx) => (
+                <div key={idx} className="relative flex items-center gap-2.5 p-2 rounded-xl border border-gray-200 bg-white shadow-xs dark:border-gray-700 dark:bg-gray-800">
+                  {item.isPdf ? (
+                    <div className="h-12 w-12 shrink-0 flex items-center justify-center rounded-lg bg-red-50 text-red-600 border border-red-200 dark:bg-red-950/30 dark:border-red-900/40">
+                      <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                      </svg>
+                    </div>
+                  ) : (
+                    <img src={item.url} alt={item.name} className="h-12 w-12 shrink-0 rounded-lg object-cover border border-gray-200 dark:border-gray-700" />
                   )}
-                </>
-              )}
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-semibold text-gray-900 dark:text-white truncate" title={item.name}>
+                      {item.name}
+                    </p>
+                    <p className="text-[11px] text-gray-500 dark:text-gray-400">
+                      Pièce #{idx + 1} • {item.isPdf ? "PDF" : "Image"}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleRemovePhoto(idx)}
+                    className="p-1 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                    title="Supprimer cette pièce"
+                  >
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              ))}
             </div>
           )}
         </div>

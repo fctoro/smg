@@ -310,26 +310,48 @@ export const updateMessageStatus = async (id: string, statut: "nouveau" | "lu" |
   const statusStr = statut === "nouveau" ? "pending" : statut === "inscrit" ? "enrolled" : statut === "refuse" ? "rejected" : statut === "archive" ? "archived" : "resolved";
 
   if (id.startsWith("det_") || metadata?.source_table === 'detection_registrations') {
-    if (metadata?.site_message_id) {
-      // Detections also have a corresponding site_messages entry, update it!
+    const rawId = metadata?.raw_db_id || id.replace("det_", "");
+    
+    let siteMsgId = metadata?.site_message_id;
+
+    if (!siteMsgId) {
+      try {
+        const { data: found } = await supabase
+          .from("site_messages")
+          .select("id")
+          .eq("type", "detection")
+          .filter("payload->>id", "eq", String(rawId))
+          .maybeSingle();
+        if (found?.id) {
+          siteMsgId = found.id;
+        }
+      } catch (e) {}
+    }
+
+    if (siteMsgId) {
       await supabase
         .from("site_messages")
         .update({ is_read: isRead, status: statusStr })
-        .eq("id", metadata.site_message_id);
+        .eq("id", siteMsgId);
+    } else {
+      await supabase
+        .from("site_messages")
+        .insert({
+          type: "detection",
+          status: statusStr,
+          is_read: isRead,
+          payload: { id: Number(rawId) }
+        });
     }
 
-    const rawId = metadata?.raw_db_id || id.replace("det_", "");
-    const { error } = await supabase
-      .from("detection_registrations")
-      .update({ is_read: isRead, status: statusStr })
-      .eq("id", rawId);
-
-    if (error) {
-      // Try updating without status column if it doesn't exist
+    // Safely attempt detection_registrations update if schema has columns (swallow PGRST204 if missing)
+    try {
       await supabase
         .from("detection_registrations")
-        .update({ is_read: isRead })
+        .update({ is_read: isRead, status: statusStr })
         .eq("id", rawId);
+    } catch (e) {
+      // Ignore column missing errors on detection_registrations
     }
     return;
   }

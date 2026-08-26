@@ -231,30 +231,9 @@ export default function PlayerForm({
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    const requiredSelects = [
-      { field: formValues.tailleHaut, name: "Taille du Haut" },
-      { field: formValues.tailleShort, name: "Taille du Short" }
-    ];
-
-    if (!formValues.sourceDetection) {
-      requiredSelects.push({ field: formValues.planPaiement, name: "Plan de Paiement" });
-      requiredSelects.push({ field: formValues.modePaiementChoisi, name: "Mode de règlement" });
-
-      if (!formValues.acteNaissanceUrl) {
-        alert("L'Acte de naissance est obligatoire.");
-        return;
-      }
-      if (!formValues.carteIdentiteParentUrl) {
-        alert("La Pièce d'identité du parent/tuteur est obligatoire.");
-        return;
-      }
-    }
-
-    for (const req of requiredSelects) {
-      if (!req.field || req.field === "Choisir") {
-        alert(`Le champ "${req.name}" est obligatoire.`);
-        return;
-      }
+    if (!formValues.nom?.trim() || !formValues.prenom?.trim()) {
+      alert("Le nom et le prénom du joueur sont obligatoires.");
+      return;
     }
 
     onSubmit(normalizePlayerFormValues(formValues));
@@ -495,14 +474,14 @@ export default function PlayerForm({
           </div>
 
           <div className="sm:col-span-2">
-            <label className="mb-1.5 block text-xs font-medium text-gray-700 dark:text-gray-300">Adresse domicile *</label>
-            <input required value={formValues.adresse} onChange={(e) => updateField("adresse", e.target.value)} placeholder="Rue, Quartier, Ville" className={inputClassName} />
+            <label className="mb-1.5 block text-xs font-medium text-gray-700 dark:text-gray-300">Adresse domicile</label>
+            <input value={formValues.adresse} onChange={(e) => updateField("adresse", e.target.value)} placeholder="Rue, Quartier, Ville" className={inputClassName} />
           </div>
 
           {!formValues.sourceDetection && (
             <div>
-              <label className="mb-1.5 block text-xs font-medium text-gray-700 dark:text-gray-300">École fréquentée *</label>
-              <input required value={formValues.ecole} onChange={(e) => updateField("ecole", e.target.value)} placeholder="Nom de l'établissement" className={inputClassName} />
+              <label className="mb-1.5 block text-xs font-medium text-gray-700 dark:text-gray-300">École fréquentée</label>
+              <input value={formValues.ecole} onChange={(e) => updateField("ecole", e.target.value)} placeholder="Nom de l'établissement" className={inputClassName} />
             </div>
           )}
 
@@ -868,18 +847,18 @@ export default function PlayerForm({
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div>
-            <label className="mb-1.5 block text-xs font-medium text-gray-700 dark:text-gray-300">Nom & Prénom *</label>
-            <input required value={formValues.urgenceNomPrenom} onChange={(e) => updateField("urgenceNomPrenom", e.target.value)} className={inputClassName} />
+            <label className="mb-1.5 block text-xs font-medium text-gray-700 dark:text-gray-300">Nom & Prénom</label>
+            <input value={formValues.urgenceNomPrenom} onChange={(e) => updateField("urgenceNomPrenom", e.target.value)} className={inputClassName} />
           </div>
 
           <div>
-            <label className="mb-1.5 block text-xs font-medium text-gray-700 dark:text-gray-300">Lien de parenté *</label>
-            <input required value={formValues.urgenceLien} onChange={(e) => updateField("urgenceLien", e.target.value)} placeholder="Ex: Oncle, Tante..." className={inputClassName} />
+            <label className="mb-1.5 block text-xs font-medium text-gray-700 dark:text-gray-300">Lien de parenté</label>
+            <input value={formValues.urgenceLien} onChange={(e) => updateField("urgenceLien", e.target.value)} placeholder="Ex: Oncle, Tante..." className={inputClassName} />
           </div>
 
           <div>
-            <label className="mb-1.5 block text-xs font-medium text-gray-700 dark:text-gray-300">Téléphone *</label>
-            <input required value={formValues.urgenceTelephone} onChange={(e) => updateField("urgenceTelephone", e.target.value)} className={inputClassName} />
+            <label className="mb-1.5 block text-xs font-medium text-gray-700 dark:text-gray-300">Téléphone</label>
+            <input value={formValues.urgenceTelephone} onChange={(e) => updateField("urgenceTelephone", e.target.value)} className={inputClassName} />
           </div>
 
           <div>
@@ -909,8 +888,8 @@ export default function PlayerForm({
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div>
-            <label className="mb-1.5 block text-xs font-medium text-gray-700 dark:text-gray-300">Taille du Haut (Top) *</label>
-            <select required value={formValues.tailleHaut} onChange={(e) => updateField("tailleHaut", e.target.value)} className={selectClassName}>
+            <label className="mb-1.5 block text-xs font-medium text-gray-700 dark:text-gray-300">Taille du Haut (Top)</label>
+            <select value={formValues.tailleHaut} onChange={(e) => updateField("tailleHaut", e.target.value)} className={selectClassName}>
               <option value="Choisir">Choisir</option>
               <option value="YXS">YXS (Youth Extra Small)</option>
               <option value="YS">YS (Youth Small)</option>
@@ -925,8 +904,8 @@ export default function PlayerForm({
           </div>
 
           <div>
-            <label className="mb-1.5 block text-xs font-medium text-gray-700 dark:text-gray-300">Taille du Short *</label>
-            <select required value={formValues.tailleShort} onChange={(e) => updateField("tailleShort", e.target.value)} className={selectClassName}>
+            <label className="mb-1.5 block text-xs font-medium text-gray-700 dark:text-gray-300">Taille du Short</label>
+            <select value={formValues.tailleShort} onChange={(e) => updateField("tailleShort", e.target.value)} className={selectClassName}>
               <option value="Choisir">Choisir</option>
               <option value="YXS">YXS (Youth Extra Small)</option>
               <option value="YS">YS (Youth Small)</option>

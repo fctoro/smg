@@ -13,6 +13,7 @@ import { addPlayerToSupabase } from "@/lib/club/supabase-crud";
 import { syncPlayerProgrammes } from "@/lib/club/programmes";
 import { supabase } from "@/lib/supabaseClient";
 import { generatePlayerMatricule, getCurrentSeason } from "@/lib/club/season";
+import { updateMessageStatus } from "@/lib/club/supabase-demandes";
 
 function translatePaymentMethod(val) { if (!val) return ''; const s = String(val).toLowerCase().trim(); if (s === 'transfert') return 'Transfert bancaire'; if (s === 'cash_cheque') return 'Cash/ch�que'; if (s === 'carte') return 'Carte bancaire'; return val; }
 
@@ -313,17 +314,14 @@ function NewPlayerFormContent() {
         const demandeId = searchParams.get("demandeId");
         const siteMessageId = searchParams.get("siteMessageId");
         
-        if (demandeId && demandeId.startsWith("det_")) {
-          const detId = demandeId.replace("det_", "");
-          await supabase.from("detection_registrations").update({ status: "enrolled", is_read: true }).eq("id", detId);
-        }
-
-        if (siteMessageId) {
-          // It's a detection that has a linked site_messages entry
-          await supabase.from("site_messages").update({ status: "enrolled", is_read: true }).eq("id", siteMessageId);
-        } else if (demandeId && !demandeId.startsWith("det_")) {
-          // Regular site_messages entry
-          await supabase.from("site_messages").update({ status: "enrolled", is_read: true }).eq("id", demandeId);
+        try {
+          if (siteMessageId) {
+            await updateMessageStatus(siteMessageId, "inscrit");
+          } else if (demandeId) {
+            await updateMessageStatus(demandeId, "inscrit");
+          }
+        } catch (e) {
+          console.warn("Could not update message status on player enrollment:", e);
         }
         router.push("/joueurs");
       }

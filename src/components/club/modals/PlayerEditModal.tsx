@@ -7,6 +7,7 @@ import { normalizePlayerFormValues, toPlayerFormValues } from "@/lib/club/player
 import { DEFAULT_CATEGORIES } from "@/config/dashboard.config";
 import { updatePlayerInSupabase } from "@/lib/club/supabase-crud";
 import { supabase } from "@/lib/supabaseClient";
+import { updateMessageStatus } from "@/lib/club/supabase-demandes";
 import { syncPlayerProgrammes } from "@/lib/club/programmes";
 import { ToastNotification } from "@/components/ui/toast/ToastNotification";
 
@@ -87,11 +88,13 @@ export const PlayerEditModal: React.FC<PlayerEditModalProps> = ({
       // Clear the draft once submitted successfully
       sessionStorage.removeItem(`draft_${player.id}`);
       
-      if (siteMessageId) {
-        await supabase.from("site_messages").update({ status: "enrolled", is_read: true }).eq("id", siteMessageId);
-      } else if (demandeId && !demandeId.startsWith("det_")) {
-        await supabase.from("site_messages").update({ status: "enrolled", is_read: true }).eq("id", demandeId);
-      }
+      try {
+        if (siteMessageId) {
+          await updateMessageStatus(siteMessageId, "inscrit");
+        } else if (demandeId) {
+          await updateMessageStatus(demandeId, "inscrit");
+        }
+      } catch (e) {}
       
       setSuccessMessage(
         normalized.statut === "alumni" 

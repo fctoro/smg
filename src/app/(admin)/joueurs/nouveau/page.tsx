@@ -14,15 +14,46 @@ import { syncPlayerProgrammes } from "@/lib/club/programmes";
 import { supabase } from "@/lib/supabaseClient";
 import { generatePlayerMatricule, getCurrentSeason } from "@/lib/club/season";
 import { updateMessageStatus } from "@/lib/club/supabase-demandes";
+import { ToastNotification } from "@/components/ui/toast/ToastNotification";
 
-function translatePaymentMethod(val) { if (!val) return ''; const s = String(val).toLowerCase().trim(); if (s === 'transfert') return 'Transfert bancaire'; if (s === 'cash_cheque') return 'Cash/ch�que'; if (s === 'carte') return 'Carte bancaire'; return val; }
+function translatePaymentMethod(val: any) {
+  if (!val) return 'Transfert bancaire';
+  const s = String(val).toLowerCase().trim();
+  if (s.includes('transfert')) return 'Transfert bancaire';
+  if (s.includes('cash') || s.includes('cheque') || s.includes('chèque')) return 'Cash/chèque';
+  if (s.includes('carte')) return 'Carte bancaire';
+  return 'Transfert bancaire';
+}
+
+function normalizePaymentPlan(val: any) {
+  if (!val) return 'PLAN #1 (Annuel)';
+  const s = String(val).toLowerCase().trim();
+  if (s.includes('3') || s.includes('mensuel')) return 'PLAN #3 (Mensuel)';
+  if (s.includes('2') || s.includes('semestriel') || s.includes('trimestriel')) return 'PLAN #2 (Semestriel)';
+  if (s.includes('1') || s.includes('annuel')) return 'PLAN #1 (Annuel)';
+  return 'PLAN #1 (Annuel)';
+}
+
+function normalizeUniformSize(val: any) {
+  if (!val) return "Choisir";
+  const s = String(val).toUpperCase().trim();
+  const validSizes = ["YXS", "YS", "YM", "YL", "YXL", "AXL", "AS", "AM", "AL"];
+  for (const size of validSizes) {
+    if (s === size || s.startsWith(size) || s.includes(`(${size})`)) {
+      return size;
+    }
+  }
+  return "Choisir";
+}
 
 function NewPlayerFormContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { players, setPlayers } = useClubData();
   const [initialValues, setInitialValues] = useState<Partial<PlayerFormValues>>({});
-  const [loadingDemande, setLoadingDemande] = useState(false);
+  const [loadingDemande, setLoadingDemande] = useState(Boolean(searchParams.get("demandeId")));
+  const [toast, setToast] = useState<{ message: string; type?: "success" | "error" | "info" } | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const categories = useMemo(
     () => [...new Set([...DEFAULT_CATEGORIES, ...players.map((player) => player.categorie)])],
@@ -32,6 +63,13 @@ function NewPlayerFormContent() {
   useEffect(() => {
     const demandeId = searchParams.get("demandeId");
     if (demandeId) {
+      if (typeof window !== "undefined") {
+        try {
+          sessionStorage.removeItem(`draft_new_player_v2_${demandeId}`);
+          sessionStorage.removeItem(`draft_new_player_${demandeId}`);
+          sessionStorage.removeItem(`draft_new_player_manual`);
+        } catch (e) {}
+      }
       const loadDemande = async () => {
         setLoadingDemande(true);
         try {
@@ -72,15 +110,17 @@ function NewPlayerFormContent() {
                 sexe: det.sexe === "Female" || det.sexe === "Fille" ? "Féminin" : "Masculin",
                 telephone: (det.telephone && det.telephone !== 'N/A') ? det.telephone : (det.parent_telephone || ""),
                 email: det.email || det.parent_email || "",
-                adresse: det.zone_residence || "",
+                adresse: det.zone_residence || det.adresse || "",
                 categorie: "fc toro",
-                experienceSoccer: det.experience || "",
+                ecole: det.ecole || det.child_school || det.school || det.etablissement || "",
+                experienceSoccer: det.experience || det.experience_competitive || "",
                 parentNomPrenom: det.parent_nom || "",
                 parentEmail: det.parent_email || "",
                 parentTelephone: det.parent_telephone || "",
-                parentLien: det.parent_lien || "",
-                urgenceNomPrenom: "",
-                urgenceTelephone: "",
+                parentLien: det.parent_lien || det.parent_relation || det.guardian_relation || det.lien_parente || det.lien || "",
+                urgenceNomPrenom: det.urgence_nom || det.emergency_name || "",
+                urgenceTelephone: det.urgence_telephone || det.emergency_phone || "",
+                urgenceLien: det.urgence_lien || det.emergency_relation || det.parent_lien || "",
                 photoIdentiteUrl: det.photo_recente_url || "",
                 acteNaissanceUrl: det.acte_naissance_url || "",
                 carteIdentiteParentUrl: det.piece_identite_parent_url || "",
@@ -99,23 +139,24 @@ function NewPlayerFormContent() {
               .single();
 
             if (msg) {
-              const p = msg.payload || {};
+              const p = { ...(msg.metadata || {}), ...(msg.payload || {}) };
               let reg: any = null;
 
-              if (p.id) {
+              if (p.id || p.registration_id) {
                 const { data: regById } = await supabase
                   .from("player_registrations")
                   .select("*")
-                  .eq("id", p.id)
+                  .eq("id", p.id || p.registration_id)
                   .single();
                 if (regById) reg = regById;
               }
 
-              if (!reg && (msg.email || p.guardian_email)) {
+              const emailToFind = msg.email || p.guardian_email || p.contact_email;
+              if (!reg && emailToFind) {
                 const { data: allRegs } = await supabase
                   .from("player_registrations")
                   .select("*")
-                  .eq("guardian_email", msg.email || p.guardian_email)
+                  .eq("guardian_email", emailToFind)
                   .order("created_at", { ascending: false });
 
                 if (allRegs && allRegs.length > 0) {
@@ -136,8 +177,8 @@ function NewPlayerFormContent() {
               }
 
               if (reg) {
-                let parsedPrenom = (reg.child_first_name || "").trim();
-                let parsedNom = (reg.child_last_name || "").trim();
+                let parsedPrenom = (reg.child_first_name || p.enfant_prenom || p.child_first_name || p.prenom || "").trim();
+                let parsedNom = (reg.child_last_name || p.enfant_nom || p.child_last_name || p.nom || "").trim();
                 if (parsedPrenom && parsedNom.toLowerCase().startsWith(parsedPrenom.toLowerCase())) {
                   parsedNom = parsedNom.substring(parsedPrenom.length).trim();
                 } else if (!parsedPrenom && parsedNom.includes(" ")) {
@@ -146,33 +187,37 @@ function NewPlayerFormContent() {
                   parsedPrenom = parts.join(" ");
                 }
 
-                const isTiToroProg = String(reg.program || "").toLowerCase().includes("ti");
+                const isTiToroProg = String(reg.program || p.program || "").toLowerCase().includes("ti");
+                const rawParentLien = reg.guardian_relation || reg.guardian_link || reg.relationship || reg.parent_lien || reg.lien_parente || reg.lien_parent || reg.lien || reg.relation || p.guardian_relation || p.guardian_link || p.relationship || p.parent_lien || p.lien_parente || p.lien_parent || p.lien || p.relation || p.lien_avec_le_joueur || p.parent_relation || "";
+                const rawUrgenceLien = reg.emergency_relation || reg.emergency_link || reg.urgence_lien || reg.lien_urgence || p.emergency_relation || p.emergency_contact_relation || p.emergency_link || p.urgence_lien || p.lien_urgence || p.lien_parente || "";
+
                 prefill = {
                   nom: parsedNom,
                   prenom: parsedPrenom,
-                  dateNaissance: reg.child_birth_date || "",
-                  sexe: reg.child_gender === "Female" || reg.child_gender === "Fille" ? "Féminin" : "Masculin",
-                  telephone: reg.guardian_phone || msg.phone || "",
-                  email: reg.guardian_email || msg.email || "",
-                  adresse: reg.child_address || reg.guardian_address || "",
+                  dateNaissance: reg.child_birth_date || p.child_birth_date || p.child_dob || "",
+                  sexe: (reg.child_gender === "Female" || reg.child_gender === "Fille" || p.child_gender === "Female" || p.child_gender === "Fille" || p.sexe === "Fille" || p.sexe === "Female") ? "Féminin" : "Masculin",
+                  telephone: reg.guardian_phone || p.guardian_phone || p.contact_telephone || msg.phone || "",
+                  email: reg.guardian_email || p.guardian_email || p.contact_email || msg.email || "",
+                  adresse: reg.child_address || reg.guardian_address || p.child_address || p.guardian_address || p.adresse || "",
                   categorie: isTiToroProg ? "ti toro" : "fc toro",
                   programme: isTiToroProg ? "Ti Toro" : "FC Toro",
-                  experienceSoccer: reg.experience || reg.experience_soccer || reg.experience_foot || "",
-                  parentNomPrenom: reg.guardian_name || (reg.guardian_first_name ? `${reg.guardian_first_name} ${reg.guardian_last_name || ""}`.trim() : "") || p.parent_nom || "",
-                  parentEmail: reg.guardian_email || p.parent_email || "",
-                  parentTelephone: reg.guardian_phone || p.parent_telephone || "",
-                  parentAdresse: reg.guardian_address || p.parent_adresse || "",
-                  parentLien: reg.guardian_relation || reg.guardian_link || reg.relationship || reg.parent_lien || reg.lien_parente || reg.lien_parent || reg.lien || p.guardian_relation || p.guardian_link || p.relationship || p.parent_lien || p.lien_parente || p.lien_parent || p.lien || "",
-                  urgenceNomPrenom: reg.emergency_name || p.emergency_name || p.emergency_contact_name || "",
-                  urgenceTelephone: reg.emergency_phone || p.emergency_phone || p.emergency_contact_phone || "",
-                  urgenceLien: reg.emergency_relation || p.emergency_relation || p.emergency_contact_relation || "",
-                  urgenceEmail: reg.emergency_email || p.emergency_email || p.emergency_contact_email || "",
-                  urgenceAdresse: reg.emergency_address || p.emergency_address || p.emergency_contact_address || "",
-                  tailleHaut: reg.uniform_top_size || reg.taille_haut || reg.taille_maillot || reg.top_size || reg.size_top || p.uniform_top_size || p.taille_haut || p.taille_maillot || p.tailleMaillot || p.tailleHaut || p.top_size || p.size_top || "",
-                  tailleShort: reg.uniform_short_size || reg.taille_short || reg.short_size || reg.bottom_size || reg.size_bottom || p.uniform_short_size || p.taille_short || p.tailleShort || p.short_size || p.bottom_size || p.size_bottom || "",
-                  numerosPreferes: reg.preferred_numbers || p.numeros_preferes || p.numerosPreferes || "",
-                  planPaiement: reg.payment_plan || p.payment_plan || p.planPaiement || "",
-                  modePaiementChoisi: translatePaymentMethod(reg.payment_method || p.payment_method || p.modePaiementChoisi),
+                  ecole: reg.child_school || reg.school || reg.ecole || reg.etablissement || reg.ecole_frequentee || p.child_school || p.school || p.ecole || p.ecole_frequentee || p.etablissement || p.etablissement_scolaire || "",
+                  experienceSoccer: reg.experience || reg.experience_soccer || reg.experience_foot || reg.child_soccer_experience || p.experience || p.experience_soccer || p.ancienne_experience || p.experience_foot || "",
+                  parentNomPrenom: reg.guardian_name || (reg.guardian_first_name ? `${reg.guardian_first_name} ${reg.guardian_last_name || ""}`.trim() : "") || p.parent_nom || p.guardian_name || msg.name || "",
+                  parentEmail: reg.guardian_email || p.parent_email || p.guardian_email || msg.email || "",
+                  parentTelephone: reg.guardian_phone || p.parent_telephone || p.guardian_phone || msg.phone || "",
+                  parentAdresse: reg.guardian_address || p.parent_adresse || p.guardian_address || "",
+                  parentLien: rawParentLien || rawUrgenceLien || "",
+                  urgenceNomPrenom: reg.emergency_name || p.emergency_name || p.emergency_contact_name || p.urgence_nom || "",
+                  urgenceTelephone: reg.emergency_phone || p.emergency_phone || p.emergency_contact_phone || p.urgence_telephone || "",
+                  urgenceLien: rawUrgenceLien || rawParentLien || "",
+                  urgenceEmail: reg.emergency_email || p.emergency_email || p.emergency_contact_email || p.urgence_email || "",
+                  urgenceAdresse: reg.emergency_address || p.emergency_address || p.emergency_contact_address || p.urgence_adresse || "",
+                  tailleHaut: normalizeUniformSize(reg.uniform_top_size || reg.taille_haut || reg.taille_maillot || reg.top_size || reg.size_top || p.uniform_top_size || p.taille_haut || p.taille_maillot || p.tailleMaillot || p.tailleHaut || p.top_size || p.size_top),
+                  tailleShort: normalizeUniformSize(reg.uniform_short_size || reg.taille_short || reg.short_size || reg.bottom_size || reg.size_bottom || p.uniform_short_size || p.taille_short || p.tailleShort || p.short_size || p.bottom_size || p.size_bottom),
+                  numerosPreferes: reg.preferred_numbers || p.preferred_numbers || p.numeros_preferes || p.numerosPreferes || "",
+                  planPaiement: normalizePaymentPlan(reg.payment_plan || p.payment_plan || p.plan_paiement || p.planPaiement || p.plan),
+                  modePaiementChoisi: translatePaymentMethod(reg.payment_method || p.payment_method || p.modePaiementChoisi || p.methode_paiement || p.methodePaiement),
                 };
 
                 const { data: docs } = await supabase
@@ -205,35 +250,39 @@ function NewPlayerFormContent() {
                   parsedPrenom = parts.join(" ");
                 }
 
+                const rawParentLien = p.guardian_relation || p.guardian_link || p.relationship || p.parent_lien || p.lien_parente || p.lien_parent || p.lien || p.relation || p.lien_avec_le_joueur || p.parent_relation || "";
+                const rawUrgenceLien = p.emergency_relation || p.emergency_contact_relation || p.emergency_link || p.urgence_lien || p.lien_urgence || p.lien_parente || "";
+
                 const isTiToroProg = String(p.program || "").toLowerCase().includes("ti");
                 prefill = {
                   nom: parsedNom,
                   prenom: parsedPrenom,
                   dateNaissance: p.child_birth_date || p.child_dob || "",
-                  sexe: p.child_gender === "Female" || p.child_gender === "Fille" ? "Féminin" : "Masculin",
-                  telephone: p.guardian_phone || msg.phone || "",
-                  email: msg.email || p.guardian_email || "",
-                  adresse: p.guardian_address || p.child_address || "",
+                  sexe: (p.child_gender === "Female" || p.child_gender === "Fille" || p.sexe === "Fille" || p.sexe === "Female") ? "Féminin" : "Masculin",
+                  telephone: p.guardian_phone || p.contact_telephone || msg.phone || "",
+                  email: p.guardian_email || p.contact_email || msg.email || "",
+                  adresse: p.guardian_address || p.child_address || p.adresse || "",
                   categorie: isTiToroProg ? "ti toro" : "fc toro",
                   programme: isTiToroProg ? "Ti Toro" : "FC Toro",
+                  ecole: p.child_school || p.school || p.ecole || p.ecole_frequentee || p.etablissement || p.etablissement_scolaire || "",
                   experienceSoccer: p.experience || p.experience_soccer || p.ancienne_experience || p.experience_foot || "",
-                  parentNomPrenom: p.guardian_first_name ? `${p.guardian_first_name} ${p.guardian_last_name || ""}`.trim() : (p.parent_nom || msg.name || ""),
+                  parentNomPrenom: p.guardian_first_name ? `${p.guardian_first_name} ${p.guardian_last_name || ""}`.trim() : (p.parent_nom || p.guardian_name || msg.name || ""),
                   parentEmail: p.guardian_email || p.parent_email || msg.email || "",
                   parentTelephone: p.guardian_phone || p.parent_telephone || msg.phone || "",
                   parentAdresse: p.guardian_address || p.parent_adresse || "",
-                  parentLien: p.guardian_relation || p.guardian_link || p.relationship || p.parent_lien || p.lien_parente || p.lien_parent || p.lien || "",
-                  urgenceNomPrenom: p.emergency_name || p.emergency_contact_name || "",
-                  urgenceTelephone: p.emergency_phone || p.emergency_contact_phone || "",
-                  urgenceLien: p.emergency_relation || p.emergency_contact_relation || "",
-                  urgenceEmail: p.emergency_email || p.emergency_contact_email || "",
-                  urgenceAdresse: p.emergency_address || p.emergency_contact_address || "",
-                  tailleHaut: p.uniform_top_size || p.taille_haut || p.taille_maillot || p.tailleMaillot || p.tailleHaut || p.top_size || p.size_top || "",
-                  tailleShort: p.uniform_short_size || p.taille_short || p.tailleShort || p.short_size || p.bottom_size || p.size_bottom || "",
+                  parentLien: rawParentLien || rawUrgenceLien || "",
+                  urgenceNomPrenom: p.emergency_name || p.emergency_contact_name || p.urgence_nom || "",
+                  urgenceTelephone: p.emergency_phone || p.emergency_contact_phone || p.urgence_telephone || "",
+                  urgenceLien: rawUrgenceLien || rawParentLien || "",
+                  urgenceEmail: p.emergency_email || p.emergency_contact_email || p.urgence_email || "",
+                  urgenceAdresse: p.emergency_address || p.emergency_contact_address || p.urgence_adresse || "",
+                  tailleHaut: normalizeUniformSize(p.uniform_top_size || p.taille_haut || p.taille_maillot || p.tailleMaillot || p.tailleHaut || p.top_size || p.size_top),
+                  tailleShort: normalizeUniformSize(p.uniform_short_size || p.taille_short || p.tailleShort || p.short_size || p.bottom_size || p.size_bottom),
                   numerosPreferes: p.preferred_numbers || p.numeros_preferes || p.numerosPreferes || "",
                   postePrincipal: p.poste_principal || "",
                   posteSecondaire: p.poste_secondaire || "",
-                  planPaiement: p.payment_plan || p.planPaiement || "",
-                  modePaiementChoisi: translatePaymentMethod(p.payment_method || p.modePaiementChoisi),
+                  planPaiement: normalizePaymentPlan(p.payment_plan || p.plan_paiement || p.planPaiement || p.plan),
+                  modePaiementChoisi: translatePaymentMethod(p.payment_method || p.modePaiementChoisi || p.methode_paiement || p.methodePaiement),
                 };
               }
             }
@@ -244,12 +293,14 @@ function NewPlayerFormContent() {
           const commentIdentifie = searchParams.get("commentIdentifie");
           const piedDominant = searchParams.get("piedDominant");
           const clubActuel = searchParams.get("clubActuel");
+          const ecoleParam = searchParams.get("ecole");
 
           if (statutJoueur) prefill.statutJoueur = statutJoueur;
           if (sourceDetection) prefill.sourceDetection = true;
           if (commentIdentifie) prefill.commentIdentifie = commentIdentifie;
           if (piedDominant) prefill.piedDominant = piedDominant;
           if (clubActuel) prefill.clubActuel = clubActuel;
+          if (ecoleParam) prefill.ecole = ecoleParam;
 
           setInitialValues(prefill);
         } catch (e) {
@@ -274,6 +325,7 @@ function NewPlayerFormContent() {
       }
     }
 
+    setIsSubmitting(true);
     const today = new Date().toISOString().slice(0, 10);
     const newPlayerLocal = createPlayerFromForm(`temp-${Date.now()}`, values, today);
     
@@ -307,47 +359,47 @@ function NewPlayerFormContent() {
         setPlayers((prevPlayers) => [newPlayer, ...prevPlayers]);
         
         if (values.programmesAssignesIds && values.programmesAssignesIds.length > 0) {
-          await syncPlayerProgrammes(String(inserted.EtudiantID), values.programmesAssignesIds);
+          syncPlayerProgrammes(String(inserted.EtudiantID), values.programmesAssignesIds).catch(console.error);
         }
 
-        // Envoyer l'e-mail automatique de validation d'inscription avec les coordonnées bancaires
+        // Envoyer l'e-mail automatique de validation d'inscription de manière asynchrone (sans bloquer)
         const targetEmail = values.parentEmail || values.email;
         if (targetEmail) {
-          try {
-            await fetch("/api/send-acceptance", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                email: targetEmail,
-                parentName: values.parentNomPrenom || "",
-                childName: `${values.prenom || ""} ${values.nom || ""}`.trim(),
-                matricule: matriculeCode,
-                categorie: values.categorie,
-                programme: values.programme,
-              }),
-            });
-          } catch (e) {
+          fetch("/api/send-acceptance", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              email: targetEmail,
+              parentName: values.parentNomPrenom || "",
+              childName: `${values.prenom || ""} ${values.nom || ""}`.trim(),
+              matricule: matriculeCode,
+              categorie: values.categorie,
+              programme: values.programme,
+            }),
+          }).catch((e) => {
             console.warn("Impossible d'envoyer l'e-mail automatique de validation :", e);
-          }
+          });
         }
 
         // Also archive the message if it came from one
         const demandeId = searchParams.get("demandeId");
         const siteMessageId = searchParams.get("siteMessageId");
         
-        try {
-          if (siteMessageId) {
-            await updateMessageStatus(siteMessageId, "inscrit");
-          } else if (demandeId) {
-            await updateMessageStatus(demandeId, "inscrit");
-          }
-        } catch (e) {
-          console.warn("Could not update message status on player enrollment:", e);
+        if (siteMessageId) {
+          updateMessageStatus(siteMessageId, "inscrit").catch(console.warn);
+        } else if (demandeId) {
+          updateMessageStatus(demandeId, "inscrit").catch(console.warn);
         }
-        router.push("/joueurs");
+
+        router.push(`/joueurs?registered=true&code=${encodeURIComponent(matriculeCode)}`);
+      } else {
+        setToast({ message: "Erreur lors de la création. Aucune ID retournée.", type: "error" });
+        setIsSubmitting(false);
       }
     } catch (error) {
-      alert("Erreur lors de la création. Veuillez réessayer.");
+      console.error(error);
+      setToast({ message: "Erreur lors de la création. Veuillez réessayer.", type: "error" });
+      setIsSubmitting(false);
     }
   };
 
@@ -357,14 +409,19 @@ function NewPlayerFormContent() {
 
   return (
     <>
+      {toast && (
+        <ToastNotification message={toast.message} type={toast.type} onClose={() => setToast(null)} />
+      )}
       <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03] sm:p-6">
         <PlayerForm
+          key={searchParams.get("demandeId") || "manual"}
           initialValues={initialValues}
           categories={categories}
           onCancel={() => router.push("/joueurs")}
           onSubmit={handleSubmit}
           submitLabel="Inscrire le joueur"
-          draftKey={`new_player_v2_${searchParams.get("demandeId") || "manual"}`}
+          draftKey={searchParams.get("demandeId") ? undefined : "new_player_manual"}
+          isSubmitting={isSubmitting}
         />
       </div>
       <div className="flex justify-end">

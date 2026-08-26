@@ -13,6 +13,8 @@ import { useClubData } from "@/context/ClubDataContext";
 import { TableBodySkeleton } from "@/components/ui/skeleton/Skeleton";
 import { fetchDocumentsForMessage, uploadDetectionDocument } from "@/lib/club/supabase-demandes";
 import { getSiteStatus, updateSiteStatus } from "@/app/actions/club";
+import { ToastNotification } from "@/components/ui/toast/ToastNotification";
+import { supabase } from "@/lib/supabaseClient";
 
 // Placeholder icon for document
 const DocumentIcon = () => (
@@ -82,6 +84,7 @@ export default function BoiteDeReception() {
   const [currentPage, setCurrentPage] = useState(1);
   const [currentPageSize, setCurrentPageSize] = useState(100);
   const { confirm, ConfirmComponent } = useConfirm();
+  const [toast, setToast] = useState<{ message: string; type?: "success" | "error" | "info" } | null>(null);
 
   // Modal states
   const [selectedMessage, setSelectedMessage] = useState<SiteMessage | null>(null);
@@ -117,13 +120,53 @@ export default function BoiteDeReception() {
     }
   };
 
+  const [selectedRegData, setSelectedRegData] = useState<any>(null);
+  const [loadingRegData, setLoadingRegData] = useState(false);
+
   useEffect(() => {
     setVerificationResult({ status: "not_verified" });
     setDetectionStatutSpecial("");
     setDetectionRabais("");
     setDetectionSpecialType("Enfant sponsorisé");
     setDetectionSpecialAutre("");
-    if (selectedMessage && (selectedMessage.type_message === "inscription_joueur" || selectedMessage.type_message === "detection")) {
+    if (selectedMessage && (selectedMessage.type_message === "inscription_joueur" || selectedMessage.type_message === "detection" || (selectedMessage as any).type === "joueur")) {
+      if (selectedMessage.type_message !== "detection") {
+        setLoadingRegData(true);
+        const p = selectedMessage.metadata || {};
+        const fetchReg = async () => {
+          try {
+            let reg = null;
+            if (p.id || p.registration_id) {
+              const { data } = await supabase
+                .from("player_registrations")
+                .select("*")
+                .eq("id", p.id || p.registration_id)
+                .single();
+              if (data) reg = data;
+            }
+            if (!reg && (selectedMessage.contact_email || p.guardian_email)) {
+              const { data: allRegs } = await supabase
+                .from("player_registrations")
+                .select("*")
+                .eq("guardian_email", selectedMessage.contact_email || p.guardian_email)
+                .order("created_at", { ascending: false });
+              if (allRegs && allRegs.length > 0) {
+                reg = allRegs[0];
+              }
+            }
+            setSelectedRegData(reg);
+          } catch (err) {
+            console.error("Failed to load registration data:", err);
+          } finally {
+            setLoadingRegData(false);
+          }
+        };
+        fetchReg();
+      } else {
+        setSelectedRegData(null);
+        setLoadingRegData(false);
+      }
+
       fetch(`/api/demandes/${selectedMessage.id}/check-duplicate`)
         .then(res => {
           if (!res.ok) {
@@ -147,6 +190,8 @@ export default function BoiteDeReception() {
         })
         .catch(err => console.error(err));
     } else {
+      setSelectedRegData(null);
+      setLoadingRegData(false);
       setDuplicateCheck(null);
     }
   }, [selectedMessage?.id]);
@@ -618,6 +663,9 @@ export default function BoiteDeReception() {
   return (
     <div className="space-y-4">
       <PageBreadcrumb pageTitle="Boîte de réception" />
+      {toast && (
+        <ToastNotification message={toast.message} type={toast.type} onClose={() => setToast(null)} />
+      )}
 
       {/* TABS UI (Segmented Control Style) */}
       <div className="flex justify-start pb-4 mb-2 mt-2 overflow-x-auto hide-scrollbar">
@@ -1130,26 +1178,159 @@ export default function BoiteDeReception() {
                       </div>
                     </div>
                   </div>
-                ) : (
-                  <div className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-6">
-                    <div className="flex items-center gap-2.5 mb-5 border-b border-gray-100 dark:border-gray-800 pb-4">
-                      <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                      <h4 className="font-semibold text-gray-900 dark:text-white text-base">Informations Joueur</h4>
-                    </div>
-                    <div className="grid gap-y-5">
-                      <div>
-                        <span className="block text-xs font-medium text-gray-500 mb-1">Nom de l'enfant</span>
-                        <span className="block text-gray-900 dark:text-white font-medium text-sm">{selectedMessage.metadata?.enfant_nom || selectedMessage.metadata?.child_last_name || "N/A"}</span>
+                ) : (() => {
+                  const regInfo = { ...(selectedMessage.metadata || {}), ...(selectedRegData || {}) };
+                  const childFullName = regInfo.child_first_name 
+                    ? `${regInfo.child_first_name} ${regInfo.child_last_name || ""}`.trim()
+                    : (selectedMessage.metadata?.enfant_nom || selectedMessage.metadata?.child_last_name || "N/A");
+                  
+                  const parentLienVal = regInfo.guardian_relation || regInfo.guardian_link || regInfo.relationship || regInfo.parent_lien || regInfo.lien_parente || regInfo.emergency_relation || "Non renseigné";
+                  const urgenceLienVal = regInfo.emergency_relation || regInfo.urgence_lien || regInfo.emergency_link || regInfo.guardian_relation || "Non renseigné";
+
+                  return (
+                    <div className="space-y-6">
+                      {/* Section 01: Informations Enfant / Joueur */}
+                      <div className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-6">
+                        <div className="flex items-center gap-2.5 mb-5 border-b border-gray-100 dark:border-gray-800 pb-4">
+                          <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                          <h4 className="font-semibold text-gray-900 dark:text-white text-base">Informations Joueur</h4>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-5 gap-x-6">
+                          <div>
+                            <span className="block text-xs font-medium text-gray-500 mb-1">Nom de l'enfant</span>
+                            <span className="block text-gray-900 dark:text-white font-medium text-sm">{childFullName}</span>
+                          </div>
+                          <div>
+                            <span className="block text-xs font-medium text-gray-500 mb-1">Date de naissance</span>
+                            <span className="block text-gray-900 dark:text-white font-medium text-sm">{regInfo.child_birth_date || regInfo.child_dob || "Non renseigné"}</span>
+                          </div>
+                          <div>
+                            <span className="block text-xs font-medium text-gray-500 mb-1">Sexe</span>
+                            <span className="block text-gray-900 dark:text-white font-medium text-sm">{regInfo.child_gender || regInfo.sexe || "Non renseigné"}</span>
+                          </div>
+                          <div>
+                            <span className="block text-xs font-medium text-gray-500 mb-1">École fréquentée</span>
+                            <span className="block text-gray-900 dark:text-white font-medium text-sm">{regInfo.child_school || regInfo.school || regInfo.ecole || regInfo.etablissement || "Non renseigné"}</span>
+                          </div>
+                          <div className="sm:col-span-2">
+                            <span className="block text-xs font-medium text-gray-500 mb-1">Expérience Soccer</span>
+                            <span className="block text-gray-900 dark:text-white font-medium text-sm">{regInfo.child_soccer_experience || regInfo.experience || regInfo.experience_soccer || "Non renseigné"}</span>
+                          </div>
+                          {regInfo.child_address && (
+                            <div className="sm:col-span-2">
+                              <span className="block text-xs font-medium text-gray-500 mb-1">Adresse de l'enfant</span>
+                              <span className="block text-gray-900 dark:text-white font-medium text-sm">{regInfo.child_address}</span>
+                            </div>
+                          )}
+                        </div>
                       </div>
-                      <div>
-                        <span className="block text-xs font-medium text-gray-500 mb-1">Message d'inscription</span>
-                        <span className="block text-gray-700 dark:text-gray-300 text-sm leading-relaxed whitespace-pre-wrap">
-                          {selectedMessage.contenu}
-                        </span>
+
+                      {/* Section 02: Contact Parents / Tuteur */}
+                      <div className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-6">
+                        <div className="flex items-center gap-2.5 mb-5 border-b border-gray-100 dark:border-gray-800 pb-4">
+                          <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
+                          <h4 className="font-semibold text-gray-900 dark:text-white text-base">Parents / Tuteur Responsable</h4>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-5 gap-x-6">
+                          <div>
+                            <span className="block text-xs font-medium text-gray-500 mb-1">Nom & Prénom</span>
+                            <span className="block text-gray-900 dark:text-white font-medium text-sm">{regInfo.guardian_name || selectedMessage.contact_nom}</span>
+                          </div>
+                          <div>
+                            <span className="block text-xs font-medium text-gray-500 mb-1">Lien avec le joueur</span>
+                            <span className="block text-gray-900 dark:text-white font-medium text-sm">{parentLienVal}</span>
+                          </div>
+                          <div>
+                            <span className="block text-xs font-medium text-gray-500 mb-1">Téléphone / WhatsApp</span>
+                            <span className="block text-gray-900 dark:text-white font-medium text-sm">{regInfo.guardian_phone || selectedMessage.contact_telephone || "Non renseigné"}</span>
+                          </div>
+                          <div>
+                            <span className="block text-xs font-medium text-gray-500 mb-1">E-mail</span>
+                            <span className="block text-gray-900 dark:text-white font-medium text-sm">{regInfo.guardian_email || selectedMessage.contact_email}</span>
+                          </div>
+                          {(regInfo.guardian_address || regInfo.parent_adresse) && (
+                            <div className="sm:col-span-2">
+                              <span className="block text-xs font-medium text-gray-500 mb-1">Adresse physique</span>
+                              <span className="block text-gray-900 dark:text-white font-medium text-sm">{regInfo.guardian_address || regInfo.parent_adresse}</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Section 03: Contact d'urgence */}
+                      <div className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-6">
+                        <div className="flex items-center gap-2.5 mb-5 border-b border-gray-100 dark:border-gray-800 pb-4">
+                          <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M18.364 5.636l-3.536 3.536m0 5.656l3.536 3.536M9.172 9.172L5.636 5.636m3.536 9.192l-3.536 3.536M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-5 0a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
+                          <h4 className="font-semibold text-gray-900 dark:text-white text-base">Contact d'Urgence</h4>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-5 gap-x-6">
+                          <div>
+                            <span className="block text-xs font-medium text-gray-500 mb-1">Nom Complet</span>
+                            <span className="block text-gray-900 dark:text-white font-medium text-sm">{regInfo.emergency_name || "Non renseigné"}</span>
+                          </div>
+                          <div>
+                            <span className="block text-xs font-medium text-gray-500 mb-1">Lien de parenté</span>
+                            <span className="block text-gray-900 dark:text-white font-medium text-sm">{urgenceLienVal}</span>
+                          </div>
+                          <div>
+                            <span className="block text-xs font-medium text-gray-500 mb-1">Téléphone d'urgence</span>
+                            <span className="block text-gray-900 dark:text-white font-medium text-sm">{regInfo.emergency_phone || "Non renseigné"}</span>
+                          </div>
+                          <div>
+                            <span className="block text-xs font-medium text-gray-500 mb-1">E-mail d'urgence</span>
+                            <span className="block text-gray-900 dark:text-white font-medium text-sm">{regInfo.emergency_email || "Non renseigné"}</span>
+                          </div>
+                          {regInfo.emergency_address && (
+                            <div className="sm:col-span-2">
+                              <span className="block text-xs font-medium text-gray-500 mb-1">Adresse d'urgence</span>
+                              <span className="block text-gray-900 dark:text-white font-medium text-sm">{regInfo.emergency_address}</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Section 04: Équipements & Tailles */}
+                      <div className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-6">
+                        <div className="flex items-center gap-2.5 mb-5 border-b border-gray-100 dark:border-gray-800 pb-4">
+                          <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" /></svg>
+                          <h4 className="font-semibold text-gray-900 dark:text-white text-base">Uniformes & Tailles</h4>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-y-5 gap-x-6">
+                          <div>
+                            <span className="block text-xs font-medium text-gray-500 mb-1">Taille du Haut (Top)</span>
+                            <span className="block text-gray-900 dark:text-white font-bold text-sm bg-gray-50 dark:bg-gray-800 px-3 py-1.5 rounded-lg border border-gray-100 dark:border-gray-700 w-fit">{regInfo.uniform_top_size || regInfo.taille_haut || "Non renseigné"}</span>
+                          </div>
+                          <div>
+                            <span className="block text-xs font-medium text-gray-500 mb-1">Taille du Short</span>
+                            <span className="block text-gray-900 dark:text-white font-bold text-sm bg-gray-50 dark:bg-gray-800 px-3 py-1.5 rounded-lg border border-gray-100 dark:border-gray-700 w-fit">{regInfo.uniform_short_size || regInfo.taille_short || "Non renseigné"}</span>
+                          </div>
+                          <div>
+                            <span className="block text-xs font-medium text-gray-500 mb-1">Numéros préférés</span>
+                            <span className="block text-gray-900 dark:text-white font-medium text-sm">{regInfo.preferred_numbers || regInfo.numeros_preferes || "Non renseigné"}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Section 05: Plan & Mode de Paiement */}
+                      <div className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-6">
+                        <div className="flex items-center gap-2.5 mb-5 border-b border-gray-100 dark:border-gray-800 pb-4">
+                          <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                          <h4 className="font-semibold text-gray-900 dark:text-white text-base">Plan & Mode de Paiement</h4>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-5 gap-x-6">
+                          <div>
+                            <span className="block text-xs font-medium text-gray-500 mb-1">Choix du Plan</span>
+                            <span className="block text-gray-900 dark:text-white font-medium text-sm">{regInfo.payment_plan || regInfo.plan_paiement || "PLAN #1 (Annuel)"}</span>
+                          </div>
+                          <div>
+                            <span className="block text-xs font-medium text-gray-500 mb-1">Mode de règlement</span>
+                            <span className="block text-gray-900 dark:text-white font-medium text-sm">{regInfo.payment_method || regInfo.mode_paiement || "Transfert bancaire"}</span>
+                          </div>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                )}
+                  );
+                })()}
               </div>
 
               <div id="verification-result-container">
@@ -1270,32 +1451,32 @@ export default function BoiteDeReception() {
                         
                         await updateMessageStatus(selectedMessage.id, newStatus, selectedMessage.metadata);
 
-                        // Envoyer l'e-mail automatique de validation au parent avec les détails bancaires
+                        // Envoyer l'e-mail automatique de validation de manière asynchrone (sans bloquer l'interface)
                         const targetEmail = selectedMessage.contact_email;
                         if (targetEmail) {
-                          try {
-                            await fetch("/api/send-acceptance", {
-                              method: "POST",
-                              headers: { "Content-Type": "application/json" },
-                              body: JSON.stringify({
-                                email: targetEmail,
-                                parentName: selectedMessage.contact_nom || "",
-                                childName: selectedMessage.sujet || selectedMessage.contact_nom || "",
-                                matricule: selectedMessage.metadata?.numero_inscription || selectedMessage.metadata?.numero_detection || "",
-                                categorie: selectedMessage.metadata?.categorie || "",
-                                programme: selectedMessage.metadata?.programme || "FC Toro",
-                              }),
-                            });
-                          } catch (e) {
+                          fetch("/api/send-acceptance", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                              email: targetEmail,
+                              parentName: selectedMessage.contact_nom || "",
+                              childName: selectedMessage.sujet || selectedMessage.contact_nom || "",
+                              matricule: selectedMessage.metadata?.numero_inscription || selectedMessage.metadata?.numero_detection || "",
+                              categorie: selectedMessage.metadata?.categorie || "",
+                              programme: selectedMessage.metadata?.programme || "FC Toro",
+                            }),
+                          }).catch((e) => {
                             console.warn("Impossible d'envoyer l'e-mail de validation :", e);
-                          }
+                          });
                         }
 
                         setMessages(prev => prev.map(m => m.id === selectedMessage.id ? { ...m, statut: newStatus } : m));
                         setSelectedMessage(null);
+                        setToast({ message: "Joueur marqué comme inscrit avec succès !", type: "success" });
+                        setTimeout(() => setToast(null), 4000);
                       } catch (err) {
                         console.error("Erreur lors de l'inscription:", err);
-                        alert("Une erreur est survenue lors de l'inscription.");
+                        setToast({ message: "Une erreur est survenue lors de l'inscription.", type: "error" });
                       }
                     }}
                     className="w-full sm:w-auto rounded-xl bg-success-600 px-8 py-2.5 text-sm font-bold text-white shadow-md shadow-success-500/25 hover:bg-success-500 transition-all"

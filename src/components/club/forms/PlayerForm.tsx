@@ -140,7 +140,6 @@ export default function PlayerForm({
     
     const merged = {
       ...defaultValues,
-      ...initialValues,
     };
 
     if (savedDraft) {
@@ -148,6 +147,15 @@ export default function PlayerForm({
         const k = key as keyof PlayerFormValues;
         if (savedDraft[k] !== "" && savedDraft[k] !== null && savedDraft[k] !== undefined) {
           merged[k] = savedDraft[k] as never;
+        }
+      });
+    }
+
+    if (initialValues) {
+      Object.keys(initialValues).forEach((key) => {
+        const k = key as keyof PlayerFormValues;
+        if (initialValues[k] !== "" && initialValues[k] !== null && initialValues[k] !== undefined) {
+          merged[k] = initialValues[k] as never;
         }
       });
     }

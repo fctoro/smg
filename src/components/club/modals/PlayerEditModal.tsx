@@ -14,6 +14,7 @@ import { ToastNotification } from "@/components/ui/toast/ToastNotification";
 interface PlayerEditModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onSuccess?: (message: string) => void;
   player: Player | null;
   highlightFields?: string[];
   demandeId?: string | null;
@@ -26,6 +27,7 @@ interface PlayerEditModalProps {
 export const PlayerEditModal: React.FC<PlayerEditModalProps> = ({
   isOpen,
   onClose,
+  onSuccess,
   player,
   highlightFields = [],
   demandeId,
@@ -82,7 +84,7 @@ export const PlayerEditModal: React.FC<PlayerEditModalProps> = ({
       );
       
       if (values.programmesAssignesIds) {
-        await syncPlayerProgrammes(player.id, values.programmesAssignesIds);
+        syncPlayerProgrammes(player.id, values.programmesAssignesIds).catch(console.error);
       }
 
       // Clear the draft once submitted successfully
@@ -96,16 +98,20 @@ export const PlayerEditModal: React.FC<PlayerEditModalProps> = ({
         }
       } catch (e) {}
       
-      setSuccessMessage(
-        normalized.statut === "alumni" 
-          ? "Joueur enregistré dans alumni avec succès !" 
-          : "Joueur enregistré avec succès !"
-      );
-      
-      setTimeout(() => {
-        setSuccessMessage("");
+      const msg = normalized.statut === "alumni" 
+        ? "Joueur enregistré dans alumni avec succès !" 
+        : "Joueur mis à jour avec succès !";
+
+      if (onSuccess) {
+        onSuccess(msg);
         onClose();
-      }, 2000);
+      } else {
+        setSuccessMessage(msg);
+        setTimeout(() => {
+          setSuccessMessage("");
+          onClose();
+        }, 800);
+      }
     } catch (error) {
       console.error(error);
       alert("Erreur lors de la mise a jour. Veuillez reessayer.");

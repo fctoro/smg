@@ -13,9 +13,10 @@ import { ToastNotification } from "@/components/ui/toast/ToastNotification";
 interface PlayerAddModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onSuccess?: (message: string) => void;
 }
 
-export function PlayerAddModal({ isOpen, onClose }: PlayerAddModalProps) {
+export function PlayerAddModal({ isOpen, onClose, onSuccess }: PlayerAddModalProps) {
   const { players, setPlayers } = useClubData();
   const [toast, setToast] = useState<{ message: string; type?: "success" | "error" | "info" } | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -60,41 +61,45 @@ export function PlayerAddModal({ isOpen, onClose }: PlayerAddModalProps) {
         setPlayers((prevPlayers) => [newPlayer, ...prevPlayers]);
         
         if (values.programmesAssignesIds && values.programmesAssignesIds.length > 0) {
-          await syncPlayerProgrammes(String(inserted.EtudiantID), values.programmesAssignesIds);
+          syncPlayerProgrammes(String(inserted.EtudiantID), values.programmesAssignesIds).catch(console.error);
         }
         
-        // Envoyer l'e-mail automatique de validation d'inscription avec les coordonnées bancaires
+        // Envoyer l'e-mail automatique de validation d'inscription avec les coordonnées bancaires (asynchrone / sans bloquer)
         const targetEmail = values.parentEmail || values.email;
         if (targetEmail) {
-          try {
-            await fetch("/api/send-acceptance", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                email: targetEmail,
-                parentName: values.parentNomPrenom || "",
-                childName: `${values.prenom || ""} ${values.nom || ""}`.trim(),
-                matricule: matriculeCode,
-                categorie: values.categorie,
-                programme: values.programme,
-              }),
-            });
-          } catch (e) {
+          fetch("/api/send-acceptance", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              email: targetEmail,
+              parentName: values.parentNomPrenom || "",
+              childName: `${values.prenom || ""} ${values.nom || ""}`.trim(),
+              matricule: matriculeCode,
+              categorie: values.categorie,
+              programme: values.programme,
+            }),
+          }).catch((e) => {
             console.warn("Impossible d'envoyer l'e-mail automatique de validation :", e);
-          }
+          });
         }
         
-        setToast({
-          message: newPlayerLocal.statut === "alumni" 
-            ? `Joueur enregistré dans alumni avec succès ! (Code: ${matriculeCode})` 
-            : `Joueur enregistré avec succès ! (Code: ${matriculeCode})`,
-          type: "success"
-        });
-        
-        setTimeout(() => {
-          setToast(null);
+        const successMsg = newPlayerLocal.statut === "alumni" 
+          ? `Joueur enregistré dans alumni avec succès ! (Code: ${matriculeCode})` 
+          : `Joueur enregistré avec succès ! (Code: ${matriculeCode})`;
+
+        if (onSuccess) {
+          onSuccess(successMsg);
           onClose();
-        }, 3000);
+        } else {
+          setToast({
+            message: successMsg,
+            type: "success"
+          });
+          setTimeout(() => {
+            setToast(null);
+            onClose();
+          }, 800);
+        }
       } else {
         setToast({ message: "Erreur lors de la création. Aucune ID retournée.", type: "error" });
       }

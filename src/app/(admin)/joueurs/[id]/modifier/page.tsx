@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import PlayerForm from "@/components/club/forms/PlayerForm";
@@ -11,12 +11,15 @@ import { normalizePlayerFormValues, toPlayerFormValues } from "@/lib/club/player
 import { DEFAULT_CATEGORIES } from "@/config/dashboard.config";
 import { updatePlayerInSupabase } from "@/lib/club/supabase-crud";
 import { syncPlayerProgrammes } from "@/lib/club/programmes";
+import { ToastNotification } from "@/components/ui/toast/ToastNotification";
 
 export default function EditPlayerPage() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
   const playerId = params.id;
   const { players, setPlayers } = useClubData();
+  const [toast, setToast] = useState<{ message: string; type?: "success" | "error" | "info" } | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const targetPlayer = players.find((player) => player.id === playerId);
   const categories = useMemo(
@@ -45,6 +48,7 @@ export default function EditPlayerPage() {
     const normalized = normalizePlayerFormValues(values);
     const today = new Date().toISOString().slice(0, 10);
     
+    setIsSubmitting(true);
     try {
       const updatedDocs = await updatePlayerInSupabase(playerId, normalized);
       
@@ -75,18 +79,23 @@ export default function EditPlayerPage() {
       );
       
       if (values.programmesAssignesIds) {
-        await syncPlayerProgrammes(playerId, values.programmesAssignesIds);
+        syncPlayerProgrammes(playerId, values.programmesAssignesIds).catch(console.error);
       }
 
-      router.push("/joueurs");
+      router.push("/joueurs?updated=true");
     } catch (error) {
-      alert("Erreur lors de la modification. Veuillez réessayer.");
+      console.error(error);
+      setToast({ message: "Erreur lors de la modification. Veuillez réessayer.", type: "error" });
+      setIsSubmitting(false);
     }
   };
 
   return (
     <div className="space-y-6">
       <PageBreadcrumb pageTitle="Modifier joueur" />
+      {toast && (
+        <ToastNotification message={toast.message} type={toast.type} onClose={() => setToast(null)} />
+      )}
       <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03] sm:p-6">
         <PlayerForm
           initialValues={toPlayerFormValues(targetPlayer)}
@@ -95,6 +104,7 @@ export default function EditPlayerPage() {
           onSubmit={handleSubmit}
           submitLabel="Mettre a jour"
           playerId={playerId}
+          isSubmitting={isSubmitting}
         />
       </div>
     </div>

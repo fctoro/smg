@@ -48,6 +48,32 @@ function PlayersPageContent() {
   const [highlightFields, setHighlightFields] = useState<string[]>([]);
 
   useEffect(() => {
+    const registered = searchParams.get("registered");
+    const updated = searchParams.get("updated");
+    const code = searchParams.get("code");
+
+    if (registered === "true") {
+      setToast({
+        message: code
+          ? `Joueur enregistré avec succès ! (Code: ${code})`
+          : "Joueur enregistré avec succès !",
+        type: "success",
+      });
+      const timer = setTimeout(() => setToast(null), 4000);
+      router.replace("/joueurs");
+      return () => clearTimeout(timer);
+    } else if (updated === "true") {
+      setToast({
+        message: "Joueur mis à jour avec succès !",
+        type: "success",
+      });
+      const timer = setTimeout(() => setToast(null), 4000);
+      router.replace("/joueurs");
+      return () => clearTimeout(timer);
+    }
+  }, [searchParams, router]);
+
+  useEffect(() => {
     const editPlayerId = searchParams.get("editPlayerId");
     const demandeId = searchParams.get("demandeId");
 
@@ -78,36 +104,68 @@ function PlayersPageContent() {
                 updatedPlayer.dateNaissance = meta.child_birth_date || meta.child_dob;
                 fieldsToHighlight.push("dateNaissance");
               }
-              if ((!updatedPlayer.urgenceNomPrenom || updatedPlayer.urgenceNomPrenom === "Choisir") && (meta.emergency_name || meta.emergency_contact_name)) {
-                updatedPlayer.urgenceNomPrenom = meta.emergency_name || meta.emergency_contact_name;
+              if (!updatedPlayer.ecole && (meta.child_school || meta.school || meta.ecole || meta.etablissement || meta.ecole_frequentee)) {
+                updatedPlayer.ecole = meta.child_school || meta.school || meta.ecole || meta.etablissement || meta.ecole_frequentee;
+                fieldsToHighlight.push("ecole");
+              }
+              if (!updatedPlayer.parentNomPrenom && (meta.guardian_name || meta.parent_nom || meta.parentNomPrenom)) {
+                updatedPlayer.parentNomPrenom = meta.guardian_name || meta.parent_nom || meta.parentNomPrenom;
+                fieldsToHighlight.push("parentNomPrenom");
+              }
+              if (!updatedPlayer.parentLien && (meta.guardian_relation || meta.guardian_link || meta.relationship || meta.parent_lien || meta.lien_parente || meta.lien_parent || meta.lien || meta.relation)) {
+                updatedPlayer.parentLien = meta.guardian_relation || meta.guardian_link || meta.relationship || meta.parent_lien || meta.lien_parente || meta.lien_parent || meta.lien || meta.relation;
+                fieldsToHighlight.push("parentLien");
+              }
+              if (!updatedPlayer.planPaiement && (meta.payment_plan || meta.plan_paiement || meta.planPaiement)) {
+                const planVal = String(meta.payment_plan || meta.plan_paiement || meta.planPaiement).toLowerCase();
+                updatedPlayer.planPaiement = planVal.includes("3") || planVal.includes("mensuel") ? "PLAN #3 (Mensuel)" : planVal.includes("2") || planVal.includes("semestriel") || planVal.includes("trimestriel") ? "PLAN #2 (Semestriel)" : "PLAN #1 (Annuel)";
+                fieldsToHighlight.push("planPaiement");
+              }
+              if (!updatedPlayer.modePaiementChoisi && (meta.payment_method || meta.modePaiementChoisi || meta.methode_paiement)) {
+                const meth = String(meta.payment_method || meta.modePaiementChoisi || meta.methode_paiement).toLowerCase();
+                updatedPlayer.modePaiementChoisi = meth.includes("carte") ? "Carte bancaire" : (meth.includes("cash") || meth.includes("cheque")) ? "Cash/chèque" : "Transfert bancaire";
+                fieldsToHighlight.push("modePaiementChoisi");
+              }
+              if (!updatedPlayer.urgenceNomPrenom && (meta.emergency_name || meta.emergency_contact_name || meta.urgence_nom)) {
+                updatedPlayer.urgenceNomPrenom = meta.emergency_name || meta.emergency_contact_name || meta.urgence_nom;
                 fieldsToHighlight.push("urgenceNomPrenom");
               }
-              if (!updatedPlayer.urgenceTelephone && (meta.emergency_phone || meta.emergency_contact_phone)) {
-                updatedPlayer.urgenceTelephone = meta.emergency_phone || meta.emergency_contact_phone;
+              if (!updatedPlayer.urgenceTelephone && (meta.emergency_phone || meta.emergency_contact_phone || meta.urgence_telephone)) {
+                updatedPlayer.urgenceTelephone = meta.emergency_phone || meta.emergency_contact_phone || meta.urgence_telephone;
                 fieldsToHighlight.push("urgenceTelephone");
               }
-              if (!updatedPlayer.urgenceLien && (meta.emergency_relation || meta.emergency_contact_relation)) {
-                updatedPlayer.urgenceLien = meta.emergency_relation || meta.emergency_contact_relation;
+              if (!updatedPlayer.urgenceLien && (meta.emergency_relation || meta.emergency_contact_relation || meta.emergency_link || meta.urgence_lien || meta.lien_urgence || meta.lien_parente)) {
+                updatedPlayer.urgenceLien = meta.emergency_relation || meta.emergency_contact_relation || meta.emergency_link || meta.urgence_lien || meta.lien_urgence || meta.lien_parente;
                 fieldsToHighlight.push("urgenceLien");
               }
-              if (!updatedPlayer.urgenceEmail && (meta.emergency_email || meta.emergency_contact_email)) {
-                updatedPlayer.urgenceEmail = meta.emergency_email || meta.emergency_contact_email;
+              if (!updatedPlayer.urgenceEmail && (meta.emergency_email || meta.emergency_contact_email || meta.urgence_email)) {
+                updatedPlayer.urgenceEmail = meta.emergency_email || meta.emergency_contact_email || meta.urgence_email;
                 fieldsToHighlight.push("urgenceEmail");
               }
-              if (!updatedPlayer.urgenceAdresse && (meta.emergency_address || meta.emergency_contact_address)) {
-                updatedPlayer.urgenceAdresse = meta.emergency_address || meta.emergency_contact_address;
+              if (!updatedPlayer.urgenceAdresse && (meta.emergency_address || meta.emergency_contact_address || meta.urgence_adresse)) {
+                updatedPlayer.urgenceAdresse = meta.emergency_address || meta.emergency_contact_address || meta.urgence_adresse;
                 fieldsToHighlight.push("urgenceAdresse");
               }
-              if ((!updatedPlayer.tailleHaut || updatedPlayer.tailleHaut === "Choisir") && meta.uniform_top_size) {
-                updatedPlayer.tailleHaut = meta.uniform_top_size;
-                fieldsToHighlight.push("tailleHaut");
+              if ((!updatedPlayer.tailleHaut || updatedPlayer.tailleHaut === "Choisir") && (meta.uniform_top_size || meta.taille_haut || meta.taille_maillot)) {
+                const s = String(meta.uniform_top_size || meta.taille_haut || meta.taille_maillot).toUpperCase().trim();
+                const validSizes = ["YXS", "YS", "YM", "YL", "YXL", "AXL", "AS", "AM", "AL"];
+                const matched = validSizes.find(v => s === v || s.startsWith(v));
+                if (matched) {
+                  updatedPlayer.tailleHaut = matched;
+                  fieldsToHighlight.push("tailleHaut");
+                }
               }
-              if ((!updatedPlayer.tailleShort || updatedPlayer.tailleShort === "Choisir") && meta.uniform_short_size) {
-                updatedPlayer.tailleShort = meta.uniform_short_size;
-                fieldsToHighlight.push("tailleShort");
+              if ((!updatedPlayer.tailleShort || updatedPlayer.tailleShort === "Choisir") && (meta.uniform_short_size || meta.taille_short || meta.short_size)) {
+                const s = String(meta.uniform_short_size || meta.taille_short || meta.short_size).toUpperCase().trim();
+                const validSizes = ["YXS", "YS", "YM", "YL", "YXL", "AXL", "AS", "AM", "AL"];
+                const matched = validSizes.find(v => s === v || s.startsWith(v));
+                if (matched) {
+                  updatedPlayer.tailleShort = matched;
+                  fieldsToHighlight.push("tailleShort");
+                }
               }
-              if (!updatedPlayer.numerosPreferes && meta.preferred_numbers) {
-                updatedPlayer.numerosPreferes = meta.preferred_numbers;
+              if (!updatedPlayer.numerosPreferes && (meta.preferred_numbers || meta.numeros_preferes)) {
+                updatedPlayer.numerosPreferes = meta.preferred_numbers || meta.numeros_preferes;
                 fieldsToHighlight.push("numerosPreferes");
               }
               
@@ -119,21 +177,57 @@ function PlayersPageContent() {
                   const reg = allRegs[0];
                   
                   // Merge any missing fields from player_registrations directly
+                  if (!updatedPlayer.ecole && (reg.child_school || reg.school || reg.ecole || reg.etablissement)) {
+                    updatedPlayer.ecole = reg.child_school || reg.school || reg.ecole || reg.etablissement;
+                    if (!fieldsToHighlight.includes("ecole")) fieldsToHighlight.push("ecole");
+                  }
+                  if (!updatedPlayer.parentNomPrenom && (reg.guardian_name || reg.guardian_first_name)) {
+                    updatedPlayer.parentNomPrenom = reg.guardian_name || `${reg.guardian_first_name || ""} ${reg.guardian_last_name || ""}`.trim();
+                    if (!fieldsToHighlight.includes("parentNomPrenom")) fieldsToHighlight.push("parentNomPrenom");
+                  }
+                  if (!updatedPlayer.parentLien && (reg.guardian_relation || reg.guardian_link || reg.relationship || reg.parent_lien || reg.lien_parente)) {
+                    updatedPlayer.parentLien = reg.guardian_relation || reg.guardian_link || reg.relationship || reg.parent_lien || reg.lien_parente;
+                    if (!fieldsToHighlight.includes("parentLien")) fieldsToHighlight.push("parentLien");
+                  }
+                  if (!updatedPlayer.planPaiement && reg.payment_plan) {
+                    const planVal = String(reg.payment_plan).toLowerCase();
+                    updatedPlayer.planPaiement = planVal.includes("3") || planVal.includes("mensuel") ? "PLAN #3 (Mensuel)" : planVal.includes("2") || planVal.includes("semestriel") || planVal.includes("trimestriel") ? "PLAN #2 (Semestriel)" : "PLAN #1 (Annuel)";
+                    if (!fieldsToHighlight.includes("planPaiement")) fieldsToHighlight.push("planPaiement");
+                  }
+                  if (!updatedPlayer.modePaiementChoisi && reg.payment_method) {
+                    const meth = String(reg.payment_method).toLowerCase();
+                    updatedPlayer.modePaiementChoisi = meth.includes("carte") ? "Carte bancaire" : (meth.includes("cash") || meth.includes("cheque")) ? "Cash/chèque" : "Transfert bancaire";
+                    if (!fieldsToHighlight.includes("modePaiementChoisi")) fieldsToHighlight.push("modePaiementChoisi");
+                  }
                   if (!updatedPlayer.numerosPreferes && reg.preferred_numbers) {
                     updatedPlayer.numerosPreferes = reg.preferred_numbers;
                     fieldsToHighlight.push("numerosPreferes");
                   }
                   if ((!updatedPlayer.tailleHaut || updatedPlayer.tailleHaut === "Choisir") && reg.uniform_top_size) {
-                    updatedPlayer.tailleHaut = reg.uniform_top_size;
-                    if (!fieldsToHighlight.includes("tailleHaut")) fieldsToHighlight.push("tailleHaut");
+                    const s = String(reg.uniform_top_size).toUpperCase().trim();
+                    const validSizes = ["YXS", "YS", "YM", "YL", "YXL", "AXL", "AS", "AM", "AL"];
+                    const matched = validSizes.find(v => s === v || s.startsWith(v));
+                    if (matched) {
+                      updatedPlayer.tailleHaut = matched;
+                      if (!fieldsToHighlight.includes("tailleHaut")) fieldsToHighlight.push("tailleHaut");
+                    }
                   }
                   if ((!updatedPlayer.tailleShort || updatedPlayer.tailleShort === "Choisir") && reg.uniform_short_size) {
-                    updatedPlayer.tailleShort = reg.uniform_short_size;
-                    if (!fieldsToHighlight.includes("tailleShort")) fieldsToHighlight.push("tailleShort");
+                    const s = String(reg.uniform_short_size).toUpperCase().trim();
+                    const validSizes = ["YXS", "YS", "YM", "YL", "YXL", "AXL", "AS", "AM", "AL"];
+                    const matched = validSizes.find(v => s === v || s.startsWith(v));
+                    if (matched) {
+                      updatedPlayer.tailleShort = matched;
+                      if (!fieldsToHighlight.includes("tailleShort")) fieldsToHighlight.push("tailleShort");
+                    }
                   }
                   if ((!updatedPlayer.urgenceNomPrenom || updatedPlayer.urgenceNomPrenom === "Choisir") && reg.emergency_name) {
                     updatedPlayer.urgenceNomPrenom = reg.emergency_name;
                     if (!fieldsToHighlight.includes("urgenceNomPrenom")) fieldsToHighlight.push("urgenceNomPrenom");
+                  }
+                  if (!updatedPlayer.urgenceLien && (reg.emergency_relation || reg.emergency_link || reg.urgence_lien || reg.lien_urgence)) {
+                    updatedPlayer.urgenceLien = reg.emergency_relation || reg.emergency_link || reg.urgence_lien || reg.lien_urgence;
+                    if (!fieldsToHighlight.includes("urgenceLien")) fieldsToHighlight.push("urgenceLien");
                   }
 
                   const { data: docs } = await supabase.from('player_registration_documents').select('*').eq('registration_id', reg.id);
@@ -357,6 +451,10 @@ function PlayersPageContent() {
           setSelectedEditPlayer(null);
           router.replace("/joueurs");
         }}
+        onSuccess={(msg) => {
+          setToast({ message: msg, type: "success" });
+          setTimeout(() => setToast(null), 4000);
+        }}
         player={selectedEditPlayer}
         highlightFields={highlightFields}
         demandeId={searchParams.get("demandeId")}
@@ -366,6 +464,10 @@ function PlayersPageContent() {
       <PlayerAddModal
         isOpen={isAddModalOpen}
         onClose={() => setIsAddModalOpen(false)}
+        onSuccess={(msg) => {
+          setToast({ message: msg, type: "success" });
+          setTimeout(() => setToast(null), 4000);
+        }}
       />
       <PaymentAddModal
         isOpen={!!selectedPaymentPlayer}

@@ -208,6 +208,7 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
   const experienceSoccer = player.experienceSoccer || regData?.child_soccer_experience || "Non renseigné";
 
   const parentNom = player.parentNomPrenom || regData?.guardian_name || "Non renseigné";
+  const parentLien = player.parentLien || regData?.guardian_relation || regData?.guardian_link || regData?.parent_lien || regData?.relationship || "Non renseigné";
   const parentEmail = player.parentEmail || regData?.guardian_email || player.email || "Non renseigné";
   const parentPhone = player.parentTelephone || regData?.guardian_phone || player.telephone || "Non renseigné";
   const parentAdresse = player.parentAdresse || regData?.guardian_address || player.adresse || "Non renseigné";
@@ -413,10 +414,14 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
                 <h4 className="font-semibold text-gray-900 dark:text-white text-base">Parents / Tuteur Responsable</h4>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-5">
                 <div>
                   <span className="block text-xs font-medium text-gray-500 mb-1">Nom & Prénom</span>
                   <span className="block text-sm font-semibold text-gray-900 dark:text-white">{parentNom}</span>
+                </div>
+                <div>
+                  <span className="block text-xs font-medium text-gray-500 mb-1">Lien avec le joueur</span>
+                  <span className="block text-sm font-semibold text-gray-900 dark:text-white">{parentLien}</span>
                 </div>
                 <div>
                   <span className="block text-xs font-medium text-gray-500 mb-1">E-mail</span>

@@ -1269,6 +1269,28 @@ export default function BoiteDeReception() {
                         }
                         
                         await updateMessageStatus(selectedMessage.id, newStatus, selectedMessage.metadata);
+
+                        // Envoyer l'e-mail automatique de validation au parent avec les détails bancaires
+                        const targetEmail = selectedMessage.contact_email;
+                        if (targetEmail) {
+                          try {
+                            await fetch("/api/send-acceptance", {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({
+                                email: targetEmail,
+                                parentName: selectedMessage.contact_nom || "",
+                                childName: selectedMessage.sujet || selectedMessage.contact_nom || "",
+                                matricule: selectedMessage.metadata?.numero_inscription || selectedMessage.metadata?.numero_detection || "",
+                                categorie: selectedMessage.metadata?.categorie || "",
+                                programme: selectedMessage.metadata?.programme || "FC Toro",
+                              }),
+                            });
+                          } catch (e) {
+                            console.warn("Impossible d'envoyer l'e-mail de validation :", e);
+                          }
+                        }
+
                         setMessages(prev => prev.map(m => m.id === selectedMessage.id ? { ...m, statut: newStatus } : m));
                         setSelectedMessage(null);
                       } catch (err) {

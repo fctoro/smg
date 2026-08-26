@@ -63,6 +63,27 @@ export function PlayerAddModal({ isOpen, onClose }: PlayerAddModalProps) {
           await syncPlayerProgrammes(String(inserted.EtudiantID), values.programmesAssignesIds);
         }
         
+        // Envoyer l'e-mail automatique de validation d'inscription avec les coordonnées bancaires
+        const targetEmail = values.parentEmail || values.email;
+        if (targetEmail) {
+          try {
+            await fetch("/api/send-acceptance", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                email: targetEmail,
+                parentName: values.parentNomPrenom || "",
+                childName: `${values.prenom || ""} ${values.nom || ""}`.trim(),
+                matricule: matriculeCode,
+                categorie: values.categorie,
+                programme: values.programme,
+              }),
+            });
+          } catch (e) {
+            console.warn("Impossible d'envoyer l'e-mail automatique de validation :", e);
+          }
+        }
+        
         setToast({
           message: newPlayerLocal.statut === "alumni" 
             ? `Joueur enregistré dans alumni avec succès ! (Code: ${matriculeCode})` 

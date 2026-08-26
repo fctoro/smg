@@ -222,8 +222,9 @@ export default function RecusJoueursPage() {
           "Nombre Versements",
           "Total Payé",
         ];
-        let csvContent = "\uFEFF" + headers.join(";") + "\n";
-        filteredPlayers.forEach((p) => {
+        
+        const thead = headers.map(h => `<th>${h}</th>`).join("");
+        const tbody = filteredPlayers.map((p) => {
           const row = [
             p.receiptNo,
             p.matricule,
@@ -233,16 +234,33 @@ export default function RecusJoueursPage() {
             String(p.playerPayments.length),
             p.totalPaye,
           ];
-          const csvRow = row.map(
-            (field) => `"${(field || "").toString().replace(/"/g, '""')}"`,
-          );
-          csvContent += csvRow.join(";") + "\n";
-        });
-        const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+          return `<tr>${row.map(field => `<td>${(field || "").toString().replace(/</g, "&lt;").replace(/>/g, "&gt;")}</td>`).join("")}</tr>`;
+        }).join("");
+
+        const htmlContent = `
+          <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+          <head>
+            <meta charset="utf-8" />
+            <style>
+              table { border-collapse: collapse; }
+              td, th { border: 1px solid #dddddd; padding: 4px; }
+              th { background-color: #f2f2f2; font-weight: bold; }
+            </style>
+          </head>
+          <body>
+            <table>
+              <thead><tr>${thead}</tr></thead>
+              <tbody>${tbody}</tbody>
+            </table>
+          </body>
+          </html>
+        `;
+
+        const blob = new Blob([htmlContent], { type: "application/vnd.ms-excel;charset=utf-8" });
         const url = URL.createObjectURL(blob);
         const link = document.createElement("a");
         link.href = url;
-        link.setAttribute("download", `rp_joueurs_${new Date().toISOString().slice(0, 10)}.csv`);
+        link.setAttribute("download", `rp_joueurs_${new Date().toISOString().slice(0, 10)}.xls`);
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);

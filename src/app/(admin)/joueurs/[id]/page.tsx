@@ -6,7 +6,7 @@ import { useParams } from "next/navigation";
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import Pagination from "@/components/tables/Pagination";
 import { useClubData } from "@/context/ClubDataContext";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import {
   formatClubCurrency,
   formatClubDate,
@@ -20,6 +20,39 @@ const getSafeAvatarSrc = (photoUrl?: string): string => {
   return "/images/user/silhouette.svg";
 };
 
+/** Calcule le solde restant pour un paiement individuel (même logique que la page paiements) */
+const computePaymentBalance = (p: any): { balance: number; devise: "US" | "HTG" } => {
+  const paymentDevise = (p.devise || "US") as "US" | "HTG";
+  const zero = { balance: 0, devise: paymentDevise };
+
+  const remarkLower = (p.remarque || "").toLowerCase();
+  // Ignorer les boursiers
+  if (remarkLower.includes("[plan:boursier]")) return zero;
+  // Paiements kit-only sans adhésion : pas de dette
+  const isKitOnly = !remarkLower.includes("adhésion") && !remarkLower.includes("adhesion");
+
+  const totalDueMatch = (p.remarque || "").match(/\[TOTAL_DUE:\s*([\d.]+)\s*\]/i);
+  if (!totalDueMatch) return zero;
+  const totalDueUSD = parseFloat(totalDueMatch[1]);
+  if (isNaN(totalDueUSD) || totalDueUSD <= 0) return zero;
+  if (isKitOnly && totalDueUSD >= 900) return zero;
+
+  if (paymentDevise === "HTG") {
+    let taux = p.taux || 0;
+    if (taux <= 1) {
+      const tauxMatch = (p.remarque || "").match(/\[TAUX:\s*([\d.]+)\s*\]/i);
+      taux = tauxMatch ? parseFloat(tauxMatch[1]) : 130;
+    }
+    if (taux <= 1) return zero;
+    const totalDueHTG = totalDueUSD * taux;
+    const balanceHTG = totalDueHTG - p.montant;
+    return balanceHTG > 1 ? { balance: Math.round(balanceHTG), devise: "HTG" } : zero;
+  } else {
+    const balanceUSD = totalDueUSD - p.montant;
+    return balanceUSD > 0.01 ? { balance: Number(balanceUSD.toFixed(2)), devise: "US" } : zero;
+  }
+};
+
 export default function PlayerDetailsPage() {
   const params = useParams<{ id: string }>();
   const playerId = params.id;
@@ -29,6 +62,89 @@ export default function PlayerDetailsPage() {
 
   const player = players.find((item) => item.id === playerId);
   const playerPayments = payments.filter((p) => p.playerId === playerId);
+
+  // Calcul financier synthétique
+  const finSummary = useMemo(() => {
+    if (!player) return null;
+
+    const playerStatus = ((player as any).statutJoueur || "").toLowerCase().trim();
+    const isBoursier = playerStatus === "bourse" || playerStatus === "boursier"
+      || playerPayments.some(p => (p.remarque || "").toLowerCase().includes("[plan:boursier]"));
+
+    // Dédupliquer les paiements identiques
+    const uniquePayments: any[] = [];
+    const seenKeys = new Set<string>();
+    playerPayments.forEach((p) => {
+      const key = `${p.montant}_${p.datePaiement}_${(p.remarque || "").trim()}`;
+      if (!seenKeys.has(key)) {
+        seenKeys.add(key);
+        uniquePayments.push(p);
+      }
+    });
+
+    const hasHTG = uniquePayments.some(p => p.devise === "HTG" || (p.montantHTG && p.montantHTG > 0));
+    const mainDevise: "US" | "HTG" = hasHTG ? "HTG" : "US";
+
+    let totalPaid = 0;
+    if (mainDevise === "HTG") {
+      totalPaid = uniquePayments.reduce((acc, p) => {
+        if (p.devise === "HTG" || (p.montantHTG && p.montantHTG > 0)) {
+          return acc + (p.montantHTG || p.montant || 0);
+        }
+        const taux = p.taux || 130;
+        return acc + ((p.montantUS || p.montant || 0) * taux);
+      }, 0);
+    } else {
+      totalPaid = uniquePayments.reduce((acc, p) => {
+        if (p.devise === "US" || (p.montantUS && p.montantUS > 0)) {
+          return acc + (p.montantUS || p.montant || 0);
+        }
+        const taux = p.taux || 130;
+        return acc + (taux > 0 ? (p.montantHTG || p.montant || 0) / taux : 0);
+      }, 0);
+    }
+
+    if (isBoursier) return { isBoursier: true, totalPaid, balance: 0, devise: mainDevise, isPaidInFull: true };
+
+    let dossierTotalDueUSD = 0;
+    uniquePayments.forEach((p) => {
+      const remark = p.remarque || "";
+      const totalDueMatch = remark.match(/\[TOTAL_DUE:\s*([\d.]+)\s*\]/i);
+      if (totalDueMatch && totalDueMatch[1]) {
+        const due = parseFloat(totalDueMatch[1]);
+        if (!isNaN(due) && due > dossierTotalDueUSD) {
+          dossierTotalDueUSD = due;
+        }
+      }
+    });
+
+    let balance = 0;
+    if (dossierTotalDueUSD > 0) {
+      if (mainDevise === "HTG") {
+        let taux = 130;
+        const firstHTG = uniquePayments.find(p => p.devise === "HTG" || (p.montantHTG && p.montantHTG > 0));
+        if (firstHTG) {
+          taux = firstHTG.taux || 0;
+          if (taux <= 1) {
+            const tauxMatch = (firstHTG.remarque || "").match(/\[TAUX:\s*([\d.]+)\s*\]/i);
+            taux = tauxMatch ? parseFloat(tauxMatch[1]) : 130;
+          }
+        }
+        const totalDueHTG = dossierTotalDueUSD * taux;
+        balance = Math.max(0, totalDueHTG - totalPaid);
+      } else {
+        balance = Math.max(0, dossierTotalDueUSD - totalPaid);
+      }
+    }
+
+    return {
+      isBoursier: false,
+      totalPaidUSD: totalPaid,
+      balance: Math.round(balance * 100) / 100,
+      devise: mainDevise,
+      isPaidInFull: balance <= 0.01,
+    };
+  }, [player, playerPayments]);
 
   const totalPages = Math.max(1, Math.ceil(playerPayments.length / currentPageSize));
   const currentPageSafe = Math.min(currentPage, totalPages);
@@ -130,10 +246,33 @@ export default function PlayerDetailsPage() {
             <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
               Cotisation Globale
             </p>
-            <p className="mt-2 text-sm text-gray-700 dark:text-gray-300">
-              Montant Total Paye: {formatClubCurrency(player.cotisationMontant, player.cotisationDevise)}
-            </p>
-            <p className="mt-1 text-sm text-gray-700 dark:text-gray-300">
+            {finSummary ? (
+              <>
+                {finSummary.isBoursier ? (
+                  <p className="mt-2 text-sm font-semibold text-purple-600 dark:text-purple-400">
+                    🎓 Boursier (Exonéré)
+                  </p>
+                ) : (
+                  <>
+                    <p className="mt-2 text-sm text-gray-700 dark:text-gray-300">
+                      Total versé (USD) : <span className="font-semibold text-gray-900 dark:text-white">{formatClubCurrency(finSummary.totalPaidUSD, "US")}</span>
+                    </p>
+                    {finSummary.balance > 0 ? (
+                      <p className="mt-1 text-sm font-semibold text-red-600 dark:text-red-400">
+                        Solde dû : {formatClubCurrency(finSummary.balance, finSummary.devise)}
+                      </p>
+                    ) : (
+                      <p className="mt-1 text-sm font-semibold text-emerald-600 dark:text-emerald-400">
+                        ✓ À jour (Payé)
+                      </p>
+                    )}
+                  </>
+                )}
+              </>
+            ) : (
+              <p className="mt-2 text-sm text-gray-700 dark:text-gray-300">—</p>
+            )}
+            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
               Dernier paiement: {formatClubDate(player.dernierPaiement)}
             </p>
           </div>
@@ -150,7 +289,8 @@ export default function PlayerDetailsPage() {
                 <thead className="bg-gray-50 text-gray-800 dark:bg-white/[0.02] dark:text-white/90">
                   <tr>
                     <th className="px-4 py-3 font-medium">Date</th>
-                    <th className="px-4 py-3 font-medium">Montant</th>
+                    <th className="px-4 py-3 font-medium">Montant versé</th>
+                    <th className="px-4 py-3 font-medium">Solde restant</th>
                     <th className="px-4 py-3 font-medium">Méthode</th>
                     <th className="px-4 py-3 font-medium">Statut</th>
                   </tr>
@@ -158,25 +298,37 @@ export default function PlayerDetailsPage() {
                 <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
                   {pagedPayments.length === 0 ? (
                     <tr>
-                      <td colSpan={4} className="px-4 py-4 text-center">
+                      <td colSpan={5} className="px-4 py-4 text-center">
                         Aucun paiement enregistré pour ce joueur.
                       </td>
                     </tr>
                   ) : (
-                    pagedPayments.map((p) => (
-                      <tr key={p.id} className="hover:bg-gray-50 dark:hover:bg-white/[0.02]">
-                        <td className="px-4 py-3">{formatClubDate(p.datePaiement ?? "")}</td>
-                        <td className="px-4 py-3 font-medium text-gray-800 dark:text-white/90">
-                          {formatClubCurrency(p.montant, p.devise)}
-                        </td>
-                        <td className="px-4 py-3">{p.methode}</td>
-                        <td className="px-4 py-3">
-                          <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${p.statut === 'paid' ? 'bg-success-50 text-success-700' : 'bg-warning-50 text-warning-700'}`}>
-                            {paymentStatusLabel[p.statut]}
-                          </span>
-                        </td>
-                      </tr>
-                    ))
+                    pagedPayments.map((p) => {
+                      const bal = computePaymentBalance(p);
+                      return (
+                        <tr key={p.id} className="hover:bg-gray-50 dark:hover:bg-white/[0.02]">
+                          <td className="px-4 py-3">{formatClubDate(p.datePaiement ?? "")}</td>
+                          <td className="px-4 py-3 font-medium text-gray-800 dark:text-white/90">
+                            {formatClubCurrency(p.montant, p.devise)}
+                          </td>
+                          <td className="px-4 py-3">
+                            {bal.balance > 0 ? (
+                              <span className="font-medium text-red-600 dark:text-red-400">
+                                {formatClubCurrency(bal.balance, bal.devise)}
+                              </span>
+                            ) : (
+                              <span className="font-medium text-emerald-600 dark:text-emerald-400">À jour</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3">{p.methode}</td>
+                          <td className="px-4 py-3">
+                            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${p.statut === 'paid' ? 'bg-success-50 text-success-700' : 'bg-warning-50 text-warning-700'}`}>
+                              {paymentStatusLabel[p.statut]}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })
                   )}
                 </tbody>
               </table>
@@ -199,3 +351,4 @@ export default function PlayerDetailsPage() {
     </div>
   );
 }
+

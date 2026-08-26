@@ -361,7 +361,9 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
 
             // Agrégation de tous les paiements des doublons
             const studentPayments = paiements.filter((p: any) => allGroupIds.includes(p.EtudiantId));
-            const totalPaid = studentPayments.reduce((sum: number, p: any) => sum + (p.MntPayeUS || p.MntPayeGd || 0), 0);
+            // On additionne uniquement les montants USD (MntPayeUS) pour éviter de mélanger HTG et USD
+            // Les paiements en HTG ont MntPayeUS=0 et MntPayeGd > 0, donc on les ignore ici
+            const totalPaid = studentPayments.reduce((sum: number, p: any) => sum + (Number(p.MntPayeUS) || 0), 0);
             const sortedPayments = [...studentPayments].sort((a: any, b: any) => 
               new Date(b.DateTransact || 0).getTime() - new Date(a.DateTransact || 0).getTime()
             );

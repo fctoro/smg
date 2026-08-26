@@ -73,7 +73,96 @@ export default function PlayerTable({
   exportButton,
   availableCategories,
 }: PlayerTableProps) {
-  const { hydrated } = useClubData();
+  const { hydrated, payments } = useClubData();
+
+  const playerFinMap = useMemo(() => {
+    const map = new Map<string, { totalPaid: number; balance: number; devise: "US" | "HTG"; isPaidInFull: boolean; hasPayments: boolean }>();
+    const grouped = new Map<string, any[]>();
+
+    (payments || []).forEach((p) => {
+      const pid = String(p.playerId);
+      if (!grouped.has(pid)) grouped.set(pid, []);
+      grouped.get(pid)!.push(p);
+    });
+
+    grouped.forEach((pList, pid) => {
+      const uniquePayments: any[] = [];
+      const seenKeys = new Set<string>();
+      pList.forEach((p) => {
+        const key = `${p.montant}_${p.datePaiement}_${(p.remarque || "").trim()}`;
+        if (!seenKeys.has(key)) {
+          seenKeys.add(key);
+          uniquePayments.push(p);
+        }
+      });
+
+      const hasHTG = uniquePayments.some(p => p.devise === "HTG" || (p.montantHTG && p.montantHTG > 0));
+      const mainDevise: "US" | "HTG" = hasHTG ? "HTG" : "US";
+
+      let totalPaid = 0;
+      if (mainDevise === "HTG") {
+        totalPaid = uniquePayments.reduce((acc, p) => {
+          if (p.devise === "HTG" || (p.montantHTG && p.montantHTG > 0)) {
+            return acc + (p.montantHTG || p.montant || 0);
+          }
+          const taux = p.taux || 130;
+          return acc + ((p.montantUS || p.montant || 0) * taux);
+        }, 0);
+      } else {
+        totalPaid = uniquePayments.reduce((acc, p) => {
+          if (p.devise === "US" || (p.montantUS && p.montantUS > 0)) {
+            return acc + (p.montantUS || p.montant || 0);
+          }
+          const taux = p.taux || 130;
+          return acc + (taux > 0 ? (p.montantHTG || p.montant || 0) / taux : 0);
+        }, 0);
+      }
+
+      let dossierTotalDueUSD = 0;
+      pList.forEach((p) => {
+        const remark = p.remarque || "";
+        const match = remark.match(/\[TOTAL_DUE:\s*([\d.]+)\s*\]/i);
+        if (match && match[1]) {
+          const due = parseFloat(match[1]);
+          if (!isNaN(due) && due > dossierTotalDueUSD) {
+            dossierTotalDueUSD = due;
+          }
+        }
+      });
+
+      let taux = 130;
+      const htgPayment = uniquePayments.find(p => p.devise === "HTG" || (p.montantHTG && p.montantHTG > 0));
+      if (htgPayment) {
+        taux = htgPayment.taux || 0;
+        if (taux <= 1) {
+          const tauxMatch = (htgPayment.remarque || "").match(/\[TAUX:\s*([\d.]+)\s*\]/i);
+          taux = tauxMatch ? parseFloat(tauxMatch[1]) : 130;
+        }
+      }
+
+      let balance = 0;
+      if (dossierTotalDueUSD > 0) {
+        if (mainDevise === "HTG") {
+          const dossierTotalDueHTG = dossierTotalDueUSD * taux;
+          balance = Math.max(0, dossierTotalDueHTG - totalPaid);
+        } else {
+          balance = Math.max(0, dossierTotalDueUSD - totalPaid);
+        }
+      }
+
+      const isPaidInFull = dossierTotalDueUSD > 0 ? balance <= 0.01 : false;
+
+      map.set(pid, {
+        totalPaid: Math.round(totalPaid * 100) / 100,
+        balance: Math.round(balance * 100) / 100,
+        devise: mainDevise,
+        isPaidInFull,
+        hasPayments: pList.length > 0,
+      });
+    });
+
+    return map;
+  }, [payments]);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [selectedSeason, setSelectedSeason] = useState("all");
@@ -392,6 +481,31 @@ export default function PlayerTable({
                   ? player.matricule
                   : generatePlayerMatricule(player.id, player.saison, player.sourceDetection);
 
+                const pidStr = String(player.id);
+                const finData = playerFinMap.get(pidStr);
+                const isBoursier = ((player as any).statutJoueur || "").toLowerCase().includes("bourse");
+
+                const displayMontant = finData ? finData.totalPaid : player.cotisationMontant;
+                const displayDevise = finData ? finData.devise : (player.cotisationDevise || "US");
+                const isPaidInFull = finData ? finData.isPaidInFull : player.cotisationStatut === "paid";
+                const hasBalance = finData ? finData.balance > 0 : false;
+
+                const statusLabel = isBoursier
+                  ? "Boursier"
+                  : isPaidInFull
+                  ? "Payé"
+                  : hasBalance
+                  ? "Solde dû"
+                  : paymentStatusLabel[player.cotisationStatut];
+
+                const badgeBgClass = isBoursier
+                  ? "bg-purple-50 text-purple-700 dark:bg-purple-500/15 dark:text-purple-400"
+                  : isPaidInFull
+                  ? "bg-success-50 text-success-700 dark:bg-success-500/15 dark:text-success-500"
+                  : hasBalance
+                  ? "bg-warning-50 text-warning-700 dark:bg-warning-500/15 dark:text-orange-400"
+                  : "bg-error-50 text-error-700 dark:bg-error-500/15 dark:text-error-500";
+
                 return (
                 <TableRow key={player.id}>
                   {visibleColumnSet.has("avatarNom") ? (
@@ -442,21 +556,15 @@ export default function PlayerTable({
                   {visibleColumnSet.has("cotisation") ? (
                     <TableCell className="py-3 text-theme-sm text-gray-500 dark:text-gray-400">
                       <span
-                        className={`inline-flex items-center justify-center whitespace-nowrap rounded-full px-3 py-1 text-sm font-medium ${
-                          player.cotisationStatut === "paid"
-                            ? "bg-success-50 text-success-700 dark:bg-success-500/15 dark:text-success-500"
-                            : player.cotisationStatut === "pending"
-                            ? "bg-warning-50 text-warning-700 dark:bg-warning-500/15 dark:text-orange-400"
-                            : "bg-error-50 text-error-700 dark:bg-error-500/15 dark:text-error-500"
-                        }`}
+                        className={`inline-flex items-center justify-center whitespace-nowrap rounded-full px-3 py-1 text-sm font-medium ${badgeBgClass}`}
                       >
-                        {paymentStatusLabel[player.cotisationStatut]}
+                        {statusLabel}
                       </span>
                     </TableCell>
                   ) : null}
                   {visibleColumnSet.has("montant") ? (
                     <TableCell className="py-3 text-theme-sm font-medium text-gray-700 dark:text-gray-300">
-                      {formatClubCurrency(player.cotisationMontant, player.cotisationDevise)}
+                      {formatClubCurrency(displayMontant, displayDevise)}
                     </TableCell>
                   ) : null}
                   {visibleColumnSet.has("dernierPaiement") ? (

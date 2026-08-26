@@ -18,49 +18,54 @@ const supabaseAdmin: any = process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.S
 export async function insertPlayerAdmin(insertPayload: any) {
   if (!supabaseAdmin) return { success: false, error: "Service role Supabase indisponible." };
 
+  const calculateMaxId = async (): Promise<number> => {
+    const { data: allRows } = await supabaseAdmin
+      .from("tblEtudiants")
+      .select("EtudiantID");
+    
+    let maxId = 0;
+    if (allRows && allRows.length > 0) {
+      allRows.forEach((r: any) => {
+        const num = Number(r.EtudiantID);
+        if (!isNaN(num) && num > maxId) maxId = num;
+      });
+    }
+    return maxId;
+  };
+
   if (!insertPayload.EtudiantID) {
-    const { data: maxRow } = await supabaseAdmin
-      .from("tblEtudiants")
-      .select("EtudiantID")
-      .order("EtudiantID", { ascending: false })
-      .limit(1)
-      .maybeSingle();
+    const currentMax = await calculateMaxId();
+    insertPayload.EtudiantID = currentMax > 0 ? currentMax + 1 : 1;
+  }
 
-    if (maxRow?.EtudiantID && !isNaN(Number(maxRow.EtudiantID))) {
-      insertPayload.EtudiantID = Number(maxRow.EtudiantID) + 1;
+  let attempts = 0;
+  let lastError: any = null;
+
+  while (attempts < 10) {
+    attempts++;
+    const { data, error } = await supabaseAdmin
+      .from("tblEtudiants")
+      .insert(insertPayload)
+      .select("EtudiantID")
+      .single();
+
+    if (!error && data) {
+      return { success: true, data };
+    }
+
+    lastError = error;
+
+    // Duplicate key error handler (code 23505 or PK_tblEtudiant)
+    if (error && (error.code === "23505" || error.message?.includes("PK_tblEtudiant") || error.message?.includes("duplicate key"))) {
+      const freshMax = await calculateMaxId();
+      insertPayload.EtudiantID = Math.max(Number(insertPayload.EtudiantID) + 1, freshMax + 1);
+    } else {
+      // Non-duplicate error, break immediately
+      break;
     }
   }
 
-  let { data, error } = await supabaseAdmin
-    .from("tblEtudiants")
-    .insert(insertPayload)
-    .select("EtudiantID")
-    .single();
-
-  if (error && (error.code === "23505" || error.message?.includes("PK_tblEtudiant") || error.message?.includes("duplicate key"))) {
-    const { data: freshMax } = await supabaseAdmin
-      .from("tblEtudiants")
-      .select("EtudiantID")
-      .order("EtudiantID", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (freshMax?.EtudiantID) {
-      insertPayload.EtudiantID = Number(freshMax.EtudiantID) + 1;
-      const retryRes = await supabaseAdmin
-        .from("tblEtudiants")
-        .insert(insertPayload)
-        .select("EtudiantID")
-        .single();
-      data = retryRes.data;
-      error = retryRes.error;
-    }
-  }
-
-  if (error) {
-    return { success: false, error: error.message };
-  }
-  return { success: true, data };
+  return { success: false, error: lastError?.message || "Erreur lors de l'insertion." };
 }
 
 export async function updatePlayerAdmin(etudiantId: number | string, updatePayload: any) {

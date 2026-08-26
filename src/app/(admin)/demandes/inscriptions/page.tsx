@@ -304,13 +304,14 @@ export default function BoiteDeReception() {
     try {
       const data = await fetchSiteMessages();
       
-      // DAcduplication: EmpAccher l'affichage de deux inscriptions identiques
+      // Déduplication sécurisée : Ne pas fusionner si les clés sont génériques ou si ce sont des demandes distinctes
       const dedupedData = (data || []).reduce((acc: typeof data, msg: any) => {
         const enfantNom = (msg.metadata?.nom || msg.metadata?.enfant_nom || msg.metadata?.child_last_name || "").toString().trim().toLowerCase();
         const enfantPrenom = (msg.metadata?.prenom || msg.metadata?.enfant_prenom || msg.metadata?.child_first_name || "").toString().trim().toLowerCase();
         
-        // Si on a pas de nom d'enfant, on ne dAcduplique pas pour ne pas cacher de vrais messages
-        if (!enfantNom || !enfantPrenom) {
+        const isGeneric = (str: string) => !str || str.length < 3 || ["n/a", "na", "none", "null", "undefined", "pas", "non", "aucun", "aucune"].includes(str);
+
+        if (isGeneric(enfantNom) || isGeneric(enfantPrenom)) {
           acc.push(msg);
           return acc;
         }
@@ -318,13 +319,14 @@ export default function BoiteDeReception() {
         const uniqueKey = `${msg.type_message}_${enfantNom}_${enfantPrenom}`;
 
         const existingIndex = acc.findIndex((m: any) => {
+          if (m.id === msg.id) return true;
           const mEnfantNom = (m.metadata?.nom || m.metadata?.enfant_nom || m.metadata?.child_last_name || "").toString().trim().toLowerCase();
           const mEnfantPrenom = (m.metadata?.prenom || m.metadata?.enfant_prenom || m.metadata?.child_first_name || "").toString().trim().toLowerCase();
+          if (isGeneric(mEnfantNom) || isGeneric(mEnfantPrenom)) return false;
           return `${m.type_message}_${mEnfantNom}_${mEnfantPrenom}` === uniqueKey;
         });
 
         if (existingIndex >= 0) {
-          // Si le message courant est plus rAcent, on remplace l'ancien par celui-ci
           if (new Date(msg.created_at) > new Date(acc[existingIndex].created_at)) {
             acc[existingIndex] = msg;
           }
@@ -355,14 +357,27 @@ export default function BoiteDeReception() {
         const query = searchQuery.toLowerCase().trim();
         const contactName = (m.contact_nom || "").toLowerCase();
         const contactEmail = (m.contact_email || "").toLowerCase();
-        const childName = (m.metadata?.enfant_nom || m.metadata?.child_last_name || m.metadata?.nom || "").toLowerCase();
+        const contactPhone = (m.contact_telephone || "").toLowerCase();
+        const childLastName = (m.metadata?.enfant_nom || m.metadata?.child_last_name || m.metadata?.nom || "").toLowerCase();
         const childFirstName = (m.metadata?.enfant_prenom || m.metadata?.child_first_name || m.metadata?.prenom || "").toLowerCase();
-        
+        const parentName = (m.metadata?.parent_nom || m.metadata?.guardian_name || m.metadata?.emergency_name || "").toLowerCase();
+        const zone = (m.metadata?.zone_residence || m.metadata?.child_address || "").toLowerCase();
+        const numDet = (m.metadata?.numero_detection || m.reference_id || "").toLowerCase();
+        const fullSubject = (m.sujet || "").toLowerCase();
+        const fullContent = (m.contenu || "").toLowerCase();
+
         const isMatch = contactName.includes(query) || 
                         contactEmail.includes(query) || 
-                        childName.includes(query) || 
+                        contactPhone.includes(query) ||
+                        childLastName.includes(query) || 
                         childFirstName.includes(query) ||
-                        `${childFirstName} ${childName}`.includes(query);
+                        `${childFirstName} ${childLastName}`.includes(query) ||
+                        `${childLastName} ${childFirstName}`.includes(query) ||
+                        parentName.includes(query) ||
+                        zone.includes(query) ||
+                        numDet.includes(query) ||
+                        fullSubject.includes(query) ||
+                        fullContent.includes(query);
                         
         if (!isMatch) return false;
       }

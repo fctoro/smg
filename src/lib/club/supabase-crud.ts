@@ -350,18 +350,20 @@ export const addPlayerToSupabase = async (data: Omit<Player & { photoIdentiteUrl
     MethodePaiement: data.modePaiementChoisi || null,
     NumerosPreferes: (data as any).numerosPreferes || null,
     Ecole: (data as any).ecole || null,
-    Programme: (data as any).programme || null,
     PhotoIdentiteUrl: photoIdentiteUrl || null,
     ActeNaissanceUrl: acteNaissanceUrl || null,
     CarteIdentiteParentUrl: carteIdentiteParentUrl || null,
     Info2: fiche9eUrl || null,
     Info3: carnetVaccinationUrl || null,
-    Info1: ((data as any).sourceDetection ? "SOURCE:DETECTION" : "") + 
-           ((data as any).commentIdentifie ? `|IDENTIFIE:${(data as any).commentIdentifie}` : "") +
-           ((data as any).piedDominant ? `|PIED:${(data as any).piedDominant}` : "") +
-           ((data as any).postePrincipal ? `|POSTE_P:${(data as any).postePrincipal}` : "") +
-           ((data as any).posteSecondaire ? `|POSTE_S:${(data as any).posteSecondaire}` : "") +
-           ((data as any).clubActuel ? `|CLUB:${(data as any).clubActuel}` : ""),
+    Info1: (() => {
+      const raw = ((data as any).sourceDetection ? "SOURCE:DETECTION" : "") + 
+                  ((data as any).commentIdentifie ? `|IDENTIFIE:${(data as any).commentIdentifie}` : "") +
+                  ((data as any).piedDominant ? `|PIED:${(data as any).piedDominant}` : "") +
+                  ((data as any).postePrincipal ? `|POSTE_P:${(data as any).postePrincipal}` : "") +
+                  ((data as any).posteSecondaire ? `|POSTE_S:${(data as any).posteSecondaire}` : "") +
+                  ((data as any).clubActuel ? `|CLUB:${(data as any).clubActuel}` : "");
+      return raw ? raw.substring(0, 50) : null;
+    })(),
   };
 
   // Strip any residual base64 strings from insertPayload before sending to server action
@@ -384,6 +386,7 @@ export const addPlayerToSupabase = async (data: Omit<Player & { photoIdentiteUrl
     delete insertPayload.TailleShort;
     delete insertPayload.Saison;
     delete insertPayload.PhotoUrl;
+    delete insertPayload.Programme;
     result = await insertPlayerAdmin(insertPayload);
   }
 

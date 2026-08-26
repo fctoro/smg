@@ -218,7 +218,10 @@ export default function PlayerTable({
     return players
       .filter((player) => {
         const fullName = getPlayerFullName(player).toLowerCase();
-        const nameMatches = !query || fullName.includes(query);
+        const reversedName = `${player.nom || ""} ${player.prenom || ""}`.toLowerCase();
+        const searchStr = `${fullName} ${reversedName} ${player.matricule || ""} ${player.parentNomPrenom || ""} ${player.email || ""} ${player.parentEmail || ""} ${player.telephone || ""} ${player.parentTelephone || ""} ${player.adresse || ""} ${player.parentAdresse || ""} ${player.statutJoueur || ""} ${player.poste || ""}`.toLowerCase();
+
+        const nameMatches = !query || searchStr.includes(query);
         const categoryMatches =
           selectedCategory === "all" ||
           (player.categorie || "").trim().toLowerCase() === selectedCategory.trim().toLowerCase();

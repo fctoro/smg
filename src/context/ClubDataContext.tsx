@@ -304,12 +304,6 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
             if (nom === "test") return false;
             if (/^x+$/i.test(prenom)) return false; // Exclusion si le prénom est juste "x" ou "xx"
 
-            // Masquer les joueurs qui n'ont pas encore été validés par l'admin (venant du site public par ex)
-            const statutJoueur = String(d.StatutJoueur || "").toLowerCase().trim();
-            if (statutJoueur === "en attente" || statutJoueur === "a venir" || statutJoueur === "A venir" || statutJoueur === "nouveau") {
-              return false;
-            }
-
             return true;
           });
           
@@ -447,7 +441,7 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
 
             const isAlumni = group.some(g => g.EstAlumni === true || g.EstAlumni === 1 || String(g.EstAlumni).toLowerCase() === "true" || String(g.StatutJoueur).toLowerCase() === "alumni");
             const isAbandon = group.some(g => g.Abandon === true || g.Abandon === 1 || String(g.Abandon).toLowerCase() === "true" || String(g.StatutJoueur).toLowerCase().includes("abandon"));
-            const isInactive = group.every(g => g.Actif === false || g.Actif === 0 || String(g.Actif).toLowerCase() === "false" || String(g.StatutJoueur).toLowerCase().includes("inactif"));
+            const isExplicitInactive = group.some(g => g.Actif === false || g.Actif === 0);
             const isBlesse = group.some(g => String(g.StatutJoueur).toLowerCase().includes("bless"));
             const isSuspendu = group.some(g => String(g.StatutJoueur).toLowerCase().includes("suspend"));
 
@@ -455,17 +449,15 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
               playerStatus = "alumni";
             } else if (isAbandon) {
               playerStatus = "abandonne";
-            } else if (isInactive) {
+            } else if (isExplicitInactive) {
               playerStatus = "inactif";
             } else if (isBlesse) {
               playerStatus = "blesse";
             } else if (isSuspendu) {
               playerStatus = "suspendu";
-            } else if (savedPlayerStatus && ["actif", "inactif", "blesse", "suspendu", "abandonne", "alumni"].includes(savedPlayerStatus)) {
-              playerStatus = savedPlayerStatus as PlayerStatus;
             }
 
-            let finalStatutJoueur = savedPlayerStatus || undefined;
+            let finalStatutJoueur = (primaryRecord.StatutJoueur && !["inactif", "actif", "normal"].includes(savedPlayerStatus)) ? primaryRecord.StatutJoueur : undefined;
             for (const id of allGroupIds) {
               const st = playerStatusMap.get(String(id));
               if (st) {

@@ -62,7 +62,7 @@ export default function PlayerTable({
   columns = defaultColumns,
   title = "Joueurs",
   showToolbar = true,
-  pageSize = 8,
+  pageSize = 100,
   emptyMessage = "Aucun joueur trouvé.",
   onViewPlayer,
   onEditPlayer,

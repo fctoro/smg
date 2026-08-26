@@ -80,7 +80,7 @@ export default function BoiteDeReception() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
-  const [currentPageSize, setCurrentPageSize] = useState(10);
+  const [currentPageSize, setCurrentPageSize] = useState(100);
   const { confirm, ConfirmComponent } = useConfirm();
 
   // Modal states

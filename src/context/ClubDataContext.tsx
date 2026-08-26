@@ -1,6 +1,6 @@
 "use client";
 
-import { getSeasonCode, generatePlayerMatricule } from "@/lib/club/season";
+import { getSeasonCode, generatePlayerMatricule, getCurrentSeason } from "@/lib/club/season";
 
 import React, { createContext, useContext, useEffect, useState, useMemo, useCallback } from "react";
 import {
@@ -475,9 +475,13 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
               finalStatutJoueur = undefined;
             }
 
-            let currentDisplaySeason = latestSeasonStr || primaryRecord.Saison || entrySeason || "";
-            if (typeof currentDisplaySeason === 'string' && currentDisplaySeason.trim().toLowerCase() === "saison 2026-2027") {
-              currentDisplaySeason = "2026-2027";
+            // Si le joueur est actif, sa saison en cours est 2026-2027 (saison actuelle). Sinon, sa saison historique est conservée.
+            let currentDisplaySeason = playerStatus === "actif"
+              ? getCurrentSeason()
+              : (latestSeasonStr || primaryRecord.Saison || entrySeason || getCurrentSeason());
+
+            if (typeof currentDisplaySeason === 'string') {
+              currentDisplaySeason = currentDisplaySeason.replace(/^saison\s*/i, "").trim();
             }
 
             // Contact d'urgence (recherche robuste sur toutes les colonnes et entrées du groupe)

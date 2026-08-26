@@ -592,12 +592,12 @@ export default function PlayerForm({
                 Documents administratifs
               </h4>
               <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
-                Téléversez l'acte de naissance et la pièce d'identité des parents (PDF, JPG, PNG).
+                Téléversez l'acte de naissance et la pièce d'identité des parents (Optionnel).
               </p>
             </div>
           </div>
-          <span className="rounded-full bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-700 dark:bg-red-900/30 dark:text-red-400">
-            Obligatoire
+          <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-600 dark:bg-gray-800 dark:text-gray-400">
+            Optionnel
           </span>
         </div>
 

@@ -266,8 +266,8 @@ export function PaymentAddModal({ isOpen, onClose, initialPlayerId }: PaymentAdd
         setToast({ message: "Veuillez remplir le montant payé et le taux de change.", type: "error" });
         return;
       }
-      if (selectedPricingItems.length === 0) {
-        setToast({ message: "Veuillez sélectionner au moins une rubrique.", type: "error" });
+      if (selectedPricingItems.length === 0 && !selectedPlan) {
+        setToast({ message: "Veuillez sélectionner au moins une rubrique ou un plan de paiement.", type: "error" });
         return;
       }
     }
@@ -526,6 +526,7 @@ export function PaymentAddModal({ isOpen, onClose, initialPlayerId }: PaymentAdd
 
   const handlePlanChange = (planId: string) => {
     setSelectedPlan(planId);
+
     const plan = paymentPlans.find((p) => p.id === planId);
     if (plan && selectedPlayer) {
       setDevise("US");
@@ -537,7 +538,7 @@ export function PaymentAddModal({ isOpen, onClose, initialPlayerId }: PaymentAdd
       });
 
       if (!hasAdhesion && planId !== "") {
-        const isTiToroPlayer = selectedPlayer.categorie?.toLowerCase().includes("ti toro") || selectedPlayer.programme?.toLowerCase().includes("ti toro");
+        const isTiToroPlayer = (selectedPlayer.categorie || "").toLowerCase().includes("ti toro") || (selectedPlayer.programme || "").toLowerCase().includes("ti toro");
         const adhesionIdToSelect = isTiToroPlayer ? "adhesion-ti" : "adhesion-fc";
         setSelectedPricing((current) => [...current, adhesionIdToSelect]);
       }
@@ -557,21 +558,28 @@ export function PaymentAddModal({ isOpen, onClose, initialPlayerId }: PaymentAdd
       .reduce((sum, item) => sum + item.montant, 0);
 
     let adhesionBase = 0;
-    if (selectedAdhesionItem) {
+    if (selectedPlanData) {
+      const isTi = selectedAdhesionItem
+        ? (selectedAdhesionItem.rubrique.toLowerCase().includes("ti toro") || selectedAdhesionItem.id === "adhesion-ti")
+        : ((selectedPlayer?.categorie || "").toLowerCase().includes("ti toro") || (selectedPlayer?.programme || "").toLowerCase().includes("ti toro"));
+      
+      const fullPlanYearUSD = isTi ? selectedPlanData.montantTIToro : selectedPlanData.montantFCToro;
+      adhesionBase = (selectedPlanData.id === "semestriel" || selectedPlanData.id === "mensuel")
+        ? fullPlanYearUSD * selectedPlanData.nombreVersements
+        : fullPlanYearUSD;
+    } else if (selectedAdhesionItem) {
       adhesionBase = selectedAdhesionItem.montant;
     } else if (selectedPricingItems.some((item) => item.estAdhesion || item.id === "adhesion-fc" || item.id === "adhesion-ti")) {
       adhesionBase = isTiToro ? 1000 : 1350;
-    } else if (selectedPlan) {
-      adhesionBase = isTiToro ? 1000 : 1350;
     }
 
-    // Rabais appliqué uniquement et précisément sur le montant réel de l'adhésion
-    const rabaisDecimal = Math.max(0, Math.min(100, rabaisPercent || 0)) / 100;
-    const rabaisAmount = adhesionBase * rabaisDecimal;
-    const adhesionAfterRabais = Math.max(0, adhesionBase - rabaisAmount);
+    // Additional discount applied on top of adhesionBase
+    const extraRabaisDecimal = Math.max(0, Math.min(100, rabaisPercent || 0)) / 100;
+    const extraRabaisAmount = adhesionBase * extraRabaisDecimal;
+    const adhesionAfterExtraRabais = Math.max(0, adhesionBase - extraRabaisAmount);
 
-    return adhesionAfterRabais + nonAdhesionSum;
-  }, [selectedPricingItems, selectedPlan, isTiToro, selectedAdhesionItem, rabaisPercent]);
+    return adhesionAfterExtraRabais + nonAdhesionSum;
+  }, [selectedPricingItems, selectedPlan, selectedPlanData, selectedPlayer, isTiToro, selectedAdhesionItem, rabaisPercent]);
 
   const discountedDue = baseTotalDue; // rétrocompatibilité interne
 
@@ -579,7 +587,7 @@ export function PaymentAddModal({ isOpen, onClose, initialPlayerId }: PaymentAdd
     return !!(selectedPlayer && (selectedPlayer.statutJoueur || "").toLowerCase().includes("bourse"));
   }, [selectedPlayer]);
 
-  const hasPricingItems = selectedPricingItems.length > 0;
+  const hasPricingItems = selectedPricingItems.length > 0 || !!selectedPlan;
 
   // Ne pas modifier automatiquement les montants quand le plan change
   // Les montants sont basés sur les rubriques sélectionnées uniquement
@@ -854,10 +862,10 @@ export function PaymentAddModal({ isOpen, onClose, initialPlayerId }: PaymentAdd
             )}
 
             {/* Rabais sur adhésion */}
-            {!isBoursier && selectedAdhesionItem && (
+            {!isBoursier && (
               <div className="md:col-span-2">
                 <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
-                  Remise sur l'adhésion
+                  Rabais additionnel (%)
                 </label>
                 <div className="flex flex-col sm:flex-row sm:items-center gap-3">
                   <div className="relative max-w-[140px]">
@@ -875,10 +883,17 @@ export function PaymentAddModal({ isOpen, onClose, initialPlayerId }: PaymentAdd
                     </div>
                   </div>
                   
-                  {rabaisPercent > 0 && selectedAdhesionItem && (() => {
-                    const adhesionBase = selectedAdhesionItem.montant;
-                    const rabaisAmt = +(adhesionBase * rabaisPercent / 100).toFixed(2);
-                    const afterRabais = +(adhesionBase - rabaisAmt).toFixed(2);
+                  {rabaisPercent > 0 && (() => {
+                    const isTi = selectedAdhesionItem
+                      ? (selectedAdhesionItem.rubrique.toLowerCase().includes("ti toro") || selectedAdhesionItem.id === "adhesion-ti")
+                      : ((selectedPlayer?.categorie || "").toLowerCase().includes("ti toro") || (selectedPlayer?.programme || "").toLowerCase().includes("ti toro"));
+                    const basePlanVal = selectedPlanData
+                      ? (selectedPlanData.id === "semestriel" || selectedPlanData.id === "mensuel"
+                          ? (isTi ? selectedPlanData.montantTIToro : selectedPlanData.montantFCToro) * selectedPlanData.nombreVersements
+                          : (isTi ? selectedPlanData.montantTIToro : selectedPlanData.montantFCToro))
+                      : (selectedAdhesionItem ? selectedAdhesionItem.montant : (isTi ? 1000 : 1350));
+                    const rabaisAmt = +(basePlanVal * rabaisPercent / 100).toFixed(2);
+                    const afterRabais = +(basePlanVal - rabaisAmt).toFixed(2);
                     return (
                       <div className="flex items-center gap-3 pl-1">
                         <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-500/20">
@@ -888,10 +903,10 @@ export function PaymentAddModal({ isOpen, onClose, initialPlayerId }: PaymentAdd
                         </div>
                         <div className="flex flex-col">
                           <span className="text-[13px] font-semibold text-gray-900 dark:text-white">
-                            Nouveau tarif : ${afterRabais}
+                            Nouveau tarif adhésion : ${afterRabais}
                           </span>
                           <span className="text-[11px] font-medium text-gray-500 dark:text-gray-400">
-                            Économie de ${rabaisAmt} <span className="ml-1 line-through opacity-70">${adhesionBase}</span>
+                            Remise de ${rabaisAmt} <span className="ml-1 line-through opacity-70">${basePlanVal}</span>
                           </span>
                         </div>
                       </div>
@@ -899,7 +914,7 @@ export function PaymentAddModal({ isOpen, onClose, initialPlayerId }: PaymentAdd
                   })()}
                 </div>
                 <p className="mt-1.5 text-[11px] text-gray-500 dark:text-gray-400">
-                  Cette remise s'applique exclusivement sur le montant de l'adhésion, les autres rubriques ne sont pas concernées.
+                  Ce rabais additionnel (ex: 10% rabais de fratrie / promotion) s'applique en plus du tarif du plan sélectionné.
                 </p>
               </div>
             )}

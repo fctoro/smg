@@ -449,7 +449,17 @@ export default function NewPaymentPage() {
       adhesionAmount = isTiToro ? 1000 : 1350;
     }
 
-    const totalUSD = adhesionAmount + nonAdhesionSum;
+    let effectiveRabaisPct = 0;
+    if (selectedPlan === "annuel") {
+      effectiveRabaisPct = 10;
+    } else if (selectedPlan === "semestriel") {
+      effectiveRabaisPct = 5;
+    }
+
+    const rabaisDecimal = effectiveRabaisPct / 100;
+    const adhesionAfterRabais = Math.max(0, adhesionAmount * (1 - rabaisDecimal));
+
+    const totalUSD = adhesionAfterRabais + nonAdhesionSum;
     if (devise === "HTG" && taux > 0) {
       return totalUSD * taux;
     }

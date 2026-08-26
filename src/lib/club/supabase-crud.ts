@@ -396,16 +396,17 @@ export const addPlayerToSupabase = async (data: Omit<Player & { photoIdentiteUrl
   }
 
   const newEtudiantId = result.data?.EtudiantID;
-  if (newEtudiantId && data.statut) {
+  if (newEtudiantId) {
+    const targetStatus = data.statut || "actif";
     try {
       const { upsertPlayerStatusAdmin } = await import("@/app/actions/club");
-      await upsertPlayerStatusAdmin(Number(newEtudiantId), data.statut);
+      await upsertPlayerStatusAdmin(Number(newEtudiantId), targetStatus);
     } catch (e) {
       await supabase
         .from('player_status')
         .upsert({ 
           player_id: Number(newEtudiantId), 
-          status: data.statut,
+          status: targetStatus,
           updated_at: new Date().toISOString()
         }, { onConflict: 'player_id' });
     }

@@ -291,6 +291,13 @@ export default function StatistiquesPage() {
       csvContent += `${dt},${recu},${pName},${mat},${prog},${cat},${mode},${p.devise || 'US'},${mntUS},${mntHTG},${statut}\n`;
     });
 
+    // Lignes de synthèse totales au bas du fichier CSV pour Excel (avec devises explicites)
+    const totalUSDExport = rows.filter(p => isUSDDevise(p.devise) && p.statut === "paid").reduce((sum, p) => sum + (p.montantUS || p.montant || 0), 0);
+    const totalHTGExport = rows.filter(p => p.devise === "HTG" && p.statut === "paid").reduce((sum, p) => sum + (p.montantHTG || p.montant || 0), 0);
+
+    csvContent += `\nTOTAL,,,,"TOTAL ENCAISSEMENTS",,,${totalUSDExport.toFixed(2)} USD,${totalHTGExport.toFixed(2)} HTG,VALIDES\n`;
+    csvContent += `JOUEURS_ACTIFS,,,,"EFFECTIF JOUEURS ACTIFS",,,${totalActivePlayersCount} Joueurs,,ACTIFS\n`;
+
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -445,17 +452,6 @@ export default function StatistiquesPage() {
               className="px-3 py-1.5 rounded-lg bg-gray-100 dark:bg-gray-800 text-xs font-bold text-gray-700 dark:text-gray-300 hover:bg-gray-200 transition-all"
             >
               Réinitialiser
-            </button>
-
-            {/* Bouton Imprimer placé CÔTE À CÔTE avec le bouton Extraction CSV */}
-            <button 
-              onClick={() => window.print()} 
-              className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-bold text-white shadow-sm transition-all flex items-center gap-2 border border-slate-700 active:scale-95 ml-1"
-            >
-              <svg className="w-4 h-4 text-slate-300 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-              </svg>
-              <span>Imprimer le Bilan</span>
             </button>
 
             <button 
@@ -740,50 +736,50 @@ export default function StatistiquesPage() {
           </div>
         </div>
 
-        {/* NOUVEAU BLOC DE KPI EN BAS (NOMBRE DE JOUEURS + TOTAL HTG + TOTAL USD) */}
+        {/* BLOC DE KPI EXÉCUTIF EN BAS (MONOCHROME & PRO) */}
         <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="rounded-2xl border border-purple-200 bg-purple-50/40 dark:border-purple-900/40 dark:bg-purple-950/20 p-5 flex items-center justify-between shadow-xs">
+          <div className="rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900 p-5 flex items-center justify-between shadow-xs hover:border-gray-300 transition-all">
             <div>
-              <span className="block text-xs font-bold uppercase tracking-wider text-purple-700 dark:text-purple-400">Joueurs Actifs (Période)</span>
-              <span className="mt-1 block text-2.5xl font-black text-purple-900 dark:text-purple-100">
+              <span className="block text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">Joueurs Actifs (Période)</span>
+              <span className="mt-1 block text-2.5xl font-black text-gray-900 dark:text-white">
                 {totalActivePlayersCount} Joueur(s)
               </span>
-              <span className="mt-0.5 block text-xs text-purple-600 dark:text-purple-400 font-medium">
+              <span className="mt-0.5 block text-xs text-brand-600 dark:text-brand-400 font-semibold">
                 Effectif total sous filtre
               </span>
             </div>
-            <div className="h-12 w-12 rounded-xl bg-purple-600 text-white flex items-center justify-center shadow-sm">
-              <GroupIcon className="size-6" />
+            <div className="h-12 w-12 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 flex items-center justify-center border border-gray-200 dark:border-gray-700 shadow-xs">
+              <GroupIcon className="size-6 text-brand-600 dark:text-brand-400" />
             </div>
           </div>
 
-          <div className="rounded-2xl border border-blue-200 bg-blue-50/40 dark:border-blue-900/40 dark:bg-blue-950/20 p-5 flex items-center justify-between shadow-xs">
+          <div className="rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900 p-5 flex items-center justify-between shadow-xs hover:border-gray-300 transition-all">
             <div>
-              <span className="block text-xs font-bold uppercase tracking-wider text-blue-700 dark:text-blue-400">Total Encaissé en Gourdes</span>
-              <span className="mt-1 block text-2.5xl font-black text-blue-900 dark:text-blue-100">
+              <span className="block text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">Total Encaissé en Gourdes</span>
+              <span className="mt-1 block text-2.5xl font-black text-gray-900 dark:text-white">
                 {formatClubCurrency(trackingTotalHTG || totalRevenueHTG, "HTG")}
               </span>
-              <span className="mt-0.5 block text-xs text-blue-600 dark:text-blue-400 font-medium">
+              <span className="mt-0.5 block text-xs text-blue-600 dark:text-blue-400 font-semibold">
                 Recettes Gourdes (HTG)
               </span>
             </div>
-            <div className="h-12 w-12 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-sm">
-              <DollarLineIcon className="size-6" />
+            <div className="h-12 w-12 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 flex items-center justify-center border border-gray-200 dark:border-gray-700 shadow-xs">
+              <DollarLineIcon className="size-6 text-blue-600 dark:text-blue-400" />
             </div>
           </div>
 
-          <div className="rounded-2xl border border-emerald-200 bg-emerald-50/40 dark:border-emerald-900/40 dark:bg-emerald-950/20 p-5 flex items-center justify-between shadow-xs">
+          <div className="rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900 p-5 flex items-center justify-between shadow-xs hover:border-gray-300 transition-all">
             <div>
-              <span className="block text-xs font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-400">Total Encaissé en Dollars</span>
-              <span className="mt-1 block text-2.5xl font-black text-emerald-900 dark:text-emerald-100">
+              <span className="block text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">Total Encaissé en Dollars</span>
+              <span className="mt-1 block text-2.5xl font-black text-gray-900 dark:text-white">
                 {formatClubCurrency(trackingTotalUSD || totalRevenueUSD, "US")}
               </span>
-              <span className="mt-0.5 block text-xs text-emerald-600 dark:text-emerald-400 font-medium">
+              <span className="mt-0.5 block text-xs text-emerald-600 dark:text-emerald-400 font-semibold">
                 Recettes Dollars (USD)
               </span>
             </div>
-            <div className="h-12 w-12 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-sm">
-              <DollarLineIcon className="size-6" />
+            <div className="h-12 w-12 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 flex items-center justify-center border border-gray-200 dark:border-gray-700 shadow-xs">
+              <DollarLineIcon className="size-6 text-emerald-600 dark:text-emerald-400" />
             </div>
           </div>
         </div>

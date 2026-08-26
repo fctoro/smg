@@ -73,6 +73,11 @@ export const updatePlayerInSupabase = async (playerId: string, data: Partial<Pla
   if (data.tailleShort !== undefined) updatePayload.TailleShort = data.tailleShort;
   if (data.poste !== undefined) updatePayload.Poste = data.poste;
   if ((data as any).experienceSoccer !== undefined) updatePayload.Experience = (data as any).experienceSoccer;
+  if (data.planPaiement !== undefined) updatePayload.PlanPaiement = data.planPaiement;
+  if (data.modePaiementChoisi !== undefined) updatePayload.MethodePaiement = data.modePaiementChoisi;
+  if ((data as any).numerosPreferes !== undefined) updatePayload.NumerosPreferes = (data as any).numerosPreferes;
+  if ((data as any).ecole !== undefined) updatePayload.Ecole = (data as any).ecole;
+  if ((data as any).programme !== undefined) updatePayload.Programme = (data as any).programme;
 
   if ((data as any).commentIdentifie !== undefined || (data as any).piedDominant !== undefined || (data as any).postePrincipal !== undefined || (data as any).posteSecondaire !== undefined || (data as any).clubActuel !== undefined) {
     const existingInfo1 = (data as any).sourceDetection ? "SOURCE:DETECTION" : "";
@@ -92,6 +97,7 @@ export const updatePlayerInSupabase = async (playerId: string, data: Partial<Pla
   if (data.parentEmail !== undefined) updatePayload.EmailParent = data.parentEmail;
   if (data.parentTelephone !== undefined) updatePayload.TelephoneParent = data.parentTelephone;
   if (data.parentAdresse !== undefined) updatePayload.AdresseParent = data.parentAdresse;
+  if (data.parentLien !== undefined) updatePayload.LienParente = data.parentLien;
 
   if (data.statut !== undefined) {
     updatePayload.EstAlumni = data.statut === "alumni" ? 1 : 0;
@@ -340,6 +346,11 @@ export const addPlayerToSupabase = async (data: Omit<Player & { photoIdentiteUrl
     StatutJoueur: data.statutJoueur || null,
     Poste: data.poste || null,
     Experience: (data as any).experienceSoccer || null,
+    PlanPaiement: data.planPaiement || null,
+    MethodePaiement: data.modePaiementChoisi || null,
+    NumerosPreferes: (data as any).numerosPreferes || null,
+    Ecole: (data as any).ecole || null,
+    Programme: (data as any).programme || null,
     PhotoIdentiteUrl: photoIdentiteUrl || null,
     ActeNaissanceUrl: acteNaissanceUrl || null,
     CarteIdentiteParentUrl: carteIdentiteParentUrl || null,

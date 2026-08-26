@@ -498,11 +498,11 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
               return "";
             };
 
-            const urgenceNomPrenom = findInGroup(["UrgenceNomPrenom", "NomUrgence", "UrgenceNom", "ContactUrgence", "PersonneUrgence", "EmergencyName", "emergency_name"]);
+            const urgenceNomPrenom = findInGroup(["UrgenceNomPrenom", "NomUrgence", "UrgenceNom", "ContactUrgence", "PersonneUrgence", "EmergencyName", "emergency_name", "NomContact"]);
             const urgenceLien = findInGroup(["UrgenceLien", "LienUrgence", "LienParenteUrgence", "LienUrgent", "EmergencyRelation", "emergency_relation"]);
-            const urgenceTelephone = findInGroup(["UrgenceTelephone", "TelUrgence", "TelephoneUrgence", "UrgencePhone", "PhoneUrgence", "EmergencyPhone", "emergency_phone"]);
-            const urgenceEmail = findInGroup(["UrgenceEmail", "EmailUrgence", "EmergencyEmail", "emergency_email"]);
-            const urgenceAdresse = findInGroup(["UrgenceAdresse", "AdresseUrgence", "EmergencyAddress", "emergency_address"]);
+            const urgenceTelephone = findInGroup(["UrgenceTelephone", "TelUrgence", "TelephoneUrgence", "UrgencePhone", "PhoneUrgence", "EmergencyPhone", "emergency_phone", "TelephoneContact"]);
+            const urgenceEmail = findInGroup(["UrgenceEmail", "EmailUrgence", "EmergencyEmail", "emergency_email", "EmailContact"]);
+            const urgenceAdresse = findInGroup(["UrgenceAdresse", "AdresseUrgence", "EmergencyAddress", "emergency_address", "AdresseContact"]);
 
             fetchedPlayers.push({
               id: primaryId,
@@ -566,13 +566,20 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
               parentTelephone,
               parentEmail,
               parentAdresse,
+              parentLien: group.find(g => g.LienParente)?.LienParente || primaryRecord.LienParente || "",
               urgenceNomPrenom,
               urgenceLien,
               urgenceTelephone,
               urgenceEmail,
               urgenceAdresse,
-              tailleHaut: primaryRecord.TailleHaut || "Choisir",
-              tailleShort: primaryRecord.TailleShort || "Choisir",
+              tailleHaut: group.find(g => g.TailleHaut || g.TailleMaillot)?.TailleHaut || group.find(g => g.TailleMaillot)?.TailleMaillot || primaryRecord.TailleHaut || primaryRecord.TailleMaillot || "Choisir",
+              tailleShort: group.find(g => g.TailleShort)?.TailleShort || primaryRecord.TailleShort || "Choisir",
+              numerosPreferes: group.find(g => g.NumerosPreferes)?.NumerosPreferes || primaryRecord.NumerosPreferes || "",
+              ecole: group.find(g => g.Ecole)?.Ecole || primaryRecord.Ecole || "",
+              experienceSoccer: group.find(g => g.ExperienceFoot || g.Experience)?.ExperienceFoot || group.find(g => g.Experience)?.Experience || primaryRecord.ExperienceFoot || primaryRecord.Experience || "",
+              planPaiement: group.find(g => g.PlanPaiement || g.PaymentPlan)?.PlanPaiement || group.find(g => g.PaymentPlan)?.PaymentPlan || primaryRecord.PlanPaiement || primaryRecord.PaymentPlan || "",
+              modePaiementChoisi: group.find(g => g.MethodePaiement)?.MethodePaiement || primaryRecord.MethodePaiement || "",
+              programme: group.find(g => g.Programme)?.Programme || primaryRecord.Programme || "",
               commentIdentifie: (() => {
                 const info1 = group.find(g => g.Info1)?.Info1 || "";
                 const match = String(info1).match(/IDENTIFIE:([^|]+)/);

@@ -129,7 +129,7 @@ export default function PlayerForm({
 
   useEffect(() => {
     let savedDraft = null;
-    if (draftKey) {
+    if (draftKey && !playerId) {
       try {
         const stored = sessionStorage.getItem(`draft_${draftKey}`);
         if (stored) {
@@ -156,7 +156,7 @@ export default function PlayerForm({
   }, [initialValues, draftKey]);
 
   useEffect(() => {
-    if (draftKey) {
+    if (draftKey && !playerId) {
       try {
         const cleanDraft: Record<string, any> = { ...formValues };
         // Strip large base64 Data URLs before saving draft to avoid sessionStorage QuotaExceededError
@@ -230,6 +230,33 @@ export default function PlayerForm({
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+
+    const requiredSelects = [
+      { field: formValues.tailleHaut, name: "Taille du Haut" },
+      { field: formValues.tailleShort, name: "Taille du Short" }
+    ];
+
+    if (!formValues.sourceDetection) {
+      requiredSelects.push({ field: formValues.planPaiement, name: "Plan de Paiement" });
+      requiredSelects.push({ field: formValues.modePaiementChoisi, name: "Mode de règlement" });
+
+      if (!formValues.acteNaissanceUrl) {
+        alert("L'Acte de naissance est obligatoire.");
+        return;
+      }
+      if (!formValues.carteIdentiteParentUrl) {
+        alert("La Pièce d'identité du parent/tuteur est obligatoire.");
+        return;
+      }
+    }
+
+    for (const req of requiredSelects) {
+      if (!req.field || req.field === "Choisir") {
+        alert(`Le champ "${req.name}" est obligatoire.`);
+        return;
+      }
+    }
+
     onSubmit(normalizePlayerFormValues(formValues));
   };
 
@@ -475,7 +502,7 @@ export default function PlayerForm({
           {!formValues.sourceDetection && (
             <div>
               <label className="mb-1.5 block text-xs font-medium text-gray-700 dark:text-gray-300">École fréquentée *</label>
-              <input value={formValues.ecole} onChange={(e) => updateField("ecole", e.target.value)} placeholder="Nom de l'établissement" className={inputClassName} />
+              <input required value={formValues.ecole} onChange={(e) => updateField("ecole", e.target.value)} placeholder="Nom de l'établissement" className={inputClassName} />
             </div>
           )}
 
@@ -572,24 +599,26 @@ export default function PlayerForm({
         </div>
       </div>
 
-      {/* SECTION DOCUMENTS ADMINISTRATIFS (FACULTATIF) */}
+      {/* SECTION DOCUMENTS ADMINISTRATIFS */}
       <div className="space-y-4 rounded-xl border border-gray-200 bg-white p-6 shadow-xs dark:border-gray-800 dark:bg-gray-900/50">
         <div className="mb-4 flex items-center justify-between border-b border-gray-200 pb-4 dark:border-gray-700">
           <div className="flex items-center gap-3">
             <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-gray-200 bg-gray-50 text-xs font-semibold text-gray-600 shadow-xs dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400">
-              📄
+              <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
             </span>
             <div>
               <h4 className="text-sm font-semibold uppercase tracking-wider text-gray-800 dark:text-gray-200">
-                Documents administratifs (Facultatif)
+                Documents administratifs
               </h4>
               <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
                 Téléversez l'acte de naissance et la pièce d'identité des parents (PDF, JPG, PNG).
               </p>
             </div>
           </div>
-          <span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
-            Optionnel
+          <span className="rounded-full bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-700 dark:bg-red-900/30 dark:text-red-400">
+            Obligatoire
           </span>
         </div>
 
@@ -799,22 +828,22 @@ export default function PlayerForm({
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className="mb-1.5 block text-xs font-medium text-gray-700 dark:text-gray-300">Nom & Prénom *</label>
-            <input value={formValues.parentNomPrenom} onChange={(e) => updateField("parentNomPrenom", e.target.value)} className={inputClassName} />
+            <input required value={formValues.parentNomPrenom} onChange={(e) => updateField("parentNomPrenom", e.target.value)} className={inputClassName} />
           </div>
 
           <div>
-            <label className="mb-1.5 block text-xs font-medium text-gray-700 dark:text-gray-300">Lien avec le joueur *</label>
+            <label className="mb-1.5 block text-xs font-medium text-gray-700 dark:text-gray-300">Lien avec le joueur</label>
             <input value={formValues.parentLien} onChange={(e) => updateField("parentLien", e.target.value)} placeholder="Ex: Père, Mère, Tuteur..." className={inputClassName} />
           </div>
 
           <div>
             <label className="mb-1.5 block text-xs font-medium text-gray-700 dark:text-gray-300">E-mail *</label>
-            <input type="email" value={formValues.email} onChange={(e) => { updateField("email", e.target.value); updateField("parentEmail", e.target.value); }} className={inputClassName} />
+            <input required type="email" value={formValues.email} onChange={(e) => { updateField("email", e.target.value); updateField("parentEmail", e.target.value); }} className={inputClassName} />
           </div>
 
           <div>
             <label className="mb-1.5 block text-xs font-medium text-gray-700 dark:text-gray-300">Téléphone / WhatsApp *</label>
-            <input value={formValues.telephone} onChange={(e) => { updateField("telephone", e.target.value); updateField("parentTelephone", e.target.value); }} placeholder="+509..." className={inputClassName} />
+            <input required value={formValues.telephone} onChange={(e) => { updateField("telephone", e.target.value); updateField("parentTelephone", e.target.value); }} placeholder="+509..." className={inputClassName} />
           </div>
 
           <div className="sm:col-span-2">
@@ -840,17 +869,17 @@ export default function PlayerForm({
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div>
             <label className="mb-1.5 block text-xs font-medium text-gray-700 dark:text-gray-300">Nom & Prénom *</label>
-            <input value={formValues.urgenceNomPrenom} onChange={(e) => updateField("urgenceNomPrenom", e.target.value)} className={inputClassName} />
+            <input required value={formValues.urgenceNomPrenom} onChange={(e) => updateField("urgenceNomPrenom", e.target.value)} className={inputClassName} />
           </div>
 
           <div>
             <label className="mb-1.5 block text-xs font-medium text-gray-700 dark:text-gray-300">Lien de parenté *</label>
-            <input value={formValues.urgenceLien} onChange={(e) => updateField("urgenceLien", e.target.value)} placeholder="Ex: Oncle, Tante..." className={inputClassName} />
+            <input required value={formValues.urgenceLien} onChange={(e) => updateField("urgenceLien", e.target.value)} placeholder="Ex: Oncle, Tante..." className={inputClassName} />
           </div>
 
           <div>
             <label className="mb-1.5 block text-xs font-medium text-gray-700 dark:text-gray-300">Téléphone *</label>
-            <input value={formValues.urgenceTelephone} onChange={(e) => updateField("urgenceTelephone", e.target.value)} className={inputClassName} />
+            <input required value={formValues.urgenceTelephone} onChange={(e) => updateField("urgenceTelephone", e.target.value)} className={inputClassName} />
           </div>
 
           <div>
@@ -881,7 +910,7 @@ export default function PlayerForm({
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div>
             <label className="mb-1.5 block text-xs font-medium text-gray-700 dark:text-gray-300">Taille du Haut (Top) *</label>
-            <select value={formValues.tailleHaut} onChange={(e) => updateField("tailleHaut", e.target.value)} className={selectClassName}>
+            <select required value={formValues.tailleHaut} onChange={(e) => updateField("tailleHaut", e.target.value)} className={selectClassName}>
               <option value="Choisir">Choisir</option>
               <option value="YXS">YXS (Youth Extra Small)</option>
               <option value="YS">YS (Youth Small)</option>
@@ -897,7 +926,7 @@ export default function PlayerForm({
 
           <div>
             <label className="mb-1.5 block text-xs font-medium text-gray-700 dark:text-gray-300">Taille du Short *</label>
-            <select value={formValues.tailleShort} onChange={(e) => updateField("tailleShort", e.target.value)} className={selectClassName}>
+            <select required value={formValues.tailleShort} onChange={(e) => updateField("tailleShort", e.target.value)} className={selectClassName}>
               <option value="Choisir">Choisir</option>
               <option value="YXS">YXS (Youth Extra Small)</option>
               <option value="YS">YS (Youth Small)</option>
@@ -911,10 +940,10 @@ export default function PlayerForm({
             </select>
           </div>
 
-          <div>
-            <label className="mb-1.5 block text-xs font-medium text-gray-700 dark:text-gray-300">Numéros préférés</label>
-            <input value={formValues.numerosPreferes} onChange={(e) => updateField("numerosPreferes", e.target.value)} placeholder="Ex: 10, 7, 22" className={inputClassName} />
-          </div>
+            <div>
+              <label className="mb-1.5 block text-xs font-medium text-gray-700 dark:text-gray-300">Numéros préférés</label>
+              <input value={formValues.numerosPreferes} onChange={(e) => updateField("numerosPreferes", e.target.value)} placeholder="Ex: 10, 7, 22" className={inputClassName} />
+            </div>
         </div>
       </div>
 
@@ -934,7 +963,7 @@ export default function PlayerForm({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="mb-1.5 block text-xs font-medium text-gray-700 dark:text-gray-300">Choix du Plan de Paiement *</label>
-              <select value={formValues.planPaiement} onChange={(e) => updateField("planPaiement", e.target.value)} className={selectClassName}>
+              <select required value={formValues.planPaiement} onChange={(e) => updateField("planPaiement", e.target.value)} className={selectClassName}>
                 <option value="PLAN #1 (Annuel)">PLAN #1 (Annuel) - Versement unique à l'inscription ($1,215)</option>
                 <option value="PLAN #2 (Semestriel)">PLAN #2 (Semestriel) - 2 versements égaux ($641.25 x 2)</option>
                 <option value="PLAN #3 (Mensuel)">PLAN #3 (Mensuel) - 9 versements ($155 / mois)</option>
@@ -943,7 +972,7 @@ export default function PlayerForm({
 
             <div>
               <label className="mb-1.5 block text-xs font-medium text-gray-700 dark:text-gray-300">Mode de règlement *</label>
-              <select value={formValues.modePaiementChoisi} onChange={(e) => updateField("modePaiementChoisi", e.target.value)} className={selectClassName}>
+              <select required value={formValues.modePaiementChoisi} onChange={(e) => updateField("modePaiementChoisi", e.target.value)} className={selectClassName}>
                 <option value="Cash/chèque">Cash / chèque</option>
                 <option value="Carte bancaire">Carte bancaire</option>
                 <option value="Transfert bancaire">Transfert bancaire</option>

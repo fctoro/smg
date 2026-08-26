@@ -14,6 +14,8 @@ import { syncPlayerProgrammes } from "@/lib/club/programmes";
 import { supabase } from "@/lib/supabaseClient";
 import { generatePlayerMatricule, getCurrentSeason } from "@/lib/club/season";
 
+function translatePaymentMethod(val) { if (!val) return ''; const s = String(val).toLowerCase().trim(); if (s === 'transfert') return 'Transfert bancaire'; if (s === 'cash_cheque') return 'Cash/ch�que'; if (s === 'carte') return 'Carte bancaire'; return val; }
+
 function NewPlayerFormContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -168,6 +170,8 @@ function NewPlayerFormContent() {
                   tailleHaut: reg.uniform_top_size || p.taille_haut || p.taille_maillot || p.tailleMaillot || p.tailleHaut || "",
                   tailleShort: reg.uniform_short_size || p.taille_short || p.tailleShort || "",
                   numerosPreferes: reg.preferred_numbers || p.numeros_preferes || p.numerosPreferes || "",
+                  planPaiement: reg.payment_plan || p.payment_plan || p.planPaiement || "",
+                  modePaiementChoisi: translatePaymentMethod(reg.payment_method || p.payment_method || p.modePaiementChoisi),
                 };
 
                 const { data: docs } = await supabase
@@ -227,6 +231,8 @@ function NewPlayerFormContent() {
                   numerosPreferes: p.preferred_numbers || p.numeros_preferes || p.numerosPreferes || "",
                   postePrincipal: p.poste_principal || "",
                   posteSecondaire: p.poste_secondaire || "",
+                  planPaiement: p.payment_plan || p.planPaiement || "",
+                  modePaiementChoisi: translatePaymentMethod(p.payment_method || p.modePaiementChoisi),
                 };
               }
             }

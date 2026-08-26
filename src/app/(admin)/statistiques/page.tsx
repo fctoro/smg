@@ -12,6 +12,7 @@ import {
   getMonthlyRegistrations,
   getWeeklyRevenue,
   getWeeklyRegistrations,
+  getDailyRevenue,
   getAvailableYears,
   combineYearlyData,
 } from "@/lib/club/statistics";
@@ -41,9 +42,6 @@ const getTrackingPeriodStart = (date: Date, period: TrackingPeriod) => {
   return start;
 };
 
-const isInTrackingPeriod = (date: Date, period: TrackingPeriod, reference: Date) =>
-  date >= getTrackingPeriodStart(reference, period) && date <= reference;
-
 const formatTrackingDuration = (seconds: number) => {
   const minutes = Math.floor(seconds / 60);
   if (minutes < 60) return `${minutes} min`;
@@ -54,7 +52,7 @@ const formatTrackingDuration = (seconds: number) => {
 export default function StatistiquesPage() {
   const { players, payments } = useClubData();
   const [selectedYear, setSelectedYear] = useState<string>("all");
-  const [periodType, setPeriodType] = useState<'yearly' | 'monthly' | 'weekly'>("yearly");
+  const [periodType, setPeriodType] = useState<'daily' | 'yearly' | 'monthly' | 'weekly'>("yearly");
   const [dateFrom, setDateFrom] = useState<string>("");
   const [dateTo, setDateTo] = useState<string>("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -68,8 +66,9 @@ export default function StatistiquesPage() {
   const isAllTime = selectedYear === "all";
   const displayYear = isAllTime ? currentYearActual : parseInt(selectedYear || String(currentYearActual), 10);
 
-  const isUSDDevise = (devise?: "US" | "HTG"): boolean => {
-    return String(devise || "").toUpperCase() === "US";
+  const isUSDDevise = (devise?: string): boolean => {
+    const d = String(devise || "").toUpperCase();
+    return d === "US" || d === "USD" || d === "$";
   };
 
   useEffect(() => {
@@ -113,64 +112,119 @@ export default function StatistiquesPage() {
     };
   }, []);
 
-  // apply filters to payments/players
+  // Extraction YYYY-MM-DD sans décalage horaire
+  const getDateDayString = (dateInput?: any): string => {
+    if (!dateInput) return "";
+    const str = String(dateInput).trim();
+    const isoMatch = str.match(/^(\d{4}-\d{2}-\d{2})/);
+    if (isoMatch) return isoMatch[1];
+
+    const dateObj = new Date(dateInput);
+    if (isNaN(dateObj.getTime())) return "";
+    const yyyy = dateObj.getFullYear();
+    const mm = String(dateObj.getMonth() + 1).padStart(2, '0');
+    const dd = String(dateObj.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  };
+
+  const isDateInRange = (dateInput: any, fromStr?: string, toStr?: string): boolean => {
+    if (!fromStr && !toStr) return true;
+    const dayStr = getDateDayString(dateInput);
+    if (!dayStr) return false;
+    if (fromStr && dayStr < fromStr) return false;
+    if (toStr && dayStr > toStr) return false;
+    return true;
+  };
+
+  // Boutons de raccourcis rapides
+  const setQuickDateRange = (type: 'today' | 'month' | 'year' | 'all') => {
+    const today = new Date();
+    const yyyy = today.getFullYear();
+    const mm = String(today.getMonth() + 1).padStart(2, '0');
+    const dd = String(today.getDate()).padStart(2, '0');
+
+    if (type === 'today') {
+      const todayStr = `${yyyy}-${mm}-${dd}`;
+      setDateFrom(todayStr);
+      setDateTo(todayStr);
+      setPeriodType('daily');
+      setTrackingPeriod('day');
+      setTrackingReferenceDate(today);
+    } else if (type === 'month') {
+      setDateFrom(`${yyyy}-${mm}-01`);
+      setDateTo(`${yyyy}-${mm}-${dd}`);
+      setPeriodType('monthly');
+      setTrackingPeriod('month');
+    } else if (type === 'year') {
+      setDateFrom(`${yyyy}-01-01`);
+      setDateTo(`${yyyy}-12-31`);
+      setPeriodType('yearly');
+      setTrackingPeriod('year');
+    } else if (type === 'all') {
+      setDateFrom("");
+      setDateTo("");
+      setPeriodType('yearly');
+      setTrackingPeriod('year');
+    }
+  };
+
+  // Filtrage strict : uniquement les paiements filtrés
   const filteredPayments = useMemo(() => {
     return payments.filter((p) => {
-      // status filter
       if (statusFilter !== "all" && p.statut !== statusFilter) return false;
-      // date filters (use datePaiement or periode)
-      const dateStr = p.datePaiement || p.periode || null;
-      if (dateFrom && dateStr) {
-        const from = new Date(dateFrom);
-        const d = new Date(dateStr);
-        if (d < from) return false;
-      }
-      if (dateTo && dateStr) {
-        const to = new Date(dateTo);
-        const d = new Date(dateStr);
-        if (d > to) return false;
-      }
-      return true;
+      const dateStr = p.datePaiement || p.periode || (p as any).createdAt || null;
+      return isDateInRange(dateStr, dateFrom, dateTo);
     });
   }, [payments, dateFrom, dateTo, statusFilter]);
 
-  const filteredPlayers = useMemo(() => {
-    return players.filter((pl) => {
-      if (!dateFrom && !dateTo) return true;
-      const d = new Date(pl.dateInscription);
-      if (dateFrom && d < new Date(dateFrom)) return false;
-      if (dateTo && d > new Date(dateTo)) return false;
-      return true;
-    });
-  }, [players, dateFrom, dateTo]);
+  // FILTRAGE STRICT DES JOUEURS : UNIQUEMENT LES JOUEURS ACTIFS !
+  const activePlayersList = useMemo(() => {
+    return players.filter((pl) => pl.statut === "actif");
+  }, [players]);
 
-  // quick aggregations
+  const filteredPlayers = useMemo(() => {
+    return activePlayersList.filter((pl) => {
+      const dateStr = pl.dateInscription || (pl as any).createdAt || (pl as any).dtInscription || null;
+      return isDateInRange(dateStr, dateFrom, dateTo);
+    });
+  }, [activePlayersList, dateFrom, dateTo]);
+
+  // Agrégations
   const availableYears = useMemo(() => getAvailableYears(filteredPlayers, filteredPayments), [filteredPlayers, filteredPayments]);
 
   const totalRevenueHTG = useMemo(
     () => filteredPayments
       .filter((p) => p.statut === "paid" && p.devise === "HTG")
-      .reduce((sum, p) => sum + (p.montantHTG || (p.devise === "HTG" ? p.montant : 0) || 0), 0),
+      .reduce((sum, p) => sum + (p.montantHTG || p.montant || 0), 0),
     [filteredPayments]
   );
+
   const totalRevenueUSD = useMemo(
     () => filteredPayments
       .filter((p) => p.statut === "paid" && isUSDDevise(p.devise))
-      .reduce((sum, p) => sum + (p.montantUS || (isUSDDevise(p.devise) ? p.montant : 0) || 0), 0),
+      .reduce((sum, p) => sum + (p.montantUS || p.montant || 0), 0),
     [filteredPayments]
   );
-  const totalRegistrations = filteredPlayers.length;
-  const totalPayments = filteredPayments.length;
 
-  const trackingPeriodPayments = useMemo(
-    () =>
-      payments.filter((payment) => {
-        if (payment.statut !== "paid") return false;
-        const date = new Date(payment.datePaiement || `${payment.periode}-01`);
-        return isInTrackingPeriod(date, trackingPeriod, trackingReferenceDate);
-      }),
-    [payments, trackingPeriod, trackingReferenceDate],
-  );
+  const totalActivePlayersCount = filteredPlayers.length;
+
+  const totalPaidPlayersCount = useMemo(() => {
+    const paidIds = new Set(filteredPayments.filter(p => p.statut === "paid").map(p => String(p.playerId)));
+    return filteredPlayers.filter(p => paidIds.has(String(p.id))).length;
+  }, [filteredPlayers, filteredPayments]);
+
+  const totalPaymentsCount = filteredPayments.filter(p => p.statut === "paid").length;
+
+  const trackingPeriodPayments = useMemo(() => {
+    const startDayStr = getDateDayString(getTrackingPeriodStart(trackingReferenceDate, trackingPeriod));
+    const endDayStr = getDateDayString(trackingReferenceDate);
+
+    return payments.filter((payment) => {
+      if (payment.statut !== "paid") return false;
+      const dateStr = payment.datePaiement || (payment as any).dateTransact || (payment as any).dtCreation || `${payment.periode}-01`;
+      return isDateInRange(dateStr, startDayStr, endDayStr);
+    });
+  }, [payments, trackingPeriod, trackingReferenceDate]);
 
   const trackingPeriodTime = useMemo(() => {
     const start = getTrackingPeriodStart(trackingReferenceDate, trackingPeriod);
@@ -181,11 +235,11 @@ export default function StatistiquesPage() {
   }, [trackingTimeByDay, trackingActiveSeconds, trackingPeriod, trackingReferenceDate]);
 
   const trackingTotalUSD = trackingPeriodPayments
-    .filter((payment) => payment.devise === "US")
-    .reduce((total, payment) => total + payment.montant, 0);
+    .filter((payment) => isUSDDevise(payment.devise))
+    .reduce((total, payment) => total + (payment.montantUS || payment.montant || 0), 0);
   const trackingTotalHTG = trackingPeriodPayments
     .filter((payment) => payment.devise === "HTG")
-    .reduce((total, payment) => total + payment.montant, 0);
+    .reduce((total, payment) => total + (payment.montantHTG || payment.montant || 0), 0);
 
   const trackingPeriodLabels: Record<TrackingPeriod, string> = {
     day: "Aujourd'hui",
@@ -194,7 +248,6 @@ export default function StatistiquesPage() {
     year: "Cette année",
   };
 
-  // Calculate player status statistics from the persisted player status.
   const playerStatusStats = useMemo(() => {
     const statusLabels = ["Boursier", "Demi-bourse", "Joueur spécial"];
     const stats: Record<string, number> = Object.fromEntries(
@@ -213,23 +266,40 @@ export default function StatistiquesPage() {
 
   const yearsList = availableYears.length > 0 ? availableYears : Array.from({ length: currentYearActual - 2012 + 1 }, (_, i) => currentYearActual - i);
 
-  // CSV export helper
+  // EXPORTATION EXCEL EXPLOITABLE
   const exportPaymentsCSV = (rows: typeof payments) => {
     if (!rows || rows.length === 0) return;
-    const headers = Object.keys(rows[0]);
-    const csv = [headers.join(',')]
-      .concat(rows.map(r => headers.map(h => JSON.stringify((r as any)[h] ?? '')).join(',')))
-      .join('\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const playerMap = new Map(players.map(p => [p.id, p]));
+
+    let csvContent = "\uFEFF";
+    csvContent += "Date,Numero_Recu,Joueur,Matricule,Programme,Categorie,Mode_Paiement,Devise,Montant_USD,Montant_HTG,Statut\n";
+
+    rows.forEach(p => {
+      const pl = playerMap.get(String(p.playerId));
+      const pName = pl ? `"${(pl.prenom + ' ' + pl.nom).replace(/"/g, '""')}"` : `"Joueur #${p.playerId}"`;
+      const mat = pl?.matricule ? `"${pl.matricule.replace(/"/g, '""')}"` : '""';
+      const prog = pl?.programme ? `"${pl.programme.replace(/"/g, '""')}"` : '"FC Toro"';
+      const cat = pl?.categorie ? `"${pl.categorie.replace(/"/g, '""')}"` : '""';
+      const dt = p.datePaiement || p.periode || "";
+      const recu = p.numeroRecu || `REC-${p.id}`;
+      const mode = p.methode || "especes";
+      
+      const mntUS = isUSDDevise(p.devise) ? Number(p.montantUS || p.montant || 0).toFixed(2) : "0.00";
+      const mntHTG = p.devise === "HTG" ? Number(p.montantHTG || p.montant || 0).toFixed(2) : "0.00";
+      const statut = p.statut || "paid";
+
+      csvContent += `${dt},${recu},${pName},${mat},${prog},${cat},${mode},${p.devise || 'US'},${mntUS},${mntHTG},${statut}\n`;
+    });
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `payments_export_${new Date().toISOString().slice(0,10)}.csv`;
+    a.download = `extraction_fctoro_${dateFrom || 'debut'}_au_${dateTo || 'aujourdhui'}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };
 
-  // statistics data
   const yearlyData = useMemo(() => {
     const revenue = getYearlyRevenue(filteredPayments);
     const registrations = getYearlyRegistrations(filteredPlayers);
@@ -241,36 +311,66 @@ export default function StatistiquesPage() {
 
   const weeklyRevenueData = useMemo(() => getWeeklyRevenue(filteredPayments, displayYear), [filteredPayments, displayYear]);
   const weeklyRegistrationsData = useMemo(() => getWeeklyRegistrations(filteredPlayers, displayYear), [filteredPlayers, displayYear]);
-
-  const hasYearlyRevenue = yearlyData.some((d) => d.revenueUSD > 0 || d.revenueHTG > 0);
-  const hasMonthlyRevenue = monthlyRevenueData.some((d) => d.revenueUSD > 0 || d.revenueHTG > 0);
-  const hasWeeklyRevenue = weeklyRevenueData.some((d) => d.revenueUSD > 0 || d.revenueHTG > 0);
-  const hasRegistrations = periodType === 'monthly'
-    ? monthlyRegistrationsData.some((d) => d.registrations > 0)
-    : periodType === 'weekly'
-    ? weeklyRegistrationsData.some((d) => d.registrations > 0)
-    : yearlyData.some((d) => d.registrations > 0);
+  const dailyRevenueData = useMemo(() => getDailyRevenue(filteredPayments, dateFrom || new Date().toISOString().slice(0, 10)), [filteredPayments, dateFrom]);
 
   return (
-    <div className="space-y-6">
-      {/* Top header */}
-      <div className="rounded-2xl bg-slate-900 px-6 py-5 text-white">
-        <div className="flex items-center justify-between">
+    <div className="space-y-6 pb-12 print:p-0 print:bg-white text-gray-900 dark:text-white">
+      {/* Printable CSS Header */}
+      <style jsx global>{`
+        @media print {
+          body {
+            background-color: #ffffff !important;
+            color: #000000 !important;
+          }
+          .no-print, header, sidebar, nav {
+            display: none !important;
+          }
+          .print-header {
+            display: block !important;
+            border-bottom: 2px solid #000;
+            padding-bottom: 12px;
+            margin-bottom: 20px;
+          }
+          table {
+            border-collapse: collapse !important;
+            width: 100% !important;
+          }
+          th, td {
+            border: 1px solid #d1d5db !important;
+            padding: 8px 12px !important;
+            color: #000 !important;
+          }
+        }
+      `}</style>
+
+      {/* Header Banner Header Chic & Monochrome */}
+      <div className="rounded-2xl bg-slate-900 p-6 text-white shadow-xl border border-slate-800">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-semibold">Dashboard Analytique</h1>
-            <p className="text-sm text-slate-300">Aperçu complet des performances et finances du club</p>
+            <div className="flex items-center gap-2 mb-1.5">
+              <span className="px-3 py-0.5 rounded-full text-xs font-black bg-brand-500/20 text-brand-300 border border-brand-500/40 uppercase tracking-widest">
+                SMG FC TORO — Saison 2026-2027
+              </span>
+              {(dateFrom || dateTo) && (
+                <span className="px-2.5 py-0.5 rounded-full text-xs font-mono font-bold bg-slate-800 text-slate-300 border border-slate-700">
+                  {dateFrom || "Début"} → {dateTo || "Aujourd'hui"}
+                </span>
+              )}
+            </div>
+            <h1 className="text-2.5xl font-black tracking-tight text-white">Bilan Financier & Statistiques FC TORO</h1>
+            <p className="text-xs text-slate-400 mt-0.5">Rapport officiel des encaissements en Gourdes (HTG) et Dollars (USD) — Joueurs actifs uniquement</p>
           </div>
-          <div className="flex items-center gap-3">
-            <button className="rounded-md bg-slate-800 px-3 py-2 text-sm">Actualiser</button>
+
+          <div className="flex flex-wrap items-center gap-3">
             <select
               value={selectedYear}
               onChange={(e) => setSelectedYear(e.target.value)}
-              className="rounded-md bg-white/10 px-3 py-2 text-sm"
+              className="rounded-xl bg-slate-800 border border-slate-700 px-4 py-2.5 text-xs font-bold text-white shadow-sm focus:ring-2 focus:ring-brand-500"
             >
-              <option value="all">Historique Global</option>
+              <option value="all">Toutes les saisons</option>
               {yearsList.map((y) => (
                 <option key={y} value={y.toString()}>
-                  Année {y}
+                  Saison {y}-{y + 1}
                 </option>
               ))}
             </select>
@@ -278,159 +378,298 @@ export default function StatistiquesPage() {
         </div>
       </div>
 
-      {/* Filters row */}
-      <div className="rounded-2xl border border-gray-100 bg-white p-4">
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-2">
-            <label className="text-xs text-gray-500">Depuis</label>
-            <input value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} type="date" className="rounded-md border px-2 py-1 text-sm" />
+      {/* Toolbar & Filter Options */}
+      <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-xs dark:border-gray-800 dark:bg-gray-900">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-2 bg-gray-50 dark:bg-gray-800 p-1.5 rounded-xl border border-gray-200 dark:border-gray-700">
+              <span className="text-xs font-bold text-gray-500 px-2">Du :</span>
+              <input 
+                value={dateFrom} 
+                onChange={(e) => setDateFrom(e.target.value)} 
+                type="date" 
+                className="rounded-lg border-0 bg-white dark:bg-gray-900 px-3 py-1.5 text-xs font-semibold text-gray-900 dark:text-white shadow-xs focus:ring-2 focus:ring-brand-500" 
+              />
+            </div>
+            <div className="flex items-center gap-2 bg-gray-50 dark:bg-gray-800 p-1.5 rounded-xl border border-gray-200 dark:border-gray-700">
+              <span className="text-xs font-bold text-gray-500 px-2">Au :</span>
+              <input 
+                value={dateTo} 
+                onChange={(e) => setDateTo(e.target.value)} 
+                type="date" 
+                className="rounded-lg border-0 bg-white dark:bg-gray-900 px-3 py-1.5 text-xs font-semibold text-gray-900 dark:text-white shadow-xs focus:ring-2 focus:ring-brand-500" 
+              />
+            </div>
+            <div className="flex items-center gap-2 bg-gray-50 dark:bg-gray-800 p-1.5 rounded-xl border border-gray-200 dark:border-gray-700">
+              <span className="text-xs font-bold text-gray-500 px-2">Règlement :</span>
+              <select 
+                value={statusFilter} 
+                onChange={(e) => setStatusFilter(e.target.value)} 
+                className="rounded-lg border-0 bg-white dark:bg-gray-900 px-3 py-1.5 text-xs font-semibold text-gray-900 dark:text-white shadow-xs"
+              >
+                <option value="all">Tous les règlements</option>
+                <option value="paid">Payé (Validé)</option>
+                <option value="pending">En attente</option>
+                <option value="late">En retard</option>
+              </select>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <label className="text-xs text-gray-500">Jusqu'à</label>
-            <input value={dateTo} onChange={(e) => setDateTo(e.target.value)} type="date" className="rounded-md border px-2 py-1 text-sm" />
-          </div>
-          <div className="flex items-center gap-2">
-            <label className="text-xs text-gray-500">Statut</label>
-            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="rounded-md border px-2 py-1 text-sm">
-              <option value="all">Tous</option>
-              <option value="paid">Paid</option>
-              <option value="late">Late</option>
-            </select>
-          </div>
-          <div className="ml-auto flex items-center gap-2">
-            <button onClick={() => exportPaymentsCSV(filteredPayments)} className="rounded-md border px-3 py-2 text-sm flex items-center gap-2"><DownloadIcon className="size-4"/> CSV</button>
-            <button onClick={() => exportPaymentsCSV(filteredPayments)} className="rounded-md border px-3 py-2 text-sm">Exporter</button>
+
+          {/* Quick Date Shortcuts & Action Buttons (Imprimer & CSV Cote à Cote !) */}
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-semibold text-gray-400 mr-1">Sélection rapide :</span>
+            <button 
+              onClick={() => setQuickDateRange('today')}
+              className={`px-3 py-1.5 rounded-lg border text-xs font-bold transition-all ${
+                dateFrom === new Date().toISOString().slice(0,10) && dateTo === new Date().toISOString().slice(0,10)
+                  ? "bg-brand-600 text-white border-brand-600 shadow-xs"
+                  : "border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+              }`}
+            >
+              Aujourd'hui
+            </button>
+            <button 
+              onClick={() => setQuickDateRange('month')}
+              className="px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 text-xs font-bold text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all"
+            >
+              Ce mois-ci
+            </button>
+            <button 
+              onClick={() => setQuickDateRange('year')}
+              className="px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 text-xs font-bold text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all"
+            >
+              Cette année
+            </button>
+            <button 
+              onClick={() => setQuickDateRange('all')}
+              className="px-3 py-1.5 rounded-lg bg-gray-100 dark:bg-gray-800 text-xs font-bold text-gray-700 dark:text-gray-300 hover:bg-gray-200 transition-all"
+            >
+              Réinitialiser
+            </button>
+
+            {/* Bouton Imprimer placé CÔTE À CÔTE avec le bouton Extraction CSV */}
+            <button 
+              onClick={() => window.print()} 
+              className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-bold text-white shadow-sm transition-all flex items-center gap-2 border border-slate-700 active:scale-95 ml-1"
+            >
+              <svg className="w-4 h-4 text-slate-300 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+              </svg>
+              <span>Imprimer le Bilan</span>
+            </button>
+
+            <button 
+              onClick={() => exportPaymentsCSV(filteredPayments)} 
+              className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-xs font-bold text-white shadow-sm transition-all flex items-center gap-2 border border-slate-700 active:scale-95"
+            >
+              <svg className="w-4 h-4 text-emerald-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+              <span>Extraction Officielle CSV</span>
+            </button>
           </div>
         </div>
       </div>
 
-      {/* Main layout: big chart + KPI cards */}
+      {/* KPI Cards Grid — Design Exécutif Épuré (Monochrome & Professionnel) */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {/* Recettes USD */}
+        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-xs dark:border-gray-800 dark:bg-gray-900 transition-all hover:border-gray-300">
+          <div className="flex items-center justify-between">
+            <div>
+              <span className="block text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">Recettes USD ($)</span>
+              <span className="mt-1 block text-2xl font-black text-gray-900 dark:text-white">
+                {formatClubCurrency(totalRevenueUSD, "US")}
+              </span>
+              <span className="mt-0.5 block text-xs text-emerald-600 dark:text-emerald-400 font-semibold">
+                {totalPaymentsCount} versement(s) en USD validé(s)
+              </span>
+            </div>
+            <div className="h-12 w-12 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 flex items-center justify-center border border-gray-200 dark:border-gray-700">
+              <DollarLineIcon className="size-6 text-emerald-600 dark:text-emerald-400" />
+            </div>
+          </div>
+        </div>
+
+        {/* Recettes HTG */}
+        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-xs dark:border-gray-800 dark:bg-gray-900 transition-all hover:border-gray-300">
+          <div className="flex items-center justify-between">
+            <div>
+              <span className="block text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">Recettes HTG (Gourdes)</span>
+              <span className="mt-1 block text-2xl font-black text-gray-900 dark:text-white">
+                {formatClubCurrency(totalRevenueHTG, "HTG")}
+              </span>
+              <span className="mt-0.5 block text-xs text-blue-600 dark:text-blue-400 font-semibold">
+                Paiements enregistrés en Gourdes
+              </span>
+            </div>
+            <div className="h-12 w-12 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 flex items-center justify-center border border-gray-200 dark:border-gray-700">
+              <DollarLineIcon className="size-6 text-blue-600 dark:text-blue-400" />
+            </div>
+          </div>
+        </div>
+
+        {/* Joueurs Actifs */}
+        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-xs dark:border-gray-800 dark:bg-gray-900 transition-all hover:border-gray-300">
+          <div className="flex items-center justify-between">
+            <div>
+              <span className="block text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">Joueurs Actifs</span>
+              <span className="mt-1 block text-2xl font-black text-gray-900 dark:text-white">
+                {totalActivePlayersCount}
+              </span>
+              <span className="mt-0.5 block text-xs text-brand-600 dark:text-brand-400 font-semibold">
+                Saison en cours 2026-2027
+              </span>
+            </div>
+            <div className="h-12 w-12 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 flex items-center justify-center border border-gray-200 dark:border-gray-700">
+              <GroupIcon className="size-6 text-brand-600 dark:text-brand-400" />
+            </div>
+          </div>
+        </div>
+
+        {/* Bilan des Paiements */}
+        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-xs dark:border-gray-800 dark:bg-gray-900 transition-all hover:border-gray-300">
+          <div className="flex items-center justify-between">
+            <div>
+              <span className="block text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">Cotisations Réglées</span>
+              <span className="mt-1 block text-2xl font-black text-gray-900 dark:text-white">
+                {totalPaidPlayersCount} / {totalActivePlayersCount}
+              </span>
+              <span className="mt-0.5 block text-xs text-amber-600 dark:text-amber-400 font-semibold">
+                Joueurs à jour sur la période
+              </span>
+            </div>
+            <div className="h-12 w-12 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 flex items-center justify-center border border-gray-200 dark:border-gray-700">
+              <CheckCircleIcon className="size-6 text-amber-600 dark:text-amber-400" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Graphiques Principaux avec Mode Aujourd'hui */}
       <div className="grid grid-cols-12 gap-4">
-          <div className="col-span-12 lg:col-span-8">
-          <div className="rounded-2xl border border-gray-100 bg-white p-4">
+        <div className="col-span-12 lg:col-span-8">
+          <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-xs dark:border-gray-800 dark:bg-gray-900">
             <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-4">
               <div>
-                <h3 className="text-lg font-semibold text-gray-700">Revenus</h3>
-                <p className="text-sm text-gray-500">Montants réels en USD et HTG selon les paiements validés</p>
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white">Évolution des Encaissements</h3>
+                <p className="text-xs text-gray-500">Recettes réelles cumulées en USD et HTG</p>
               </div>
-              <div className="flex flex-wrap items-center gap-2 text-sm text-gray-500">
+              <div className="flex flex-wrap items-center gap-2 text-xs font-bold">
                 <button
-                  onClick={() => setPeriodType('yearly')}
-                  className={`px-3 py-1 rounded-md border ${periodType === 'yearly' ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-gray-600'}`}
+                  onClick={() => setPeriodType('daily')}
+                  className={`px-3 py-1.5 rounded-lg transition-all ${periodType === 'daily' ? 'bg-slate-900 text-white shadow-sm' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200'}`}
                 >
-                  Annuel
+                  Aujourd'hui
+                </button>
+                <button
+                  onClick={() => setPeriodType('weekly')}
+                  className={`px-3 py-1.5 rounded-lg transition-all ${periodType === 'weekly' ? 'bg-slate-900 text-white shadow-sm' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200'}`}
+                >
+                  Hebdomadaire
                 </button>
                 <button
                   onClick={() => setPeriodType('monthly')}
-                  className={`px-3 py-1 rounded-md border ${periodType === 'monthly' ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-gray-600'}`}
+                  className={`px-3 py-1.5 rounded-lg transition-all ${periodType === 'monthly' ? 'bg-slate-900 text-white shadow-sm' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200'}`}
                 >
                   Mensuel
                 </button>
                 <button
-                  onClick={() => setPeriodType('weekly')}
-                  className={`px-3 py-1 rounded-md border ${periodType === 'weekly' ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-gray-600'}`}
+                  onClick={() => setPeriodType('yearly')}
+                  className={`px-3 py-1.5 rounded-lg transition-all ${periodType === 'yearly' ? 'bg-slate-900 text-white shadow-sm' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200'}`}
                 >
-                  Hebdomadaire
+                  Annuel
                 </button>
               </div>
             </div>
             <CombinedRevenueChart
               data={
-                periodType === 'monthly' ? monthlyRevenueData : periodType === 'weekly' ? weeklyRevenueData : yearlyData
+                periodType === 'daily' ? dailyRevenueData :
+                periodType === 'monthly' ? monthlyRevenueData :
+                periodType === 'weekly' ? weeklyRevenueData :
+                yearlyData
               }
-              type={periodType === 'monthly' ? 'monthly' : periodType === 'weekly' ? 'weekly' : 'yearly'}
+              type={periodType}
               title={
-                periodType === 'monthly'
-                  ? `Revenus mensuels — ${displayYear}`
-                  : periodType === 'weekly'
-                  ? `Revenus hebdomadaires — ${displayYear}`
-                  : 'Revenus annuels'
+                periodType === 'daily' ? `Revenus du jour — Aujourd'hui` :
+                periodType === 'monthly' ? `Revenus mensuels — ${displayYear}` :
+                periodType === 'weekly' ? `Revenus hebdomadaires — ${displayYear}` :
+                'Revenus annuels'
               }
             />
           </div>
         </div>
 
-         <div className="col-span-12 lg:col-span-4 space-y-4">
-          <div className="rounded-2xl border border-gray-100 bg-white p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-xs text-gray-400">Revenu Total (USD)</div>
-                <div className="text-2xl font-bold text-gray-800">{formatClubCurrency(totalRevenueUSD, "US")}</div>
-                <div className="text-sm text-gray-500 mt-1">{formatClubCurrency(totalRevenueHTG, "HTG")}</div>
-              </div>
-              <div className="h-12 w-12 flex items-center justify-center rounded-md bg-blue-50">
-                <DollarLineIcon className="size-5 text-blue-600" />
-              </div>
+        {/* Statuts Spéciaux & Répartition */}
+        <div className="col-span-12 lg:col-span-4 space-y-4">
+          <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-xs dark:border-gray-800 dark:bg-gray-900">
+            <h4 className="text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider mb-4 border-b border-gray-100 dark:border-gray-800 pb-2">
+              Répartition des Bourses & Exonérations
+            </h4>
+            <div className="space-y-3">
+              {Object.entries(playerStatusStats).map(([status, count]) => (
+                <div key={status} className="flex items-center justify-between p-3 rounded-xl bg-gray-50 dark:bg-gray-800/50 border border-gray-100 dark:border-gray-800">
+                  <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">{status}</span>
+                  <span className="text-sm font-extrabold text-gray-900 dark:text-white bg-gray-100 dark:bg-gray-800 px-3 py-1 rounded-full border border-gray-200 dark:border-gray-700">
+                    {count} joueur(s)
+                  </span>
+                </div>
+              ))}
             </div>
           </div>
 
-          <div className="rounded-2xl border border-gray-100 bg-white p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-xs text-gray-400">Inscriptions</div>
-                <div className="text-2xl font-bold text-gray-800">{totalRegistrations}</div>
+          <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-xs dark:border-gray-800 dark:bg-gray-900">
+            <h4 className="text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider mb-3">
+              Bilan Synthétique
+            </h4>
+            <div className="space-y-2 text-xs">
+              <div className="flex justify-between py-1.5 border-b border-gray-100 dark:border-gray-800">
+                <span className="text-gray-500">Joueurs Actifs (Total)</span>
+                <span className="font-bold text-gray-900 dark:text-white">{totalActivePlayersCount}</span>
               </div>
-              <div className="h-12 w-12 flex items-center justify-center rounded-md bg-purple-50">
-                <GroupIcon className="size-5 text-purple-600" />
+              <div className="flex justify-between py-1.5 border-b border-gray-100 dark:border-gray-800">
+                <span className="text-gray-500">Reçus financiers émis</span>
+                <span className="font-bold text-gray-900 dark:text-white">{totalPaymentsCount}</span>
+              </div>
+              <div className="flex justify-between py-1.5 border-b border-gray-100 dark:border-gray-800">
+                <span className="text-gray-500">Total USD encaissé</span>
+                <span className="font-bold text-emerald-600 dark:text-emerald-400">{formatClubCurrency(totalRevenueUSD, "US")}</span>
+              </div>
+              <div className="flex justify-between py-1.5">
+                <span className="text-gray-500">Total HTG encaissé</span>
+                <span className="font-bold text-blue-600 dark:text-blue-400">{formatClubCurrency(totalRevenueHTG, "HTG")}</span>
               </div>
             </div>
           </div>
-
-          <div className="rounded-2xl border border-gray-100 bg-white p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-xs text-gray-400">Paiements filtrés</div>
-                <div className="text-2xl font-bold text-gray-800">{totalPayments}</div>
-              </div>
-              <div className="h-12 w-12 flex items-center justify-center rounded-md bg-amber-50">
-                <CheckCircleIcon className="size-5 text-amber-600" />
-              </div>
-            </div>
-          </div>
-
-          {Object.keys(playerStatusStats).length > 0 && (
-            <div className="rounded-2xl border border-gray-100 bg-white p-4">
-              <div className="text-xs text-gray-400 mb-3">Statuts des joueurs</div>
-              <div className="space-y-2">
-                {Object.entries(playerStatusStats)
-                  .sort((a, b) => b[1] - a[1])
-                  .map(([status, count]) => (
-                    <div key={status} className="flex items-center justify-between">
-                      <span className="text-sm text-gray-600">{status}</span>
-                      <span className="text-xl font-bold text-gray-900">{count}</span>
-                    </div>
-                  ))}
-              </div>
-            </div>
-          )}
         </div>
       </div>
 
-      <div className="rounded-2xl border border-gray-100 bg-white p-5">
-        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+      {/* Journal des Encaissements par Période */}
+      <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-xs dark:border-gray-800 dark:bg-gray-900">
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between border-b border-gray-100 dark:border-gray-800 pb-4">
           <div>
-            <h3 className="text-lg font-semibold text-gray-700">Tracking</h3>
-            <p className="text-sm text-gray-500">Suivi de l’activité, des revenus et du temps passé dans le système.</p>
+            <h3 className="text-lg font-bold text-gray-900 dark:text-white">Journal des Encaissements & Reçus Émis</h3>
+            <p className="text-xs text-gray-500">Historique chronologique des règlements pour la période sélectionnée</p>
           </div>
           <div className="flex items-center gap-2">
-            <label htmlFor="tracking-date" className="text-sm text-gray-500">Date</label>
+            <label htmlFor="tracking-date" className="text-xs font-bold text-gray-500">Date :</label>
             <input
               id="tracking-date"
               type="date"
               value={getTrackingDateKey(trackingReferenceDate)}
               onChange={(event) => setTrackingReferenceDate(new Date(`${event.target.value}T23:59:59`))}
-              className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-1.5 text-xs font-semibold text-gray-900 dark:text-white"
             />
           </div>
         </div>
 
-        <div className="mt-4 flex gap-2 overflow-x-auto">
+        <div className="mt-4 flex gap-2 overflow-x-auto pb-2">
           {(Object.keys(trackingPeriodLabels) as TrackingPeriod[]).map((value) => (
             <button
               key={value}
               type="button"
               onClick={() => setTrackingPeriod(value)}
-              className={`whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium ${trackingPeriod === value ? "bg-slate-900 text-white" : "border border-gray-200 bg-white text-gray-600"}`}
+              className={`whitespace-nowrap rounded-xl px-4 py-2 text-xs font-bold transition-all ${trackingPeriod === value ? "bg-slate-900 text-white shadow-sm" : "border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300"}`}
             >
               {trackingPeriodLabels[value]}
             </button>
@@ -438,70 +677,114 @@ export default function StatistiquesPage() {
         </div>
 
         <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <TrackingMetric label="Reçus" value={String(trackingPeriodPayments.length)} detail="Paiements validés" />
-          <TrackingMetric label="Revenus USD" value={`${trackingTotalUSD.toLocaleString("fr-FR")} $`} detail="Paiements en dollars" />
-          <TrackingMetric label="Revenus HTG" value={`${trackingTotalHTG.toLocaleString("fr-FR")} G`} detail="Paiements en gourdes" />
-          <TrackingMetric label="Temps dans le système" value={formatTrackingDuration(trackingPeriodTime)} detail="Temps actif enregistré" />
+          <TrackingMetric label="Reçus validés" value={String(trackingPeriodPayments.length)} detail="Reçus émis sur la période" />
+          <TrackingMetric label="Revenus Dollars ($)" value={formatClubCurrency(trackingTotalUSD, "US")} detail="Entrées nettes en USD" />
+          <TrackingMetric label="Revenus Gourdes (G)" value={formatClubCurrency(trackingTotalHTG, "HTG")} detail="Entrées nettes en HTG" />
+          <TrackingMetric label="Durée de session" value={formatTrackingDuration(trackingPeriodTime)} detail="Temps actif enregistré" />
         </div>
 
-        <div className="mt-4 rounded-xl border border-gray-200 p-4">
-          <h4 className="text-sm font-semibold text-gray-700">Détail {trackingPeriodLabels[trackingPeriod].toLowerCase()}</h4>
-          <div className="mt-4 overflow-x-auto">
-            <table className="w-full min-w-[600px] text-left text-sm">
-              <thead className="border-b border-gray-100 text-xs uppercase text-gray-500">
+        {/* Table de détail des transactions de la période avec TOTAL COMPTABLE */}
+        <div className="mt-6 rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden">
+          <div className="bg-gray-50 dark:bg-gray-800/50 px-4 py-3 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-gray-700 dark:text-gray-300">
+              Détail des règlements — {trackingPeriodLabels[trackingPeriod]}
+            </h4>
+            <span className="text-xs text-gray-500 font-medium">
+              {trackingPeriodPayments.length} règlement(s)
+            </span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs text-gray-600 dark:text-gray-300">
+              <thead className="bg-gray-100/80 dark:bg-gray-800/50 text-gray-700 dark:text-gray-300 font-bold uppercase border-b border-gray-200 dark:border-gray-700">
                 <tr>
-                  <th className="px-3 py-3">Date</th>
-                  <th className="px-3 py-3">Reçus</th>
-                  <th className="px-3 py-3">USD</th>
-                  <th className="px-3 py-3">HTG</th>
+                  <th className="px-4 py-3">Date</th>
+                  <th className="px-4 py-3">N° Reçu</th>
+                  <th className="px-4 py-3">Mode de paiement</th>
+                  <th className="px-4 py-3">Montant USD ($)</th>
+                  <th className="px-4 py-3">Montant HTG (G)</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
                 {trackingPeriodPayments.length === 0 ? (
                   <tr>
-                    <td colSpan={4} className="px-3 py-8 text-center text-gray-500">Aucun paiement validé pour cette période.</td>
+                    <td colSpan={5} className="px-4 py-8 text-center text-gray-400 italic">
+                      Aucun versement enregistré pour cette période.
+                    </td>
                   </tr>
                 ) : (
                   trackingPeriodPayments.map((payment) => (
-                    <tr key={payment.id} className="border-b border-gray-50">
-                      <td className="px-3 py-3">{payment.datePaiement || payment.periode}</td>
-                      <td className="px-3 py-3">1</td>
-                      <td className="px-3 py-3">{payment.devise === "US" ? payment.montant.toLocaleString("fr-FR") : "-"}</td>
-                      <td className="px-3 py-3">{payment.devise === "HTG" ? payment.montant.toLocaleString("fr-FR") : "-"}</td>
+                    <tr key={payment.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/30 transition-colors">
+                      <td className="px-4 py-3 font-medium">{payment.datePaiement || payment.periode}</td>
+                      <td className="px-4 py-3 font-mono font-bold text-gray-900 dark:text-white">{payment.numeroRecu || `REC-${payment.id}`}</td>
+                      <td className="px-4 py-3 capitalize">{payment.methode || "Standard"}</td>
+                      <td className="px-4 py-3 font-bold text-emerald-600 dark:text-emerald-400">
+                        {isUSDDevise(payment.devise) ? formatClubCurrency(payment.montantUS || payment.montant, "US") : "-"}
+                      </td>
+                      <td className="px-4 py-3 font-bold text-blue-600 dark:text-blue-400">
+                        {payment.devise === "HTG" ? formatClubCurrency(payment.montantHTG || payment.montant, "HTG") : "-"}
+                      </td>
                     </tr>
                   ))
                 )}
               </tbody>
+
+              {/* Ligne de Totalisation en bas de la table (Bordereau comptable) */}
+              <tfoot className="bg-slate-900 text-white font-bold text-xs uppercase border-t-2 border-slate-700">
+                <tr>
+                  <td colSpan={3} className="px-4 py-3 text-right font-black tracking-wider text-slate-300">TOTAL DE LA PÉRIODE :</td>
+                  <td className="px-4 py-3 text-emerald-400 font-mono font-extrabold text-sm">{formatClubCurrency(trackingTotalUSD, "US")}</td>
+                  <td className="px-4 py-3 text-blue-400 font-mono font-extrabold text-sm">{formatClubCurrency(trackingTotalHTG, "HTG")}</td>
+                </tr>
+              </tfoot>
             </table>
           </div>
         </div>
-      </div>
 
-      {/* Secondary widgets grid */}
-      <div className="grid grid-cols-12 gap-4">
-        {hasYearlyRevenue && (
-          <div className="col-span-12 lg:col-span-6">
-            <div className="rounded-2xl border border-gray-100 bg-white p-4">
-              <h4 className="text-sm font-semibold mb-3">Revenus annuels</h4>
-              <CombinedRevenueChart data={yearlyData} type="yearly" title="Revenus annuels" />
+        {/* NOUVEAU BLOC DE KPI EN BAS (NOMBRE DE JOUEURS + TOTAL HTG + TOTAL USD) */}
+        <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="rounded-2xl border border-purple-200 bg-purple-50/40 dark:border-purple-900/40 dark:bg-purple-950/20 p-5 flex items-center justify-between shadow-xs">
+            <div>
+              <span className="block text-xs font-bold uppercase tracking-wider text-purple-700 dark:text-purple-400">Joueurs Actifs (Période)</span>
+              <span className="mt-1 block text-2.5xl font-black text-purple-900 dark:text-purple-100">
+                {totalActivePlayersCount} Joueur(s)
+              </span>
+              <span className="mt-0.5 block text-xs text-purple-600 dark:text-purple-400 font-medium">
+                Effectif total sous filtre
+              </span>
+            </div>
+            <div className="h-12 w-12 rounded-xl bg-purple-600 text-white flex items-center justify-center shadow-sm">
+              <GroupIcon className="size-6" />
             </div>
           </div>
-        )}
 
-        <div className="col-span-12 lg:col-span-6">
-          <div className="rounded-2xl border border-gray-100 bg-white p-4">
-            <h4 className="text-sm font-semibold mb-3">Inscriptions</h4>
-            <RegistrationsChart
-              data={
-                periodType === 'monthly'
-                  ? monthlyRegistrationsData.map((it) => ({ label: it.monthLabel, value: it.registrations }))
-                  : periodType === 'weekly'
-                  ? weeklyRegistrationsData.map((it) => ({ label: it.weekLabel, value: it.registrations }))
-                  : yearlyData.map((it) => ({ label: it.year.toString(), value: it.registrations }))
-              }
-              title={periodType === 'monthly' ? `Inscriptions — ${displayYear}` : periodType === 'weekly' ? `Inscriptions — ${displayYear}` : 'Inscriptions par année'}
-              color="#10b981"
-            />
+          <div className="rounded-2xl border border-blue-200 bg-blue-50/40 dark:border-blue-900/40 dark:bg-blue-950/20 p-5 flex items-center justify-between shadow-xs">
+            <div>
+              <span className="block text-xs font-bold uppercase tracking-wider text-blue-700 dark:text-blue-400">Total Encaissé en Gourdes</span>
+              <span className="mt-1 block text-2.5xl font-black text-blue-900 dark:text-blue-100">
+                {formatClubCurrency(trackingTotalHTG || totalRevenueHTG, "HTG")}
+              </span>
+              <span className="mt-0.5 block text-xs text-blue-600 dark:text-blue-400 font-medium">
+                Recettes Gourdes (HTG)
+              </span>
+            </div>
+            <div className="h-12 w-12 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-sm">
+              <DollarLineIcon className="size-6" />
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-emerald-200 bg-emerald-50/40 dark:border-emerald-900/40 dark:bg-emerald-950/20 p-5 flex items-center justify-between shadow-xs">
+            <div>
+              <span className="block text-xs font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-400">Total Encaissé en Dollars</span>
+              <span className="mt-1 block text-2.5xl font-black text-emerald-900 dark:text-emerald-100">
+                {formatClubCurrency(trackingTotalUSD || totalRevenueUSD, "US")}
+              </span>
+              <span className="mt-0.5 block text-xs text-emerald-600 dark:text-emerald-400 font-medium">
+                Recettes Dollars (USD)
+              </span>
+            </div>
+            <div className="h-12 w-12 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-sm">
+              <DollarLineIcon className="size-6" />
+            </div>
           </div>
         </div>
       </div>
@@ -511,10 +794,10 @@ export default function StatistiquesPage() {
 
 function TrackingMetric({ label, value, detail }: { label: string; value: string; detail: string }) {
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white p-5">
-      <p className="text-sm text-gray-500">{label}</p>
-      <p className="mt-2 text-2xl font-bold text-gray-900">{value}</p>
-      <p className="mt-1 text-xs text-gray-400">{detail}</p>
+    <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-xs dark:border-gray-800 dark:bg-gray-900">
+      <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">{label}</p>
+      <p className="mt-2 text-2xl font-black text-gray-900 dark:text-white">{value}</p>
+      <p className="mt-1 text-xs text-gray-500 font-medium">{detail}</p>
     </div>
   );
 }

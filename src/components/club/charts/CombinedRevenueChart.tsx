@@ -10,16 +10,17 @@ const ReactApexChart = dynamic(() => import("react-apexcharts"), {
 });
 
 interface CombinedRevenueChartProps {
-  data: (MonthlyData | WeeklyData | YearlyData)[];
-  type: "monthly" | "weekly" | "yearly";
+  data: any[];
+  type: "daily" | "monthly" | "weekly" | "yearly";
   title: string;
 }
 
 export default function CombinedRevenueChart({ data, type, title }: CombinedRevenueChartProps) {
   const labels = data.map((item) => {
+    if ("dayLabel" in item) return item.dayLabel;
     if ("monthLabel" in item) return item.monthLabel;
     if ("weekLabel" in item) return item.weekLabel;
-    return item.year.toString();
+    return item.year ? item.year.toString() : (item.day || "");
   });
 
   const seriesUSD = data.map((item) => item.revenueUSD);

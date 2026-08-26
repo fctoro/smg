@@ -21,6 +21,14 @@ export interface MonthlyData {
   registrations: number;
 }
 
+export interface DailyData {
+  day: string;
+  dayLabel: string;
+  revenueUSD: number;
+  revenueHTG: number;
+  registrations: number;
+}
+
 export interface WeeklyData {
   week: string;
   weekLabel: string;
@@ -193,6 +201,46 @@ export const getWeeklyRegistrations = (players: Player[], year: number): WeeklyD
   });
 
   return weeks.sort((a, b) => a.week.localeCompare(b.week));
+};
+
+// Grouper les revenus par tranche horaire pour la journée en cours
+export const getDailyRevenue = (payments: Payment[], targetDateStr?: string): DailyData[] => {
+  const hours = ["08h", "10h", "12h", "14h", "16h", "18h", "20h"];
+  const totalsUSD = Array.from({ length: hours.length }, () => 0);
+  const totalsHTG = Array.from({ length: hours.length }, () => 0);
+
+  const todayStr = targetDateStr || new Date().toISOString().slice(0, 10);
+
+  payments.forEach((payment) => {
+    if (payment.statut !== "paid") return;
+    const pDateStr = payment.datePaiement || (payment as any).dateTransact || "";
+    if (pDateStr.startsWith(todayStr)) {
+      const date = parseDateLocal(pDateStr) || new Date();
+      const h = date.getHours();
+      let index = 0;
+      if (h >= 20) index = 6;
+      else if (h >= 18) index = 5;
+      else if (h >= 16) index = 4;
+      else if (h >= 14) index = 3;
+      else if (h >= 12) index = 2;
+      else if (h >= 10) index = 1;
+      else index = 0;
+
+      if (isUSDDevise(payment.devise)) {
+        totalsUSD[index] += payment.montant;
+      } else {
+        totalsHTG[index] += payment.montant;
+      }
+    }
+  });
+
+  return hours.map((hourLabel, index) => ({
+    day: hourLabel,
+    dayLabel: hourLabel,
+    revenueUSD: totalsUSD[index],
+    revenueHTG: totalsHTG[index],
+    registrations: 0,
+  }));
 };
 
 // Fonction utilitaire pour obtenir le numéro de semaine

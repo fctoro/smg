@@ -74,8 +74,8 @@ export default function PaymentsPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [currentPageSize, setCurrentPageSize] = useState(12);
   const [editingPayment, setEditingPayment] = useState<(typeof payments)[number] | null>(null);
-  const [newAmount, setNewAmount] = useState(0);
-  const [newPaymentDate, setNewPaymentDate] = useState("");
+  const [newAmount, setNewAmount] = useState<number | "">("");
+  const [newPaymentDate, setNewPaymentDate] = useState(() => new Date().toISOString().split("T")[0]);
   const [isSaving, setIsSaving] = useState(false);
   const [editError, setEditError] = useState("");
   const [selectedPaymentImage, setSelectedPaymentImage] = useState<string | null>(null);
@@ -138,15 +138,6 @@ export default function PaymentsPage() {
     const totalDueUSD = parseFloat(totalDueMarker[1]);
     if (isNaN(totalDueUSD) || totalDueUSD <= 0) return { ...zero, dbg: `nan_or_zero_(${totalDueUSD})` };
 
-    // FIX: Si c'est un paiement uniquement pour des kits/inscription (pas d'adhésion)
-    // mais qu'un plan a été sélectionné par erreur, le TOTAL_DUE inclut l'adhésion fantôme.
-    // On ignore ce TOTAL_DUE démesuré pour éviter d'afficher une fausse dette.
-    const remarkLower = (currentPayment.remarque || "").toLowerCase();
-    const isKitOnly = !remarkLower.includes("adhésion") && !remarkLower.includes("adhesion");
-    if (isKitOnly && totalDueUSD >= 900) {
-      return { ...zero, dbg: "isKitOnly" }; // On ignore la dette fantôme
-    }
-
     const isHTG = paymentDevise === "HTG";
 
     if (isHTG) {
@@ -188,9 +179,8 @@ export default function PaymentsPage() {
 
   const openEditModal = (payment: (typeof payments)[number]) => {
     setEditingPayment(payment);
-    setNewAmount(0);
-    const todayStr = new Date().toLocaleDateString("sv"); // Format YYYY-MM-DD en heure locale
-    setNewPaymentDate(todayStr);
+    setNewAmount("");
+    setNewPaymentDate(new Date().toISOString().split("T")[0]);
     setEditError("");
     paymentPhotoPreviews.forEach((p) => {
       if (p.url.startsWith("blob:")) URL.revokeObjectURL(p.url);
@@ -264,7 +254,7 @@ export default function PaymentsPage() {
   };
 
   const handleEditPayment = async () => {
-    if (!editingPayment || newAmount <= 0 || !newPaymentDate) {
+    if (!editingPayment || newAmount === "" || newAmount <= 0 || !newPaymentDate) {
       setEditError("Veuillez entrer un montant supérieur à zéro et une date.");
       return;
     }
@@ -275,7 +265,8 @@ export default function PaymentsPage() {
       const uploadPromise = paymentPhotos.length > 0 ? uploadPaymentPhotosToSupabase(paymentPhotos) : Promise.resolve([]);
       const paymentPhotoUrls = await uploadPromise;
 
-      const totalAmountPaid = editingPayment.montant + newAmount;
+      const newAmountNum = Number(newAmount) || 0;
+      const totalAmountPaid = editingPayment.montant + newAmountNum;
       const montantUS = editingPayment.devise === "US"
         ? totalAmountPaid
         : (editingPayment.taux ? totalAmountPaid / editingPayment.taux : 0);
@@ -335,7 +326,26 @@ export default function PaymentsPage() {
             const totalRubriquesMatch = finalRemarque.match(/\[TOTAL_DUE:\s*([\d.]+)\s*\]/i);
             const totalRubriques = totalRubriquesMatch ? parseFloat(totalRubriquesMatch[1]) : undefined;
 
-            const proofBase64List = await filesToBase64(paymentPhotos);
+            const existingPhotoUrls = extractPhotoUrlsFromRemark(editingPayment.remarque);
+            const existingProofBase64List: string[] = [];
+            for (const proofUrl of existingPhotoUrls) {
+              try {
+                const res = await fetch(proofUrl);
+                const blob = await res.blob();
+                const b64 = await new Promise<string>((resolve, reject) => {
+                  const reader = new FileReader();
+                  reader.onloadend = () => resolve(reader.result as string);
+                  reader.onerror = reject;
+                  reader.readAsDataURL(blob);
+                });
+                if (b64) existingProofBase64List.push(b64);
+              } catch (e) {
+                console.warn("Erreur lors de la récupération de la preuve", proofUrl, e);
+              }
+            }
+
+            const newProofBase64List = await filesToBase64(paymentPhotos);
+            const allProofBase64List = [...existingProofBase64List, ...newProofBase64List];
 
             const receiptBase64 = await generateReceiptPDFBase64(
               player,
@@ -345,7 +355,7 @@ export default function PaymentsPage() {
               player.parentTelephone || player.telephone || "",
               emailToSend,
               player.parentAdresse || player.adresse || "",
-              proofBase64List,
+              allProofBase64List,
               false,
               totalRubriques
             );
@@ -801,21 +811,41 @@ export default function PaymentsPage() {
     setIsExportOpen(false);
     confirm({
       title: "Exporter la liste",
-      message: "Voulez-vous vraiment exporter la liste des paiements au format Excel (CSV optimisé Excel) ?",
+      message: "Voulez-vous vraiment exporter la liste des paiements au format Excel ?",
       confirmText: "Exporter",
       cancelText: "Annuler",
       onConfirm: () => {
-        let csvContent = "\uFEFF" + exportHeaders.map(h => `"${h}"`).join(";") + "\n";
         const rows = getExportDataRows();
-        rows.forEach((row) => {
-          const csvRow = row.map((field) => `"${(field || "").toString().replace(/"/g, '""')}"`);
-          csvContent += csvRow.join(";") + "\n";
-        });
-        const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+        
+        const thead = exportHeaders.map(h => `<th>${h}</th>`).join("");
+        const tbody = rows.map(row => {
+          return `<tr>${row.map(field => `<td>${(field || "").toString().replace(/</g, "&lt;").replace(/>/g, "&gt;")}</td>`).join("")}</tr>`;
+        }).join("");
+
+        const htmlContent = `
+          <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+          <head>
+            <meta charset="utf-8" />
+            <style>
+              table { border-collapse: collapse; }
+              td, th { border: 1px solid #dddddd; padding: 4px; }
+              th { background-color: #f2f2f2; font-weight: bold; }
+            </style>
+          </head>
+          <body>
+            <table>
+              <thead><tr>${thead}</tr></thead>
+              <tbody>${tbody}</tbody>
+            </table>
+          </body>
+          </html>
+        `;
+
+        const blob = new Blob([htmlContent], { type: "application/vnd.ms-excel;charset=utf-8" });
         const url = URL.createObjectURL(blob);
         const link = document.createElement("a");
         link.href = url;
-        link.setAttribute("download", `paiements_fc_toro_${new Date().toISOString().slice(0, 10)}.csv`);
+        link.setAttribute("download", `paiements_fc_toro_${new Date().toISOString().slice(0, 10)}.xls`);
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);

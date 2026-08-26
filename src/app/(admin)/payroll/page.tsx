@@ -141,10 +141,21 @@ export default function PayrollPage() {
     typeSalaire: "fixe" | "variable";
     nombreSeances: number;
     tauxParSeance: number;
+    nombreJoursSemaine: number;
+    tauxJourSemaine: number;
+    nombreJoursWeekend: number;
+    tauxJourWeekend: number;
     bonus: number;
     deductions: number;
     prelevementPourcentage: number;
     prelevementType: "taxe" | "credit" | "avance" | "pret";
+    prelevementSnowizz: number;
+    ajustement: number;
+    taxeIRI: number;
+    taxeCFGDCT: number;
+    taxeCAS: number;
+    taxeFDU: number;
+    taxeONA: number;
     vacancesPayees: number;
     congeSansSolde: number;
     cumulPaiements: number;
@@ -161,10 +172,21 @@ export default function PayrollPage() {
     typeSalaire: "fixe",
     nombreSeances: 0,
     tauxParSeance: 0,
+    nombreJoursSemaine: 0,
+    tauxJourSemaine: 0,
+    nombreJoursWeekend: 0,
+    tauxJourWeekend: 0,
     bonus: 0,
     deductions: 0,
-    prelevementPourcentage: 2,
+    prelevementPourcentage: 0,
     prelevementType: "taxe",
+    prelevementSnowizz: 0,
+    ajustement: 0,
+    taxeIRI: 0,
+    taxeCFGDCT: 1,
+    taxeCAS: 1,
+    taxeFDU: 1,
+    taxeONA: 6,
     vacancesPayees: 0,
     congeSansSolde: 0,
     cumulPaiements: 0,
@@ -228,13 +250,24 @@ export default function PayrollPage() {
     // Calculate gross base salary based on fixed vs variable per session
     const grossBaseSalary =
       formData.typeSalaire === "variable"
-        ? formData.nombreSeances * formData.tauxParSeance
+        ? (formData.nombreJoursSemaine * formData.tauxJourSemaine) +
+          (formData.nombreJoursWeekend * formData.tauxJourWeekend) +
+          (formData.nombreSeances * formData.tauxParSeance)
         : formData.salaireBase;
 
     const prelevementMontant = calculatePrelevement(grossBaseSalary, formData.prelevementPourcentage);
+    const iriMontant = formData.devise === "HTG" ? (formData.taxeIRI || 0) : 0;
+    const cfgdctMontant = formData.devise === "HTG" ? calculatePrelevement(grossBaseSalary, formData.taxeCFGDCT) : 0;
+    const casMontant = formData.devise === "HTG" ? calculatePrelevement(grossBaseSalary, formData.taxeCAS) : 0;
+    const fduMontant = formData.devise === "HTG" ? calculatePrelevement(grossBaseSalary, formData.taxeFDU) : 0;
+    const onaMontant = formData.devise === "HTG" ? calculatePrelevement(grossBaseSalary, formData.taxeONA) : 0;
     
-    // Deductions: 2% tax + Specific prelevements (advances/loans) + unpaid leave deduction
-    const totalDeductions = prelevementMontant + formData.deductions + formData.congeSansSolde;
+    const totalTaxes = prelevementMontant + iriMontant + cfgdctMontant + casMontant + fduMontant + onaMontant;
+    const snowizzDeduction = formData.devise === "HTG" ? formData.prelevementSnowizz : 0;
+    const ajustementVal = formData.devise === "HTG" ? formData.ajustement : 0;
+    const usdDeduction = formData.devise === "US" ? formData.deductions : 0;
+
+    const totalDeductions = totalTaxes + snowizzDeduction + ajustementVal + usdDeduction + formData.congeSansSolde;
     
     // Net Pay = Gross + Bonus + Paid Vacations - Total Deductions
     const net = grossBaseSalary + formData.bonus + formData.vacancesPayees - totalDeductions;
@@ -257,11 +290,22 @@ export default function PayrollPage() {
       typeSalaire: formData.typeSalaire,
       nombreSeances: formData.nombreSeances,
       tauxParSeance: formData.tauxParSeance,
+      nombreJoursSemaine: formData.nombreJoursSemaine,
+      tauxJourSemaine: formData.tauxJourSemaine,
+      nombreJoursWeekend: formData.nombreJoursWeekend,
+      tauxJourWeekend: formData.tauxJourWeekend,
       bonus: formData.bonus,
       deductions: totalDeductions,
       prelevementPourcentage: formData.prelevementPourcentage,
       prelevementMontant,
-      prelevementAvance: formData.deductions,
+      prelevementAvance: usdDeduction,
+      prelevementSnowizz: formData.prelevementSnowizz,
+      ajustement: formData.ajustement,
+      taxeIRI: formData.taxeIRI,
+      taxeCFGDCT: formData.taxeCFGDCT,
+      taxeCAS: formData.taxeCAS,
+      taxeFDU: formData.taxeFDU,
+      taxeONA: formData.taxeONA,
       prelevementType: formData.prelevementType,
       vacancesPayees: formData.vacancesPayees,
       congeSansSolde: formData.congeSansSolde,
@@ -333,10 +377,21 @@ export default function PayrollPage() {
         typeSalaire: "fixe",
         nombreSeances: 0,
         tauxParSeance: 0,
+        nombreJoursSemaine: 0,
+        tauxJourSemaine: 0,
+        nombreJoursWeekend: 0,
+        tauxJourWeekend: 0,
         bonus: 0,
         deductions: 0,
-        prelevementPourcentage: 2,
+        prelevementPourcentage: 0,
         prelevementType: "taxe",
+        prelevementSnowizz: 0,
+        ajustement: 0,
+        taxeIRI: 0,
+        taxeCFGDCT: 1,
+        taxeCAS: 1,
+        taxeFDU: 1,
+        taxeONA: 6,
         vacancesPayees: 0,
         congeSansSolde: 0,
         cumulPaiements: 0,
@@ -412,7 +467,7 @@ export default function PayrollPage() {
 
   const handleEditPayroll = (record: PayrollRecord) => {
     const [year, month] = record.mois.split("-");
-    const prelevementPourcentage = record.prelevementPourcentage ?? 2;
+    const prelevementPourcentage = record.prelevementPourcentage ?? 0;
     const prelevementMontant = record.prelevementMontant ?? calculatePrelevement(record.salaireBase, prelevementPourcentage);
     setEditingPayrollId(record.id);
     setFileError(null);
@@ -424,10 +479,21 @@ export default function PayrollPage() {
       typeSalaire: record.typeSalaire || "fixe",
       nombreSeances: record.nombreSeances || 0,
       tauxParSeance: record.tauxParSeance || 0,
+      nombreJoursSemaine: record.nombreJoursSemaine || 0,
+      tauxJourSemaine: record.tauxJourSemaine || 0,
+      nombreJoursWeekend: record.nombreJoursWeekend || 0,
+      tauxJourWeekend: record.tauxJourWeekend || 0,
       bonus: record.bonus || 0,
       deductions: record.prelevementAvance || Math.max(0, record.deductions - prelevementMontant - (record.congeSansSolde || 0)),
       prelevementPourcentage,
       prelevementType: record.prelevementType || "taxe",
+      prelevementSnowizz: record.prelevementSnowizz || 0,
+      ajustement: record.ajustement || 0,
+      taxeIRI: record.taxeIRI || 0,
+      taxeCFGDCT: record.taxeCFGDCT ?? 1,
+      taxeCAS: record.taxeCAS ?? 1,
+      taxeFDU: record.taxeFDU ?? 1,
+      taxeONA: record.taxeONA ?? 6,
       vacancesPayees: record.vacancesPayees || 0,
       congeSansSolde: record.congeSansSolde || 0,
       cumulPaiements: record.cumulPaiements || 0,
@@ -851,52 +917,119 @@ export default function PayrollPage() {
               </div>
 
               {formData.typeSalaire === "variable" ? (
-                <div className="grid grid-cols-2 gap-3 rounded-xl border border-amber-200 bg-amber-50/50 p-3 dark:border-amber-900/40 dark:bg-amber-950/20">
-                  <div>
-                    <label className="mb-1 block text-xs font-semibold text-gray-700 dark:text-gray-300">
-                      Nombre de séances effectuées
-                    </label>
-                    <input
-                      type="number"
-                      min="0"
-                      value={formData.nombreSeances}
-                      onChange={(e) =>
-                        setFormData({ ...formData, nombreSeances: Number(e.target.value) })
-                      }
-                      className="w-full rounded-xl border border-gray-300 bg-white p-2.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
-                      placeholder="Ex: 12"
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-xs font-semibold text-gray-700 dark:text-gray-300">
-                      Taux par séance ({formData.devise === "HTG" ? "Gdes" : "$"})
-                    </label>
-                    <div className="flex gap-2">
-                      <select
-                        className="rounded-xl border border-gray-300 bg-white p-2.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
-                        onChange={(e) => {
-                          if (e.target.value) setFormData({ ...formData, tauxParSeance: Number(e.target.value) });
-                        }}
-                      >
-                        <option value="">Sélectionnez...</option>
-                        {(rubriques || []).filter(r => r.categorie === "Payroll" && r.devise === formData.devise).map(r => (
-                          <option key={r.id} value={r.montant}>{r.rubrique} ({r.montant})</option>
-                        ))}
-                      </select>
+                <div className="space-y-3 rounded-xl border border-amber-200 bg-amber-50/50 p-3 dark:border-amber-900/40 dark:bg-amber-950/20">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="mb-1 block text-xs font-semibold text-gray-700 dark:text-gray-300">
+                        Nbr Jours Semaine
+                      </label>
                       <input
                         type="number"
                         min="0"
-                        value={formData.tauxParSeance}
+                        step="any"
+                        value={formData.nombreJoursSemaine === 0 ? "" : formData.nombreJoursSemaine}
                         onChange={(e) =>
-                          setFormData({ ...formData, tauxParSeance: Number(e.target.value) })
+                          setFormData({ ...formData, nombreJoursSemaine: e.target.value === "" ? 0 : parseFloat(e.target.value) || 0 })
                         }
+                        placeholder="Ex: 8"
                         className="w-full rounded-xl border border-gray-300 bg-white p-2.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
-                        placeholder="Ex: 1500"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-semibold text-gray-700 dark:text-gray-300">
+                        Taux Jour Semaine ({formData.devise === "HTG" ? "Gdes" : "$"})
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="any"
+                        value={formData.tauxJourSemaine === 0 ? "" : formData.tauxJourSemaine}
+                        onChange={(e) =>
+                          setFormData({ ...formData, tauxJourSemaine: e.target.value === "" ? 0 : parseFloat(e.target.value) || 0 })
+                        }
+                        placeholder="Ex: 500"
+                        className="w-full rounded-xl border border-gray-300 bg-white p-2.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
                       />
                     </div>
                   </div>
-                  <div className="col-span-2 text-xs font-bold text-amber-900 dark:text-amber-300">
-                    Sous-total séances (Brut) = {formatAmountWithDevise(formData.nombreSeances * formData.tauxParSeance, formData.devise)}
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="mb-1 block text-xs font-semibold text-gray-700 dark:text-gray-300">
+                        Nbr Jours Weekend
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="any"
+                        value={formData.nombreJoursWeekend === 0 ? "" : formData.nombreJoursWeekend}
+                        onChange={(e) =>
+                          setFormData({ ...formData, nombreJoursWeekend: e.target.value === "" ? 0 : parseFloat(e.target.value) || 0 })
+                        }
+                        placeholder="Ex: 4"
+                        className="w-full rounded-xl border border-gray-300 bg-white p-2.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-semibold text-gray-700 dark:text-gray-300">
+                        Taux Jour Weekend ({formData.devise === "HTG" ? "Gdes" : "$"})
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="any"
+                        value={formData.tauxJourWeekend === 0 ? "" : formData.tauxJourWeekend}
+                        onChange={(e) =>
+                          setFormData({ ...formData, tauxJourWeekend: e.target.value === "" ? 0 : parseFloat(e.target.value) || 0 })
+                        }
+                        placeholder="Ex: 750"
+                        className="w-full rounded-xl border border-gray-300 bg-white p-2.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="mb-1 block text-xs font-semibold text-gray-700 dark:text-gray-300">
+                        Nombre autres séances
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="any"
+                        value={formData.nombreSeances === 0 ? "" : formData.nombreSeances}
+                        onChange={(e) =>
+                          setFormData({ ...formData, nombreSeances: e.target.value === "" ? 0 : parseFloat(e.target.value) || 0 })
+                        }
+                        className="w-full rounded-xl border border-gray-300 bg-white p-2.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                        placeholder="Ex: 2"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-semibold text-gray-700 dark:text-gray-300">
+                        Taux par séance
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="any"
+                        value={formData.tauxParSeance === 0 ? "" : formData.tauxParSeance}
+                        onChange={(e) =>
+                          setFormData({ ...formData, tauxParSeance: e.target.value === "" ? 0 : parseFloat(e.target.value) || 0 })
+                        }
+                        className="w-full rounded-xl border border-gray-300 bg-white p-2.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                        placeholder="Ex: 1000"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="text-xs font-bold text-amber-900 dark:text-amber-300 pt-1">
+                    Sous-total séances (Brut) = {formatAmountWithDevise(
+                      (formData.nombreJoursSemaine * formData.tauxJourSemaine) +
+                      (formData.nombreJoursWeekend * formData.tauxJourWeekend) +
+                      (formData.nombreSeances * formData.tauxParSeance),
+                      formData.devise
+                    )}
                   </div>
                 </div>
               ) : (
@@ -907,11 +1040,13 @@ export default function PayrollPage() {
                   <input
                     type="number"
                     min="0"
+                    step="any"
                     required
-                    value={formData.salaireBase}
+                    value={formData.salaireBase === 0 ? "" : formData.salaireBase}
                     onChange={(e) =>
-                      setFormData({ ...formData, salaireBase: Number(e.target.value) })
+                      setFormData({ ...formData, salaireBase: e.target.value === "" ? 0 : parseFloat(e.target.value) || 0 })
                     }
+                    placeholder="0.00"
                     className="w-full rounded-xl border border-gray-300 p-2.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
                   />
                 </div>
@@ -924,82 +1059,276 @@ export default function PayrollPage() {
                 <input
                   type="number"
                   min="0"
-                  value={formData.bonus}
-                  onChange={(e) => setFormData({ ...formData, bonus: Number(e.target.value) })}
+                  step="any"
+                  value={formData.bonus === 0 ? "" : formData.bonus}
+                  onChange={(e) => setFormData({ ...formData, bonus: e.target.value === "" ? 0 : parseFloat(e.target.value) || 0 })}
+                  placeholder="0.00"
                   className="w-full rounded-xl border border-gray-300 p-2.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
                 />
               </div>
 
               {/* Deductions & Prelevements Section */}
               <div className="rounded-xl border border-gray-200 bg-gray-50 p-3 space-y-3 dark:border-gray-800 dark:bg-gray-800/40">
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="mb-1 block text-xs font-semibold text-gray-700 dark:text-gray-300">
-                      Taxe / Retenue (%)
-                    </label>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={formData.prelevementPourcentage}
-                      onChange={(e) =>
-                        setFormData({ ...formData, prelevementPourcentage: Number(e.target.value) })
-                      }
-                      className="w-full rounded-xl border border-gray-300 bg-white p-2.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-xs font-semibold text-gray-700 dark:text-gray-300">
-                      Montant Taxe
-                    </label>
-                    <div className="flex h-[42px] items-center rounded-xl border border-gray-200 bg-white px-3 text-sm font-bold text-rose-600 dark:border-gray-700 dark:bg-gray-900 dark:text-rose-400">
-                      -{formatAmountWithDevise(
-                        calculatePrelevement(
-                          formData.typeSalaire === "variable"
-                            ? formData.nombreSeances * formData.tauxParSeance
-                            : formData.salaireBase,
-                          formData.prelevementPourcentage
-                        ),
-                        formData.devise
-                      )}
+                {formData.devise === "HTG" ? (
+                  <div className="space-y-3">
+                    <p className="text-xs font-bold text-gray-800 dark:text-gray-200 uppercase tracking-wider">
+                      Taxes Haïtiennes Légales
+                    </p>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                      <div>
+                        <label className="mb-1 block text-[11px] font-semibold text-gray-700 dark:text-gray-300">
+                          Taxe masse salariale (%)
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          step="any"
+                          value={formData.prelevementPourcentage === 0 ? "" : formData.prelevementPourcentage}
+                          onChange={(e) =>
+                            setFormData({ ...formData, prelevementPourcentage: e.target.value === "" ? 0 : parseFloat(e.target.value) || 0 })
+                          }
+                          placeholder="2"
+                          className="w-full rounded-lg border border-gray-300 bg-white p-2 text-xs dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-[11px] font-semibold text-gray-700 dark:text-gray-300">
+                          IRI (Montant Gdes)
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          step="any"
+                          value={formData.taxeIRI === 0 ? "" : formData.taxeIRI}
+                          onChange={(e) =>
+                            setFormData({ ...formData, taxeIRI: e.target.value === "" ? 0 : parseFloat(e.target.value) || 0 })
+                          }
+                          placeholder="0.00"
+                          className="w-full rounded-lg border border-gray-300 bg-white p-2 text-xs dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-[11px] font-semibold text-gray-700 dark:text-gray-300">
+                          CFGDCT (%)
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          step="any"
+                          value={formData.taxeCFGDCT === 0 ? "" : formData.taxeCFGDCT}
+                          onChange={(e) =>
+                            setFormData({ ...formData, taxeCFGDCT: e.target.value === "" ? 0 : parseFloat(e.target.value) || 0 })
+                          }
+                          placeholder="1"
+                          className="w-full rounded-lg border border-gray-300 bg-white p-2 text-xs dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-[11px] font-semibold text-gray-700 dark:text-gray-300">
+                          CAS (%)
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          step="any"
+                          value={formData.taxeCAS === 0 ? "" : formData.taxeCAS}
+                          onChange={(e) =>
+                            setFormData({ ...formData, taxeCAS: e.target.value === "" ? 0 : parseFloat(e.target.value) || 0 })
+                          }
+                          placeholder="1"
+                          className="w-full rounded-lg border border-gray-300 bg-white p-2 text-xs dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-[11px] font-semibold text-gray-700 dark:text-gray-300">
+                          FDU (%)
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          step="any"
+                          value={formData.taxeFDU === 0 ? "" : formData.taxeFDU}
+                          onChange={(e) =>
+                            setFormData({ ...formData, taxeFDU: e.target.value === "" ? 0 : parseFloat(e.target.value) || 0 })
+                          }
+                          placeholder="1"
+                          className="w-full rounded-lg border border-gray-300 bg-white p-2 text-xs dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-[11px] font-semibold text-gray-700 dark:text-gray-300">
+                          ONA (%)
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          step="any"
+                          value={formData.taxeONA === 0 ? "" : formData.taxeONA}
+                          onChange={(e) =>
+                            setFormData({ ...formData, taxeONA: e.target.value === "" ? 0 : parseFloat(e.target.value) || 0 })
+                          }
+                          placeholder="6"
+                          className="w-full rounded-lg border border-gray-300 bg-white p-2 text-xs dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="pt-2 border-t border-gray-200 dark:border-gray-700">
+                      <p className="text-xs font-bold text-gray-800 dark:text-gray-200 uppercase tracking-wider mb-2">
+                        Prélèvements & Ajustements (Gdes)
+                      </p>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="mb-1 block text-xs font-semibold text-gray-700 dark:text-gray-300">
+                            Prélèvement Snowizz / Prêt
+                          </label>
+                          <input
+                            type="number"
+                            min="0"
+                            step="any"
+                            value={formData.prelevementSnowizz === 0 ? "" : formData.prelevementSnowizz}
+                            onChange={(e) =>
+                              setFormData({ ...formData, prelevementSnowizz: e.target.value === "" ? 0 : parseFloat(e.target.value) || 0 })
+                            }
+                            placeholder="0.00"
+                            className="w-full rounded-xl border border-gray-300 bg-white p-2.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                          />
+                        </div>
+                        <div>
+                          <label className="mb-1 block text-xs font-semibold text-gray-700 dark:text-gray-300">
+                            Ajustement (Gdes)
+                          </label>
+                          <input
+                            type="number"
+                            step="any"
+                            value={formData.ajustement === 0 ? "" : formData.ajustement}
+                            onChange={(e) =>
+                              setFormData({ ...formData, ajustement: e.target.value === "" ? 0 : parseFloat(e.target.value) || 0 })
+                            }
+                            placeholder="0.00"
+                            className="w-full rounded-xl border border-gray-300 bg-white p-2.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                          />
+                        </div>
+                      </div>
                     </div>
                   </div>
-                </div>
+                ) : (
+                  <div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="mb-1 block text-xs font-semibold text-gray-700 dark:text-gray-300">
+                          Taxe / Retenue (%)
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          step="any"
+                          value={formData.prelevementPourcentage === 0 ? "" : formData.prelevementPourcentage}
+                          onChange={(e) =>
+                            setFormData({ ...formData, prelevementPourcentage: e.target.value === "" ? 0 : parseFloat(e.target.value) || 0 })
+                          }
+                          placeholder="0.00"
+                          className="w-full rounded-xl border border-gray-300 bg-white p-2.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-xs font-semibold text-gray-700 dark:text-gray-300">
+                          Montant Taxe
+                        </label>
+                        <div className="flex h-[42px] items-center rounded-xl border border-gray-200 bg-white px-3 text-sm font-bold text-rose-600 dark:border-gray-700 dark:bg-gray-900 dark:text-rose-400">
+                          -{formatAmountWithDevise(
+                            calculatePrelevement(
+                              formData.typeSalaire === "variable"
+                                ? formData.nombreSeances * formData.tauxParSeance
+                                : formData.salaireBase,
+                              formData.prelevementPourcentage
+                            ),
+                            formData.devise
+                          )}
+                        </div>
+                      </div>
+                    </div>
 
-                <div className="pt-2 border-t border-gray-200 dark:border-gray-700 text-xs font-semibold text-gray-700 dark:text-gray-300 flex justify-between">
-                  <span>
-                    Total Retenues :{" "}
-                    <strong className="text-rose-600 dark:text-rose-400">
-                      {formatAmountWithDevise(
-                        calculatePrelevement(
-                          formData.typeSalaire === "variable"
-                            ? formData.nombreSeances * formData.tauxParSeance
-                            : formData.salaireBase,
-                          formData.prelevementPourcentage
-                        ),
-                        formData.devise
-                      )}
-                    </strong>
-                  </span>
-                  <span>
-                    NET À PAYER :{" "}
-                    <strong className="text-emerald-600 dark:text-emerald-400 text-sm">
-                      {formatAmountWithDevise(
-                        (formData.typeSalaire === "variable"
-                          ? formData.nombreSeances * formData.tauxParSeance
-                          : formData.salaireBase) +
-                          formData.bonus -
-                          calculatePrelevement(
-                            formData.typeSalaire === "variable"
-                              ? formData.nombreSeances * formData.tauxParSeance
-                              : formData.salaireBase,
-                            formData.prelevementPourcentage
-                          ),
-                        formData.devise
-                      )}
-                    </strong>
-                  </span>
-                </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 mt-2 border-t border-gray-200 dark:border-gray-700">
+                      <div>
+                        <label className="mb-1 block text-xs font-semibold text-gray-700 dark:text-gray-300">
+                          Prélèvement / Ajustements ($)
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          step="any"
+                          value={formData.deductions === 0 ? "" : formData.deductions}
+                          onChange={(e) =>
+                            setFormData({ ...formData, deductions: e.target.value === "" ? 0 : parseFloat(e.target.value) || 0 })
+                          }
+                          placeholder="0.00"
+                          className="w-full rounded-xl border border-gray-300 bg-white p-2.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-xs font-semibold text-gray-700 dark:text-gray-300">
+                          Motif du Prélèvement
+                        </label>
+                        <select
+                          value={formData.prelevementType}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              prelevementType: e.target.value as "taxe" | "credit" | "avance" | "pret",
+                            })
+                          }
+                          className="w-full rounded-xl border border-gray-300 bg-white p-2.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                        >
+                          <option value="avance">Avance sur salaire</option>
+                          <option value="pret">Remboursement Prêt</option>
+                          <option value="credit">Compte à crédit</option>
+                          <option value="taxe">Autre prélèvement / Ajustement</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {(() => {
+                  const gross = formData.typeSalaire === "variable"
+                    ? ((formData.nombreJoursSemaine || 0) * (formData.tauxJourSemaine || 0)) +
+                      ((formData.nombreJoursWeekend || 0) * (formData.tauxJourWeekend || 0)) +
+                      ((formData.nombreSeances || 0) * (formData.tauxParSeance || 0))
+                    : formData.salaireBase;
+
+                  const taxBase = calculatePrelevement(gross, formData.prelevementPourcentage);
+                  const iriAmt = formData.devise === "HTG" ? (formData.taxeIRI || 0) : 0;
+                  const cfgdctAmt = formData.devise === "HTG" ? calculatePrelevement(gross, formData.taxeCFGDCT) : 0;
+                  const casAmt = formData.devise === "HTG" ? calculatePrelevement(gross, formData.taxeCAS) : 0;
+                  const fduAmt = formData.devise === "HTG" ? calculatePrelevement(gross, formData.taxeFDU) : 0;
+                  const onaAmt = formData.devise === "HTG" ? calculatePrelevement(gross, formData.taxeONA) : 0;
+
+                  const totalTaxesCalc = taxBase + iriAmt + cfgdctAmt + casAmt + fduAmt + onaAmt;
+                  const snowizzCalc = formData.devise === "HTG" ? (formData.prelevementSnowizz || 0) : 0;
+                  const ajustementCalc = formData.devise === "HTG" ? (formData.ajustement || 0) : 0;
+                  const usdDeductionCalc = formData.devise === "US" ? (formData.deductions || 0) : 0;
+
+                  const totalRetenuesCalc = totalTaxesCalc + snowizzCalc + ajustementCalc + usdDeductionCalc;
+                  const netPayCalc = gross + (formData.bonus || 0) + (formData.vacancesPayees || 0) - totalRetenuesCalc;
+
+                  return (
+                    <div className="pt-2 border-t border-gray-200 dark:border-gray-700 text-xs font-semibold text-gray-700 dark:text-gray-300 flex justify-between">
+                      <span>
+                        Total Retenues :{" "}
+                        <strong className="text-rose-600 dark:text-rose-400">
+                          {formatAmountWithDevise(totalRetenuesCalc, formData.devise)}
+                        </strong>
+                      </span>
+                      <span>
+                        NET À PAYER :{" "}
+                        <strong className="text-emerald-600 dark:text-emerald-400 text-sm">
+                          {formatAmountWithDevise(netPayCalc, formData.devise)}
+                        </strong>
+                      </span>
+                    </div>
+                  );
+                })()}
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1186,14 +1515,79 @@ export default function PayrollPage() {
                   </tr>
                 )}
 
-                <tr>
-                  <td className="p-2.5">
-                    Retenue légale / Taxe sur masse salariale ({selectedSlip.prelevementPourcentage ?? 2}%)
-                  </td>
-                  <td className="p-2.5 text-right font-medium text-rose-600">
-                    -{formatAmountWithDevise(getPrelevementAmount(selectedSlip), selectedSlip.devise)}
-                  </td>
-                </tr>
+                {(selectedSlip.prelevementPourcentage || 0) > 0 && (
+                  <tr>
+                    <td className="p-2.5">
+                      Retenue légale / Taxe sur masse salariale ({selectedSlip.prelevementPourcentage}%)
+                    </td>
+                    <td className="p-2.5 text-right font-medium text-rose-600">
+                      -{formatAmountWithDevise(getPrelevementAmount(selectedSlip), selectedSlip.devise)}
+                    </td>
+                  </tr>
+                )}
+
+                {(selectedSlip.taxeIRI || 0) > 0 && (
+                  <tr>
+                    <td className="p-2.5">IRI ({selectedSlip.taxeIRI}%)</td>
+                    <td className="p-2.5 text-right font-medium text-rose-600">
+                      -{formatAmountWithDevise(calculatePrelevement(selectedSlip.salaireBase, selectedSlip.taxeIRI || 0), selectedSlip.devise)}
+                    </td>
+                  </tr>
+                )}
+
+                {(selectedSlip.taxeCFGDCT || 0) > 0 && (
+                  <tr>
+                    <td className="p-2.5">CFGDCT ({selectedSlip.taxeCFGDCT}%)</td>
+                    <td className="p-2.5 text-right font-medium text-rose-600">
+                      -{formatAmountWithDevise(calculatePrelevement(selectedSlip.salaireBase, selectedSlip.taxeCFGDCT || 0), selectedSlip.devise)}
+                    </td>
+                  </tr>
+                )}
+
+                {(selectedSlip.taxeCAS || 0) > 0 && (
+                  <tr>
+                    <td className="p-2.5">CAS ({selectedSlip.taxeCAS}%)</td>
+                    <td className="p-2.5 text-right font-medium text-rose-600">
+                      -{formatAmountWithDevise(calculatePrelevement(selectedSlip.salaireBase, selectedSlip.taxeCAS || 0), selectedSlip.devise)}
+                    </td>
+                  </tr>
+                )}
+
+                {(selectedSlip.taxeFDU || 0) > 0 && (
+                  <tr>
+                    <td className="p-2.5">FDU ({selectedSlip.taxeFDU}%)</td>
+                    <td className="p-2.5 text-right font-medium text-rose-600">
+                      -{formatAmountWithDevise(calculatePrelevement(selectedSlip.salaireBase, selectedSlip.taxeFDU || 0), selectedSlip.devise)}
+                    </td>
+                  </tr>
+                )}
+
+                {(selectedSlip.taxeONA || 0) > 0 && (
+                  <tr>
+                    <td className="p-2.5">ONA ({selectedSlip.taxeONA}%)</td>
+                    <td className="p-2.5 text-right font-medium text-rose-600">
+                      -{formatAmountWithDevise(calculatePrelevement(selectedSlip.salaireBase, selectedSlip.taxeONA || 0), selectedSlip.devise)}
+                    </td>
+                  </tr>
+                )}
+
+                {(selectedSlip.prelevementSnowizz || 0) > 0 && (
+                  <tr>
+                    <td className="p-2.5">Prélèvement Snowizz / Prêt</td>
+                    <td className="p-2.5 text-right font-medium text-rose-600">
+                      -{formatAmountWithDevise(selectedSlip.prelevementSnowizz || 0, selectedSlip.devise)}
+                    </td>
+                  </tr>
+                )}
+
+                {(selectedSlip.ajustement || 0) !== 0 && (
+                  <tr>
+                    <td className="p-2.5">Ajustement</td>
+                    <td className="p-2.5 text-right font-medium text-rose-600">
+                      {(selectedSlip.ajustement || 0) > 0 ? "-" : "+"}{formatAmountWithDevise(Math.abs(selectedSlip.ajustement || 0), selectedSlip.devise)}
+                    </td>
+                  </tr>
+                )}
 
                 {(selectedSlip.prelevementAvance || 0) > 0 && (
                   <tr>

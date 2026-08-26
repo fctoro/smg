@@ -5,7 +5,8 @@ import { Modal } from "@/components/ui/modal";
 import { useClubData } from "@/context/ClubDataContext";
 import { PaymentMethod, PaymentStatus, Player } from "@/types/club";
 import { getPlayerFullName } from "@/lib/club/metrics";
-import { addPaymentToSupabase, addInvoiceToSupabase } from "@/lib/club/supabase-crud";
+import { addPaymentToSupabase, addInvoiceToSupabase, updatePlayerInSupabase } from "@/lib/club/supabase-crud";
+import { getCurrentSeason } from "@/lib/club/season";
 import { validatePaymentPhotoFile, getPaymentPhotoPreviewUrl, uploadPaymentPhotosToSupabase, isPdfProof, filesToBase64 } from "@/lib/club/payment-photo-utils";
 import { calculateDiscountedAmount } from "@/lib/club/payment-reduction-utils";
 import { generateReceiptPDFBase64 } from "@/lib/club/pdf-generator";
@@ -139,7 +140,7 @@ interface PaymentAddModalProps {
 }
 
 export function PaymentAddModal({ isOpen, onClose, initialPlayerId }: PaymentAddModalProps) {
-  const { players, setPayments, rubriques, refreshRubriques } = useClubData();
+  const { players, setPlayers, setPayments, rubriques, refreshRubriques } = useClubData();
 
   useEffect(() => {
     if (isOpen && refreshRubriques) {
@@ -166,8 +167,8 @@ export function PaymentAddModal({ isOpen, onClose, initialPlayerId }: PaymentAdd
     }
   }, [isOpen, initialPlayerId]);
   const [showPlayerDropdown, setShowPlayerDropdown] = useState(false);
-  const [montantDuManuel, setMontantDuManuel] = useState(0);
-  const [montantDonne, setMontantDonne] = useState(0);
+  const [montantDuManuel, setMontantDuManuel] = useState<number | "">("");
+  const [montantDonne, setMontantDonne] = useState<number | "">("");
   const [devise, setDevise] = useState<"US" | "HTG">("US");
   const [taux, setTaux] = useState(0);
   const [description, setDescription] = useState("");
@@ -223,8 +224,8 @@ export function PaymentAddModal({ isOpen, onClose, initialPlayerId }: PaymentAdd
     setPlayerId("");
     setPlayerSearch("");
     setShowPlayerDropdown(false);
-    setMontantDuManuel(0);
-    setMontantDonne(0);
+    setMontantDuManuel("");
+    setMontantDonne("");
     setDevise("US");
     setTaux(0);
     setDescription("");
@@ -261,7 +262,7 @@ export function PaymentAddModal({ isOpen, onClose, initialPlayerId }: PaymentAdd
 
     if (!isBoursierPlayer) {
       // Validations uniquement pour les joueurs non-boursiers
-      if (montantDonne <= 0 || (devise === "HTG" && taux <= 0)) {
+      if (montantDonne === "" || montantDonne <= 0 || (devise === "HTG" && taux <= 0)) {
         setToast({ message: "Veuillez remplir le montant payé et le taux de change.", type: "error" });
         return;
       }
@@ -287,8 +288,11 @@ export function PaymentAddModal({ isOpen, onClose, initialPlayerId }: PaymentAdd
         : baseTotalDue;
       
       // Pour les boursiers: montant toujours en HTG, pas de taux
-      const finalMontantAPayer = isBoursierPlayer ? totalDue : montantDuManuel;
-      const paymentAmount = isBoursierPlayer ? totalDue : montantDonne;
+      const mDuManuelNum = Number(montantDuManuel) || 0;
+      const mDonneNum = Number(montantDonne) || 0;
+      
+      const finalMontantAPayer = isBoursierPlayer ? totalDue : mDuManuelNum;
+      const paymentAmount = isBoursierPlayer ? totalDue : mDonneNum;
       const actualDevise = isBoursierPlayer ? "HTG" : devise;
       const montantUS = isBoursierPlayer ? 0 : (actualDevise === "US" ? paymentAmount : (taux > 0 ? paymentAmount / taux : 0));
       const montantHTG = isBoursierPlayer ? paymentAmount : (actualDevise === "HTG" ? paymentAmount : 0);
@@ -299,10 +303,10 @@ export function PaymentAddModal({ isOpen, onClose, initialPlayerId }: PaymentAdd
         .filter(Boolean).join(", ");
       // TOTAL_DUE doit refléter montantDuManuel (source de vérité), converti en USD si HTG
       const totalDueInUSD = (actualDevise === "HTG" && taux > 0)
-        ? montantDuManuel / taux
+        ? mDuManuelNum / taux
         : actualDevise === "HTG"
           ? baseTotalDue          // fallback si pas de taux
-          : montantDuManuel;      // USD : déjà en USD
+          : mDuManuelNum;      // USD : déjà en USD
       const rabaisMarker = (!isBoursierPlayer && rabaisPercent > 0) ? ` [RABAIS:${rabaisPercent}%]` : "";
       const tauxMarker = (!isBoursierPlayer && actualDevise === "HTG" && taux > 0) ? ` [TAUX:${taux}]` : "";
       const moisMarker = selectedPlan === "mensuel" ? ` [MOIS_PAYES:${nombreDeMois}]` : "";
@@ -362,6 +366,17 @@ export function PaymentAddModal({ isOpen, onClose, initialPlayerId }: PaymentAdd
         if (!inserted) {
           throw new Error("Paiement non créé.");
         }
+
+        const latestSeason = getCurrentSeason(new Date(actualDatePaiement));
+        updatePlayerInSupabase(playerId, { saison: latestSeason }).catch((err) => {
+          console.warn("Erreur mise à jour saison joueur:", err);
+        });
+
+        setPlayers((prevPlayers) =>
+          prevPlayers.map((p) =>
+            p.id === playerId ? { ...p, saison: latestSeason } : p
+          )
+        );
 
         setPayments((prevPayments) => [
           {
@@ -435,7 +450,7 @@ export function PaymentAddModal({ isOpen, onClose, initialPlayerId }: PaymentAdd
 
           const emailToSend = selectedPlayer.parentEmail || selectedPlayer.email;
           if (emailToSend) {
-            const mntStr = devise === "HTG" ? `${montantDonne} HTG` : `${montantDonne} USD`;
+            const mntStr = devise === "HTG" ? `${mDonneNum} HTG` : `${mDonneNum} USD`;
             await fetch("/api/send-receipt", {
               method: "POST",
               headers: {
@@ -581,16 +596,13 @@ export function PaymentAddModal({ isOpen, onClose, initialPlayerId }: PaymentAdd
       if (!isUserEditedMontantDu) {
         setMontantDuManuel(fullTotalDue);
       }
-      if (!isUserEditedMontantDonne) {
-        setMontantDonne(fullTotalDue);
-      }
     } else {
-      if (!isUserEditedMontantDu) setMontantDuManuel(0);
-      if (!isUserEditedMontantDonne) setMontantDonne(0);
+      if (!isUserEditedMontantDu) setMontantDuManuel("");
+      if (!isUserEditedMontantDonne) setMontantDonne("");
     }
   }, [isBoursier, hasPricingItems, discountedDue, devise, taux, isUserEditedMontantDonne, isUserEditedMontantDu]);
 
-  const remainingAmount = Math.max(0, montantDuManuel - montantDonne);
+  const remainingAmount = Math.max(0, (Number(montantDuManuel) || 0) - (Number(montantDonne) || 0));
 
   const getPlayerStatusInfo = (status: string | null | undefined) => {
     const baseClassName =
@@ -1110,8 +1122,8 @@ export function PaymentAddModal({ isOpen, onClose, initialPlayerId }: PaymentAdd
                         </p>
                         <p className="mt-1 text-xl font-bold text-gray-900 dark:text-white">
                           {devise === "HTG" 
-                            ? `${(selectedPlan === "mensuel" ? montantDuManuel / 9 : montantDuManuel / 2).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} HTG`
-                            : `$${(selectedPlan === "mensuel" ? montantDuManuel / 9 : montantDuManuel / 2).toFixed(2)}`}
+                            ? `${(selectedPlan === "mensuel" ? (Number(montantDuManuel) || 0) / 9 : (Number(montantDuManuel) || 0) / 2).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} HTG`
+                            : `$${(selectedPlan === "mensuel" ? (Number(montantDuManuel) || 0) / 9 : (Number(montantDuManuel) || 0) / 2).toFixed(2)}`}
                         </p>
                         <span className="mt-1.5 inline-flex items-center rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-600 border border-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700">
                           {selectedPlanData.avantage}
@@ -1124,8 +1136,8 @@ export function PaymentAddModal({ isOpen, onClose, initialPlayerId }: PaymentAdd
                         </p>
                         <p className="mt-1 text-xl font-bold text-gray-900 dark:text-white">
                           {devise === "HTG"
-                            ? `${montantDuManuel.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} HTG`
-                            : `$${montantDuManuel.toFixed(2)}`}
+                            ? `${(Number(montantDuManuel) || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} HTG`
+                            : `$${(Number(montantDuManuel) || 0).toFixed(2)}`}
                         </p>
                         <span className="mt-1.5 block text-[10px] text-gray-400 dark:text-gray-500">
                           {selectedPlan === "mensuel" ? "Total sur 9 mois" : "Total sur 2 versements"}

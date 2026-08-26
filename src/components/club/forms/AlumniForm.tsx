@@ -338,7 +338,6 @@ export default function AlumniForm({
             Email
           </label>
           <input
-            required
             type="email"
             value={formValues.email}
             onChange={(event) => updateField("email", event.target.value)}

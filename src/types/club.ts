@@ -84,6 +84,7 @@ export interface Player {
   cotisationStatut: PaymentStatus;
   dernierPaiement: string;
   saison?: string;
+  entrySeason?: string;
   photoIdentiteUrl?: string;
   acteNaissanceUrl?: string;
   carteIdentiteParentUrl?: string;

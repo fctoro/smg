@@ -42,7 +42,7 @@ const defaultValues: PlayerFormValues = {
   cotisationDevise: "US",
   cotisationStatut: "pending",
 
-  programme: "Ti Toro (2 à 5 ans)",
+  programme: "Ti Toro",
   ecole: "",
   experienceSoccer: "",
 
@@ -206,9 +206,9 @@ export default function PlayerForm({
         const isTiToro = age <= 5;
         const currentProgramme = formValues.programme || "";
         if (isTiToro && !currentProgramme.includes("Ti Toro")) {
-           updateField("programme", "Ti Toro (2 à 5 ans)");
+           updateField("programme", "Ti Toro");
         } else if (!isTiToro && !currentProgramme.includes("FC Toro")) {
-           updateField("programme", "FC Toro (6 ans et plus)");
+           updateField("programme", "FC Toro");
         }
       }
     }
@@ -257,7 +257,7 @@ export default function PlayerForm({
             <input
               type="radio"
               name="programme"
-              value="Ti Toro (2 à 5 ans)"
+              value="Ti Toro"
               checked={formValues.programme?.includes("Ti Toro")}
               onChange={(e) => {
                 updateField("programme", e.target.value);
@@ -279,7 +279,7 @@ export default function PlayerForm({
             <input
               type="radio"
               name="programme"
-              value="FC Toro (6 ans et plus)"
+              value="FC Toro"
               checked={!formValues.programme?.includes("Ti Toro")}
               onChange={(e) => {
                 updateField("programme", e.target.value);
@@ -816,8 +816,8 @@ export default function PlayerForm({
           </div>
 
           <div>
-            <label className="mb-1.5 block text-xs font-medium text-gray-700 dark:text-gray-300">E-mail *</label>
-            <input required type="email" value={formValues.email} onChange={(e) => { updateField("email", e.target.value); updateField("parentEmail", e.target.value); }} className={inputClassName} />
+            <label className="mb-1.5 block text-xs font-medium text-gray-700 dark:text-gray-300">E-mail (Optionnel)</label>
+            <input type="email" value={formValues.email} onChange={(e) => { updateField("email", e.target.value); updateField("parentEmail", e.target.value); }} className={inputClassName} />
           </div>
 
           <div>

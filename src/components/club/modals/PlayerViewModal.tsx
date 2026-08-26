@@ -203,7 +203,7 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
   const avatarSrc = getSafeAvatarSrc(player.photoIdentiteUrl || player.photoUrl);
 
   // Extract fields from player or regData fallback
-  const programme = player.programme || (regData?.program === "tiToro" ? "Ti Toro (2 à 5 ans)" : regData?.program === "fcToro" ? "FC Toro (6 ans et plus)" : regData?.program) || (player.categorie?.toLowerCase().includes("ti") ? "Ti Toro (2 à 5 ans)" : "FC Toro (6 ans et plus)");
+  const programme = player.programme || (regData?.program === "tiToro" ? "Ti Toro" : regData?.program === "fcToro" ? "FC Toro" : regData?.program) || (player.categorie?.toLowerCase().includes("ti") ? "Ti Toro" : "FC Toro");
   const ecole = player.ecole || regData?.child_school || "Non renseigné";
   const experienceSoccer = player.experienceSoccer || regData?.child_soccer_experience || "Non renseigné";
 

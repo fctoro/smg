@@ -435,9 +435,15 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
             const fiche9eUrl = group.find(g => g.Info2)?.Info2 || primaryRecord.Info2 || "";
             const carnetVaccinationUrl = group.find(g => g.Info3)?.Info3 || primaryRecord.Info3 || "";
 
+            // Saison d'affichage réelle du joueur : Inscription récente -> Saison enregistrée -> Saison de création -> Saison actuelle
+            let currentDisplaySeason = latestSeasonStr || primaryRecord.Saison || entrySeason || getCurrentSeason();
+            if (typeof currentDisplaySeason === 'string') {
+              currentDisplaySeason = currentDisplaySeason.replace(/^saison\s*/i, "").trim();
+            }
+
             // Détermination du statut réel du joueur
             const savedPlayerStatus = String(primaryRecord.StatutJoueur || "").trim().toLowerCase();
-            let playerStatus: PlayerStatus = "actif";
+            let playerStatus: PlayerStatus = "inactif";
 
             const isAlumni = group.some(g => g.EstAlumni === true || g.EstAlumni === 1 || String(g.EstAlumni).toLowerCase() === "true" || String(g.StatutJoueur).toLowerCase() === "alumni");
             const isAbandon = group.some(g => g.Abandon === true || g.Abandon === 1 || String(g.Abandon).toLowerCase() === "true" || String(g.StatutJoueur).toLowerCase().includes("abandon"));
@@ -445,19 +451,34 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
             const isBlesse = group.some(g => String(g.StatutJoueur).toLowerCase().includes("bless"));
             const isSuspendu = group.some(g => String(g.StatutJoueur).toLowerCase().includes("suspend"));
 
+            const explicitSaison = primaryRecord.Saison ? String(primaryRecord.Saison).replace(/^saison\s*/i, "").trim() : "";
+            let isCreatedIn2026 = false;
+            if (primaryRecord.DtCreation) {
+              const dt = new Date(primaryRecord.DtCreation);
+              if (!isNaN(dt.getTime()) && dt.getFullYear() === 2026) {
+                isCreatedIn2026 = true;
+              }
+            }
+
             if (isAlumni) {
               playerStatus = "alumni";
             } else if (isAbandon) {
               playerStatus = "abandonne";
-            } else if (isExplicitInactive) {
-              playerStatus = "inactif";
             } else if (isBlesse) {
               playerStatus = "blesse";
             } else if (isSuspendu) {
               playerStatus = "suspendu";
+            } else if (isExplicitInactive || savedPlayerStatus === "inactif") {
+              playerStatus = "inactif";
+            } else if (savedPlayerStatus === "actif" || savedPlayerStatus === "normal" || explicitSaison === getCurrentSeason() || isCreatedIn2026 || studentInscriptions.length > 0) {
+              playerStatus = "actif";
+            } else {
+              playerStatus = "inactif";
             }
 
             let finalStatutJoueur = (primaryRecord.StatutJoueur && !["inactif", "actif", "normal"].includes(savedPlayerStatus)) ? primaryRecord.StatutJoueur : undefined;
+            
+            // Override explicite provenant de la table player_status (priorité absolue admin)
             for (const id of allGroupIds) {
               const st = playerStatusMap.get(String(id));
               if (st) {
@@ -473,15 +494,6 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
             if (finalStatutJoueur && ["actif", "inactif", "blesse", "suspendu", "abandonne", "alumni"].includes(finalStatutJoueur.toLowerCase())) {
               playerStatus = finalStatutJoueur.toLowerCase() as PlayerStatus;
               finalStatutJoueur = undefined;
-            }
-
-            // Si le joueur est actif, sa saison en cours est 2026-2027 (saison actuelle). Sinon, sa saison historique est conservée.
-            let currentDisplaySeason = playerStatus === "actif"
-              ? getCurrentSeason()
-              : (latestSeasonStr || primaryRecord.Saison || entrySeason || getCurrentSeason());
-
-            if (typeof currentDisplaySeason === 'string') {
-              currentDisplaySeason = currentDisplaySeason.replace(/^saison\s*/i, "").trim();
             }
 
             // Contact d'urgence (recherche robuste sur toutes les colonnes et entrées du groupe)
@@ -559,7 +571,8 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
               cotisationMontant: totalPaid,
               cotisationStatut: totalPaid > 0 ? "paid" : "pending",
               dernierPaiement: dernierPaiementDate,
-              saison: currentDisplaySeason,
+              saison: playerStatus === "actif" ? getCurrentSeason() : currentDisplaySeason,
+              entrySeason: entrySeason || primaryRecord.Saison || getCurrentSeason(),
               parentNomPrenom,
               parentTelephone,
               parentEmail,
@@ -577,7 +590,11 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
               experienceSoccer: group.find(g => g.ExperienceFoot || g.Experience)?.ExperienceFoot || group.find(g => g.Experience)?.Experience || primaryRecord.ExperienceFoot || primaryRecord.Experience || "",
               planPaiement: group.find(g => g.PlanPaiement || g.PaymentPlan)?.PlanPaiement || group.find(g => g.PaymentPlan)?.PaymentPlan || primaryRecord.PlanPaiement || primaryRecord.PaymentPlan || "",
               modePaiementChoisi: group.find(g => g.MethodePaiement)?.MethodePaiement || primaryRecord.MethodePaiement || "",
-              programme: group.find(g => g.Programme)?.Programme || primaryRecord.Programme || "",
+              programme: group.find(g => g.Programme)?.Programme || primaryRecord.Programme || (
+                (group.find(g => g.Categorie || g.categorie)?.Categorie || primaryRecord.Categorie || "").toLowerCase().includes("ti toro")
+                  ? "Ti Toro"
+                  : "FC Toro"
+              ),
               commentIdentifie: (() => {
                 const info1 = group.find(g => g.Info1)?.Info1 || "";
                 const match = String(info1).match(/IDENTIFIE:([^|]+)/);

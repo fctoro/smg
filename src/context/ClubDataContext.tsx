@@ -760,16 +760,28 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
           );
         }
 
-        if (employesData) {
-          const fetchedEmployees: Employee[] = employesData
+        let rawEmployesData = employesData;
+        if (!rawEmployesData || rawEmployesData.length === 0) {
+          try {
+            const { getEmployeesAdmin } = await import("@/app/actions/club");
+            const adminRes = await getEmployeesAdmin();
+            if (adminRes.success && adminRes.data && adminRes.data.length > 0) {
+              rawEmployesData = adminRes.data;
+            }
+          } catch (err) {
+            console.warn("Erreur chargement fallback getEmployeesAdmin:", err);
+          }
+        }
+
+        if (rawEmployesData && rawEmployesData.length > 0) {
+          const fetchedEmployees: Employee[] = rawEmployesData
             .filter((e: any) => {
               const isDesactive = e.Desactive === 1 || e.Desactive === true || String(e.Desactive).toLowerCase() === "true";
-              const isDeleted = e.IsDeleted === 1 || e.IsDeleted === true || String(e.IsDeleted).toLowerCase() === "true";
-              return !isDesactive && !isDeleted;
+              return !isDesactive;
             })
             .map((e: any) => ({
-              id: String(e.EmployeId),
-              employeId: e.EmployeId,
+              id: String(e.EmployeId || e.employeid),
+              employeId: e.EmployeId || e.employeid,
               nom: e.Nom || "",
               prenom: e.Prenom || "",
               sexe: e.Sexe || "",

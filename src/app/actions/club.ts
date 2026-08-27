@@ -171,6 +171,15 @@ export async function softDeletePlayerAdmin(etudiantId: number) {
 
   return { success: true };
 }
+export async function getEmployeesAdmin() {
+  if (!supabaseAdmin) return { success: false, error: "Service role Supabase indisponible." };
+  const { data, error } = await supabaseAdmin
+    .from("tblEmployes")
+    .select("*")
+    .order("EmployeId", { ascending: true });
+  if (error) return { success: false, error: error.message };
+  return { success: true, data };
+}
 
 export async function insertEmployeeAdmin(insertPayload: any) {
   if (!supabaseAdmin) return { success: false, error: "Service role Supabase indisponible." };
@@ -213,32 +222,21 @@ export async function softDeleteEmployeeAdmin(employeeId: number | string) {
   const numId = Number(strId.replace(/\D/g, ""));
   const targetId = !isNaN(numId) && numId > 0 ? numId : strId;
 
-  // Attempt 1: Desactive = true, IsDeleted = 1
   let res = await supabaseAdmin
     .from("tblEmployes")
-    .update({ Desactive: true, IsDeleted: 1 })
+    .update({ Desactive: 1 })
     .or(`EmployeId.eq.${targetId},EmployeId.eq.${strId}`);
 
   if (res.error) {
-    // Attempt 2: Desactive = 1, IsDeleted = 1
     res = await supabaseAdmin
       .from("tblEmployes")
-      .update({ Desactive: 1, IsDeleted: 1 })
-      .or(`EmployeId.eq.${targetId},EmployeId.eq.${strId}`);
-  }
-
-  if (res.error) {
-    // Attempt 3: Hard delete fallback
-    res = await supabaseAdmin
-      .from("tblEmployes")
-      .delete()
+      .update({ Desactive: true })
       .or(`EmployeId.eq.${targetId},EmployeId.eq.${strId}`);
   }
 
   if (res.error) {
     return { success: false, error: res.error.message };
   }
-
   return { success: true };
 }
 

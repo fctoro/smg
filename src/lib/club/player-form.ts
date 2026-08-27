@@ -28,7 +28,7 @@ export const normalizePlayerFormValues = (
   fiche9eUrl: values.fiche9eUrl,
   carnetVaccinationUrl: values.carnetVaccinationUrl,
 
-  programme: values.programme || "FC Toro",
+  programme: values.programme === "tiToro" ? "Ti Toro" : values.programme === "fcToro" ? "FC Toro" : (values.programme || "FC Toro"),
   ecole: values.ecole || "",
   experienceSoccer: values.experienceSoccer || "",
   commentIdentifie: values.commentIdentifie || "",

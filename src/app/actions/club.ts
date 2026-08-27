@@ -19,16 +19,26 @@ export async function insertPlayerAdmin(insertPayload: any) {
   if (!supabaseAdmin) return { success: false, error: "Service role Supabase indisponible." };
 
   const calculateMaxId = async (): Promise<number> => {
-    const { data: allRows } = await supabaseAdmin
-      .from("tblEtudiants")
-      .select("EtudiantID");
-    
     let maxId = 0;
-    if (allRows && allRows.length > 0) {
-      allRows.forEach((r: any) => {
+    let from = 0;
+    const step = 1000;
+    while (true) {
+      const { data: rows, error } = await supabaseAdmin
+        .from("tblEtudiants")
+        .select("EtudiantID")
+        .range(from, from + step - 1);
+
+      if (error || !rows || rows.length === 0) break;
+
+      for (const r of rows) {
         const num = Number(r.EtudiantID);
-        if (!isNaN(num) && num > maxId) maxId = num;
-      });
+        if (!isNaN(num) && num > maxId) {
+          maxId = num;
+        }
+      }
+
+      if (rows.length < step) break;
+      from += step;
     }
     return maxId;
   };

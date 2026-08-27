@@ -322,10 +322,16 @@ export async function insertPaymentAdmin(paymentPayload: Record<string, any>) {
     return { success: false, error: "Service role Supabase indisponible." };
   }
 
+  const payload = {
+    FactureId: 0,
+    Annule: 0,
+    ...paymentPayload,
+  };
+
   try {
     const { data, error } = await supabaseAdmin
       .from("tblPaiements")
-      .insert(paymentPayload)
+      .insert(payload)
       .select("Id")
       .single();
 
@@ -446,4 +452,95 @@ export async function deleteRubriqueAdmin(id: string) {
     .eq("id", id);
   if (error) return { success: false, error: error.message };
   return { success: true };
+}
+
+export async function fetchCoachesAdmin() {
+  if (!supabaseAdmin) return { success: false, error: "Service role Supabase indisponible." };
+  const { data, error } = await supabaseAdmin
+    .from("tblCoachs")
+    .select("*")
+    .order("nom", { ascending: true });
+  if (error) return { success: false, error: error.message };
+  return { success: true, data };
+}
+
+export async function createCoachAdmin(payload: any) {
+  if (!supabaseAdmin) return { success: false, error: "Service role Supabase indisponible." };
+  const { data, error } = await supabaseAdmin
+    .from("tblCoachs")
+    .insert([payload])
+    .select()
+    .single();
+  if (error) return { success: false, error: error.message };
+  return { success: true, data };
+}
+
+export async function updateCoachAdmin(id: string, payload: any) {
+  if (!supabaseAdmin) return { success: false, error: "Service role Supabase indisponible." };
+  const { data, error } = await supabaseAdmin
+    .from("tblCoachs")
+    .update(payload)
+    .eq("id", id)
+    .select()
+    .single();
+  if (error) return { success: false, error: error.message };
+  return { success: true, data };
+}
+
+export async function deleteCoachAdmin(id: string) {
+  if (!supabaseAdmin) return { success: false, error: "Service role Supabase indisponible." };
+  const { error } = await supabaseAdmin
+    .from("tblCoachs")
+    .delete()
+    .eq("id", id);
+  if (error) return { success: false, error: error.message };
+  return { success: true };
+}
+
+export async function getSiteMessagesAdmin() {
+  if (!supabaseAdmin) return { success: false, error: "Service role Supabase indisponible." };
+  let allData: any[] = [];
+  let from = 0;
+  const step = 1000;
+  while (true) {
+    const { data, error } = await supabaseAdmin
+      .from("site_messages")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .range(from, from + step - 1);
+
+    if (error) break;
+    if (data && data.length > 0) {
+      allData = [...allData, ...data];
+      if (data.length < step) break;
+      from += step;
+    } else {
+      break;
+    }
+  }
+  return { success: true, data: allData };
+}
+
+export async function getDetectionRegistrationsAdmin() {
+  if (!supabaseAdmin) return { success: false, error: "Service role Supabase indisponible." };
+  let allData: any[] = [];
+  let from = 0;
+  const step = 1000;
+  while (true) {
+    const { data, error } = await supabaseAdmin
+      .from("detection_registrations")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .range(from, from + step - 1);
+
+    if (error) break;
+    if (data && data.length > 0) {
+      allData = [...allData, ...data];
+      if (data.length < step) break;
+      from += step;
+    } else {
+      break;
+    }
+  }
+  return { success: true, data: allData };
 }

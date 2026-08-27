@@ -404,3 +404,46 @@ export async function updateSiteStatus(field: "inscriptions_ouvertes" | "detecti
     return { success: false, error: error.message };
   }
 }
+
+export async function getRubriquesAdmin() {
+  if (!supabaseAdmin) return { success: false, error: "Service role Supabase indisponible." };
+  const { data, error } = await supabaseAdmin
+    .from("tblRubriques")
+    .select("*")
+    .order("created_at", { ascending: true });
+  if (error) return { success: false, error: error.message };
+  return { success: true, data };
+}
+
+export async function insertRubriqueAdmin(payload: any) {
+  if (!supabaseAdmin) return { success: false, error: "Service role Supabase indisponible." };
+  const { data, error } = await supabaseAdmin
+    .from("tblRubriques")
+    .insert([payload])
+    .select()
+    .single();
+  if (error) return { success: false, error: error.message };
+  return { success: true, data };
+}
+
+export async function updateRubriqueAdmin(id: string, payload: any) {
+  if (!supabaseAdmin) return { success: false, error: "Service role Supabase indisponible." };
+  const { data, error } = await supabaseAdmin
+    .from("tblRubriques")
+    .update(payload)
+    .eq("id", id)
+    .select()
+    .single();
+  if (error) return { success: false, error: error.message };
+  return { success: true, data };
+}
+
+export async function deleteRubriqueAdmin(id: string) {
+  if (!supabaseAdmin) return { success: false, error: "Service role Supabase indisponible." };
+  const { error } = await supabaseAdmin
+    .from("tblRubriques")
+    .delete()
+    .eq("id", id);
+  if (error) return { success: false, error: error.message };
+  return { success: true };
+}

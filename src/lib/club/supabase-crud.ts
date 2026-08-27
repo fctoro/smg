@@ -1166,14 +1166,18 @@ export const DEFAULT_PRICING_ITEMS: import("@/types/club").PricingItem[] = [
 
 export const fetchRubriquesFromSupabase = async (): Promise<import("@/types/club").PricingItem[]> => {
   try {
-    const { data, error } = await supabase
-      .from("tblRubriques")
-      .select("*")
-      .order("created_at", { ascending: true });
+    const { getRubriquesAdmin } = await import("@/app/actions/club");
+    const adminRes = await getRubriquesAdmin();
+    let data = adminRes.success ? adminRes.data : null;
 
-    if (error) {
-      console.warn("Table tblRubriques introuvable ou erreur Supabase, utilisation des rubriques par défaut:", error.message);
-      return DEFAULT_PRICING_ITEMS;
+    if (!data || data.length === 0) {
+      const { data: clientData } = await supabase
+        .from("tblRubriques")
+        .select("*")
+        .order("created_at", { ascending: true });
+      if (clientData && clientData.length > 0) {
+        data = clientData;
+      }
     }
 
     if (!data || data.length === 0) {
@@ -1209,9 +1213,14 @@ export const addRubriqueToSupabase = async (data: Omit<import("@/types/club").Pr
     actif: data.actif !== undefined ? Boolean(data.actif) : true,
   };
 
-  const { error } = await supabase.from("tblRubriques").insert(payload);
-  if (error) {
-    console.warn("Erreur Supabase lors de l'ajout de rubrique :", error.message);
+  try {
+    const { insertRubriqueAdmin } = await import("@/app/actions/club");
+    const adminRes = await insertRubriqueAdmin(payload);
+    if (!adminRes.success) {
+      await supabase.from("tblRubriques").insert(payload);
+    }
+  } catch (e) {
+    await supabase.from("tblRubriques").insert(payload);
   }
 
   return {
@@ -1232,16 +1241,26 @@ export const updateRubriqueInSupabase = async (id: string, data: Partial<import(
   if (data.estAdhesion !== undefined) payload.est_adhesion = data.estAdhesion;
   if (data.actif !== undefined) payload.actif = data.actif;
 
-  const { error } = await supabase.from("tblRubriques").update(payload).eq("id", id);
-  if (error) {
-    console.warn("Erreur Supabase lors de la modification de rubrique :", error.message);
+  try {
+    const { updateRubriqueAdmin } = await import("@/app/actions/club");
+    const adminRes = await updateRubriqueAdmin(id, payload);
+    if (!adminRes.success) {
+      await supabase.from("tblRubriques").update(payload).eq("id", id);
+    }
+  } catch (e) {
+    await supabase.from("tblRubriques").update(payload).eq("id", id);
   }
 };
 
 export const deleteRubriqueInSupabase = async (id: string) => {
-  const { error } = await supabase.from("tblRubriques").delete().eq("id", id);
-  if (error) {
-    console.warn("Erreur Supabase lors de la suppression de rubrique :", error.message);
+  try {
+    const { deleteRubriqueAdmin } = await import("@/app/actions/club");
+    const adminRes = await deleteRubriqueAdmin(id);
+    if (!adminRes.success) {
+      await supabase.from("tblRubriques").delete().eq("id", id);
+    }
+  } catch (e) {
+    await supabase.from("tblRubriques").delete().eq("id", id);
   }
 };
 

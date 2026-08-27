@@ -234,19 +234,21 @@ export default function PlayerTable({
         return nameMatches && categoryMatches && seasonMatches && programmeMatches && statusMatches;
       })
       .sort((a, b) => {
-        // 1. Statut Actif en premier
-        if (a.statut === "actif" && b.statut !== "actif") return -1;
-        if (a.statut !== "actif" && b.statut === "actif") return 1;
+        // 1. Statut Actif en premier (priorité aux joueurs actifs)
+        const isAActif = (a.statut || "").toLowerCase() === "actif";
+        const isBActif = (b.statut || "").toLowerCase() === "actif";
+        if (isAActif && !isBActif) return -1;
+        if (!isAActif && isBActif) return 1;
 
-        // 2. Saison la plus récente en premier (ex: 2026-2027 avant 2025-2026)
-        const saisonA = a.saison || "";
-        const saisonB = b.saison || "";
-        if (saisonA !== saisonB) {
-          return saisonB.localeCompare(saisonA);
-        }
+        // 2. Ordre alphabétique A-Z (Nom de famille, puis Prénom)
+        const nomA = (a.nom || "").trim();
+        const nomB = (b.nom || "").trim();
+        const nomCompare = nomA.localeCompare(nomB, "fr", { sensitivity: "base" });
+        if (nomCompare !== 0) return nomCompare;
 
-        // 3. Inscription la plus récente
-        return new Date(b.dateInscription).getTime() - new Date(a.dateInscription).getTime();
+        const prenomA = (a.prenom || "").trim();
+        const prenomB = (b.prenom || "").trim();
+        return prenomA.localeCompare(prenomB, "fr", { sensitivity: "base" });
       });
   }, [players, searchQuery, selectedCategory, selectedSeason, selectedProgramme, selectedStatus]);
 

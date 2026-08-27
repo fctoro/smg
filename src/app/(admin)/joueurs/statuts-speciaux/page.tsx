@@ -137,6 +137,21 @@ export default function StatutsSpeciauxPage() {
       }
 
       return matchesSearch && matchesCat && matchesStatus;
+    })
+    .sort((a, b) => {
+      const isAActif = (a.statut || "").toLowerCase() === "actif";
+      const isBActif = (b.statut || "").toLowerCase() === "actif";
+      if (isAActif && !isBActif) return -1;
+      if (!isAActif && isBActif) return 1;
+
+      const nomA = (a.nom || "").trim();
+      const nomB = (b.nom || "").trim();
+      const nomCompare = nomA.localeCompare(nomB, "fr", { sensitivity: "base" });
+      if (nomCompare !== 0) return nomCompare;
+
+      const prenomA = (a.prenom || "").trim();
+      const prenomB = (b.prenom || "").trim();
+      return prenomA.localeCompare(prenomB, "fr", { sensitivity: "base" });
     });
   }, [playersWithSpecialStatus, searchQuery, categoryFilter, statusFilter]);
 

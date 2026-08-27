@@ -272,7 +272,24 @@ export default function StatistiquesPage() {
     if (!rows || rows.length === 0) return;
     const playerMap = new Map(players.map(p => [p.id, p]));
 
+    const todayStr = new Date().toISOString().slice(0, 10);
+    
+    // Déterminer la période exacte d'extraction
+    let startStr = dateFrom;
+    let endStr = dateTo || todayStr;
+
+    if (!startStr && rows.length > 0) {
+      const dates = rows.map(p => p.datePaiement || p.periode || "").filter(Boolean).sort();
+      if (dates.length > 0) startStr = dates[0];
+    }
+    if (!startStr) startStr = todayStr;
+
+    const periodFileName = startStr === endStr 
+      ? startStr 
+      : `${startStr}_au_${endStr}`;
+
     let csvContent = "\uFEFF";
+    csvContent += `Période d'extraction : du ${startStr} au ${endStr}\n`;
     csvContent += "Date,Numero_Recu,Joueur,Matricule,Programme,Categorie,Mode_Paiement,Devise,Montant_USD,Montant_HTG,Statut\n";
 
     rows.forEach(p => {
@@ -303,7 +320,7 @@ export default function StatistiquesPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `extraction_fctoro_${dateFrom || 'debut'}_au_${dateTo || 'aujourdhui'}.csv`;
+    a.download = `extraction_fctoro_${periodFileName}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };

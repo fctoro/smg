@@ -10,6 +10,8 @@ import {
   deletePayrollInSupabase,
 } from "@/lib/club/supabase-crud";
 import { ConfirmModal } from "@/components/ui/modal/ConfirmModal";
+import { Dropdown } from "@/components/ui/dropdown/Dropdown";
+import { DropdownItem } from "@/components/ui/dropdown/DropdownItem";
 
 // Professional SVG Icons
 const Icons = {
@@ -234,6 +236,89 @@ export default function PayrollPage() {
       totalCount: filteredRecords.length,
     };
   }, [filteredRecords]);
+
+  const [isExportOpen, setIsExportOpen] = useState<boolean>(false);
+
+  const generatePayrollExportContent = (delimiter: string) => {
+    let csvContent = "\uFEFF";
+    const headers = [
+      "Employe_Nom",
+      "Employe_Prenom",
+      "Fonction",
+      "Periode_Mois",
+      "Type_Salaire",
+      "Salaire_Base",
+      "Primes_Bonus",
+      "Vacances_Payees",
+      "Retenues_Taxes",
+      "Net_A_Payer",
+      "Devise",
+      "Statut",
+      "Date_Paiement",
+      "Mode_Paiement",
+      "Notes",
+    ];
+    csvContent += headers.join(delimiter) + "\n";
+
+    filteredRecords.forEach((r) => {
+      const row = [
+        r.employeNom,
+        r.employePrenom,
+        r.fonction,
+        formatMonthYearDisplay(r.mois),
+        r.typeSalaire === "variable" ? "Variable / Séance" : "Fixe",
+        Number(r.salaireBase || 0).toFixed(2),
+        Number(r.bonus || 0).toFixed(2),
+        Number(r.vacancesPayees || 0).toFixed(2),
+        Number(r.deductions || 0).toFixed(2),
+        Number(r.netAPayer || 0).toFixed(2),
+        r.devise || "HTG",
+        r.statut === "paye" ? "Payé" : "En attente",
+        r.datePaiement || "",
+        r.modePaiement || "",
+        r.notes || "",
+      ];
+      const formattedRow = row.map((field) => `"${String(field || "").replace(/"/g, '""')}"`);
+      csvContent += formattedRow.join(delimiter) + "\n";
+    });
+
+    // Summary totals
+    const totalNetHTG = filteredRecords.filter((r) => r.devise === "HTG").reduce((sum, r) => sum + (r.netAPayer || 0), 0);
+    const totalNetUSD = filteredRecords.filter((r) => r.devise !== "HTG").reduce((sum, r) => sum + (r.netAPayer || 0), 0);
+
+    csvContent += `\nTOTAL${delimiter}${delimiter}${delimiter}TOTAL NET HTG ENCAISSE${delimiter}${delimiter}${delimiter}${delimiter}${delimiter}${delimiter}${totalNetHTG.toFixed(2)} HTG\n`;
+    csvContent += `TOTAL${delimiter}${delimiter}${delimiter}TOTAL NET USD ENCAISSE${delimiter}${delimiter}${delimiter}${delimiter}${delimiter}${delimiter}${totalNetUSD.toFixed(2)} USD\n`;
+
+    return csvContent;
+  };
+
+  const handleExportExcel = () => {
+    setIsExportOpen(false);
+    const content = generatePayrollExportContent(";");
+    const blob = new Blob([content], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `payroll_export_${selectedYear}_${selectedMonth}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleExportCSV = () => {
+    setIsExportOpen(false);
+    const content = generatePayrollExportContent(",");
+    const blob = new Blob([content], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `payroll_export_${selectedYear}_${selectedMonth}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
 
   const handleCreatePayroll = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -580,19 +665,26 @@ export default function PayrollPage() {
         </div>
       </div>
 
-      {/* Top Bar Actions */}
-      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between print:hidden">
-        <div className="flex flex-wrap items-center gap-3">
-          {/* Year Filter */}
-          <div className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 shadow-xs dark:border-gray-800 dark:bg-gray-900">
-            <Icons.Calendar />
-            <span className="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Année:</span>
+      {/* Top Action Bar (Filters + Add Button) */}
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between print:hidden mb-6">
+        <div className="grid flex-1 gap-2 sm:grid-cols-2 lg:grid-cols-4 min-w-0">
+          <div className="min-w-0">
+            <input
+              type="text"
+              placeholder="Rechercher un employé"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="h-11 w-full min-w-0 max-w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs placeholder:text-gray-400 focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
+            />
+          </div>
+
+          <div className="min-w-0">
             <select
               value={selectedYear}
               onChange={(e) => setSelectedYear(e.target.value)}
-              className="bg-transparent text-sm font-semibold text-gray-800 focus:outline-none dark:text-white"
+              className="h-11 w-full min-w-0 max-w-full truncate rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90 cursor-pointer"
             >
-              <option value="all">Toutes les années (2012 - {CURRENT_YEAR})</option>
+              <option value="all">Toutes les années</option>
               {YEARS_LIST.map((year) => (
                 <option key={year} value={String(year)}>
                   Année {year}
@@ -601,14 +693,11 @@ export default function PayrollPage() {
             </select>
           </div>
 
-          {/* Month Filter */}
-          <div className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 shadow-xs dark:border-gray-800 dark:bg-gray-900">
-            <Icons.Filter />
-            <span className="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Mois:</span>
+          <div className="min-w-0">
             <select
               value={selectedMonth}
               onChange={(e) => setSelectedMonth(e.target.value)}
-              className="bg-transparent text-sm font-semibold text-gray-800 focus:outline-none dark:text-white"
+              className="h-11 w-full min-w-0 max-w-full truncate rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90 cursor-pointer"
             >
               {MONTHS_LIST.map((m) => (
                 <option key={m.value} value={m.value}>
@@ -618,63 +707,77 @@ export default function PayrollPage() {
             </select>
           </div>
 
-          {/* Search Box */}
-          <div className="relative flex items-center">
-            <span className="absolute left-3">
-              <Icons.Search />
-            </span>
-            <input
-              type="text"
-              placeholder="Rechercher employé, poste..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-64 rounded-xl border border-gray-200 bg-white py-2 pl-9 pr-3 text-sm text-gray-800 shadow-xs focus:border-brand-500 focus:outline-none dark:border-gray-800 dark:bg-gray-900 dark:text-white"
-            />
+          <div className="min-w-0">
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="h-11 w-full min-w-0 max-w-full truncate rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90 cursor-pointer"
+            >
+              <option value="all">Tous statuts</option>
+              <option value="paye">Payé</option>
+              <option value="en_attente">En attente</option>
+            </select>
           </div>
-
-          {/* Status Filter */}
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-800 shadow-xs focus:border-brand-500 focus:outline-none dark:border-gray-800 dark:bg-gray-900 dark:text-white"
-          >
-            <option value="all">Tous les statuts</option>
-            <option value="paye">Payé</option>
-            <option value="en_attente">En attente</option>
-          </select>
         </div>
 
-        {/* Action Buttons */}
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => {
-              setSelectedSlip(null);
-              setTimeout(() => {
-                window.print();
-              }, 200);
-            }}
-            className="inline-flex h-11 items-center justify-center gap-2 whitespace-nowrap rounded-lg border border-gray-300 bg-white px-4 text-sm font-medium text-gray-700 shadow-theme-xs hover:bg-gray-50 transition-colors dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
-          >
-            <Icons.Printer />
-            <span>Imprimer</span>
-          </button>
-          
+        <div className="shrink-0">
           <button
             onClick={() => setShowModal(true)}
-            className="inline-flex h-11 items-center justify-center gap-2 whitespace-nowrap rounded-lg bg-brand-500 px-4 text-sm font-medium text-white shadow-theme-xs hover:bg-brand-600 transition-colors"
+            className="inline-flex h-11 items-center justify-center whitespace-nowrap rounded-lg bg-brand-500 px-4 text-sm font-medium text-white shadow-theme-xs hover:bg-brand-600 transition-colors cursor-pointer"
           >
-            <Icons.Plus />
-            <span>+ Nouveau Bulletin</span>
+            + Nouveau Bulletin
           </button>
         </div>
       </div>
 
+      {/* Printable Title */}
       <div className="hidden print:block mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Rapport de Paie - {formatMonthYearDisplay(`${selectedYear}-${selectedMonth}`)}</h1>
       </div>
 
-      {/* Payroll Records Table */}
-      <div className={`rounded-2xl border border-gray-200 bg-white shadow-xs dark:border-gray-800 dark:bg-gray-900 ${selectedSlip ? 'print:hidden' : ''}`}>
+      {/* Payroll Records Table Container */}
+      <div className={`overflow-hidden rounded-2xl border border-gray-200 bg-white px-4 pb-3 pt-4 dark:border-gray-800 dark:bg-white/[0.03] sm:px-6 ${selectedSlip ? 'print:hidden' : ''}`}>
+        {/* Table Header: Title on Left, Export Excel Button on Right */}
+        <div className="mb-4 flex items-center justify-between">
+          <div>
+            <h3 className="text-lg font-semibold text-gray-800 dark:text-white/90">
+              Journal de Paie
+            </h3>
+            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+              {filteredRecords.length} fiche(s)
+            </p>
+          </div>
+
+          {/* Export Excel / CSV Button inside table header */}
+          <div className="relative shrink-0">
+            <button
+              onClick={() => setIsExportOpen(!isExportOpen)}
+              className="inline-flex h-10 items-center justify-center gap-2 whitespace-nowrap rounded-lg bg-[#107C41] px-4 text-sm font-medium text-white shadow-theme-xs hover:bg-[#0c5e31] transition-colors cursor-pointer"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                <path d="M14 2v6h6"></path>
+                <path d="M8 13h2"></path>
+                <path d="M14 13h2"></path>
+                <path d="M8 17h2"></path>
+                <path d="M14 17h2"></path>
+              </svg>
+              <span>Exporter Excel / CSV</span>
+            </button>
+            <Dropdown
+              isOpen={isExportOpen}
+              onClose={() => setIsExportOpen(false)}
+              className="w-36 right-0"
+            >
+              <DropdownItem onItemClick={handleExportExcel}>
+                Excel (.csv)
+              </DropdownItem>
+              <DropdownItem onItemClick={handleExportCSV}>
+                CSV (.csv)
+              </DropdownItem>
+            </Dropdown>
+          </div>
+        </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm text-gray-600 dark:text-gray-400">
             <thead className="bg-gray-50/80 text-xs uppercase text-gray-700 dark:bg-gray-800/60 dark:text-gray-300">

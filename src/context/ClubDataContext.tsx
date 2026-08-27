@@ -36,6 +36,7 @@ import {
   deleteRubriqueInSupabase,
   DEFAULT_PRICING_ITEMS,
 } from "@/lib/club/supabase-crud";
+import { getPaiementsAdmin } from "@/app/actions/club";
 
 type SetState<T> = React.Dispatch<React.SetStateAction<T>>;
 
@@ -235,17 +236,27 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
           return allData;
         };
 
-        const [etudiantsData, paiementsData, inscriptionsData, sessionsData, facturesData, employesData, evenementsData, payrollData, playerStatusData] = await Promise.all([
-          fetchAll("tblEtudiants"),
-          fetchAll("tblPaiements"),
-          fetchAll("tblInscriptions"),
-          fetchAll("tblSessions"),
-          fetchAll("tblFacture"),
-          fetchAll("tblEmployes"),
-          fetchAll("tblEvenements").catch(() => []),
-          fetchAll("tblPayroll").catch(() => []),
-          fetchAll("player_status").catch(() => [])
-        ]);
+          const fetchPaiements = async () => {
+            try {
+              const res = await getPaiementsAdmin();
+              if (res.success && res.data && res.data.length > 0) return res.data;
+            } catch (e) {
+              console.warn("getPaiementsAdmin fallback error:", e);
+            }
+            return fetchAll("tblPaiements");
+          };
+
+          const [etudiantsData, paiementsData, inscriptionsData, sessionsData, facturesData, employesData, evenementsData, payrollData, playerStatusData] = await Promise.all([
+            fetchAll("tblEtudiants"),
+            fetchPaiements(),
+            fetchAll("tblInscriptions"),
+            fetchAll("tblSessions"),
+            fetchAll("tblFacture"),
+            fetchAll("tblEmployes"),
+            fetchAll("tblEvenements").catch(() => []),
+            fetchAll("tblPayroll").catch(() => []),
+            fetchAll("player_status").catch(() => [])
+          ]);
 
         console.log("[DEBUG ClubDataContext] etudiantsData length:", etudiantsData?.length);
 
@@ -699,6 +710,7 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
               };
             });
             setPayments(fetchedPayments);
+            safeSetItem(STORAGE_KEYS.payments, fetchedPayments);
           } else {
             setPayments(parseStoredArray<Payment>(window.localStorage.getItem(STORAGE_KEYS.payments), []));
           }

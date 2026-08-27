@@ -544,3 +544,28 @@ export async function getDetectionRegistrationsAdmin() {
   }
   return { success: true, data: allData };
 }
+
+export async function getPaiementsAdmin() {
+  if (!supabaseAdmin) return { success: false, error: "Service role Supabase indisponible." };
+  let allData: any[] = [];
+  let from = 0;
+  const step = 1000;
+  while (true) {
+    const { data, error } = await supabaseAdmin
+      .from("tblPaiements")
+      .select("*")
+      .order("Id", { ascending: false })
+      .range(from, from + step - 1);
+
+    if (error) break;
+    if (data && data.length > 0) {
+      allData = [...allData, ...data];
+      if (data.length < step) break;
+      from += step;
+    } else {
+      break;
+    }
+  }
+  return { success: true, data: allData };
+}
+

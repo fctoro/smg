@@ -928,7 +928,21 @@ export default function PaymentsPage() {
               Paiements
             </h3>
             <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-              {filteredPayments.length} paiement(s)
+              {filteredPayments.length === payments.length
+                ? `${payments.length} paiement(s)`
+                : `${filteredPayments.length} sur ${payments.length} paiement(s)`}
+              {filteredPayments.length !== payments.length && (
+                <button
+                  onClick={() => {
+                    setSearchQuery("");
+                    setDeviseFilter("all");
+                    setSelectedSeason("all");
+                  }}
+                  className="ml-2 text-xs text-brand-500 hover:underline font-medium"
+                >
+                  (Afficher tous les {payments.length} paiements)
+                </button>
+              )}
             </p>
           </div>
           <div className="flex items-center gap-3 relative">

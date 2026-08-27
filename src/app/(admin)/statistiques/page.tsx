@@ -299,7 +299,7 @@ export default function StatistiquesPage() {
       const prog = pl?.programme ? `"${pl.programme.replace(/"/g, '""')}"` : '"FC Toro"';
       const cat = pl?.categorie ? `"${pl.categorie.replace(/"/g, '""')}"` : '""';
       const dt = p.datePaiement || p.periode || "";
-      const recu = p.numeroRecu || `REC-${p.id}`;
+      const recu = (p as any).numeroRecu || (p as any).recuNo || `REC-${p.id}`;
       const mode = p.methode || "especes";
       
       const mntUS = isUSDDevise(p.devise) ? Number(p.montantUS || p.montant || 0).toFixed(2) : "0.00";
@@ -718,7 +718,7 @@ export default function StatistiquesPage() {
                   trackingPeriodPayments.map((payment) => (
                     <tr key={payment.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/30 transition-colors">
                       <td className="px-4 py-3 font-medium">{payment.datePaiement || payment.periode}</td>
-                      <td className="px-4 py-3 font-mono font-bold text-gray-900 dark:text-white">{payment.numeroRecu || `REC-${payment.id}`}</td>
+                      <td className="px-4 py-3 font-mono font-bold text-gray-900 dark:text-white">{(payment as any).numeroRecu || (payment as any).recuNo || `REC-${payment.id}`}</td>
                       <td className="px-4 py-3 capitalize">{payment.methode || "Standard"}</td>
                       <td className="px-4 py-3 font-bold text-emerald-600 dark:text-emerald-400">
                         {isUSDDevise(payment.devise) ? formatClubCurrency(payment.montantUS || payment.montant, "US") : "-"}

@@ -96,6 +96,10 @@ export default function PaymentsPage() {
   const [nombreDeMois, setNombreDeMois] = useState<number>(1);
   const [isMonthlyPlan, setIsMonthlyPlan] = useState<boolean>(false);
 
+  const [modalPlayerId, setModalPlayerId] = useState<string | undefined>(undefined);
+  const [editDevise, setEditDevise] = useState<"US" | "HTG">("US");
+  const [editTaux, setEditTaux] = useState<number>(0);
+
   const playerMap = useMemo(
     () => new Map(players.map((player) => [player.id, player])),
     [players],
@@ -181,6 +185,8 @@ export default function PaymentsPage() {
     setEditingPayment(payment);
     setNewAmount("");
     setNewPaymentDate(new Date().toISOString().split("T")[0]);
+    setEditDevise((payment.devise as "US" | "HTG") || "US");
+    setEditTaux(payment.taux || 0);
     setEditError("");
     paymentPhotoPreviews.forEach((p) => {
       if (p.url.startsWith("blob:")) URL.revokeObjectURL(p.url);
@@ -218,46 +224,30 @@ export default function PaymentsPage() {
     const selectedFiles = Array.from(event.target.files || []);
     if (selectedFiles.length === 0) return;
 
-    const newPreviews: { file: File; url: string; name: string; isPdf: boolean }[] = [];
-    let hasError = false;
+    setPaymentPhotoError(null);
+    const newPreviews = selectedFiles.map((file) => {
+      const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+      const url = URL.createObjectURL(file);
+      return { file, url, name: file.name, isPdf };
+    });
 
-    for (const file of selectedFiles) {
-      const validation = validatePaymentPhotoFile(file);
-      if (!validation.valid) {
-        setPaymentPhotoError(validation.error ?? "Erreur de validation d'un fichier.");
-        hasError = true;
-        break;
-      }
-      newPreviews.push({
-        file,
-        url: getPaymentPhotoPreviewUrl(file) || "",
-        name: file.name,
-        isPdf: isPdfProof(file.name),
-      });
-    }
-
-    if (!hasError) {
-      setPaymentPhotos((prev) => [...prev, ...selectedFiles]);
-      setPaymentPhotoPreviews((prev) => [...prev, ...newPreviews]);
-      setPaymentPhotoError(null);
-    }
-    event.target.value = "";
+    setPaymentPhotos((current) => [...current, ...selectedFiles]);
+    setPaymentPhotoPreviews((current) => [...current, ...newPreviews]);
   };
 
   const handleRemovePhoto = (index: number) => {
-    setPaymentPhotoPreviews((prev) => {
-      const item = prev[index];
-      if (item?.url?.startsWith("blob:")) URL.revokeObjectURL(item.url);
-      return prev.filter((_, i) => i !== index);
+    setPaymentPhotos((current) => current.filter((_, i) => i !== index));
+    setPaymentPhotoPreviews((current) => {
+      const itemToRemove = current[index];
+      if (itemToRemove && itemToRemove.url.startsWith("blob:")) {
+        URL.revokeObjectURL(itemToRemove.url);
+      }
+      return current.filter((_, i) => i !== index);
     });
-    setPaymentPhotos((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const handleEditPayment = async () => {
-    if (!editingPayment || newAmount === "" || newAmount <= 0 || !newPaymentDate) {
-      setEditError("Veuillez entrer un montant supérieur à zéro et une date.");
-      return;
-    }
+  const handleSaveEdit = async () => {
+    if (!editingPayment) return;
 
     setIsSaving(true);
     setEditError("");
@@ -266,11 +256,28 @@ export default function PaymentsPage() {
       const paymentPhotoUrls = await uploadPromise;
 
       const newAmountNum = Number(newAmount) || 0;
-      const totalAmountPaid = editingPayment.montant + newAmountNum;
-      const montantUS = editingPayment.devise === "US"
-        ? totalAmountPaid
-        : (editingPayment.taux ? totalAmountPaid / editingPayment.taux : 0);
-      const montantHTG = editingPayment.devise === "HTG" ? totalAmountPaid : 0;
+
+      // Calcul de l'équivalent en USD du versement ajouté
+      const addedUSD = editDevise === "HTG"
+        ? (editTaux > 0 ? newAmountNum / editTaux : 0)
+        : newAmountNum;
+      
+      const addedHTG = editDevise === "HTG"
+        ? newAmountNum
+        : (editTaux > 0 ? newAmountNum * editTaux : 0);
+
+      // On préserve la devise initiale du dossier (US par défaut) pour ne pas altérer l'affichage principal
+      const targetDevise = editingPayment.devise || "US";
+
+      // Cumul total mis à jour en USD et HTG
+      const prevMontantUS = Number(editingPayment.montantUS) || (editingPayment.devise === "HTG" && editingPayment.taux ? editingPayment.montant / editingPayment.taux : Number(editingPayment.montant) || 0);
+      const prevMontantHTG = Number(editingPayment.montantHTG) || (editingPayment.devise === "HTG" ? Number(editingPayment.montant) || 0 : 0);
+
+      const totalMontantUS = prevMontantUS + addedUSD;
+      const totalMontantHTG = prevMontantHTG + addedHTG;
+
+      // Le montant principal reste exprimé dans la devise initiale du dossier
+      const newPrimaryAmount = targetDevise === "HTG" ? totalMontantHTG : totalMontantUS;
       
       const paymentPhotoNotes = (paymentPhotoUrls && paymentPhotoUrls.length > 0)
         ? paymentPhotoUrls.map((url) => ` [JUSTIFICATIF:${url}]`).join("")
@@ -285,100 +292,107 @@ export default function PaymentsPage() {
         }
       }
 
+      if (editDevise === "HTG" && newAmountNum > 0) {
+        baseRemarque += ` [SOLDE_HTG:${newAmountNum}_TAUX:${editTaux}_USD:${addedUSD.toFixed(2)}]`;
+      }
+
       const finalRemarque = `${baseRemarque}${paymentPhotoNotes}`.trim();
 
       await updatePaymentInSupabase(editingPayment.id, {
-        montant: totalAmountPaid,
-        montantUS,
-        montantHTG,
-        devise: editingPayment.devise,
+        montant: newPrimaryAmount,
+        montantUS: totalMontantUS,
+        montantHTG: totalMontantHTG,
+        devise: targetDevise,
+        taux: editTaux > 0 ? editTaux : editingPayment.taux,
         datePaiement: newPaymentDate,
         remarque: finalRemarque,
       });
       setPayments((currentPayments) =>
         currentPayments.map((payment) =>
           payment.id === editingPayment.id
-            ? { ...payment, montant: totalAmountPaid, montantUS, montantHTG, datePaiement: newPaymentDate, remarque: finalRemarque }
+            ? { ...payment, montant: newPrimaryAmount, montantUS: totalMontantUS, montantHTG: totalMontantHTG, devise: targetDevise, taux: editTaux > 0 ? editTaux : editingPayment.taux, datePaiement: newPaymentDate, remarque: finalRemarque }
             : payment,
         ),
       );
 
-      // Envoi automatique de mail de reçu
-      const player = playerMap.get(editingPayment.playerId);
-      if (player) {
-        const emailToSend = player.parentEmail || player.email;
-        if (emailToSend) {
-          try {
-            const updatedPaymentForPdf = {
-              id: editingPayment.id,
-              playerId: editingPayment.playerId,
-              montant: totalAmountPaid,
-              montantUS,
-              montantHTG,
-              devise: editingPayment.devise,
-              datePaiement: newPaymentDate,
-              remarque: finalRemarque,
-            };
-            const nomParts = (player.parentNomPrenom || "").split(" ");
-            const parentNom = nomParts[0] || "";
-            const parentPrenom = nomParts.slice(1).join(" ") || "";
-
-            const totalRubriquesMatch = finalRemarque.match(/\[TOTAL_DUE:\s*([\d.]+)\s*\]/i);
-            const totalRubriques = totalRubriquesMatch ? parseFloat(totalRubriquesMatch[1]) : undefined;
-
-            const existingPhotoUrls = extractPhotoUrlsFromRemark(editingPayment.remarque);
-            const existingProofBase64List: string[] = [];
-            for (const proofUrl of existingPhotoUrls) {
-              try {
-                const res = await fetch(proofUrl);
-                const blob = await res.blob();
-                const b64 = await new Promise<string>((resolve, reject) => {
-                  const reader = new FileReader();
-                  reader.onloadend = () => resolve(reader.result as string);
-                  reader.onerror = reject;
-                  reader.readAsDataURL(blob);
-                });
-                if (b64) existingProofBase64List.push(b64);
-              } catch (e) {
-                console.warn("Erreur lors de la récupération de la preuve", proofUrl, e);
-              }
-            }
-
-            const newProofBase64List = await filesToBase64(paymentPhotos);
-            const allProofBase64List = [...existingProofBase64List, ...newProofBase64List];
-
-            const receiptBase64 = await generateReceiptPDFBase64(
-              player,
-              [updatedPaymentForPdf],
-              parentNom,
-              parentPrenom,
-              player.parentTelephone || player.telephone || "",
-              emailToSend,
-              player.parentAdresse || player.adresse || "",
-              allProofBase64List,
-              false,
-              totalRubriques
-            );
-
-            const mntStr = editingPayment.devise === "HTG" ? `${newAmount} HTG` : `${newAmount} USD`;
-            await fetch("/api/send-receipt", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                email: emailToSend,
-                parentName: player.parentNomPrenom || getPlayerFullName(player),
-                receiptBase64,
-                receiptNumber: `SOLDE-${Date.now()}`,
-                amount: mntStr,
-              }),
-            });
-          } catch (emailErr) {
-            console.error("Erreur lors de l'envoi du mail de solde:", emailErr);
-          }
-        }
-      }
-
+      // Fermeture immédiate du modal et mise à jour UI instantanée !
       closeEditModal();
+
+      // Envoi du mail de reçu en arrière-plan (sans faire attendre l'utilisateur)
+      (async () => {
+        const player = playerMap.get(editingPayment.playerId);
+        if (!player) return;
+        const emailToSend = player.parentEmail || player.email;
+        if (!emailToSend) return;
+
+        try {
+          const updatedPaymentForPdf = {
+            id: editingPayment.id,
+            playerId: editingPayment.playerId,
+            montant: newPrimaryAmount,
+            montantUS: totalMontantUS,
+            montantHTG: totalMontantHTG,
+            devise: targetDevise,
+            datePaiement: newPaymentDate,
+            remarque: finalRemarque,
+          };
+          const nomParts = (player.parentNomPrenom || "").split(" ");
+          const parentNom = nomParts[0] || "";
+          const parentPrenom = nomParts.slice(1).join(" ") || "";
+
+          const totalRubriquesMatch = finalRemarque.match(/\[TOTAL_DUE:\s*([\d.]+)\s*\]/i);
+          const totalRubriques = totalRubriquesMatch ? parseFloat(totalRubriquesMatch[1]) : undefined;
+
+          const existingPhotoUrls = extractPhotoUrlsFromRemark(editingPayment.remarque);
+          const existingProofBase64List: string[] = [];
+          for (const proofUrl of existingPhotoUrls) {
+            try {
+              const res = await fetch(proofUrl);
+              const blob = await res.blob();
+              const b64 = await new Promise<string>((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onloadend = () => resolve(reader.result as string);
+                reader.onerror = reject;
+                reader.readAsDataURL(blob);
+              });
+              if (b64) existingProofBase64List.push(b64);
+            } catch (e) {
+              console.warn("Erreur lors de la récupération de la preuve", proofUrl, e);
+            }
+          }
+
+          const newProofBase64List = await filesToBase64(paymentPhotos);
+          const allProofBase64List = [...existingProofBase64List, ...newProofBase64List];
+
+          const receiptBase64 = await generateReceiptPDFBase64(
+            player,
+            [updatedPaymentForPdf],
+            parentNom,
+            parentPrenom,
+            player.parentTelephone || player.telephone || "",
+            emailToSend,
+            player.parentAdresse || player.adresse || "",
+            allProofBase64List,
+            false,
+            totalRubriques
+          );
+
+          const mntStr = targetDevise === "HTG" ? `${newAmount} HTG` : `${newAmount} USD`;
+          await fetch("/api/send-receipt", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              email: emailToSend,
+              parentName: player.parentNomPrenom || getPlayerFullName(player),
+              receiptBase64,
+              receiptNumber: `SOLDE-${Date.now()}`,
+              amount: mntStr,
+            }),
+          });
+        } catch (emailErr) {
+          console.error("Erreur lors de l'envoi du mail de solde:", emailErr);
+        }
+      })();
     } catch (error) {
       setEditError(error instanceof Error ? error.message : "Impossible d'enregistrer la modification.");
     } finally {
@@ -1238,18 +1252,108 @@ export default function PaymentsPage() {
                 </p>
               </div>
               <div>
-                <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">Montant à régler</label>
-                <p className="rounded-lg bg-gray-100 px-3 py-2 text-sm text-gray-700 dark:bg-gray-800 dark:text-gray-300">
+                <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">Montant à régler (Solde)</label>
+                <p className="rounded-lg bg-gray-100 px-3 py-2 text-sm font-bold text-gray-900 dark:bg-gray-800 dark:text-white">
                   {(() => {
                     const b = calculateBalance(editingPayment);
-                    return formatClubCurrency(b.balance, b.devise);
+                    if (b.balance <= 0) return formatClubCurrency(0, b.devise);
+                    
+                    const tauxEff = editTaux > 0 ? editTaux : (editingPayment.taux || 132);
+
+                    let balUSD = 0;
+                    let balHTG = 0;
+
+                    if (b.devise === "HTG") {
+                      balHTG = b.balance;
+                      balUSD = tauxEff > 0 ? b.balance / tauxEff : 0;
+                    } else {
+                      balUSD = b.balance;
+                      balHTG = tauxEff > 0 ? Math.round(b.balance * tauxEff) : 0;
+                    }
+
+                    if (editDevise === "HTG") {
+                      return `${balHTG.toLocaleString('fr-FR')} HTG (${formatClubCurrency(balUSD, "US")})`;
+                    }
+                    return `${formatClubCurrency(balUSD, "US")}${balHTG > 0 ? ` (${balHTG.toLocaleString('fr-FR')} HTG)` : ""}`;
                   })()}
                 </p>
               </div>
-              <div>
-                <label htmlFor="new-payment-amount" className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">Différence à ajouter</label>
-                <input id="new-payment-amount" type="number" min="0.01" step="0.01" value={newAmount === 0 ? "" : newAmount} onChange={(event) => setNewAmount(event.target.value === "" ? 0 : Number(event.target.value))} placeholder="Saisissez le montant..." className="h-11 w-full rounded-lg border border-gray-300 px-3 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white" />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">Devise du versement</label>
+                  <select
+                    value={editDevise}
+                    onChange={(event) => setEditDevise(event.target.value as "US" | "HTG")}
+                    className="h-11 w-full rounded-lg border border-gray-300 px-3 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                  >
+                    <option value="US">Dollar US ($)</option>
+                    <option value="HTG">Gourde HTG (Gdes)</option>
+                  </select>
+                </div>
+                {editDevise === "HTG" && (
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">Taux de change (ex: 132)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="any"
+                      value={editTaux || ""}
+                      onChange={(event) => setEditTaux(event.target.value === "" ? 0 : parseFloat(event.target.value) || 0)}
+                      placeholder="Ex: 132"
+                      className="h-11 w-full rounded-lg border border-gray-300 px-3 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                    />
+                  </div>
+                )}
               </div>
+              {editDevise === "HTG" ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label htmlFor="new-payment-amount" className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Différence à ajouter (Gourdes)
+                    </label>
+                    <input
+                      id="new-payment-amount"
+                      type="number"
+                      min="0.01"
+                      step="0.01"
+                      value={newAmount === 0 ? "" : newAmount}
+                      onChange={(event) => setNewAmount(event.target.value === "" ? 0 : Number(event.target.value))}
+                      placeholder="Saisissez le montant..."
+                      className="h-11 w-full rounded-lg border border-gray-300 px-3 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Équivalent (Dollars USD $)
+                    </label>
+                    <div className="h-11 w-full rounded-lg border border-emerald-300 bg-emerald-50/60 px-3 flex items-center text-sm font-bold text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-300">
+                      {(() => {
+                        const num = Number(newAmount) || 0;
+                        if (num <= 0 || editTaux <= 0) return "$0.00 USD";
+                        const valUS = num / editTaux;
+                        return `$${valUS.toFixed(2)} USD`;
+                      })()}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <label htmlFor="new-payment-amount" className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Différence à ajouter (USD)
+                  </label>
+                  <input
+                    id="new-payment-amount"
+                    type="number"
+                    min="0.01"
+                    step="0.01"
+                    value={newAmount === 0 ? "" : newAmount}
+                    onChange={(event) => setNewAmount(event.target.value === "" ? 0 : Number(event.target.value))}
+                    placeholder="Saisissez le montant..."
+                    className="h-11 w-full rounded-lg border border-gray-300 px-3 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                  />
+                </div>
+              )}
               <div>
                 <label htmlFor="new-payment-date" className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">Date du paiement</label>
                 <input id="new-payment-date" type="date" value={newPaymentDate} onChange={(event) => setNewPaymentDate(event.target.value)} className="h-11 w-full rounded-lg border border-gray-300 px-3 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white" />
@@ -1339,7 +1443,7 @@ export default function PaymentsPage() {
             </div>
             <div className="mt-4 pt-3 border-t border-gray-100 dark:border-gray-800 flex justify-end gap-3 shrink-0">
               <button type="button" onClick={closeEditModal} disabled={isSaving} className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 dark:border-gray-700 dark:text-gray-300">Annuler</button>
-              <button type="button" onClick={handleEditPayment} disabled={isSaving} className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-medium text-white hover:bg-brand-600 disabled:opacity-50">{isSaving ? "Enregistrement..." : "Enregistrer"}</button>
+              <button type="button" onClick={handleSaveEdit} disabled={isSaving} className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-medium text-white hover:bg-brand-600 disabled:opacity-50">{isSaving ? "Enregistrement..." : "Enregistrer"}</button>
             </div>
           </div>
         </div>
@@ -1361,7 +1465,11 @@ export default function PaymentsPage() {
 
       <PaymentAddModal
         isOpen={isAddModalOpen}
-        onClose={() => setIsAddModalOpen(false)}
+        onClose={() => {
+          setIsAddModalOpen(false);
+          setModalPlayerId(undefined);
+        }}
+        initialPlayerId={modalPlayerId}
       />
 
       <ImageModal

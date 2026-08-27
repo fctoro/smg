@@ -183,12 +183,40 @@ export async function generateReceiptPDFBase64(
     return cleaned.trim() || "Paiement de cotisation";
   };
 
+  const mainPayment = payments[0] || {};
+  const isHTG = mainPayment.devise === "HTG";
+  // Lire taux depuis la colonne DB, sinon depuis le marqueur [TAUX:XXX] dans la remarque
+  let taux = mainPayment.taux || 0;
+  if (isHTG && taux <= 1) {
+    const tauxMatch = (mainPayment.remarque || "").match(/\[TAUX:\s*([\d.]+)\s*\]/i);
+    if (tauxMatch && tauxMatch[1]) {
+      taux = parseFloat(tauxMatch[1]);
+    } else {
+      taux = 130; // Fallback pour les anciens paiements corrompus
+    }
+  }
+
   let totalUSD = 0;
   let totalHTG = 0;
 
   payments.forEach((p: any) => {
-    if (p.devise === "US" || p.MntPayeUS) totalUSD += Number(p.montant || p.MntPayeUS || 0);
-    if (p.devise === "HTG" || p.MntPayeGd) totalHTG += Number(p.montant || p.MntPayeGd || 0);
+    const pTaux = Number(p.taux) || 0;
+    let valUS = 0;
+    let valHTG = 0;
+
+    if (p.devise === "US" || p.montantUS || p.MntPayeUS) {
+      valUS = Number(p.montantUS || p.MntPayeUS || p.montant || 0);
+      valHTG = pTaux > 0 ? valUS * pTaux : (taux > 0 ? valUS * taux : 0);
+    } else if (p.devise === "HTG" || p.montantHTG || p.MntPayeGd) {
+      valHTG = Number(p.montantHTG || p.MntPayeGd || p.montant || 0);
+      valUS = pTaux > 0 ? valHTG / pTaux : (taux > 0 ? valHTG / taux : 0);
+    } else {
+      valUS = Number(p.montant || 0);
+      valHTG = valUS * (taux > 0 ? taux : 130);
+    }
+
+    totalUSD += valUS;
+    totalHTG += valHTG;
 
     const mntStr = p.devise === "HTG" || p.MntPayeGd 
       ? formatClubCurrency(p.montant || p.MntPayeGd, "HTG") 
@@ -203,11 +231,6 @@ export async function generateReceiptPDFBase64(
     ];
     tableRows.push(pData);
   });
-
-  const totalPayeLabel = [
-    totalUSD > 0 ? formatClubCurrency(totalUSD, "US") : null,
-    totalHTG > 0 ? formatClubCurrency(totalHTG, "HTG") : null
-  ].filter(Boolean).join(" / ") || formatClubCurrency(0, "US");
 
   autoTable(doc, {
     head: [tableColumn],
@@ -249,19 +272,6 @@ export async function generateReceiptPDFBase64(
 
   const finalY = (doc as any).lastAutoTable.finalY || tableStartY;
 
-  const mainPayment = payments[0] || {};
-  const isHTG = mainPayment.devise === "HTG";
-  // Lire taux depuis la colonne DB, sinon depuis le marqueur [TAUX:XXX] dans la remarque
-  let taux = mainPayment.taux || 0;
-  if (isHTG && taux <= 1) {
-    const tauxMatch = (mainPayment.remarque || "").match(/\[TAUX:\s*([\d.]+)\s*\]/i);
-    if (tauxMatch && tauxMatch[1]) {
-        taux = parseFloat(tauxMatch[1]);
-    } else {
-        taux = 130; // Fallback pour les anciens paiements corrompus
-    }
-  }
-
   const playerStatus = (player.statutJoueur || "").toLowerCase().trim();
   const isBoursierReceipt = playerStatus === "bourse" || playerStatus === "boursier" ||
     payments.some((p: any) => (p.remarque || "").toLowerCase().includes("[plan:boursier]"));
@@ -299,29 +309,31 @@ export async function generateReceiptPDFBase64(
     });
   }
 
-  // Libellé du montant total dû — convertir en HTG si nécessaire
+  // Calcul des totaux et soldes selon la devise
+  const totalDueHTG = (isHTG && taux > 0) ? Math.round(totalDueValue * taux) : 0;
+  const balanceHTG = Math.max(0, totalDueHTG - totalHTG);
+  const balanceUSD = Math.max(0, totalDueValue - totalUSD);
+
+  const balanceNumeric = isHTG ? balanceHTG : Number(balanceUSD.toFixed(2));
+
+  // Libellé du montant versé — strictement dans la devise du reçu
+  const totalPayeLabel = isHTG
+    ? formatClubCurrency(totalHTG, "HTG")
+    : formatClubCurrency(totalUSD, "US");
+
+  // Libellé du montant total dû — strictly dans la devise du reçu
   const totalDueLabel = (() => {
     if (totalDueValue <= 0) return totalPayeLabel;
     if (isHTG && taux > 0) {
-      return formatClubCurrency(Math.round(totalDueValue * taux), "HTG");
+      return formatClubCurrency(totalDueHTG, "HTG");
     }
     return formatClubCurrency(totalDueValue, "US");
   })();
 
-  // Calcul du solde dans la devise native
-  let balanceLabel = isHTG ? formatClubCurrency(0, "HTG") : formatClubCurrency(0, "US");
-  let balanceNumeric = 0;
-  if (totalDueValue > 0) {
-    if (isHTG && taux > 0) {
-      const totalDueHTG = totalDueValue * taux;
-      const paidHTG = totalHTG; // montant versé en gourdes
-      balanceNumeric = Math.max(0, Math.round(totalDueHTG - paidHTG));
-      balanceLabel = formatClubCurrency(balanceNumeric, "HTG");
-    } else {
-      balanceNumeric = Math.max(0, totalDueValue - totalUSD);
-      balanceLabel = formatClubCurrency(Number(balanceNumeric.toFixed(2)), "US");
-    }
-  }
+  // Libellé du solde restant — strictement dans la devise du reçu
+  const balanceLabel = isHTG
+    ? formatClubCurrency(balanceHTG, "HTG")
+    : formatClubCurrency(balanceUSD, "US");
 
   let yPos = finalY + 10;
 

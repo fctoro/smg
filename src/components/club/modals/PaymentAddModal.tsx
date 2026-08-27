@@ -140,7 +140,7 @@ interface PaymentAddModalProps {
 }
 
 export function PaymentAddModal({ isOpen, onClose, initialPlayerId }: PaymentAddModalProps) {
-  const { players, setPlayers, setPayments, rubriques, refreshRubriques } = useClubData();
+  const { players, setPlayers, payments, setPayments, rubriques, refreshRubriques } = useClubData();
 
   useEffect(() => {
     if (isOpen && refreshRubriques) {
@@ -581,6 +581,60 @@ export function PaymentAddModal({ isOpen, onClose, initialPlayerId }: PaymentAdd
     return adhesionAfterExtraRabais + nonAdhesionSum;
   }, [selectedPricingItems, selectedPlan, selectedPlanData, selectedPlayer, isTiToro, selectedAdhesionItem, rabaisPercent]);
 
+  // Filter past payments for selected player
+  const playerPastPayments = useMemo(() => {
+    if (!playerId) return [];
+    return (payments || []).filter(
+      (p: any) => String(p.etudiantId) === String(playerId) || String(p.etudiant_id) === String(playerId)
+    );
+  }, [payments, playerId]);
+
+  // Calculate cumulative paid in USD from past payments
+  const pastPaidUSD = useMemo(() => {
+    return playerPastPayments.reduce((sum: number, p: any) => {
+      const pTaux = Number(p.taux) || 0;
+      let valUS = 0;
+      if (p.devise === "US" || p.montantUS || p.MntPayeUS) {
+        valUS = Number(p.montantUS || p.MntPayeUS || p.montant || 0);
+      } else if (p.devise === "HTG" || p.montantHTG || p.MntPayeGd) {
+        const valHTG = Number(p.montantHTG || p.MntPayeGd || p.montant || 0);
+        valUS = pTaux > 0 ? valHTG / pTaux : (taux > 0 ? valHTG / taux : 0);
+      }
+      return sum + valUS;
+    }, 0);
+  }, [playerPastPayments, taux]);
+
+  // Balance remaining in USD BEFORE this current payment
+  const currentSoldeDueUSD = useMemo(() => {
+    return Math.max(0, baseTotalDue - pastPaidUSD);
+  }, [baseTotalDue, pastPaidUSD]);
+
+  // Solde converted to selected devise (US or HTG)
+  const currentSoldeDueInSelectedDevise = useMemo(() => {
+    if (devise === "HTG") {
+      return taux > 0 ? currentSoldeDueUSD * taux : 0;
+    }
+    return currentSoldeDueUSD;
+  }, [currentSoldeDueUSD, devise, taux]);
+
+  // Amount paid TODAY converted to USD
+  const amountGivenUSD = useMemo(() => {
+    const mDonneNum = Number(montantDonne) || 0;
+    if (devise === "HTG") {
+      return taux > 0 ? mDonneNum / taux : 0;
+    }
+    return mDonneNum;
+  }, [montantDonne, devise, taux]);
+
+  // Balance remaining AFTER this current payment
+  const soldeAfterPaymentUSD = useMemo(() => {
+    return Math.max(0, currentSoldeDueUSD - amountGivenUSD);
+  }, [currentSoldeDueUSD, amountGivenUSD]);
+
+  const soldeAfterPaymentHTG = useMemo(() => {
+    return taux > 0 ? soldeAfterPaymentUSD * taux : 0;
+  }, [soldeAfterPaymentUSD, taux]);
+
   const discountedDue = baseTotalDue; // rétrocompatibilité interne
 
   const isBoursier = useMemo(() => {
@@ -589,26 +643,23 @@ export function PaymentAddModal({ isOpen, onClose, initialPlayerId }: PaymentAdd
 
   const hasPricingItems = selectedPricingItems.length > 0 || !!selectedPlan;
 
-  // Ne pas modifier automatiquement les montants quand le plan change
-  // Les montants sont basés sur les rubriques sélectionnées uniquement
-  // Réinitialiser le verrou si la devise, le taux, ou le montant de base change significativement
+  // Réinitialiser le verrou si la devise, le taux, ou le solde change
   useEffect(() => {
     setIsUserEditedMontantDu(false);
-  }, [devise, taux, baseTotalDue]);
+  }, [devise, taux, baseTotalDue, currentSoldeDueInSelectedDevise]);
 
   useEffect(() => {
     if (isBoursier) return;
 
     if (hasPricingItems) {
-      const fullTotalDue = devise === "HTG" && taux > 0 ? discountedDue * taux : discountedDue;
       if (!isUserEditedMontantDu) {
-        setMontantDuManuel(fullTotalDue);
+        setMontantDuManuel(currentSoldeDueInSelectedDevise);
       }
     } else {
       if (!isUserEditedMontantDu) setMontantDuManuel("");
       if (!isUserEditedMontantDonne) setMontantDonne("");
     }
-  }, [isBoursier, hasPricingItems, discountedDue, devise, taux, isUserEditedMontantDonne, isUserEditedMontantDu]);
+  }, [isBoursier, hasPricingItems, currentSoldeDueInSelectedDevise, devise, taux, isUserEditedMontantDonne, isUserEditedMontantDu]);
 
   const remainingAmount = Math.max(0, (Number(montantDuManuel) || 0) - (Number(montantDonne) || 0));
 
@@ -922,9 +973,84 @@ export function PaymentAddModal({ isOpen, onClose, initialPlayerId }: PaymentAdd
             {/* Montant dû, montant versé, devise (masqués pour les boursiers) */}
             {!isBoursier && (
               <>
+                <div className="md:col-span-2 rounded-xl border border-brand-200 bg-brand-50/40 p-4 dark:border-brand-900/40 dark:bg-brand-950/20 space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-brand-100 dark:border-brand-900/30 pb-2">
+                    <span className="text-xs font-bold uppercase tracking-wider text-brand-900 dark:text-brand-300">
+                      Calcul & Conversion du Solde
+                    </span>
+                    {pastPaidUSD > 0 && (
+                      <span className="text-xs font-semibold text-gray-600 dark:text-gray-400">
+                        Historique déjà réglé : <strong className="text-emerald-600">${pastPaidUSD.toFixed(2)} USD</strong>
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="mb-1 block text-xs font-semibold text-gray-700 dark:text-gray-300">
+                        Devise du règlement actuel
+                      </label>
+                      <select
+                        value={devise}
+                        onChange={(event) => setDevise(event.target.value as "US" | "HTG")}
+                        className={selectClassName}
+                      >
+                        <option value="US">Dollar US ($)</option>
+                        <option value="HTG">Gourde HTG (Gdes)</option>
+                      </select>
+                    </div>
+
+                    {devise === "HTG" ? (
+                      <div>
+                        <label className="mb-1 block text-xs font-semibold text-gray-700 dark:text-gray-300">
+                          Taux de change (ex: 132 HTG / 1$)
+                        </label>
+                        <input
+                          type="number"
+                          min={0}
+                          step="any"
+                          value={taux || ""}
+                          onChange={(event) => setTaux(event.target.value === "" ? 0 : parseFloat(event.target.value) || 0)}
+                          placeholder="Ex: 132"
+                          className={inputClassName}
+                        />
+                      </div>
+                    ) : (
+                      <div className="flex flex-col justify-end text-xs text-gray-500 pb-1">
+                        <span>Paiement direct en Dollars US ($)</span>
+                        <span className="font-semibold text-gray-700 dark:text-gray-300">Taux par défaut : 1 USD = 1 USD</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="pt-2 border-t border-brand-100 dark:border-brand-900/30 grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                    <div>
+                      <span className="block text-gray-500">Solde avant ce paiement :</span>
+                      <strong className="text-sm text-gray-900 dark:text-white">
+                        {devise === "HTG" && taux > 0
+                          ? `${(currentSoldeDueUSD * taux).toLocaleString('fr-FR', { maximumFractionDigits: 2 })} Gdes ($${currentSoldeDueUSD.toFixed(2)})`
+                          : `$${currentSoldeDueUSD.toFixed(2)} USD`}
+                      </strong>
+                    </div>
+
+                    {montantDonne !== "" && Number(montantDonne) > 0 && (
+                      <div>
+                        <span className="block text-gray-500">Solde restant APRÈS ce versement :</span>
+                        <strong className={`text-sm ${soldeAfterPaymentUSD <= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400"}`}>
+                          {soldeAfterPaymentUSD <= 0
+                            ? "RÉGLÉ EN TOTALITÉ (0.00)"
+                            : (devise === "HTG" && taux > 0
+                                ? `${soldeAfterPaymentHTG.toLocaleString('fr-FR', { maximumFractionDigits: 2 })} Gdes ($${soldeAfterPaymentUSD.toFixed(2)})`
+                                : `$${soldeAfterPaymentUSD.toFixed(2)} USD`)}
+                        </strong>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
                 <div>
                   <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
-                    Montant dû
+                    Montant Dû
                   </label>
                   <input
                     type="number"
@@ -940,52 +1066,58 @@ export function PaymentAddModal({ isOpen, onClose, initialPlayerId }: PaymentAdd
                     className={inputClassName}
                   />
                 </div>
-                <div>
-                  <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
-                    Montant donné ({devise === "HTG" ? "Gourdes" : "USD"})
-                  </label>
-                  <input
-                    type="number"
-                    min={0}
-                    step="0.01"
-                    value={montantDonne === 0 ? "" : montantDonne}
-                    onChange={(event) => {
-                      const val = event.target.value;
-                      setMontantDonne(val === "" ? 0 : Number(val));
-                      setIsUserEditedMontantDonne(true);
-                    }}
-                    placeholder="0.00"
-                    className={inputClassName}
-                  />
-                </div>
-                <div>
-                  <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">Montant restant</label>
-                  <input type="number" value={remainingAmount} className={inputClassName} readOnly />
-                </div>
-                <div>
-                  <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
-                    Devise
-                  </label>
-                  <select
-                    value={devise}
-                    onChange={(event) => setDevise(event.target.value as "US" | "HTG")}
-                    className={selectClassName}
-                  >
-                    <option value="US">Dollar US ($)</option>
-                    <option value="HTG">Gourde HTG (G)</option>
-                  </select>
-                </div>
-                {devise === "HTG" && (
+
+                {devise === "HTG" ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
+                        Montant Versé Aujourd'hui (Gourdes)
+                      </label>
+                      <input
+                        type="number"
+                        min={0}
+                        step="0.01"
+                        value={montantDonne === 0 ? "" : montantDonne}
+                        onChange={(event) => {
+                          const val = event.target.value;
+                          setMontantDonne(val === "" ? 0 : Number(val));
+                          setIsUserEditedMontantDonne(true);
+                        }}
+                        placeholder="0.00"
+                        className={inputClassName}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
+                        Équivalent (Dollars USD $)
+                      </label>
+                      <div className="h-11 w-full rounded-lg border border-emerald-300 bg-emerald-50/60 px-3 flex items-center text-sm font-bold text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-300">
+                        {(() => {
+                          const num = Number(montantDonne) || 0;
+                          if (num <= 0 || taux <= 0) return "$0.00 USD";
+                          const valUS = num / taux;
+                          return `$${valUS.toFixed(2)} USD`;
+                        })()}
+                      </div>
+                    </div>
+                  </div>
+                ) : (
                   <div>
                     <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
-                      Taux de change
+                      Montant Versé Aujourd'hui (USD)
                     </label>
                     <input
                       type="number"
                       min={0}
                       step="0.01"
-                      value={taux || ""}
-                      onChange={(event) => setTaux(Number(event.target.value))}
+                      value={montantDonne === 0 ? "" : montantDonne}
+                      onChange={(event) => {
+                        const val = event.target.value;
+                        setMontantDonne(val === "" ? 0 : Number(val));
+                        setIsUserEditedMontantDonne(true);
+                      }}
+                      placeholder="0.00"
                       className={inputClassName}
                     />
                   </div>

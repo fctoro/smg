@@ -644,7 +644,7 @@ export default function PayrollPage() {
           </select>
         </div>
 
-        {/* Action Button */}
+        {/* Action Buttons */}
         <div className="flex items-center gap-3">
           <button
             onClick={() => {
@@ -653,7 +653,7 @@ export default function PayrollPage() {
                 window.print();
               }, 200);
             }}
-            className="inline-flex items-center gap-2 rounded-xl bg-gray-100 px-4 py-2.5 text-sm font-semibold text-gray-700 shadow-md transition-all hover:bg-gray-200 focus:outline-none active:scale-95 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+            className="inline-flex h-11 items-center justify-center gap-2 whitespace-nowrap rounded-lg border border-gray-300 bg-white px-4 text-sm font-medium text-gray-700 shadow-theme-xs hover:bg-gray-50 transition-colors dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
           >
             <Icons.Printer />
             <span>Imprimer</span>
@@ -661,10 +661,10 @@ export default function PayrollPage() {
           
           <button
             onClick={() => setShowModal(true)}
-            className="inline-flex items-center gap-2 rounded-xl bg-brand-500 px-4 py-2.5 text-sm font-semibold text-white shadow-md transition-all hover:bg-brand-600 focus:outline-none active:scale-95"
+            className="inline-flex h-11 items-center justify-center gap-2 whitespace-nowrap rounded-lg bg-brand-500 px-4 text-sm font-medium text-white shadow-theme-xs hover:bg-brand-600 transition-colors"
           >
             <Icons.Plus />
-            <span>Nouveau Bulletin</span>
+            <span>+ Nouveau Bulletin</span>
           </button>
         </div>
       </div>
@@ -779,305 +779,375 @@ export default function PayrollPage() {
       {/* Add Payroll Record Modal */}
       {showModal && (
         <div className="fixed inset-0 z-[999999] flex items-start justify-center overflow-y-auto bg-black/60 p-4 backdrop-blur-xs print:hidden sm:p-6">
-          <div className="my-6 w-full max-w-lg rounded-2xl border border-gray-100 bg-white p-6 shadow-2xl dark:border-gray-800 dark:bg-gray-900">
-            <div className="flex items-center justify-between pb-3 border-b dark:border-gray-800 mb-4">
-              <h3 className="text-lg font-bold text-gray-900 dark:text-white">
-                Nouveau Bulletin de Paie
-              </h3>
+          <div className="my-6 w-full max-w-5xl rounded-2xl border border-gray-100 bg-white p-6 shadow-2xl dark:border-gray-800 dark:bg-gray-900">
+            <div className="flex items-center justify-between pb-4 border-b border-gray-100 dark:border-gray-800 mb-6">
+              <div>
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white">
+                  {editingPayrollId ? "Modifier le Bulletin de Paie" : "Nouveau Bulletin de Paie"}
+                </h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                  Remplissez les informations salariales, primes et déductions légales
+                </p>
+              </div>
               <button
+                type="button"
                 onClick={() => setShowModal(false)}
-                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+                className="h-9 w-9 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 flex items-center justify-center transition-colors"
               >
                 ✕
               </button>
             </div>
 
-            <form onSubmit={handleCreatePayroll} className="space-y-4">
-              {/* Row 1: Année, Mois, Employé */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div>
-                  <label className="mb-1 block text-xs font-semibold text-gray-700 dark:text-gray-300">
-                    Année
-                  </label>
-                  <select
-                    value={formData.annee}
-                    onChange={(e) => setFormData({ ...formData, annee: e.target.value })}
-                    className="w-full rounded-xl border border-gray-300 bg-white p-2.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
-                  >
-                    {YEARS_LIST.map((year) => (
-                      <option key={year} value={String(year)}>
-                        {year}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+            <form onSubmit={handleCreatePayroll} className="space-y-6">
+              {/* SECTION 1: INFORMATIONS GÉNÉRALES (4 colonnes) */}
+              <div className="rounded-xl border border-gray-100 bg-gray-50/50 dark:border-gray-800 dark:bg-gray-800/30 p-4 space-y-3">
+                <h4 className="text-xs font-bold text-gray-800 dark:text-gray-200 uppercase tracking-wider">
+                  1. Période & Employé
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-gray-700 dark:text-gray-300">
+                      Année
+                    </label>
+                    <select
+                      value={formData.annee}
+                      onChange={(e) => setFormData({ ...formData, annee: e.target.value })}
+                      className="w-full rounded-xl border border-gray-300 bg-white p-2.5 text-sm font-medium dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                    >
+                      {YEARS_LIST.map((year) => (
+                        <option key={year} value={String(year)}>
+                          {year}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
 
-                <div>
-                  <label className="mb-1 block text-xs font-semibold text-gray-700 dark:text-gray-300">
-                    Mois
-                  </label>
-                  <select
-                    value={formData.mois}
-                    onChange={(e) => setFormData({ ...formData, mois: e.target.value })}
-                    className="w-full rounded-xl border border-gray-300 bg-white p-2.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
-                  >
-                    {MONTHS_LIST.filter((m) => m.value !== "all").map((m) => (
-                      <option key={m.value} value={m.value}>
-                        {m.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-gray-700 dark:text-gray-300">
+                      Mois
+                    </label>
+                    <select
+                      value={formData.mois}
+                      onChange={(e) => setFormData({ ...formData, mois: e.target.value })}
+                      className="w-full rounded-xl border border-gray-300 bg-white p-2.5 text-sm font-medium dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                    >
+                      {MONTHS_LIST.filter((m) => m.value !== "all").map((m) => (
+                        <option key={m.value} value={m.value}>
+                          {m.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
 
-                <div>
-                  <label className="mb-1 block text-xs font-semibold text-gray-700 dark:text-gray-300">
-                    Sélectionner l'Employé
-                  </label>
-                  <select
-                    required
-                    value={formData.employeId}
-                    onChange={(e) => {
-                      const empId = e.target.value;
-                      const emp = employees.find((x) => x.id === empId);
-                      const empSal = emp?.salaire || 500;
-                      const empDev: "US" | "HTG" = emp?.devise || (empSal >= 1000 ? "HTG" : "US");
-                      const isCoach = (emp?.fonction || emp?.role || "").toLowerCase().includes("coach");
-                      const defaultType = emp?.typeSalaire || (isCoach ? "variable" : "fixe");
-                      const defaultTaux = emp?.tauxParSeance || 0;
-                      setFormData((prev) => ({
-                        ...prev,
-                        employeId: empId,
-                        typeSalaire: defaultType,
-                        tauxParSeance: defaultTaux,
-                        salaireBase: empSal,
-                        prelevementPourcentage: prev.prelevementPourcentage || 2,
-                        devise: empDev,
-                      }));
-                    }}
-                    className="w-full rounded-xl border border-gray-300 bg-white p-2.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
-                  >
-                    <option value="">-- Choisir un employé --</option>
-                    {employees.map((emp) => (
-                      <option key={emp.id} value={emp.id}>
-                        {emp.prenom} {emp.nom} ({emp.fonction || "Employé"})
-                      </option>
-                    ))}
-                  </select>
+                  <div className="sm:col-span-2">
+                    <label className="mb-1 block text-xs font-semibold text-gray-700 dark:text-gray-300">
+                      Sélectionner l'Employé *
+                    </label>
+                    <select
+                      required
+                      value={formData.employeId}
+                      onChange={(e) => {
+                        const empId = e.target.value;
+                        const emp = employees.find((x) => x.id === empId);
+                        const empSal = emp?.salaire || 500;
+                        const empDev: "US" | "HTG" = emp?.devise || (empSal >= 1000 ? "HTG" : "US");
+                        const isCoach = (emp?.fonction || emp?.role || "").toLowerCase().includes("coach");
+                        const defaultType = emp?.typeSalaire || (isCoach ? "variable" : "fixe");
+                        const defaultTaux = emp?.tauxParSeance || 0;
+                        setFormData((prev) => ({
+                          ...prev,
+                          employeId: empId,
+                          typeSalaire: defaultType,
+                          tauxParSeance: defaultTaux,
+                          salaireBase: empSal,
+                          prelevementPourcentage: prev.prelevementPourcentage || 2,
+                          devise: empDev,
+                        }));
+                      }}
+                      className="w-full rounded-xl border border-gray-300 bg-white p-2.5 text-sm font-semibold text-gray-900 dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                    >
+                      <option value="">-- Choisir un employé --</option>
+                      {employees.map((emp) => (
+                        <option key={emp.id} value={emp.id}>
+                          {emp.prenom} {emp.nom} ({emp.fonction || "Employé"})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="sm:col-span-2">
+                    <label className="mb-1 block text-xs font-semibold text-gray-700 dark:text-gray-300">
+                      Type de Rémunération
+                    </label>
+                    <select
+                      value={formData.typeSalaire}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          typeSalaire: e.target.value as "fixe" | "variable",
+                        })
+                      }
+                      className="w-full rounded-xl border border-gray-300 bg-white p-2.5 text-sm font-medium dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                    >
+                      <option value="fixe">Salaire Fixe Mensuel</option>
+                      <option value="variable">Salaire Variable / Par séance (Coachs)</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-gray-700 dark:text-gray-300">
+                      Devise du Salaire
+                    </label>
+                    <select
+                      value={formData.devise}
+                      onChange={(e) => setFormData({ ...formData, devise: e.target.value as "US" | "HTG" })}
+                      className="w-full rounded-xl border border-gray-300 bg-white p-2.5 text-sm font-semibold dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                    >
+                      <option value="HTG">Gourdes (HTG / Gdes)</option>
+                      <option value="US">Dollars (USD / $)</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-gray-700 dark:text-gray-300">
+                      Statut du Paiement
+                    </label>
+                    <select
+                      value={formData.statut}
+                      onChange={(e) =>
+                        setFormData({ ...formData, statut: e.target.value as "paye" | "en_attente" })
+                      }
+                      className="w-full rounded-xl border border-gray-300 bg-white p-2.5 text-sm font-semibold dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                    >
+                      <option value="paye">Payé</option>
+                      <option value="en_attente">En attente</option>
+                    </select>
+                  </div>
                 </div>
               </div>
 
-              {/* Row 2: Type, Devise, Statut */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div>
-                  <label className="mb-1 block text-xs font-semibold text-gray-700 dark:text-gray-300">
-                    Type de Rémunération
-                  </label>
-                  <select
-                    value={formData.typeSalaire}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        typeSalaire: e.target.value as "fixe" | "variable",
-                      })
-                    }
-                    className="w-full rounded-xl border border-gray-300 bg-white p-2.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
-                  >
-                    <option value="fixe">Salaire Fixe Mensuel</option>
-                    <option value="variable">Salaire Variable / Par séance (Coachs)</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs font-semibold text-gray-700 dark:text-gray-300">
-                    Devise du Salaire
-                  </label>
-                  <select
-                    value={formData.devise}
-                    onChange={(e) => setFormData({ ...formData, devise: e.target.value as "US" | "HTG" })}
-                    className="w-full rounded-xl border border-gray-300 bg-white p-2.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
-                  >
-                    <option value="HTG">Gourdes Haïtiennes (HTG / Gdes)</option>
-                    <option value="US">Dollars Américains (USD / $)</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs font-semibold text-gray-700 dark:text-gray-300">
-                    Statut du Paiement
-                  </label>
-                  <select
-                    value={formData.statut}
-                    onChange={(e) =>
-                      setFormData({ ...formData, statut: e.target.value as "paye" | "en_attente" })
-                    }
-                    className="w-full rounded-xl border border-gray-300 p-2.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
-                  >
-                    <option value="paye">Payé</option>
-                    <option value="en_attente">En attente</option>
-                  </select>
-                </div>
+              {/* SECTION 2: DÉCOMPTE SALAIRE & PRIMES (4 colonnes) */}
+              <div className="rounded-xl border border-gray-100 bg-gray-50/50 dark:border-gray-800 dark:bg-gray-800/30 p-4 space-y-3">
+                <h4 className="text-xs font-bold text-gray-800 dark:text-gray-200 uppercase tracking-wider">
+                  2. Calcul du Salaire & Primes
+                </h4>
+
+                {formData.typeSalaire === "variable" ? (
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+                      <div>
+                        <label className="mb-1 block text-xs font-semibold text-gray-700 dark:text-gray-300">
+                          Jours Semaine
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          step="any"
+                          value={formData.nombreJoursSemaine === 0 ? "" : formData.nombreJoursSemaine}
+                          onChange={(e) =>
+                            setFormData({ ...formData, nombreJoursSemaine: e.target.value === "" ? 0 : parseFloat(e.target.value) || 0 })
+                          }
+                          placeholder="Ex: 8"
+                          className="w-full rounded-xl border border-gray-300 bg-white p-2.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-xs font-semibold text-gray-700 dark:text-gray-300">
+                          Taux Semaine ({formData.devise === "HTG" ? "Gdes" : "$"})
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          step="any"
+                          value={formData.tauxJourSemaine === 0 ? "" : formData.tauxJourSemaine}
+                          onChange={(e) =>
+                            setFormData({ ...formData, tauxJourSemaine: e.target.value === "" ? 0 : parseFloat(e.target.value) || 0 })
+                          }
+                          placeholder="Ex: 500"
+                          className="w-full rounded-xl border border-gray-300 bg-white p-2.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-xs font-semibold text-gray-700 dark:text-gray-300">
+                          Jours Weekend
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          step="any"
+                          value={formData.nombreJoursWeekend === 0 ? "" : formData.nombreJoursWeekend}
+                          onChange={(e) =>
+                            setFormData({ ...formData, nombreJoursWeekend: e.target.value === "" ? 0 : parseFloat(e.target.value) || 0 })
+                          }
+                          placeholder="Ex: 4"
+                          className="w-full rounded-xl border border-gray-300 bg-white p-2.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-xs font-semibold text-gray-700 dark:text-gray-300">
+                          Taux Weekend ({formData.devise === "HTG" ? "Gdes" : "$"})
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          step="any"
+                          value={formData.tauxJourWeekend === 0 ? "" : formData.tauxJourWeekend}
+                          onChange={(e) =>
+                            setFormData({ ...formData, tauxJourWeekend: e.target.value === "" ? 0 : parseFloat(e.target.value) || 0 })
+                          }
+                          placeholder="Ex: 750"
+                          className="w-full rounded-xl border border-gray-300 bg-white p-2.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+                      <div>
+                        <label className="mb-1 block text-xs font-semibold text-gray-700 dark:text-gray-300">
+                          Autres séances
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          step="any"
+                          value={formData.nombreSeances === 0 ? "" : formData.nombreSeances}
+                          onChange={(e) =>
+                            setFormData({ ...formData, nombreSeances: e.target.value === "" ? 0 : parseFloat(e.target.value) || 0 })
+                          }
+                          className="w-full rounded-xl border border-gray-300 bg-white p-2.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                          placeholder="Ex: 2"
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-xs font-semibold text-gray-700 dark:text-gray-300">
+                          Taux par séance
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          step="any"
+                          value={formData.tauxParSeance === 0 ? "" : formData.tauxParSeance}
+                          onChange={(e) =>
+                            setFormData({ ...formData, tauxParSeance: e.target.value === "" ? 0 : parseFloat(e.target.value) || 0 })
+                          }
+                          className="w-full rounded-xl border border-gray-300 bg-white p-2.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                          placeholder="Ex: 1000"
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-xs font-semibold text-gray-700 dark:text-gray-300">
+                          Primes / Bonus ({formData.devise === "HTG" ? "Gdes" : "$"})
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          step="any"
+                          value={formData.bonus === 0 ? "" : formData.bonus}
+                          onChange={(e) => setFormData({ ...formData, bonus: e.target.value === "" ? 0 : parseFloat(e.target.value) || 0 })}
+                          placeholder="0.00"
+                          className="w-full rounded-xl border border-gray-300 bg-white p-2.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-xs font-semibold text-gray-700 dark:text-gray-300">
+                          Mode de Règlement
+                        </label>
+                        <select
+                          value={formData.modePaiement}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              modePaiement: e.target.value as "virement" | "especes" | "chèque" | "mobile",
+                            })
+                          }
+                          className="w-full rounded-xl border border-gray-300 bg-white p-2.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                        >
+                          <option value="virement">Virement bancaire</option>
+                          <option value="especes">Espèces</option>
+                          <option value="chèque">Chèque</option>
+                          <option value="mobile">MonCash / Mobile</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="p-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/40 text-xs font-bold text-amber-900 dark:text-amber-300">
+                      Sous-total séances (Brut) = {formatAmountWithDevise(
+                        (formData.nombreJoursSemaine * formData.tauxJourSemaine) +
+                        (formData.nombreJoursWeekend * formData.tauxJourWeekend) +
+                        (formData.nombreSeances * formData.tauxParSeance),
+                        formData.devise
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div>
+                      <label className="mb-1 block text-xs font-semibold text-gray-700 dark:text-gray-300">
+                        Salaire Fixe de Base ({formData.devise === "HTG" ? "Gdes" : "$"}) *
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="any"
+                        required
+                        value={formData.salaireBase === 0 ? "" : formData.salaireBase}
+                        onChange={(e) =>
+                          setFormData({ ...formData, salaireBase: e.target.value === "" ? 0 : parseFloat(e.target.value) || 0 })
+                        }
+                        placeholder="0.00"
+                        className="w-full rounded-xl border border-gray-300 bg-white p-2.5 text-sm font-semibold dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-semibold text-gray-700 dark:text-gray-300">
+                        Primes / Bonus ({formData.devise === "HTG" ? "Gdes" : "$"})
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="any"
+                        value={formData.bonus === 0 ? "" : formData.bonus}
+                        onChange={(e) => setFormData({ ...formData, bonus: e.target.value === "" ? 0 : parseFloat(e.target.value) || 0 })}
+                        placeholder="0.00"
+                        className="w-full rounded-xl border border-gray-300 bg-white p-2.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-semibold text-gray-700 dark:text-gray-300">
+                        Mode de Règlement
+                      </label>
+                      <select
+                        value={formData.modePaiement}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            modePaiement: e.target.value as "virement" | "especes" | "chèque" | "mobile",
+                          })
+                        }
+                        className="w-full rounded-xl border border-gray-300 bg-white p-2.5 text-sm font-semibold dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                      >
+                        <option value="virement">Virement bancaire</option>
+                        <option value="especes">Espèces</option>
+                        <option value="chèque">Chèque</option>
+                        <option value="mobile">MonCash / Mobile</option>
+                      </select>
+                    </div>
+                  </div>
+                )}
               </div>
 
-              {formData.typeSalaire === "variable" ? (
-                <div className="space-y-3 rounded-xl border border-amber-200 bg-amber-50/50 p-3 dark:border-amber-900/40 dark:bg-amber-950/20">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="mb-1 block text-xs font-semibold text-gray-700 dark:text-gray-300">
-                        Nbr Jours Semaine
-                      </label>
-                      <input
-                        type="number"
-                        min="0"
-                        step="any"
-                        value={formData.nombreJoursSemaine === 0 ? "" : formData.nombreJoursSemaine}
-                        onChange={(e) =>
-                          setFormData({ ...formData, nombreJoursSemaine: e.target.value === "" ? 0 : parseFloat(e.target.value) || 0 })
-                        }
-                        placeholder="Ex: 8"
-                        className="w-full rounded-xl border border-gray-300 bg-white p-2.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
-                      />
-                    </div>
-                    <div>
-                      <label className="mb-1 block text-xs font-semibold text-gray-700 dark:text-gray-300">
-                        Taux Jour Semaine ({formData.devise === "HTG" ? "Gdes" : "$"})
-                      </label>
-                      <input
-                        type="number"
-                        min="0"
-                        step="any"
-                        value={formData.tauxJourSemaine === 0 ? "" : formData.tauxJourSemaine}
-                        onChange={(e) =>
-                          setFormData({ ...formData, tauxJourSemaine: e.target.value === "" ? 0 : parseFloat(e.target.value) || 0 })
-                        }
-                        placeholder="Ex: 500"
-                        className="w-full rounded-xl border border-gray-300 bg-white p-2.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
-                      />
-                    </div>
-                  </div>
+              {/* SECTION 3: TAXES & RETENUES (4 colonnes) */}
+              <div className="rounded-xl border border-gray-100 bg-gray-50/50 dark:border-gray-800 dark:bg-gray-800/30 p-4 space-y-3">
+                <h4 className="text-xs font-bold text-gray-800 dark:text-gray-200 uppercase tracking-wider">
+                  3. Déductions & Retenues Légales
+                </h4>
 
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="mb-1 block text-xs font-semibold text-gray-700 dark:text-gray-300">
-                        Nbr Jours Weekend
-                      </label>
-                      <input
-                        type="number"
-                        min="0"
-                        step="any"
-                        value={formData.nombreJoursWeekend === 0 ? "" : formData.nombreJoursWeekend}
-                        onChange={(e) =>
-                          setFormData({ ...formData, nombreJoursWeekend: e.target.value === "" ? 0 : parseFloat(e.target.value) || 0 })
-                        }
-                        placeholder="Ex: 4"
-                        className="w-full rounded-xl border border-gray-300 bg-white p-2.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
-                      />
-                    </div>
-                    <div>
-                      <label className="mb-1 block text-xs font-semibold text-gray-700 dark:text-gray-300">
-                        Taux Jour Weekend ({formData.devise === "HTG" ? "Gdes" : "$"})
-                      </label>
-                      <input
-                        type="number"
-                        min="0"
-                        step="any"
-                        value={formData.tauxJourWeekend === 0 ? "" : formData.tauxJourWeekend}
-                        onChange={(e) =>
-                          setFormData({ ...formData, tauxJourWeekend: e.target.value === "" ? 0 : parseFloat(e.target.value) || 0 })
-                        }
-                        placeholder="Ex: 750"
-                        className="w-full rounded-xl border border-gray-300 bg-white p-2.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="mb-1 block text-xs font-semibold text-gray-700 dark:text-gray-300">
-                        Nombre autres séances
-                      </label>
-                      <input
-                        type="number"
-                        min="0"
-                        step="any"
-                        value={formData.nombreSeances === 0 ? "" : formData.nombreSeances}
-                        onChange={(e) =>
-                          setFormData({ ...formData, nombreSeances: e.target.value === "" ? 0 : parseFloat(e.target.value) || 0 })
-                        }
-                        className="w-full rounded-xl border border-gray-300 bg-white p-2.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
-                        placeholder="Ex: 2"
-                      />
-                    </div>
-                    <div>
-                      <label className="mb-1 block text-xs font-semibold text-gray-700 dark:text-gray-300">
-                        Taux par séance
-                      </label>
-                      <input
-                        type="number"
-                        min="0"
-                        step="any"
-                        value={formData.tauxParSeance === 0 ? "" : formData.tauxParSeance}
-                        onChange={(e) =>
-                          setFormData({ ...formData, tauxParSeance: e.target.value === "" ? 0 : parseFloat(e.target.value) || 0 })
-                        }
-                        className="w-full rounded-xl border border-gray-300 bg-white p-2.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
-                        placeholder="Ex: 1000"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="text-xs font-bold text-amber-900 dark:text-amber-300 pt-1">
-                    Sous-total séances (Brut) = {formatAmountWithDevise(
-                      (formData.nombreJoursSemaine * formData.tauxJourSemaine) +
-                      (formData.nombreJoursWeekend * formData.tauxJourWeekend) +
-                      (formData.nombreSeances * formData.tauxParSeance),
-                      formData.devise
-                    )}
-                  </div>
-                </div>
-              ) : (
-                <div>
-                  <label className="mb-1 block text-xs font-semibold text-gray-700 dark:text-gray-300">
-                    Salaire Fixe de Base ({formData.devise === "HTG" ? "Gdes" : "$"})
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    step="any"
-                    required
-                    value={formData.salaireBase === 0 ? "" : formData.salaireBase}
-                    onChange={(e) =>
-                      setFormData({ ...formData, salaireBase: e.target.value === "" ? 0 : parseFloat(e.target.value) || 0 })
-                    }
-                    placeholder="0.00"
-                    className="w-full rounded-xl border border-gray-300 p-2.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
-                  />
-                </div>
-              )}
-
-              <div>
-                <label className="mb-1 block text-xs font-semibold text-gray-700 dark:text-gray-300">
-                  Primes / Bonus ({formData.devise === "HTG" ? "Gdes" : "$"})
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  step="any"
-                  value={formData.bonus === 0 ? "" : formData.bonus}
-                  onChange={(e) => setFormData({ ...formData, bonus: e.target.value === "" ? 0 : parseFloat(e.target.value) || 0 })}
-                  placeholder="0.00"
-                  className="w-full rounded-xl border border-gray-300 p-2.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
-                />
-              </div>
-
-              {/* Deductions & Prelevements Section */}
-              <div className="rounded-xl border border-gray-200 bg-gray-50 p-3 space-y-3 dark:border-gray-800 dark:bg-gray-800/40">
                 {formData.devise === "HTG" ? (
                   <div className="space-y-3">
-                    <p className="text-xs font-bold text-gray-800 dark:text-gray-200 uppercase tracking-wider">
-                      Taxes Haïtiennes Légales
-                    </p>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
                       <div>
                         <label className="mb-1 block text-[11px] font-semibold text-gray-700 dark:text-gray-300">
-                          Taxe masse salariale (%)
+                          Masse sal. (%)
                         </label>
                         <input
                           type="number"
@@ -1088,12 +1158,12 @@ export default function PayrollPage() {
                             setFormData({ ...formData, prelevementPourcentage: e.target.value === "" ? 0 : parseFloat(e.target.value) || 0 })
                           }
                           placeholder="2"
-                          className="w-full rounded-lg border border-gray-300 bg-white p-2 text-xs dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                          className="w-full rounded-lg border border-gray-300 bg-white p-2 text-xs font-semibold dark:border-gray-700 dark:bg-gray-800 dark:text-white"
                         />
                       </div>
                       <div>
                         <label className="mb-1 block text-[11px] font-semibold text-gray-700 dark:text-gray-300">
-                          IRI (Montant Gdes)
+                          IRI (Gdes)
                         </label>
                         <input
                           type="number"
@@ -1104,7 +1174,7 @@ export default function PayrollPage() {
                             setFormData({ ...formData, taxeIRI: e.target.value === "" ? 0 : parseFloat(e.target.value) || 0 })
                           }
                           placeholder="0.00"
-                          className="w-full rounded-lg border border-gray-300 bg-white p-2 text-xs dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                          className="w-full rounded-lg border border-gray-300 bg-white p-2 text-xs font-semibold dark:border-gray-700 dark:bg-gray-800 dark:text-white"
                         />
                       </div>
                       <div>
@@ -1120,7 +1190,7 @@ export default function PayrollPage() {
                             setFormData({ ...formData, taxeCFGDCT: e.target.value === "" ? 0 : parseFloat(e.target.value) || 0 })
                           }
                           placeholder="1"
-                          className="w-full rounded-lg border border-gray-300 bg-white p-2 text-xs dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                          className="w-full rounded-lg border border-gray-300 bg-white p-2 text-xs font-semibold dark:border-gray-700 dark:bg-gray-800 dark:text-white"
                         />
                       </div>
                       <div>
@@ -1136,7 +1206,7 @@ export default function PayrollPage() {
                             setFormData({ ...formData, taxeCAS: e.target.value === "" ? 0 : parseFloat(e.target.value) || 0 })
                           }
                           placeholder="1"
-                          className="w-full rounded-lg border border-gray-300 bg-white p-2 text-xs dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                          className="w-full rounded-lg border border-gray-300 bg-white p-2 text-xs font-semibold dark:border-gray-700 dark:bg-gray-800 dark:text-white"
                         />
                       </div>
                       <div>
@@ -1152,7 +1222,7 @@ export default function PayrollPage() {
                             setFormData({ ...formData, taxeFDU: e.target.value === "" ? 0 : parseFloat(e.target.value) || 0 })
                           }
                           placeholder="1"
-                          className="w-full rounded-lg border border-gray-300 bg-white p-2 text-xs dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                          className="w-full rounded-lg border border-gray-300 bg-white p-2 text-xs font-semibold dark:border-gray-700 dark:bg-gray-800 dark:text-white"
                         />
                       </div>
                       <div>
@@ -1168,259 +1238,252 @@ export default function PayrollPage() {
                             setFormData({ ...formData, taxeONA: e.target.value === "" ? 0 : parseFloat(e.target.value) || 0 })
                           }
                           placeholder="6"
-                          className="w-full rounded-lg border border-gray-300 bg-white p-2 text-xs dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                          className="w-full rounded-lg border border-gray-300 bg-white p-2 text-xs font-semibold dark:border-gray-700 dark:bg-gray-800 dark:text-white"
                         />
                       </div>
                     </div>
 
-                    <div className="pt-2 border-t border-gray-200 dark:border-gray-700">
-                      <p className="text-xs font-bold text-gray-800 dark:text-gray-200 uppercase tracking-wider mb-2">
-                        Prélèvements & Ajustements (Gdes)
-                      </p>
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <label className="mb-1 block text-xs font-semibold text-gray-700 dark:text-gray-300">
-                            Prélèvement Snowizz / Prêt
-                          </label>
-                          <input
-                            type="number"
-                            min="0"
-                            step="any"
-                            value={formData.prelevementSnowizz === 0 ? "" : formData.prelevementSnowizz}
-                            onChange={(e) =>
-                              setFormData({ ...formData, prelevementSnowizz: e.target.value === "" ? 0 : parseFloat(e.target.value) || 0 })
-                            }
-                            placeholder="0.00"
-                            className="w-full rounded-xl border border-gray-300 bg-white p-2.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
-                          />
-                        </div>
-                        <div>
-                          <label className="mb-1 block text-xs font-semibold text-gray-700 dark:text-gray-300">
-                            Ajustement (Gdes)
-                          </label>
-                          <input
-                            type="number"
-                            step="any"
-                            value={formData.ajustement === 0 ? "" : formData.ajustement}
-                            onChange={(e) =>
-                              setFormData({ ...formData, ajustement: e.target.value === "" ? 0 : parseFloat(e.target.value) || 0 })
-                            }
-                            placeholder="0.00"
-                            className="w-full rounded-xl border border-gray-300 bg-white p-2.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
-                          />
-                        </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+                      <div>
+                        <label className="mb-1 block text-xs font-semibold text-gray-700 dark:text-gray-300">
+                          Prélèvement Snowizz / Prêt (Gdes)
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          step="any"
+                          value={formData.prelevementSnowizz === 0 ? "" : formData.prelevementSnowizz}
+                          onChange={(e) =>
+                            setFormData({ ...formData, prelevementSnowizz: e.target.value === "" ? 0 : parseFloat(e.target.value) || 0 })
+                          }
+                          placeholder="0.00"
+                          className="w-full rounded-xl border border-gray-300 bg-white p-2.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-xs font-semibold text-gray-700 dark:text-gray-300">
+                          Ajustement (Gdes)
+                        </label>
+                        <input
+                          type="number"
+                          step="any"
+                          value={formData.ajustement === 0 ? "" : formData.ajustement}
+                          onChange={(e) =>
+                            setFormData({ ...formData, ajustement: e.target.value === "" ? 0 : parseFloat(e.target.value) || 0 })
+                          }
+                          placeholder="0.00"
+                          className="w-full rounded-xl border border-gray-300 bg-white p-2.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                        />
                       </div>
                     </div>
                   </div>
                 ) : (
-                  <div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="mb-1 block text-xs font-semibold text-gray-700 dark:text-gray-300">
-                          Taxe / Retenue (%)
-                        </label>
-                        <input
-                          type="number"
-                          min="0"
-                          step="any"
-                          value={formData.prelevementPourcentage === 0 ? "" : formData.prelevementPourcentage}
-                          onChange={(e) =>
-                            setFormData({ ...formData, prelevementPourcentage: e.target.value === "" ? 0 : parseFloat(e.target.value) || 0 })
-                          }
-                          placeholder="0.00"
-                          className="w-full rounded-xl border border-gray-300 bg-white p-2.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
-                        />
-                      </div>
-                      <div>
-                        <label className="mb-1 block text-xs font-semibold text-gray-700 dark:text-gray-300">
-                          Montant Taxe
-                        </label>
-                        <div className="flex h-[42px] items-center rounded-xl border border-gray-200 bg-white px-3 text-sm font-bold text-rose-600 dark:border-gray-700 dark:bg-gray-900 dark:text-rose-400">
-                          -{formatAmountWithDevise(
-                            calculatePrelevement(
-                              formData.typeSalaire === "variable"
-                                ? formData.nombreSeances * formData.tauxParSeance
-                                : formData.salaireBase,
-                              formData.prelevementPourcentage
-                            ),
-                            formData.devise
-                          )}
-                        </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+                    <div>
+                      <label className="mb-1 block text-xs font-semibold text-gray-700 dark:text-gray-300">
+                        Taxe / Retenue (%)
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="any"
+                        value={formData.prelevementPourcentage === 0 ? "" : formData.prelevementPourcentage}
+                        onChange={(e) =>
+                          setFormData({ ...formData, prelevementPourcentage: e.target.value === "" ? 0 : parseFloat(e.target.value) || 0 })
+                        }
+                        placeholder="0.00"
+                        className="w-full rounded-xl border border-gray-300 bg-white p-2.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-semibold text-gray-700 dark:text-gray-300">
+                        Montant Taxe
+                      </label>
+                      <div className="flex h-[42px] items-center rounded-xl border border-gray-200 bg-white px-3 text-sm font-bold text-rose-600 dark:border-gray-700 dark:bg-gray-900 dark:text-rose-400">
+                        -{formatAmountWithDevise(
+                          calculatePrelevement(
+                            formData.typeSalaire === "variable"
+                              ? formData.nombreSeances * formData.tauxParSeance
+                              : formData.salaireBase,
+                            formData.prelevementPourcentage
+                          ),
+                          formData.devise
+                        )}
                       </div>
                     </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 mt-2 border-t border-gray-200 dark:border-gray-700">
-                      <div>
-                        <label className="mb-1 block text-xs font-semibold text-gray-700 dark:text-gray-300">
-                          Prélèvement / Ajustements ($)
-                        </label>
-                        <input
-                          type="number"
-                          min="0"
-                          step="any"
-                          value={formData.deductions === 0 ? "" : formData.deductions}
-                          onChange={(e) =>
-                            setFormData({ ...formData, deductions: e.target.value === "" ? 0 : parseFloat(e.target.value) || 0 })
-                          }
-                          placeholder="0.00"
-                          className="w-full rounded-xl border border-gray-300 bg-white p-2.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
-                        />
-                      </div>
-                      <div>
-                        <label className="mb-1 block text-xs font-semibold text-gray-700 dark:text-gray-300">
-                          Motif du Prélèvement
-                        </label>
-                        <select
-                          value={formData.prelevementType}
-                          onChange={(e) =>
-                            setFormData({
-                              ...formData,
-                              prelevementType: e.target.value as "taxe" | "credit" | "avance" | "pret",
-                            })
-                          }
-                          className="w-full rounded-xl border border-gray-300 bg-white p-2.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
-                        >
-                          <option value="avance">Avance sur salaire</option>
-                          <option value="pret">Remboursement Prêt</option>
-                          <option value="credit">Compte à crédit</option>
-                          <option value="taxe">Autre prélèvement / Ajustement</option>
-                        </select>
-                      </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-semibold text-gray-700 dark:text-gray-300">
+                        Prélèvement / Ajustements ($)
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="any"
+                        value={formData.deductions === 0 ? "" : formData.deductions}
+                        onChange={(e) =>
+                          setFormData({ ...formData, deductions: e.target.value === "" ? 0 : parseFloat(e.target.value) || 0 })
+                        }
+                        placeholder="0.00"
+                        className="w-full rounded-xl border border-gray-300 bg-white p-2.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-semibold text-gray-700 dark:text-gray-300">
+                        Motif du Prélèvement
+                      </label>
+                      <select
+                        value={formData.prelevementType}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            prelevementType: e.target.value as "taxe" | "credit" | "avance" | "pret",
+                          })
+                        }
+                        className="w-full rounded-xl border border-gray-300 bg-white p-2.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                      >
+                        <option value="avance">Avance sur salaire</option>
+                        <option value="pret">Remboursement Prêt</option>
+                        <option value="credit">Compte à crédit</option>
+                        <option value="taxe">Autre prélèvement / Ajustement</option>
+                      </select>
                     </div>
                   </div>
                 )}
-
-                {(() => {
-                  const gross = formData.typeSalaire === "variable"
-                    ? ((formData.nombreJoursSemaine || 0) * (formData.tauxJourSemaine || 0)) +
-                      ((formData.nombreJoursWeekend || 0) * (formData.tauxJourWeekend || 0)) +
-                      ((formData.nombreSeances || 0) * (formData.tauxParSeance || 0))
-                    : formData.salaireBase;
-
-                  const taxBase = calculatePrelevement(gross, formData.prelevementPourcentage);
-                  const iriAmt = formData.devise === "HTG" ? (formData.taxeIRI || 0) : 0;
-                  const cfgdctAmt = formData.devise === "HTG" ? calculatePrelevement(gross, formData.taxeCFGDCT) : 0;
-                  const casAmt = formData.devise === "HTG" ? calculatePrelevement(gross, formData.taxeCAS) : 0;
-                  const fduAmt = formData.devise === "HTG" ? calculatePrelevement(gross, formData.taxeFDU) : 0;
-                  const onaAmt = formData.devise === "HTG" ? calculatePrelevement(gross, formData.taxeONA) : 0;
-
-                  const totalTaxesCalc = taxBase + iriAmt + cfgdctAmt + casAmt + fduAmt + onaAmt;
-                  const snowizzCalc = formData.devise === "HTG" ? (formData.prelevementSnowizz || 0) : 0;
-                  const ajustementCalc = formData.devise === "HTG" ? (formData.ajustement || 0) : 0;
-                  const usdDeductionCalc = formData.devise === "US" ? (formData.deductions || 0) : 0;
-
-                  const totalRetenuesCalc = totalTaxesCalc + snowizzCalc + ajustementCalc + usdDeductionCalc;
-                  const netPayCalc = gross + (formData.bonus || 0) + (formData.vacancesPayees || 0) - totalRetenuesCalc;
-
-                  return (
-                    <div className="pt-2 border-t border-gray-200 dark:border-gray-700 text-xs font-semibold text-gray-700 dark:text-gray-300 flex justify-between">
-                      <span>
-                        Total Retenues :{" "}
-                        <strong className="text-rose-600 dark:text-rose-400">
-                          {formatAmountWithDevise(totalRetenuesCalc, formData.devise)}
-                        </strong>
-                      </span>
-                      <span>
-                        NET À PAYER :{" "}
-                        <strong className="text-emerald-600 dark:text-emerald-400 text-sm">
-                          {formatAmountWithDevise(netPayCalc, formData.devise)}
-                        </strong>
-                      </span>
-                    </div>
-                  );
-                })()}
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
+              {/* SECTION 4: NOTES & PIÈCE JOINTE (4 colonnes) */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="md:col-span-3">
                   <label className="mb-1 block text-xs font-semibold text-gray-700 dark:text-gray-300">
-                    Mode de Règlement
+                    Notes / Remarques
                   </label>
-                  <select
-                    value={formData.modePaiement}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        modePaiement: e.target.value as "virement" | "especes" | "chèque" | "mobile",
-                      })
-                    }
+                  <textarea
+                    rows={2}
+                    value={formData.notes}
+                    onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                    placeholder="Précisions ou commentaires sur ce versement..."
                     className="w-full rounded-xl border border-gray-300 p-2.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
-                  >
-                    <option value="virement">Virement bancaire</option>
-                    <option value="especes">Espèces</option>
-                    <option value="chèque">Chèque</option>
-                    <option value="mobile">MonCash / Mobile</option>
-                  </select>
+                  />
+                </div>
+                <div className="md:col-span-1">
+                  <label className="mb-1 block text-xs font-semibold text-gray-700 dark:text-gray-300">
+                    Justificatif (JPG/PNG)
+                  </label>
+                  <input
+                    type="file"
+                    accept=".jpg, .jpeg, .png"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0] ?? null;
+                      if (!file) {
+                        setFormData({ ...formData, file: null });
+                        setFileError(null);
+                        return;
+                      }
+                      if (file.size > 5 * 1024 * 1024) {
+                        setFileError("Max 5 MB.");
+                        setFormData({ ...formData, file: null });
+                        return;
+                      }
+                      setFileError(null);
+                      setFormData({ ...formData, file });
+                    }}
+                    className="w-full rounded-xl border border-gray-300 p-1.5 text-xs text-gray-600 dark:border-gray-700 dark:text-gray-300 dark:bg-gray-800"
+                  />
+                  {editingPayrollId && payrollRecords.find((rec) => rec.id === editingPayrollId)?.pieceJointe && (
+                    <p className="mt-1 text-[11px] text-slate-500">
+                      <a
+                        href={payrollRecords.find((rec) => rec.id === editingPayrollId)?.pieceJointe}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="font-semibold text-brand-600 hover:underline"
+                      >
+                        Document joint
+                      </a>
+                    </p>
+                  )}
+                  {fileError && <p className="mt-1 text-[11px] text-rose-500">{fileError}</p>}
                 </div>
               </div>
 
-              <div>
-                <label className="mb-1 block text-xs font-semibold text-gray-700 dark:text-gray-300">
-                  Notes / Remarques
-                </label>
-                <textarea
-                  rows={2}
-                  value={formData.notes}
-                  onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                  className="w-full rounded-xl border border-gray-300 p-2.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
-                />
-              </div>
+              {/* SECTION 5: CARD SYNTHÈSE FINANCIÈRE */}
+              {(() => {
+                const gross = formData.typeSalaire === "variable"
+                  ? ((formData.nombreJoursSemaine || 0) * (formData.tauxJourSemaine || 0)) +
+                    ((formData.nombreJoursWeekend || 0) * (formData.tauxJourWeekend || 0)) +
+                    ((formData.nombreSeances || 0) * (formData.tauxParSeance || 0))
+                  : formData.salaireBase;
 
-              <div>
-                <label className="mb-1 block text-xs font-semibold text-gray-700 dark:text-gray-300">
-                  Photo justificative (JPG, PNG) — Max 5 MB
-                </label>
-                <input
-                  type="file"
-                  accept=".jpg, .jpeg, .png"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0] ?? null;
-                    if (!file) {
-                      setFormData({ ...formData, file: null });
-                      setFileError(null);
-                      return;
-                    }
+                const taxBase = calculatePrelevement(gross, formData.prelevementPourcentage);
+                const iriAmt = formData.devise === "HTG" ? (formData.taxeIRI || 0) : 0;
+                const cfgdctAmt = formData.devise === "HTG" ? calculatePrelevement(gross, formData.taxeCFGDCT) : 0;
+                const casAmt = formData.devise === "HTG" ? calculatePrelevement(gross, formData.taxeCAS) : 0;
+                const fduAmt = formData.devise === "HTG" ? calculatePrelevement(gross, formData.taxeFDU) : 0;
+                const onaAmt = formData.devise === "HTG" ? calculatePrelevement(gross, formData.taxeONA) : 0;
 
-                    if (file.size > 5 * 1024 * 1024) {
-                      setFileError("La photo justificative doit faire au maximum 5 MB.");
-                      setFormData({ ...formData, file: null });
-                      return;
-                    }
+                const totalTaxesCalc = taxBase + iriAmt + cfgdctAmt + casAmt + fduAmt + onaAmt;
+                const snowizzCalc = formData.devise === "HTG" ? (formData.prelevementSnowizz || 0) : 0;
+                const ajustementCalc = formData.devise === "HTG" ? (formData.ajustement || 0) : 0;
+                const usdDeductionCalc = formData.devise === "US" ? (formData.deductions || 0) : 0;
 
-                    setFileError(null);
-                    setFormData({ ...formData, file });
-                  }}
-                  className="w-full rounded-xl border border-gray-300 p-2 text-sm text-gray-600 dark:border-gray-700 dark:text-gray-300 dark:bg-gray-800 file:mr-4 file:rounded-full file:border-0 file:bg-brand-50 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-brand-700 hover:file:bg-brand-100 dark:file:bg-brand-900/20 dark:file:text-brand-400"
-                />
-                {editingPayrollId && payrollRecords.find((rec) => rec.id === editingPayrollId)?.pieceJointe && (
-                  <p className="mt-2 text-xs text-slate-500">
-                    Justificatif actuel : 
-                    <a
-                      href={payrollRecords.find((rec) => rec.id === editingPayrollId)?.pieceJointe}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="font-semibold text-brand-600 hover:underline"
-                    >
-                      Voir le document
-                    </a>
-                  </p>
-                )}
-                {fileError && <p className="mt-2 text-xs text-rose-500">{fileError}</p>}
-              </div>
+                const totalRetenuesCalc = totalTaxesCalc + snowizzCalc + ajustementCalc + usdDeductionCalc;
+                const netPayCalc = gross + (formData.bonus || 0) + (formData.vacancesPayees || 0) - totalRetenuesCalc;
 
-              <div className="flex items-center justify-end gap-3 pt-3">
+                return (
+                  <div className="rounded-2xl border border-gray-200 bg-gradient-to-r from-gray-50 via-white to-gray-50 dark:border-gray-800 dark:from-gray-800/40 dark:via-gray-800/20 dark:to-gray-800/40 p-4 sm:p-5 shadow-xs">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 items-center">
+                      <div className="p-3 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700/60 shadow-xs">
+                        <span className="text-[11px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400 block mb-0.5">
+                          Salaire Brut
+                        </span>
+                        <span className="text-base sm:text-lg font-black text-gray-900 dark:text-white">
+                          {formatAmountWithDevise(gross, formData.devise)}
+                        </span>
+                      </div>
+
+                      <div className="p-3 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700/60 shadow-xs">
+                        <span className="text-[11px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400 block mb-0.5">
+                          Total Retenues
+                        </span>
+                        <span className="text-base sm:text-lg font-black text-rose-600 dark:text-rose-400">
+                          -{formatAmountWithDevise(totalRetenuesCalc, formData.devise)}
+                        </span>
+                      </div>
+
+                      <div className="p-3 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700/60 shadow-xs">
+                        <span className="text-[11px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400 block mb-0.5">
+                          Bonus & Primes
+                        </span>
+                        <span className="text-base sm:text-lg font-black text-emerald-600 dark:text-emerald-400">
+                          +{formatAmountWithDevise(formData.bonus || 0, formData.devise)}
+                        </span>
+                      </div>
+
+                      <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-right shadow-xs">
+                        <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-400 block mb-0.5">
+                          NET À PAYER
+                        </span>
+                        <span className="text-lg sm:text-xl font-black text-emerald-700 dark:text-emerald-400 font-mono">
+                          {formatAmountWithDevise(netPayCalc, formData.devise)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-gray-100 dark:border-gray-800">
                 <button
                   type="button"
                   onClick={() => setShowModal(false)}
-                  className="rounded-xl px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
+                  className="rounded-xl px-5 py-2.5 text-sm font-semibold text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800 transition-colors"
                 >
                   Annuler
                 </button>
                 <button
                   type="submit"
-                  className="rounded-xl bg-brand-500 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-600 shadow-md"
+                  className="rounded-xl bg-brand-500 px-6 py-2.5 text-sm font-bold text-white hover:bg-brand-600 shadow-md transition-all active:scale-95"
                 >
-                  Enregistrer
+                  Enregistrer le Bulletin
                 </button>
               </div>
             </form>

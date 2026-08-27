@@ -643,10 +643,10 @@ export const updatePaymentInSupabase = async (paymentId: string, data: Partial<i
   if (data.montant !== undefined) {
     if (data.devise === "HTG") {
       updatePayload.MntPayeGd = data.montant;
-      updatePayload.MntPayeUS = null;
+      updatePayload.MntPayeUS = 0;
     } else {
       updatePayload.MntPayeUS = data.montant;
-      updatePayload.MntPayeGd = null;
+      updatePayload.MntPayeGd = 0;
     }
   }
   if (data.datePaiement !== undefined) updatePayload.DateTransact = data.datePaiement;

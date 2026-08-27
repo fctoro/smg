@@ -65,7 +65,7 @@ export const Modal: React.FC<ModalProps> = ({
     : "my-auto max-h-[calc(100vh-3rem)] overflow-y-auto";
 
   return (
-    <div className="fixed inset-0 flex items-start justify-center overflow-y-auto px-4 py-6 modal z-99999 sm:py-8">
+    <div className="fixed inset-0 flex items-start justify-center overflow-y-auto px-4 py-6 modal z-[999999] sm:py-8">
       {!isFullscreen && (
         <div
           className="fixed inset-0 h-full w-full bg-gray-900/25 backdrop-blur-[2px]"

@@ -725,62 +725,14 @@ export default function StatistiquesPage() {
               </tbody>
 
               {/* Ligne de Totalisation en bas de la table (Bordereau comptable) */}
-              <tfoot className="bg-slate-900 text-white font-bold text-xs uppercase border-t-2 border-slate-700">
+              <tfoot className="bg-gray-100/90 dark:bg-gray-800 text-gray-900 dark:text-white font-bold text-xs uppercase border-t-2 border-gray-200 dark:border-gray-700">
                 <tr>
-                  <td colSpan={3} className="px-4 py-3 text-right font-black tracking-wider text-slate-300">TOTAL DE LA PÉRIODE :</td>
-                  <td className="px-4 py-3 text-emerald-400 font-mono font-extrabold text-sm">{formatClubCurrency(trackingTotalUSD, "US")}</td>
-                  <td className="px-4 py-3 text-blue-400 font-mono font-extrabold text-sm">{formatClubCurrency(trackingTotalHTG, "HTG")}</td>
+                  <td colSpan={3} className="px-4 py-3 text-right font-black tracking-wider text-gray-700 dark:text-gray-300">TOTAL DE LA PÉRIODE :</td>
+                  <td className="px-4 py-3 text-emerald-600 dark:text-emerald-400 font-mono font-extrabold text-sm">{formatClubCurrency(trackingTotalUSD, "US")}</td>
+                  <td className="px-4 py-3 text-blue-600 dark:text-blue-400 font-mono font-extrabold text-sm">{formatClubCurrency(trackingTotalHTG, "HTG")}</td>
                 </tr>
               </tfoot>
             </table>
-          </div>
-        </div>
-
-        {/* BLOC DE KPI EXÉCUTIF EN BAS (MONOCHROME & PRO) */}
-        <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900 p-5 flex items-center justify-between shadow-xs hover:border-gray-300 transition-all">
-            <div>
-              <span className="block text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">Joueurs Actifs (Période)</span>
-              <span className="mt-1 block text-2.5xl font-black text-gray-900 dark:text-white">
-                {totalActivePlayersCount} Joueur(s)
-              </span>
-              <span className="mt-0.5 block text-xs text-brand-600 dark:text-brand-400 font-semibold">
-                Effectif total sous filtre
-              </span>
-            </div>
-            <div className="h-12 w-12 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 flex items-center justify-center border border-gray-200 dark:border-gray-700 shadow-xs">
-              <GroupIcon className="size-6 text-brand-600 dark:text-brand-400" />
-            </div>
-          </div>
-
-          <div className="rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900 p-5 flex items-center justify-between shadow-xs hover:border-gray-300 transition-all">
-            <div>
-              <span className="block text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">Total Encaissé en Gourdes</span>
-              <span className="mt-1 block text-2.5xl font-black text-gray-900 dark:text-white">
-                {formatClubCurrency(trackingTotalHTG || totalRevenueHTG, "HTG")}
-              </span>
-              <span className="mt-0.5 block text-xs text-blue-600 dark:text-blue-400 font-semibold">
-                Recettes Gourdes (HTG)
-              </span>
-            </div>
-            <div className="h-12 w-12 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 flex items-center justify-center border border-gray-200 dark:border-gray-700 shadow-xs">
-              <DollarLineIcon className="size-6 text-blue-600 dark:text-blue-400" />
-            </div>
-          </div>
-
-          <div className="rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900 p-5 flex items-center justify-between shadow-xs hover:border-gray-300 transition-all">
-            <div>
-              <span className="block text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">Total Encaissé en Dollars</span>
-              <span className="mt-1 block text-2.5xl font-black text-gray-900 dark:text-white">
-                {formatClubCurrency(trackingTotalUSD || totalRevenueUSD, "US")}
-              </span>
-              <span className="mt-0.5 block text-xs text-emerald-600 dark:text-emerald-400 font-semibold">
-                Recettes Dollars (USD)
-              </span>
-            </div>
-            <div className="h-12 w-12 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 flex items-center justify-center border border-gray-200 dark:border-gray-700 shadow-xs">
-              <DollarLineIcon className="size-6 text-emerald-600 dark:text-emerald-400" />
-            </div>
           </div>
         </div>
       </div>

@@ -881,8 +881,13 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
 
       setHydrated(true);
     };
-
     fetchData();
+
+    // Auto-refresh when the user switches back to this tab
+    window.addEventListener("focus", fetchData);
+    return () => {
+      window.removeEventListener("focus", fetchData);
+    };
   }, []);
 
   useEffect(() => {

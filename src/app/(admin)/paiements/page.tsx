@@ -393,8 +393,9 @@ export default function PaymentsPage() {
           console.error("Erreur lors de l'envoi du mail de solde:", emailErr);
         }
       })();
-    } catch (error) {
-      setEditError(error instanceof Error ? error.message : "Impossible d'enregistrer la modification.");
+    } catch (error: any) {
+      console.error("Erreur complète:", error);
+      setEditError(error?.message || "Impossible d'enregistrer la modification.");
     } finally {
       setIsSaving(false);
     }
@@ -1222,7 +1223,7 @@ export default function PaymentsPage() {
 
       {editingPayment && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 sm:p-6 overflow-y-auto"
+          className="fixed inset-0 z-[999999] flex items-center justify-center bg-black/50 p-4 sm:p-6 overflow-y-auto"
           role="dialog"
           aria-modal="true"
           aria-labelledby="edit-payment-title"
@@ -1244,7 +1245,7 @@ export default function PaymentsPage() {
                 ×
               </button>
             </div>
-            <div className="flex-1 min-h-0 overflow-y-auto pr-1.5 space-y-4 custom-scrollbar">
+            <div className="flex-1 min-h-0 overflow-y-auto pr-1.5 pb-4 space-y-4 custom-scrollbar">
               <div>
                 <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">Joueur</label>
                 <p className="rounded-lg bg-gray-100 px-3 py-2 text-sm font-semibold text-gray-700 dark:bg-gray-800 dark:text-gray-300">

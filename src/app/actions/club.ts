@@ -278,6 +278,16 @@ export async function deleteParentAdmin(playerIds: (number | string)[]) {
   return { success: true };
 }
 
+export async function fetchProgrammesAdmin() {
+  if (!supabaseAdmin) return { success: false, error: "Service role Supabase indisponible." };
+  const { data, error } = await supabaseAdmin
+    .from("programmes_match")
+    .select("*")
+    .order("date_programme", { ascending: false });
+  if (error) return { success: false, error: error.message };
+  return { success: true, data };
+}
+
 export async function createProgrammeAdmin(payload: any) {
   if (!supabaseAdmin) return { success: false, error: "Service role Supabase indisponible." };
   const { data, error } = await supabaseAdmin.from("programmes_match").insert([payload]).select().single();

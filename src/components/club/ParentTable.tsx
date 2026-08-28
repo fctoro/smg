@@ -16,6 +16,10 @@ import { getParentLinkedPlayerIds } from "@/lib/club/parents";
 import { useClubData } from "@/context/ClubDataContext";
 import { TableBodySkeleton } from "@/components/ui/skeleton/Skeleton";
 
+import { Dropdown } from "@/components/ui/dropdown";
+import { DropdownItem } from "@/components/ui/dropdown/DropdownItem";
+import { useConfirm } from "@/hooks/useConfirm";
+
 interface ParentTableProps {
   parents: Parent[];
   players: Player[];
@@ -38,11 +42,13 @@ export default function ParentTable({
   exportButton,
 }: ParentTableProps) {
   const { hydrated } = useClubData();
+  const { confirm, ConfirmComponent } = useConfirm();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedChildrenCount, setSelectedChildrenCount] = useState("all");
   const [selectedSeason, setSelectedSeason] = useState("all");
   const [currentPage, setCurrentPage] = useState(1);
   const [currentPageSize, setCurrentPageSize] = useState(7);
+  const [isExportOpen, setIsExportOpen] = useState(false);
 
   const playerMap = useMemo(
     () => new Map(players.map((player) => [player.id, player])),
@@ -94,6 +100,101 @@ export default function ParentTable({
       );
     });
   }, [parents, playerMap, searchQuery, selectedChildrenCount, selectedSeason]);
+
+  const handleExport = (type: "excel" | "csv") => {
+    setIsExportOpen(false);
+    const isExcel = type === "excel";
+    const formatName = isExcel ? "Excel (.xls)" : "CSV (.csv)";
+
+    confirm({
+      title: "Exporter la liste des parents",
+      message: `Voulez-vous exporter la liste des ${filteredParents.length} parent(s) au format ${formatName} ?`,
+      onConfirm: () => {
+        const headers = [
+          "Nom Parent",
+          "Prénom Parent",
+          "Lien de Parenté",
+          "Téléphone Parent",
+          "Email Parent",
+          "Enfant(s) / Joueur(s)",
+          "Matricule Enfant(s)",
+          "Saison Enfant(s)",
+          "Catégorie Enfant(s)",
+        ];
+
+        const rows: string[][] = [];
+
+        filteredParents.forEach((p) => {
+          const linkedPlayerIds = getParentLinkedPlayerIds(p);
+          const linkedPlayers = linkedPlayerIds
+            .map((id) => playerMap.get(id))
+            .filter(Boolean) as Player[];
+
+          const childNames = linkedPlayers.map((lp) => getPlayerFullName(lp)).join(" | ");
+          const childMatricules = linkedPlayers.map((lp) => lp.matricule || "-").join(" | ");
+          const childSeasons = linkedPlayers.map((lp) => lp.saison || "-").join(" | ");
+          const childCategories = linkedPlayers.map((lp) => lp.categorie || "-").join(" | ");
+
+          rows.push([
+            p.nom || "",
+            p.prenom || "",
+            p.lien || "",
+            p.telephone || "",
+            p.email || "",
+            childNames || "-",
+            childMatricules || "-",
+            childSeasons || "-",
+            childCategories || "-",
+          ]);
+        });
+
+        const seasonSuffix = selectedSeason !== "all" ? `_${selectedSeason}` : "";
+
+        if (isExcel) {
+          let excelHtml = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">`;
+          excelHtml += `<head><meta charset="utf-8"><!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet><x:Name>Parents</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]--></head>`;
+          excelHtml += `<body><table border="1" style="border-collapse:collapse;"><thead><tr style="background-color: #107C41; color: #ffffff; font-weight: bold;">`;
+          headers.forEach((h) => {
+            excelHtml += `<th style="padding: 8px 12px; text-align: left; border: 1px solid #cccccc;">${h}</th>`;
+          });
+          excelHtml += `</tr></thead><tbody>`;
+          rows.forEach((r) => {
+            excelHtml += `<tr>`;
+            r.forEach((cell) => {
+              const safeCell = (cell || "").toString().replace(/</g, "&lt;").replace(/>/g, "&gt;");
+              excelHtml += `<td style="padding: 6px 10px; border: 1px solid #cccccc;">${safeCell}</td>`;
+            });
+            excelHtml += `</tr>`;
+          });
+          excelHtml += `</tbody></table></body></html>`;
+
+          const blob = new Blob([excelHtml], { type: "application/vnd.ms-excel;charset=utf-8;" });
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement("a");
+          link.href = url;
+          link.setAttribute("download", `parents_excel${seasonSuffix}.xls`);
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+        } else {
+          let csvContent = "sep=,\n\uFEFF" + headers.map((h) => `"${h}"`).join(",") + "\n";
+          rows.forEach((r) => {
+            const formattedRow = r.map((field) => `"${(field || "").toString().replace(/"/g, '""')}"`);
+            csvContent += formattedRow.join(",") + "\n";
+          });
+
+          const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement("a");
+          link.href = url;
+          link.setAttribute("download", `parents${seasonSuffix}.csv`);
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+        }
+      },
+    });
+  };
 
   const totalPages = Math.max(1, Math.ceil(filteredParents.length / currentPageSize));
   const currentPageSafe = Math.min(currentPage, totalPages);
@@ -171,7 +272,42 @@ export default function ParentTable({
           </div>
           {exportButton ? (
             <div className="shrink-0">{exportButton}</div>
-          ) : null}
+          ) : (
+            <div className="relative shrink-0">
+              <button
+                onClick={() => setIsExportOpen(!isExportOpen)}
+                className="inline-flex h-10 items-center justify-center gap-2 whitespace-nowrap rounded-lg bg-[#107C41] px-4 text-sm font-medium text-white shadow-theme-xs hover:bg-[#0c5e31] transition-colors cursor-pointer"
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                  <path d="M14 2v6h6"></path>
+                  <path d="M8 13h2"></path>
+                  <path d="M14 13h2"></path>
+                  <path d="M8 17h2"></path>
+                  <path d="M14 17h2"></path>
+                </svg>
+                Exporter Excel / CSV
+              </button>
+              <Dropdown
+                isOpen={isExportOpen}
+                onClose={() => setIsExportOpen(false)}
+                className="absolute right-0 top-full mt-1 w-40 z-30"
+              >
+                <DropdownItem
+                  onItemClick={() => handleExport("excel")}
+                  className="cursor-pointer"
+                >
+                  Excel (.csv)
+                </DropdownItem>
+                <DropdownItem
+                  onItemClick={() => handleExport("csv")}
+                  className="cursor-pointer"
+                >
+                  CSV
+                </DropdownItem>
+              </Dropdown>
+            </div>
+          )}
         </div>
 
       <div className="max-w-full overflow-x-auto">
@@ -302,7 +438,8 @@ export default function ParentTable({
           }}
         />
       </div>
-      </div>
+      <ConfirmComponent />
     </div>
-  );
+  </div>
+);
 }

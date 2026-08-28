@@ -157,18 +157,40 @@ export async function generateReceiptPDFBase64(
 
   const extractRabaisLabelFromRemark = (remark?: string): string | null => {
     if (!remark) return null;
+
+    // 1. Marqueur explicite [RABAIS:X%] ou [RABAIS:$X]
     const rabaisPctMatch = remark.match(/\[RABAIS:\s*([\d.]+)%\s*\]/i);
+    const rabaisAmtMatch = remark.match(/\[RABAIS:\s*\$?([\d.]+)\s*\]/i);
+    let explicitRabais = "";
     if (rabaisPctMatch && rabaisPctMatch[1]) {
       const val = parseFloat(rabaisPctMatch[1]);
-      if (val > 0) return `${val}%`;
-    }
-
-    const rabaisAmtMatch = remark.match(/\[RABAIS:\s*\$?([\d.]+)\s*\]/i);
-    if (rabaisAmtMatch && rabaisAmtMatch[1]) {
+      if (val > 0) explicitRabais = `${val}%`;
+    } else if (rabaisAmtMatch && rabaisAmtMatch[1]) {
       const val = parseFloat(rabaisAmtMatch[1]);
-      if (val > 0) return `$${val.toFixed(2)}`;
+      if (val > 0) explicitRabais = `$${val.toFixed(2)}`;
     }
 
+    // 2. Détection du Plan (Annuel = 10%, Semestriel = 5%)
+    const isPlanAnnuel = /\[PLAN:\s*ANNUEL\s*\]/i.test(remark) || /Plan\s*:\s*Annuel/i.test(remark);
+    const isPlanSemestriel = /\[PLAN:\s*SEMESTRIEL\s*\]/i.test(remark) || /Plan\s*:\s*Semestriel/i.test(remark);
+
+    if (explicitRabais && isPlanAnnuel) {
+      return `${explicitRabais} (+ 10% Plan Annuel)`;
+    }
+    if (explicitRabais && isPlanSemestriel) {
+      return `${explicitRabais} (+ 5% Plan Semestriel)`;
+    }
+    if (explicitRabais) {
+      return explicitRabais;
+    }
+    if (isPlanAnnuel) {
+      return "10% (Plan Annuel)";
+    }
+    if (isPlanSemestriel) {
+      return "5% (Plan Semestriel)";
+    }
+
+    // 3. Bourses / Demi-bourses
     if (/\[REDUCTION:\s*FULL\s*\]/i.test(remark)) return "100% (Bourse)";
     if (/\[REDUCTION:\s*HALF\s*\]/i.test(remark)) return "50% (Demi-bourse)";
     const customRedMatch = remark.match(/\[REDUCTION_PERCENT:\s*([\d.]+)\s*\]/i);

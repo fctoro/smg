@@ -155,8 +155,35 @@ export async function generateReceiptPDFBase64(
     return String(mode || "-");
   };
 
+  const extractRabaisLabelFromRemark = (remark?: string): string | null => {
+    if (!remark) return null;
+    const rabaisPctMatch = remark.match(/\[RABAIS:\s*([\d.]+)%\s*\]/i);
+    if (rabaisPctMatch && rabaisPctMatch[1]) {
+      const val = parseFloat(rabaisPctMatch[1]);
+      if (val > 0) return `${val}%`;
+    }
+
+    const rabaisAmtMatch = remark.match(/\[RABAIS:\s*\$?([\d.]+)\s*\]/i);
+    if (rabaisAmtMatch && rabaisAmtMatch[1]) {
+      const val = parseFloat(rabaisAmtMatch[1]);
+      if (val > 0) return `$${val.toFixed(2)}`;
+    }
+
+    if (/\[REDUCTION:\s*FULL\s*\]/i.test(remark)) return "100% (Bourse)";
+    if (/\[REDUCTION:\s*HALF\s*\]/i.test(remark)) return "50% (Demi-bourse)";
+    const customRedMatch = remark.match(/\[REDUCTION_PERCENT:\s*([\d.]+)\s*\]/i);
+    if (customRedMatch && customRedMatch[1]) {
+      const val = parseFloat(customRedMatch[1]);
+      if (val > 0) return `${val}%`;
+    }
+
+    return null;
+  };
+
   const cleanRemarkForPDF = (remark: string) => {
     if (!remark) return "Paiement de cotisation";
+    const rabaisLabel = extractRabaisLabelFromRemark(remark);
+
     // Supprime tous les tags système du type [CLE:VALEUR] ou [CLE]
     let cleaned = remark.replace(/\[.*?\]\s*/g, '').trim();
     
@@ -178,6 +205,10 @@ export async function generateReceiptPDFBase64(
     
     if (cleaned.includes('•')) {
       cleaned = cleaned.replace(/,\s*/g, '\n• ');
+    }
+
+    if (rabaisLabel) {
+      cleaned = `${cleaned}\nRabais accordé : ${rabaisLabel}`;
     }
 
     return cleaned.trim() || "Paiement de cotisation";
@@ -336,6 +367,22 @@ export async function generateReceiptPDFBase64(
     : formatClubCurrency(balanceUSD, "US");
 
   let yPos = finalY + 10;
+
+  const appliedRabais = payments
+    .map((p: any) => extractRabaisLabelFromRemark(p.remarque))
+    .find(Boolean);
+
+  // 0. RABAIS ACCORDÉ (si présent)
+  if (appliedRabais) {
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.setTextColor(grayMedium[0], grayMedium[1], grayMedium[2]);
+    doc.text("Rabais accordé :", 110, yPos);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(grayDark[0], grayDark[1], grayDark[2]);
+    doc.text(appliedRabais, 196, yPos, { align: 'right' });
+    yPos += 7;
+  }
 
   // 1. MONTANT TOTAL DÛ
   doc.setFont("helvetica", "normal");

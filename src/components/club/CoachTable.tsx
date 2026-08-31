@@ -31,82 +31,92 @@ export default function CoachTable({ coaches, onDelete, actionButton }: CoachTab
   }, [coaches]);
 
   const filteredCoaches = useMemo(() => {
-    return coaches.filter((c) => {
-      const q = searchQuery.toLowerCase();
-      const matchesSearch =
-        c.nom.toLowerCase().includes(q) ||
-        c.prenom.toLowerCase().includes(q) ||
-        c.email.toLowerCase().includes(q);
+    return coaches
+      .filter((c) => {
+        const q = searchQuery.toLowerCase();
+        const matchesSearch =
+          (c.nom || "").toLowerCase().includes(q) ||
+          (c.prenom || "").toLowerCase().includes(q) ||
+          (c.email || "").toLowerCase().includes(q);
 
-      const matchesCat =
-        selectedCategory === "all" ||
-        (c.categories && c.categories.includes(selectedCategory));
+        const matchesCat =
+          selectedCategory === "all" ||
+          (c.categories && c.categories.includes(selectedCategory));
 
-      const matchesSeason =
-        selectedSeason === "all" || c.saison === selectedSeason;
+        const matchesSeason =
+          selectedSeason === "all" || c.saison === selectedSeason;
 
-      return matchesSearch && matchesCat && matchesSeason;
-    });
+        return matchesSearch && matchesCat && matchesSeason;
+      })
+      .sort((a, b) => {
+        const nomA = (a.nom || "").trim();
+        const nomB = (b.nom || "").trim();
+        const nomCompare = nomA.localeCompare(nomB, "fr", { sensitivity: "base" });
+        if (nomCompare !== 0) return nomCompare;
+        const prenomA = (a.prenom || "").trim();
+        const prenomB = (b.prenom || "").trim();
+        return prenomA.localeCompare(prenomB, "fr", { sensitivity: "base" });
+      });
   }, [coaches, searchQuery, selectedCategory, selectedSeason]);
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <div className="grid flex-1 gap-2 sm:grid-cols-2 lg:grid-cols-3 min-w-0">
-          <div className="min-w-0">
-            <input
-              type="text"
-              placeholder="Rechercher (nom, email)..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="h-11 w-full min-w-0 max-w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs placeholder:text-gray-400 focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
-            />
-          </div>
-          <div className="min-w-0">
-            <select
-              value={selectedCategory}
-              onChange={(e) => setSelectedCategory(e.target.value)}
-              className="h-11 w-full min-w-0 max-w-full truncate rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
-            >
-              <option value="all">Toutes les catégories</option>
-              {categories.map((cat) => (
-                <option key={cat} value={cat}>
-                  {cat}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="min-w-0">
-            <select
-              value={selectedSeason}
-              onChange={(e) => setSelectedSeason(e.target.value)}
-              className="h-11 w-full min-w-0 max-w-full truncate rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
-            >
-              <option value="all">Toutes les saisons</option>
-              {seasons.map((saison) => (
-                <option key={saison} value={saison}>
-                  {String(saison).toLowerCase().startsWith('saison') ? saison : `Saison ${saison}`}
-                </option>
-              ))}
-            </select>
-          </div>
+    <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white px-4 pb-3 pt-4 dark:border-gray-800 dark:bg-white/[0.03] sm:px-6">
+      {/* En-tête avec Titre et Action */}
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h3 className="text-lg font-semibold text-gray-800 dark:text-white/90">
+            Liste des Coachs
+          </h3>
+          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+            {filteredCoaches.length} coach(s)
+          </p>
         </div>
+
         {actionButton ? (
           <div className="shrink-0 flex items-center">{actionButton}</div>
         ) : null}
       </div>
 
-      <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white px-4 pb-3 pt-4 dark:border-gray-800 dark:bg-white/[0.03] sm:px-6">
-        <div className="mb-4 flex items-center justify-between">
-          <div>
-            <h3 className="text-lg font-semibold text-gray-800 dark:text-white/90">
-              Liste des Coachs
-            </h3>
-            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-              {filteredCoaches.length} coach(s)
-            </p>
-          </div>
+      {/* Barre d'outils de filtres */}
+      <div className="mb-4 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3 min-w-0">
+        <div className="min-w-0">
+          <input
+            type="text"
+            placeholder="Rechercher (nom, email)..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="h-11 w-full min-w-0 max-w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs placeholder:text-gray-400 focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
+          />
         </div>
+        <div className="min-w-0">
+          <select
+            value={selectedCategory}
+            onChange={(e) => setSelectedCategory(e.target.value)}
+            className="h-11 w-full min-w-0 max-w-full truncate rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
+          >
+            <option value="all">Toutes les catégories</option>
+            {categories.map((cat) => (
+              <option key={cat} value={cat}>
+                {cat}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="min-w-0">
+          <select
+            value={selectedSeason}
+            onChange={(e) => setSelectedSeason(e.target.value)}
+            className="h-11 w-full min-w-0 max-w-full truncate rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
+          >
+            <option value="all">Toutes les saisons</option>
+            {seasons.map((saison) => (
+              <option key={saison} value={saison}>
+                {String(saison).toLowerCase().startsWith('saison') ? saison : `Saison ${saison}`}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
         <div className="max-w-full overflow-x-auto">
           <table className="min-w-full text-left text-sm text-gray-500 dark:text-gray-400">
           <thead className="bg-gray-50 text-xs uppercase text-gray-700 dark:bg-gray-800 dark:text-gray-300">
@@ -180,7 +190,6 @@ export default function CoachTable({ coaches, onDelete, actionButton }: CoachTab
           </tbody>
         </table>
       </div>
-    </div>
     </div>
   );
 }

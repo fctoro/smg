@@ -201,49 +201,55 @@ export default function AccessControlPage() {
     setSaving(true);
     setMessage(null);
 
-    const form = new FormData();
-    form.append("email", formData.email);
-    form.append("password", formData.password);
-    form.append("role", formData.role);
-    form.append("sections", JSON.stringify(selectedSections));
-    form.append("categories", JSON.stringify(formData.role === "Coach" ? selectedCategories : []));
-    form.append("permissions", JSON.stringify(selectedPermissions));
+    try {
+      const form = new FormData();
+      form.append("email", formData.email);
+      form.append("password", formData.password);
+      form.append("role", formData.role);
+      form.append("sections", JSON.stringify(selectedSections));
+      form.append("categories", JSON.stringify(formData.role === "Coach" ? selectedCategories : []));
+      form.append("permissions", JSON.stringify(selectedPermissions));
 
-    let result;
-    if (editingAccessUserId) {
-      if (formData.password) {
-        const pwdResult = await updateUserPassword(editingAccessUserId, formData.password);
-        if (pwdResult?.error) {
-          setMessage({ text: pwdResult.error, type: "error" });
-          setSaving(false);
-          return;
+      let result;
+      if (editingAccessUserId) {
+        if (formData.password) {
+          const pwdResult = await updateUserPassword(editingAccessUserId, formData.password);
+          if (pwdResult?.error) {
+            setMessage({ text: pwdResult.error, type: "error" });
+            setSaving(false);
+            return;
+          }
         }
+        result = await updateUserAccess(
+          editingAccessUserId, 
+          formData.role, 
+          selectedSections,
+          formData.role === "Coach" ? selectedCategories : [],
+          selectedPermissions
+        );
+      } else {
+        result = await createUser(form);
       }
-      result = await updateUserAccess(
-        editingAccessUserId, 
-        formData.role, 
-        selectedSections,
-        formData.role === "Coach" ? selectedCategories : [],
-        selectedPermissions
-      );
-    } else {
-      result = await createUser(form);
-    }
 
-    if (result.error) {
-      setMessage({ text: result.error, type: "error" });
-    } else {
-      const action = editingAccessUserId ? "mis à jour" : "créé";
-      const countText = formData.role === "Coach" ? `${selectedCategories.length} catégorie(s)` : `${selectedSections.length} section(s)`;
-      setMessage({ text: `Compte ${formData.role} ${action} avec succès avec ${countText} attribuée(s) !`, type: "success" });
-      setEditingAccessUserId(null);
-      setFormData({ email: "", password: "", role: "Admin" });
-      setSelectedSections(rolePermissions["Admin"]);
-      setSelectedPermissions({});
-      setSelectedCoachId("");
-      fetchProfiles();
+      if (result?.error) {
+        setMessage({ text: result.error, type: "error" });
+      } else {
+        const action = editingAccessUserId ? "mis à jour" : "créé";
+        const countText = formData.role === "Coach" ? `${selectedCategories.length} catégorie(s)` : `${selectedSections.length} section(s)`;
+        setMessage({ text: `Compte ${formData.role} ${action} avec succès avec ${countText} attribuée(s) !`, type: "success" });
+        setEditingAccessUserId(null);
+        setFormData({ email: "", password: "", role: "Admin" });
+        setSelectedSections(rolePermissions["Admin"]);
+        setSelectedPermissions({});
+        setSelectedCoachId("");
+        fetchProfiles();
+      }
+    } catch (err: any) {
+      console.error("Submit error:", err);
+      setMessage({ text: "Une erreur critique est survenue. Vérifiez la connexion.", type: "error" });
+    } finally {
+      setSaving(false);
     }
-    setSaving(false);
   };
 
   const handleEditAccess = (user: Profile) => {

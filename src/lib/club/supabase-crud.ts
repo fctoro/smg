@@ -224,6 +224,7 @@ export const updatePlayerInSupabase = async (playerId: string, data: Partial<Pla
     delete updatePayload.TailleShort;
     delete updatePayload.Saison;
     delete updatePayload.PhotoUrl;
+    delete updatePayload.Programme;
     result = await updatePlayerAdmin(resolveEtudiantId(playerId), updatePayload);
   }
 

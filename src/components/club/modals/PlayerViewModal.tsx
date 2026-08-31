@@ -31,8 +31,8 @@ const getSafeAvatarSrc = (photoUrl?: string) => {
 };
 
 const getPlayerFinancialSummary = (player: Player, playerPayments: any[]) => {
-  const playerStatus = ((player as any).statutJoueur || "").toLowerCase().trim();
-  const isBoursier = playerStatus === "bourse" || playerStatus === "boursier" || playerPayments.some(p => (p.remarque || "").toLowerCase().includes("[plan:boursier]"));
+  const playerStatus = String((player as any).statutJoueur || "").toLowerCase().trim();
+  const isBoursier = playerStatus === "bourse" || playerStatus === "boursier" || playerPayments.some(p => String(p.remarque || "").toLowerCase().includes("[plan:boursier]"));
 
   if (isBoursier) {
     return {
@@ -54,7 +54,7 @@ const getPlayerFinancialSummary = (player: Player, playerPayments: any[]) => {
       balance: 0,
       devise: "US" as const,
       isPaidInFull: false,
-      isMonthlyPlan: (player.planPaiement || "").toLowerCase().includes("mensuel"),
+      isMonthlyPlan: String(player.planPaiement || "").toLowerCase().includes("mensuel"),
       monthsPaid: 0,
       totalPaidUSD: 0,
     };
@@ -96,7 +96,7 @@ const getPlayerFinancialSummary = (player: Player, playerPayments: any[]) => {
   // Recherche du montant total dû du dossier (le TOTAL_DUE le plus élevé ou du paiement principal)
   let dossierTotalDueUSD = 0;
   let maxMonthsPaid = 0;
-  let isMonthlyPlan = (player.planPaiement || "").toLowerCase().includes("mensuel");
+  let isMonthlyPlan = String(player.planPaiement || "").toLowerCase().includes("mensuel");
 
   uniquePayments.forEach((p) => {
     const remark = p.remarque || "";
@@ -203,7 +203,7 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
   const avatarSrc = getSafeAvatarSrc(player.photoIdentiteUrl || player.photoUrl);
 
   // Extract fields from player or regData fallback
-  const programme = player.programme || (regData?.program === "tiToro" ? "Ti Toro" : regData?.program === "fcToro" ? "FC Toro" : regData?.program) || (player.categorie?.toLowerCase().includes("ti") ? "Ti Toro" : "FC Toro");
+  const programme = player.programme || (regData?.program === "tiToro" ? "Ti Toro" : regData?.program === "fcToro" ? "FC Toro" : regData?.program) || (String(player.categorie || "").toLowerCase().includes("ti") ? "Ti Toro" : "FC Toro");
   const ecole = player.ecole || regData?.child_school || "Non renseigné";
   const experienceSoccer = player.experienceSoccer || regData?.child_soccer_experience || "Non renseigné";
 

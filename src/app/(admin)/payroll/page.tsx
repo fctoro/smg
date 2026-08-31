@@ -12,6 +12,7 @@ import {
 import { ConfirmModal } from "@/components/ui/modal/ConfirmModal";
 import { Dropdown } from "@/components/ui/dropdown/Dropdown";
 import { DropdownItem } from "@/components/ui/dropdown/DropdownItem";
+import { formatClubDate } from "@/lib/club/metrics";
 
 // Professional SVG Icons
 const Icons = {
@@ -316,12 +317,105 @@ export default function PayrollPage() {
 
   const handleExportExcel = () => {
     setIsExportOpen(false);
-    const content = generatePayrollExportContent(";");
-    const blob = new Blob([content], { type: "text/csv;charset=utf-8;" });
+    const headers = [
+      "Nom & Prénom",
+      "Fonction / Rôle",
+      "Période",
+      "Type de Salaire",
+      "Salaire de Base",
+      "Primes & Bonus",
+      "Vacances Payées",
+      "Taxe Revenu (2%)",
+      "Net à Payer",
+      "Devise",
+      "Statut",
+      "Date de Paiement",
+      "Mode de Paiement",
+      "Remarques / Notes",
+    ];
+
+    const totalNetHTG = filteredRecords
+      .filter((r) => r.devise === "HTG")
+      .reduce((sum, r) => sum + (r.netAPayer || 0), 0);
+    const totalNetUSD = filteredRecords
+      .filter((r) => r.devise !== "HTG")
+      .reduce((sum, r) => sum + (r.netAPayer || 0), 0);
+
+    const thead = headers.map((h) => `<th>${h}</th>`).join("");
+    const tbody = filteredRecords
+      .map((r) => {
+        const nomComplet = r.employeNom ? `${r.employeNom.toUpperCase()} ${r.employePrenom}` : r.employePrenom;
+        const row = [
+          nomComplet,
+          r.fonction || "-",
+          formatMonthYearDisplay(r.mois),
+          r.typeSalaire === "variable" ? "Variable / Séance" : "Fixe",
+          Number(r.salaireBase || 0).toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+          Number(r.bonus || 0).toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+          Number(r.vacancesPayees || 0).toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+          Number(r.deductions || 0).toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+          Number(r.netAPayer || 0).toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+          r.devise || "HTG",
+          r.statut === "paye" ? "Payé" : "En attente",
+          r.datePaiement ? formatClubDate(r.datePaiement) : "-",
+          r.modePaiement || "-",
+          r.notes || "-",
+        ];
+        return `<tr>${row
+          .map(
+            (field) =>
+              `<td>${String(field || "")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")}</td>`,
+          )
+          .join("")}</tr>`;
+      })
+      .join("");
+
+    const summaryRows = `
+      <tr style="background-color: #f8fafc; font-weight: bold;">
+        <td colspan="8" style="text-align: right;">TOTAL NET HTG :</td>
+        <td>${totalNetHTG.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+        <td>HTG</td>
+        <td colspan="4"></td>
+      </tr>
+      <tr style="background-color: #f8fafc; font-weight: bold;">
+        <td colspan="8" style="text-align: right;">TOTAL NET USD :</td>
+        <td>${totalNetUSD.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+        <td>USD</td>
+        <td colspan="4"></td>
+      </tr>
+    `;
+
+    const htmlContent = `
+      <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+      <head>
+        <meta charset="utf-8" />
+        <style>
+          table { border-collapse: collapse; width: 100%; font-family: Arial, sans-serif; font-size: 13px; }
+          td, th { border: 1px solid #cccccc; padding: 6px 10px; text-align: left; }
+          th { background-color: #107C41; color: white; font-weight: bold; }
+        </style>
+      </head>
+      <body>
+        <table>
+          <thead><tr>${thead}</tr></thead>
+          <tbody>
+            ${tbody}
+            ${summaryRows}
+          </tbody>
+        </table>
+      </body>
+      </html>
+    `;
+
+    const blob = new Blob([htmlContent], {
+      type: "application/vnd.ms-excel;charset=utf-8;",
+    });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `payroll_export_${selectedYear}_${selectedMonth}.csv`;
+    a.download = `payroll_export_${selectedYear}_${selectedMonth}.xls`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);

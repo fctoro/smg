@@ -57,8 +57,8 @@ export const PlayerEditModal: React.FC<PlayerEditModalProps> = ({
     try {
       const updatedDocs = await updatePlayerInSupabase(player.id, normalized);
       
-      setPlayers((prevPlayers) =>
-        prevPlayers.map((p) => {
+      setPlayers((prevPlayers) => {
+        const newPlayers = prevPlayers.map((p) => {
           if (p.id !== player.id) return p;
           const updated = {
             ...p,
@@ -80,8 +80,12 @@ export const PlayerEditModal: React.FC<PlayerEditModalProps> = ({
           if (updated.fiche9eUrl?.startsWith("data:")) delete (updated as any).fiche9eUrl;
           if (updated.carnetVaccinationUrl?.startsWith("data:")) delete (updated as any).carnetVaccinationUrl;
           return updated;
-        }),
-      );
+        });
+        if (typeof window !== "undefined") {
+          window.localStorage.setItem("club-data-players-v1", JSON.stringify(newPlayers));
+        }
+        return newPlayers;
+      });
       
       if (values.programmesAssignesIds) {
         syncPlayerProgrammes(player.id, values.programmesAssignesIds).catch(console.error);

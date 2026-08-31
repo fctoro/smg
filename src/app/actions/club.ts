@@ -135,11 +135,21 @@ export async function updatePlayerAdmin(etudiantId: number | string, updatePaylo
 
 export async function upsertPlayerStatusAdmin(etudiantId: number, status: string) {
   if (!supabaseAdmin) return { success: false, error: "Service role Supabase indisponible." };
+  
+  if (!status || status.trim() === "") {
+    const { error } = await supabaseAdmin
+      .from('player_status')
+      .delete()
+      .eq('player_id', etudiantId);
+    if (error) return { success: false, error: error.message };
+    return { success: true };
+  }
+
   const { error } = await supabaseAdmin
     .from('player_status')
     .upsert({ 
       player_id: etudiantId, 
-      status: status,
+      status: status.trim(),
       updated_at: new Date().toISOString()
     }, { onConflict: 'player_id' });
 

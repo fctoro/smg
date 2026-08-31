@@ -40,19 +40,26 @@ export const updatePlayerInSupabase = async (playerId: string, data: Partial<Pla
   if (data.sexe !== undefined) updatePayload.Sexe = data.sexe === "Féminin" ? "F" : "M";
   if (data.categorie !== undefined) updatePayload.Categorie = data.categorie;
   // Sauvegarder le statut dans la table séparée player_status
-  const statusToUpdate = data.statutJoueur || data.statut;
+  const statusToUpdate = data.statutJoueur !== undefined ? data.statutJoueur : data.statut;
   if (statusToUpdate !== undefined) {
     try {
       const { upsertPlayerStatusAdmin } = await import("@/app/actions/club");
       await upsertPlayerStatusAdmin(Number(resolveEtudiantId(playerId)), statusToUpdate);
     } catch (e) {
-      await supabase
-        .from('player_status')
-        .upsert({ 
-          player_id: resolveEtudiantId(playerId), 
-          status: statusToUpdate,
-          updated_at: new Date().toISOString()
-        }, { onConflict: 'player_id' });
+      if (!statusToUpdate || statusToUpdate.trim() === "") {
+        await supabase
+          .from('player_status')
+          .delete()
+          .eq('player_id', resolveEtudiantId(playerId));
+      } else {
+        await supabase
+          .from('player_status')
+          .upsert({ 
+            player_id: resolveEtudiantId(playerId), 
+            status: statusToUpdate.trim(),
+            updated_at: new Date().toISOString()
+          }, { onConflict: 'player_id' });
+      }
     }
   }
 

@@ -9,9 +9,45 @@ import { addEmployeeToSupabase } from "@/lib/club/supabase-crud";
 
 export default function NewEmployeePage() {
   const router = useRouter();
-  const { setEmployees } = useClubData();
+  const { employees, setEmployees } = useClubData();
 
   const handleSubmit = async (values: EmployeeFormValues) => {
+    // Vérification anti-doublon
+    const normalize = (str: string) =>
+      (str || "").trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
+    const nomInput = normalize(values.nom);
+    const prenomInput = normalize(values.prenom);
+    const emailInput = normalize(values.email);
+    const phoneInput = (values.telephone || "").replace(/\D/g, "");
+
+    const duplicate = employees.find((emp) => {
+      const empNom = normalize(emp.nom);
+      const empPrenom = normalize(emp.prenom);
+      const empEmail = normalize(emp.email);
+      const empPhone = (emp.telephone || "").replace(/\D/g, "");
+
+      if (nomInput && prenomInput && empNom === nomInput && empPrenom === prenomInput) {
+        return true;
+      }
+      if (emailInput && empEmail && empEmail === emailInput) {
+        return true;
+      }
+      if (phoneInput && phoneInput.length >= 7 && empPhone && empPhone === phoneInput) {
+        return true;
+      }
+      return false;
+    });
+
+    if (duplicate) {
+      alert(
+        `❌ Cet employé existe déjà dans le système : ${duplicate.nom.toUpperCase()} ${duplicate.prenom}${
+          duplicate.fonction ? ` (${duplicate.fonction})` : ""
+        }. L'ajout a été bloqué pour éviter les doublons.`
+      );
+      return;
+    }
+
     const newEmployeeLocal: Employee = {
       id: `emp-temp-${Date.now()}`,
       employeId: Date.now(),

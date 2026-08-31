@@ -451,6 +451,21 @@ export default function PayrollPage() {
     const targetEmp = employees.find((emp) => emp.id === formData.employeId);
     if (!targetEmp) return;
 
+    const targetMois = `${formData.annee}-${formData.mois}`;
+
+    // Anti-doublon Payroll: Vérifier si un bulletin existe déjà pour cet employé et ce mois
+    if (!editingPayrollId) {
+      const duplicatePayroll = payrollRecords.find(
+        (rec) => rec.employeId === targetEmp.id && rec.mois === targetMois
+      );
+      if (duplicatePayroll) {
+        const errorMsg = `❌ Un bulletin de paie existe déjà pour ${targetEmp.nom.toUpperCase()} ${targetEmp.prenom} pour la période ${formatMonthYearDisplay(targetMois)}. La création d'un doublon est bloquée.`;
+        alert(errorMsg);
+        setToast({ message: errorMsg, type: "error" });
+        return;
+      }
+    }
+
     // Calculate gross base salary based on fixed vs variable per session
     const grossBaseSalary =
       formData.typeSalaire === "variable"
@@ -475,7 +490,6 @@ export default function PayrollPage() {
     
     // Net Pay = Gross + Bonus + Paid Vacations - Total Deductions
     const net = grossBaseSalary + formData.bonus + formData.vacancesPayees - totalDeductions;
-    const targetMois = `${formData.annee}-${formData.mois}`;
 
     // Calculate cumulative payments for this employee
     const existingEmpRecords = payrollRecords.filter(

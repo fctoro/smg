@@ -120,6 +120,19 @@ const getPrelevementAmount = (record: PayrollRecord) =>
 export default function PayrollPage() {
   const { employees, payrollRecords, setPayrollRecords, rubriques } = useClubData();
 
+  // Liste triée par ordre alphabétique (Nom, Prénom A-Z) des employés et coachs
+  const sortedEmployees = useMemo(() => {
+    return [...employees].sort((a, b) => {
+      const nomA = (a.nom || "").trim();
+      const nomB = (b.nom || "").trim();
+      const nomCompare = nomA.localeCompare(nomB, "fr", { sensitivity: "base" });
+      if (nomCompare !== 0) return nomCompare;
+      const prenomA = (a.prenom || "").trim();
+      const prenomB = (b.prenom || "").trim();
+      return prenomA.localeCompare(prenomB, "fr", { sensitivity: "base" });
+    });
+  }, [employees]);
+
   // Filters
   const currentYearStr = String(CURRENT_YEAR);
   const currentMonthStr = String(new Date().getMonth() + 1).padStart(2, "0");
@@ -198,20 +211,30 @@ export default function PayrollPage() {
     file: null,
   });
 
-  // Filtered List
+  // Filtered & Alphabetically Sorted List
   const filteredRecords = useMemo(() => {
-    return payrollRecords.filter((rec) => {
-      const [recYear, recMonth] = rec.mois ? rec.mois.split("-") : ["", ""];
+    return payrollRecords
+      .filter((rec) => {
+        const [recYear, recMonth] = rec.mois ? rec.mois.split("-") : ["", ""];
 
-      const matchYear = selectedYear === "all" || recYear === selectedYear;
-      const matchMonth = selectedMonth === "all" || recMonth === selectedMonth;
+        const matchYear = selectedYear === "all" || recYear === selectedYear;
+        const matchMonth = selectedMonth === "all" || recMonth === selectedMonth;
 
-      const fullName = `${rec.employePrenom} ${rec.employeNom} ${rec.fonction}`.toLowerCase();
-      const matchSearch = fullName.includes(searchTerm.toLowerCase());
-      const matchStatus = statusFilter === "all" || rec.statut === statusFilter;
+        const fullName = `${rec.employePrenom} ${rec.employeNom} ${rec.fonction}`.toLowerCase();
+        const matchSearch = fullName.includes(searchTerm.toLowerCase());
+        const matchStatus = statusFilter === "all" || rec.statut === statusFilter;
 
-      return matchYear && matchMonth && matchSearch && matchStatus;
-    });
+        return matchYear && matchMonth && matchSearch && matchStatus;
+      })
+      .sort((a, b) => {
+        const nomA = (a.employeNom || "").trim();
+        const nomB = (b.employeNom || "").trim();
+        const nomCompare = nomA.localeCompare(nomB, "fr", { sensitivity: "base" });
+        if (nomCompare !== 0) return nomCompare;
+        const prenomA = (a.employePrenom || "").trim();
+        const prenomB = (b.employePrenom || "").trim();
+        return prenomA.localeCompare(prenomB, "fr", { sensitivity: "base" });
+      });
   }, [payrollRecords, selectedYear, selectedMonth, searchTerm, statusFilter]);
 
   // KPI Calculations based on active filters (separate by currency)
@@ -949,7 +972,7 @@ export default function PayrollPage() {
                       value={formData.employeId}
                       onChange={(e) => {
                         const empId = e.target.value;
-                        const emp = employees.find((x) => x.id === empId);
+                        const emp = sortedEmployees.find((x) => x.id === empId);
                         const empSal = emp?.salaire || 500;
                         const empDev: "US" | "HTG" = emp?.devise || (empSal >= 1000 ? "HTG" : "US");
                         const isCoach = (emp?.fonction || emp?.role || "").toLowerCase().includes("coach");
@@ -967,10 +990,10 @@ export default function PayrollPage() {
                       }}
                       className="w-full rounded-xl border border-gray-300 bg-white p-2.5 text-sm font-semibold text-gray-900 dark:border-gray-700 dark:bg-gray-800 dark:text-white"
                     >
-                      <option value="">-- Choisir un employé --</option>
-                      {employees.map((emp) => (
+                      <option value="">-- Choisir un employé / coach (A-Z) --</option>
+                      {sortedEmployees.map((emp) => (
                         <option key={emp.id} value={emp.id}>
-                          {emp.prenom} {emp.nom} ({emp.fonction || "Employé"})
+                          {emp.nom ? `${emp.nom.toUpperCase()} ${emp.prenom}` : `${emp.prenom}`} ({emp.fonction || emp.role || "Employé"})
                         </option>
                       ))}
                     </select>

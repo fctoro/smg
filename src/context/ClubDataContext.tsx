@@ -791,25 +791,38 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
               const isDesactive = e.Desactive === 1 || e.Desactive === true || String(e.Desactive).toLowerCase() === "true";
               return !isDesactive;
             })
-            .map((e: any) => ({
-              id: String(e.EmployeId || e.employeid),
-              employeId: e.EmployeId || e.employeid,
-              nom: e.Nom || "",
-              prenom: e.Prenom || "",
-              sexe: e.Sexe || "",
-              fonction: e.Fonction || e.Profession || "Employé",
-              role: e.Fonction || e.Profession || "Employé",
-              salaire: e.Salaire || null,
-              dateEmbauche: e.DateEmbauche ? e.DateEmbauche.split("T")[0] : "",
-              dateDebut: e.DateEmbauche ? e.DateEmbauche.split("T")[0] : "",
-              telephone: e.Telephone || "",
-              email: e.Email || "",
-              adresse: e.Adresse || "",
-              niveauEtude: e.NiveauEtude || "",
-              profession: e.Profession || "",
-              photoUrl: e.Photo || "/images/user/silhouette.svg",
-              desactive: false,
-            }));
+            .map((e: any) => {
+              const rawDevise = (e.Devise || e.devise || "").toUpperCase();
+              const salNum = Number(e.Salaire || 0);
+              const devise: "US" | "HTG" = rawDevise === "HTG" || rawDevise === "GDES" || rawDevise === "GOURDES"
+                ? "HTG"
+                : rawDevise === "US" || rawDevise === "USD"
+                ? "US"
+                : (salNum >= 1000 ? "HTG" : "US");
+
+              return {
+                id: String(e.EmployeId || e.employeid),
+                employeId: e.EmployeId || e.employeid,
+                nom: e.Nom || "",
+                prenom: e.Prenom || "",
+                sexe: e.Sexe || "",
+                fonction: e.Fonction || e.Profession || "Employé",
+                role: e.Fonction || e.Profession || "Employé",
+                typeSalaire: e.TypeSalaire || e.typesalaire || "fixe",
+                tauxParSeance: e.TauxParSeance ? Number(e.TauxParSeance) : null,
+                salaire: e.Salaire ? Number(e.Salaire) : null,
+                devise,
+                dateEmbauche: e.DateEmbauche ? e.DateEmbauche.split("T")[0] : "",
+                dateDebut: e.DateEmbauche ? e.DateEmbauche.split("T")[0] : "",
+                telephone: e.Telephone || "",
+                email: e.Email || "",
+                adresse: e.Adresse || "",
+                niveauEtude: e.NiveauEtude || "",
+                profession: e.Profession || "",
+                photoUrl: e.Photo || "/images/user/silhouette.svg",
+                desactive: false,
+              };
+            });
           setEmployees(fetchedEmployees);
           setStaff(fetchedEmployees);
         } else {

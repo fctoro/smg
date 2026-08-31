@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Image from "next/image";
 import {
   Table,
   TableBody,
@@ -16,6 +17,14 @@ import { formatClubDate } from "@/lib/club/metrics";
 
 import { useClubData } from "@/context/ClubDataContext";
 import { TableBodySkeleton } from "@/components/ui/skeleton/Skeleton";
+
+const getSafeAvatarSrc = (photoUrl?: string) => {
+  const trimmed = (photoUrl || "").trim();
+  if (trimmed.length > 0 && !trimmed.includes("user-01")) {
+    return trimmed;
+  }
+  return "/images/user/silhouette.svg";
+};
 
 interface EmployeeTableProps {
   employees: Employee[];
@@ -187,7 +196,7 @@ export default function EmployeeTable({
                 isHeader
                 className="py-3 text-start text-theme-xs font-medium text-gray-500 dark:text-gray-400"
               >
-                Nom & Prénom
+                Photo + Nom
               </TableCell>
               <TableCell
                 isHeader
@@ -251,13 +260,20 @@ export default function EmployeeTable({
                     className="hover:bg-gray-50 dark:hover:bg-white/[0.02]"
                   >
                     <TableCell className="py-3 font-medium text-gray-800 dark:text-white/90">
-                      <div>
-                        <p className="font-semibold text-gray-900 dark:text-white">
-                          {emp.nom ? `${emp.nom.toUpperCase()} ${emp.prenom}` : emp.prenom}
-                        </p>
-                        {emp.sexe && (
-                          <p className="text-xs text-gray-400">Sexe: {emp.sexe}</p>
-                        )}
+                      <div className="flex items-center gap-3">
+                        <Image
+                          width={40}
+                          height={40}
+                          src={getSafeAvatarSrc(emp.photoUrl)}
+                          alt={`${emp.prenom || ""} ${emp.nom || ""}`}
+                          className="h-10 w-10 rounded-full object-cover shadow-xs border border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800 p-0.5"
+                          unoptimized
+                        />
+                        <div>
+                          <p className="text-theme-sm font-medium text-gray-800 dark:text-white/90">
+                            {emp.prenom} {emp.nom}
+                          </p>
+                        </div>
                       </div>
                     </TableCell>
 
@@ -282,8 +298,8 @@ export default function EmployeeTable({
                     <TableCell className="py-3 text-sm font-semibold text-gray-800 dark:text-white/90">
                       {emp.salaire ? (
                         <span>
-                          {emp.devise === "HTG"
-                            ? `${emp.salaire.toLocaleString("fr-FR")} Gdes`
+                          {(emp.devise === "HTG" || (emp.salaire && emp.salaire >= 1000))
+                            ? `${emp.salaire.toLocaleString("fr-FR")} HTG`
                             : `$${emp.salaire.toLocaleString("en-US")}`}
                         </span>
                       ) : (

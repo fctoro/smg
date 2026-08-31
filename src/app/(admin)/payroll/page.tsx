@@ -112,11 +112,13 @@ const formatAmountWithDevise = (amount: number, devise?: "US" | "HTG") => {
   return `$${amount.toLocaleString("en-US")}`;
 };
 
+const getDefaultTaxPercentage = (salary: number) => (salary > 5000 ? 2 : 0);
+
 const calculatePrelevement = (salary: number, percentage: number) =>
   Math.round(((salary * percentage) / 100) * 100) / 100;
 
 const getPrelevementAmount = (record: PayrollRecord) =>
-  record.prelevementMontant ?? calculatePrelevement(record.salaireBase, record.prelevementPourcentage ?? 2);
+  record.prelevementMontant ?? calculatePrelevement(record.salaireBase, record.prelevementPourcentage ?? getDefaultTaxPercentage(record.salaireBase));
 
 export default function PayrollPage() {
   const { employees, payrollRecords, setPayrollRecords, rubriques } = useClubData();
@@ -193,7 +195,8 @@ export default function PayrollPage() {
     nombreJoursWeekend: 0,
     tauxJourWeekend: 0,
     bonus: 0,
-    prelevementPourcentage: 2,
+    deductions: 0,
+    prelevementPourcentage: 0,
     prelevementType: "taxe",
     prelevementSnowizz: 0,
     ajustement: 0,
@@ -583,7 +586,8 @@ export default function PayrollPage() {
         nombreJoursWeekend: 0,
         tauxJourWeekend: 0,
         bonus: 0,
-        prelevementPourcentage: 2,
+        deductions: 0,
+        prelevementPourcentage: 0,
         prelevementType: "taxe",
         prelevementSnowizz: 0,
         ajustement: 0,
@@ -1067,7 +1071,7 @@ export default function PayrollPage() {
                       onChange={(e) => {
                         const empId = e.target.value;
                         const emp = sortedEmployees.find((x) => x.id === empId);
-                        const empSal = emp?.salaire || 500;
+                        const empSal = emp?.salaire || 0;
                         const empDev: "US" | "HTG" = emp?.devise || (empSal >= 1000 ? "HTG" : "US");
                         const isCoach = (emp?.fonction || emp?.role || "").toLowerCase().includes("coach");
                         const defaultType = emp?.typeSalaire || (isCoach ? "variable" : "fixe");
@@ -1078,7 +1082,7 @@ export default function PayrollPage() {
                           typeSalaire: defaultType,
                           tauxParSeance: defaultTaux,
                           salaireBase: empSal,
-                          prelevementPourcentage: prev.prelevementPourcentage || 2,
+                          prelevementPourcentage: getDefaultTaxPercentage(empSal),
                           devise: empDev,
                         }));
                       }}
@@ -1162,9 +1166,17 @@ export default function PayrollPage() {
                           min="0"
                           step="any"
                           value={formData.nombreJoursSemaine === 0 ? "" : formData.nombreJoursSemaine}
-                          onChange={(e) =>
-                            setFormData({ ...formData, nombreJoursSemaine: e.target.value === "" ? 0 : parseFloat(e.target.value) || 0 })
-                          }
+                          onChange={(e) => {
+                            const val = e.target.value === "" ? 0 : parseFloat(e.target.value) || 0;
+                            setFormData((prev) => {
+                              const total = (val * prev.tauxJourSemaine) + (prev.nombreJoursWeekend * prev.tauxJourWeekend) + (prev.nombreSeances * prev.tauxParSeance);
+                              return {
+                                ...prev,
+                                nombreJoursSemaine: val,
+                                prelevementPourcentage: getDefaultTaxPercentage(total),
+                              };
+                            });
+                          }}
                           placeholder="Ex: 8"
                           className="w-full rounded-xl border border-gray-300 bg-white p-2.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
                         />
@@ -1178,9 +1190,17 @@ export default function PayrollPage() {
                           min="0"
                           step="any"
                           value={formData.tauxJourSemaine === 0 ? "" : formData.tauxJourSemaine}
-                          onChange={(e) =>
-                            setFormData({ ...formData, tauxJourSemaine: e.target.value === "" ? 0 : parseFloat(e.target.value) || 0 })
-                          }
+                          onChange={(e) => {
+                            const val = e.target.value === "" ? 0 : parseFloat(e.target.value) || 0;
+                            setFormData((prev) => {
+                              const total = (prev.nombreJoursSemaine * val) + (prev.nombreJoursWeekend * prev.tauxJourWeekend) + (prev.nombreSeances * prev.tauxParSeance);
+                              return {
+                                ...prev,
+                                tauxJourSemaine: val,
+                                prelevementPourcentage: getDefaultTaxPercentage(total),
+                              };
+                            });
+                          }}
                           placeholder="Ex: 500"
                           className="w-full rounded-xl border border-gray-300 bg-white p-2.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
                         />
@@ -1194,9 +1214,17 @@ export default function PayrollPage() {
                           min="0"
                           step="any"
                           value={formData.nombreJoursWeekend === 0 ? "" : formData.nombreJoursWeekend}
-                          onChange={(e) =>
-                            setFormData({ ...formData, nombreJoursWeekend: e.target.value === "" ? 0 : parseFloat(e.target.value) || 0 })
-                          }
+                          onChange={(e) => {
+                            const val = e.target.value === "" ? 0 : parseFloat(e.target.value) || 0;
+                            setFormData((prev) => {
+                              const total = (prev.nombreJoursSemaine * prev.tauxJourSemaine) + (val * prev.tauxJourWeekend) + (prev.nombreSeances * prev.tauxParSeance);
+                              return {
+                                ...prev,
+                                nombreJoursWeekend: val,
+                                prelevementPourcentage: getDefaultTaxPercentage(total),
+                              };
+                            });
+                          }}
                           placeholder="Ex: 4"
                           className="w-full rounded-xl border border-gray-300 bg-white p-2.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
                         />
@@ -1210,9 +1238,17 @@ export default function PayrollPage() {
                           min="0"
                           step="any"
                           value={formData.tauxJourWeekend === 0 ? "" : formData.tauxJourWeekend}
-                          onChange={(e) =>
-                            setFormData({ ...formData, tauxJourWeekend: e.target.value === "" ? 0 : parseFloat(e.target.value) || 0 })
-                          }
+                          onChange={(e) => {
+                            const val = e.target.value === "" ? 0 : parseFloat(e.target.value) || 0;
+                            setFormData((prev) => {
+                              const total = (prev.nombreJoursSemaine * prev.tauxJourSemaine) + (prev.nombreJoursWeekend * val) + (prev.nombreSeances * prev.tauxParSeance);
+                              return {
+                                ...prev,
+                                tauxJourWeekend: val,
+                                prelevementPourcentage: getDefaultTaxPercentage(total),
+                              };
+                            });
+                          }}
                           placeholder="Ex: 750"
                           className="w-full rounded-xl border border-gray-300 bg-white p-2.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
                         />
@@ -1229,9 +1265,17 @@ export default function PayrollPage() {
                           min="0"
                           step="any"
                           value={formData.nombreSeances === 0 ? "" : formData.nombreSeances}
-                          onChange={(e) =>
-                            setFormData({ ...formData, nombreSeances: e.target.value === "" ? 0 : parseFloat(e.target.value) || 0 })
-                          }
+                          onChange={(e) => {
+                            const val = e.target.value === "" ? 0 : parseFloat(e.target.value) || 0;
+                            setFormData((prev) => {
+                              const total = (prev.nombreJoursSemaine * prev.tauxJourSemaine) + (prev.nombreJoursWeekend * prev.tauxJourWeekend) + (val * prev.tauxParSeance);
+                              return {
+                                ...prev,
+                                nombreSeances: val,
+                                prelevementPourcentage: getDefaultTaxPercentage(total),
+                              };
+                            });
+                          }}
                           className="w-full rounded-xl border border-gray-300 bg-white p-2.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
                           placeholder="Ex: 2"
                         />
@@ -1245,9 +1289,17 @@ export default function PayrollPage() {
                           min="0"
                           step="any"
                           value={formData.tauxParSeance === 0 ? "" : formData.tauxParSeance}
-                          onChange={(e) =>
-                            setFormData({ ...formData, tauxParSeance: e.target.value === "" ? 0 : parseFloat(e.target.value) || 0 })
-                          }
+                          onChange={(e) => {
+                            const val = e.target.value === "" ? 0 : parseFloat(e.target.value) || 0;
+                            setFormData((prev) => {
+                              const total = (prev.nombreJoursSemaine * prev.tauxJourSemaine) + (prev.nombreJoursWeekend * prev.tauxJourWeekend) + (prev.nombreSeances * val);
+                              return {
+                                ...prev,
+                                tauxParSeance: val,
+                                prelevementPourcentage: getDefaultTaxPercentage(total),
+                              };
+                            });
+                          }}
                           className="w-full rounded-xl border border-gray-300 bg-white p-2.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
                           placeholder="Ex: 1000"
                         />
@@ -1309,9 +1361,14 @@ export default function PayrollPage() {
                         step="any"
                         required
                         value={formData.salaireBase === 0 ? "" : formData.salaireBase}
-                        onChange={(e) =>
-                          setFormData({ ...formData, salaireBase: e.target.value === "" ? 0 : parseFloat(e.target.value) || 0 })
-                        }
+                        onChange={(e) => {
+                          const val = e.target.value === "" ? 0 : parseFloat(e.target.value) || 0;
+                          setFormData((prev) => ({
+                            ...prev,
+                            salaireBase: val,
+                            prelevementPourcentage: getDefaultTaxPercentage(val),
+                          }));
+                        }}
                         placeholder="0.00"
                         className="w-full rounded-xl border border-gray-300 bg-white p-2.5 text-sm font-semibold dark:border-gray-700 dark:bg-gray-800 dark:text-white"
                       />
@@ -1796,10 +1853,10 @@ export default function PayrollPage() {
                   </tr>
                 )}
 
-                {(getPrelevementAmount(selectedSlip) > 0 || (selectedSlip.prelevementPourcentage ?? 2) > 0) && (
+                {(getPrelevementAmount(selectedSlip) > 0 || (selectedSlip.prelevementPourcentage ?? getDefaultTaxPercentage(selectedSlip.salaireBase)) > 0) && (
                   <tr>
                     <td className="p-2.5">
-                      Taxe sur le Revenu ({selectedSlip.prelevementPourcentage ?? 2}%)
+                      Taxe sur le Revenu ({selectedSlip.prelevementPourcentage ?? getDefaultTaxPercentage(selectedSlip.salaireBase)}%)
                     </td>
                     <td className="p-2.5 text-right font-medium text-rose-600">
                       -{formatAmountWithDevise(getPrelevementAmount(selectedSlip), selectedSlip.devise)}

@@ -461,7 +461,6 @@ export default function PayrollPage() {
       if (duplicatePayroll) {
         const errorMsg = `❌ Un bulletin de paie existe déjà pour ${targetEmp.nom.toUpperCase()} ${targetEmp.prenom} pour la période ${formatMonthYearDisplay(targetMois)}. La création d'un doublon est bloquée.`;
         alert(errorMsg);
-        setToast({ message: errorMsg, type: "error" });
         return;
       }
     }
@@ -619,8 +618,9 @@ export default function PayrollPage() {
         notes: "",
         file: null,
       });
-    } catch (error) {
-      alert("Erreur lors de l'enregistrement du bulletin de paie.");
+    } catch (error: any) {
+      console.error("Erreur lors de l'enregistrement du bulletin de paie :", error);
+      alert(`Erreur lors de l'enregistrement du bulletin de paie : ${error?.message || error || "Veuillez réessayer."}`);
     }
   };
 

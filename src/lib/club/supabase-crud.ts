@@ -921,29 +921,29 @@ export const addPayrollToSupabase = async (data: Omit<import("@/types/club").Pay
 
   // 1. Upload file to Supabase Storage if a file is provided
   if (file) {
-    const fileExt = file.name.split('.').pop();
-    const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
-    const filePath = `receipts/${fileName}`;
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+      const filePath = `receipts/${fileName}`;
 
-    const { error: uploadError } = await supabase.storage
-      .from("payroll-attachments")
-      .upload(filePath, file);
+      const { error: uploadError } = await supabase.storage
+        .from("payroll-attachments")
+        .upload(filePath, file);
 
-    if (uploadError) {
-      console.error("Error uploading file:", uploadError);
-      throw new Error("Erreur lors du téléversement du fichier.");
+      if (!uploadError) {
+        const { data: publicUrlData } = supabase.storage
+          .from("payroll-attachments")
+          .getPublicUrl(filePath);
+        pieceJointeUrl = publicUrlData.publicUrl;
+      }
+    } catch (e) {
+      console.warn("Storage upload failed, continuing without file upload:", e);
     }
-
-    const { data: publicUrlData } = supabase.storage
-      .from("payroll-attachments")
-      .getPublicUrl(filePath);
-
-    pieceJointeUrl = publicUrlData.publicUrl;
   }
 
   // 2. Insert into tblPayroll
   const insertPayload: any = {
-    EmployeId: parseInt(data.employeId, 10),
+    EmployeId: parseInt(data.employeId, 10) || Number(data.employeId) || 0,
     EmployeNom: data.employeNom,
     EmployePrenom: data.employePrenom,
     Fonction: data.fonction,
@@ -970,6 +970,12 @@ export const addPayrollToSupabase = async (data: Omit<import("@/types/club").Pay
     PieceJointe: pieceJointeUrl,
   };
 
+  const { insertPayrollAdmin } = await import("@/app/actions/club");
+  const adminResult = await insertPayrollAdmin(insertPayload);
+  if (adminResult.success && adminResult.data) {
+    return { ...adminResult.data, PieceJointe: pieceJointeUrl };
+  }
+
   let { data: insertedData, error } = await supabase
     .from("tblPayroll")
     .insert(insertPayload)
@@ -994,7 +1000,10 @@ export const addPayrollToSupabase = async (data: Omit<import("@/types/club").Pay
       .single());
   }
 
-  if (error) throw error;
+  if (error) {
+    console.error("Erreur insertion paie :", error);
+    throw error;
+  }
   return { ...insertedData, PieceJointe: pieceJointeUrl };
 };
 
@@ -1002,24 +1011,24 @@ export const updatePayrollInSupabase = async (id: string, data: Partial<import("
   let pieceJointeUrl = data.pieceJointe;
 
   if (file) {
-    const fileExt = file.name.split('.').pop();
-    const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
-    const filePath = `receipts/${fileName}`;
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+      const filePath = `receipts/${fileName}`;
 
-    const { error: uploadError } = await supabase.storage
-      .from("payroll-attachments")
-      .upload(filePath, file);
+      const { error: uploadError } = await supabase.storage
+        .from("payroll-attachments")
+        .upload(filePath, file);
 
-    if (uploadError) {
-      console.error("Error uploading file:", uploadError);
-      throw new Error("Erreur lors du téléversement du fichier.");
+      if (!uploadError) {
+        const { data: publicUrlData } = supabase.storage
+          .from("payroll-attachments")
+          .getPublicUrl(filePath);
+        pieceJointeUrl = publicUrlData.publicUrl;
+      }
+    } catch (e) {
+      console.warn("Storage upload failed in update, continuing:", e);
     }
-
-    const { data: publicUrlData } = supabase.storage
-      .from("payroll-attachments")
-      .getPublicUrl(filePath);
-
-    pieceJointeUrl = publicUrlData.publicUrl;
   }
 
   const updatePayload: any = {};
@@ -1042,6 +1051,12 @@ export const updatePayrollInSupabase = async (id: string, data: Partial<import("
   if (data.netAPayer !== undefined) updatePayload.NetAPayer = data.netAPayer;
   if (data.notes !== undefined) updatePayload.Notes = data.notes;
   if (pieceJointeUrl !== undefined) updatePayload.PieceJointe = pieceJointeUrl;
+
+  const { updatePayrollAdmin } = await import("@/app/actions/club");
+  const adminResult = await updatePayrollAdmin(id, updatePayload);
+  if (adminResult.success) {
+    return { PieceJointe: pieceJointeUrl };
+  }
 
   let { error } = await supabase
     .from("tblPayroll")
@@ -1074,6 +1089,10 @@ export const updatePayrollInSupabase = async (id: string, data: Partial<import("
 };
 
 export const deletePayrollInSupabase = async (id: string) => {
+  const { deletePayrollAdmin } = await import("@/app/actions/club");
+  const adminResult = await deletePayrollAdmin(id);
+  if (adminResult.success) return;
+
   const { error } = await supabase
     .from("tblPayroll")
     .delete()

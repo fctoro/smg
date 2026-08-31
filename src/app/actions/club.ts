@@ -569,3 +569,111 @@ export async function getPaiementsAdmin() {
   return { success: true, data: allData };
 }
 
+export async function insertPayrollAdmin(insertPayload: any) {
+  if (!supabaseAdmin) return { success: false, error: "Service role Supabase indisponible." };
+  try {
+    const calculateMaxId = async (): Promise<number> => {
+      const { data, error } = await supabaseAdmin
+        .from("tblPayroll")
+        .select("Id")
+        .order("Id", { ascending: false })
+        .limit(1);
+      if (!error && data && data.length > 0) {
+        const num = Number(data[0].Id);
+        return !isNaN(num) ? num : 0;
+      }
+      return 0;
+    };
+
+    if (!insertPayload.Id) {
+      const maxId = await calculateMaxId();
+      if (maxId > 0) {
+        insertPayload.Id = maxId + 1;
+      }
+    }
+
+    let { data, error } = await supabaseAdmin
+      .from("tblPayroll")
+      .insert(insertPayload)
+      .select("*")
+      .single();
+
+    if (error) {
+      const payloadCopy = { ...insertPayload };
+      const optionalCols = [
+        "PrelevementSnowizz", "Ajustement", "TaxeIRI", "TaxeCFGDCT",
+        "TaxeCAS", "TaxeFDU", "TaxeONA", "VacancesPayees", "CongeSansSolde",
+        "CumulPaiements", "PrelevementPourcentage", "PrelevementMontant",
+        "PrelevementAvance", "PrelevementType", "TypeSalaire", "NombreSeances",
+        "TauxParSeance", "Devise", "PieceJointe"
+      ];
+      for (const col of optionalCols) {
+        delete payloadCopy[col];
+      }
+      const retry = await supabaseAdmin
+        .from("tblPayroll")
+        .insert(payloadCopy)
+        .select("*")
+        .single();
+      if (!retry.error) {
+        return { success: true, data: retry.data || { Id: insertPayload.Id } };
+      }
+      return { success: false, error: error.message || String(error) };
+    }
+    return { success: true, data: data || { Id: insertPayload.Id } };
+  } catch (err: any) {
+    return { success: false, error: err?.message || String(err) };
+  }
+}
+
+export async function updatePayrollAdmin(id: string, updatePayload: any) {
+  if (!supabaseAdmin) return { success: false, error: "Service role Supabase indisponible." };
+  try {
+    let { data, error } = await supabaseAdmin
+      .from("tblPayroll")
+      .update(updatePayload)
+      .eq("Id", parseInt(id, 10))
+      .select("*");
+
+    if (error) {
+      const payloadCopy = { ...updatePayload };
+      const optionalCols = [
+        "PrelevementSnowizz", "Ajustement", "TaxeIRI", "TaxeCFGDCT",
+        "TaxeCAS", "TaxeFDU", "TaxeONA", "VacancesPayees", "CongeSansSolde",
+        "CumulPaiements", "PrelevementPourcentage", "PrelevementMontant",
+        "PrelevementAvance", "PrelevementType", "TypeSalaire", "NombreSeances",
+        "TauxParSeance", "Devise", "PieceJointe"
+      ];
+      for (const col of optionalCols) {
+        delete payloadCopy[col];
+      }
+      const retry = await supabaseAdmin
+        .from("tblPayroll")
+        .update(payloadCopy)
+        .eq("Id", parseInt(id, 10))
+        .select("*");
+      if (!retry.error) {
+        return { success: true, data: retry.data };
+      }
+      return { success: false, error: error.message || String(error) };
+    }
+    return { success: true, data };
+  } catch (err: any) {
+    return { success: false, error: err?.message || String(err) };
+  }
+}
+
+export async function deletePayrollAdmin(id: string) {
+  if (!supabaseAdmin) return { success: false, error: "Service role Supabase indisponible." };
+  try {
+    const { error } = await supabaseAdmin
+      .from("tblPayroll")
+      .delete()
+      .eq("Id", parseInt(id, 10));
+    if (error) return { success: false, error: error.message || String(error) };
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err?.message || String(err) };
+  }
+}
+

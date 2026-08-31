@@ -819,11 +819,6 @@ export default function PlayerForm({
           </div>
 
           <div>
-            <label className="mb-1.5 block text-xs font-medium text-gray-700 dark:text-gray-300">Lien avec le joueur</label>
-            <input value={formValues.parentLien} onChange={(e) => updateField("parentLien", e.target.value)} placeholder="Ex: Père, Mère, Tuteur..." className={inputClassName} />
-          </div>
-
-          <div>
             <label className="mb-1.5 block text-xs font-medium text-gray-700 dark:text-gray-300">E-mail (Optionnel)</label>
             <input type="email" value={formValues.email} onChange={(e) => { updateField("email", e.target.value); updateField("parentEmail", e.target.value); }} className={inputClassName} />
           </div>

@@ -414,14 +414,10 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
                 <h4 className="font-semibold text-gray-900 dark:text-white text-base">Parents / Tuteur Responsable</h4>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
                 <div>
                   <span className="block text-xs font-medium text-gray-500 mb-1">Nom & Prénom</span>
                   <span className="block text-sm font-semibold text-gray-900 dark:text-white">{parentNom}</span>
-                </div>
-                <div>
-                  <span className="block text-xs font-medium text-gray-500 mb-1">Lien avec le joueur</span>
-                  <span className="block text-sm font-semibold text-gray-900 dark:text-white">{parentLien}</span>
                 </div>
                 <div>
                   <span className="block text-xs font-medium text-gray-500 mb-1">E-mail</span>

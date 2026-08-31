@@ -541,32 +541,28 @@ export const fetchFullRegistrationDataForPlayer = async (player: any) => {
         .order('created_at', { ascending: false });
 
       if (allRegs && allRegs.length > 0) {
-        if (allRegs.length === 1) {
-          reg = allRegs[0];
-        } else {
-          // Frères/Sœurs partageant le même email de parent : matching précis par nom de l'enfant
-          let bestScore = -1;
-          for (const candidate of allRegs) {
-            const cFirst = (candidate.child_first_name || "").trim().toLowerCase();
-            const cLast = (candidate.child_last_name || "").trim().toLowerCase();
-            const cFull = `${cFirst} ${cLast}`.trim();
-            const cTokens = cFull.split(/\s+/).filter(Boolean);
+        // Toujours faire un matching précis par nom de l'enfant pour éviter les collisions entre frères/sœurs
+        let bestScore = -1;
+        for (const candidate of allRegs) {
+          const cFirst = (candidate.child_first_name || "").trim().toLowerCase();
+          const cLast = (candidate.child_last_name || "").trim().toLowerCase();
+          const cFull = `${cFirst} ${cLast}`.trim();
+          const cTokens = cFull.split(/\s+/).filter(Boolean);
 
-            let score = 0;
-            for (const token of playerTokens) {
-              if (token.length > 1 && cTokens.some(ct => ct.includes(token) || token.includes(ct))) {
-                score++;
-              }
-            }
-            if (cFirst && playerPrenom.includes(cFirst)) score += 2;
-            if (cLast && playerNom.includes(cLast)) score += 2;
-
-            if (score > bestScore) {
-              bestScore = score;
-              reg = candidate;
+          let score = 0;
+          for (const token of playerTokens) {
+            if (token.length > 1 && cTokens.some(ct => ct.includes(token) || token.includes(ct))) {
+              score++;
             }
           }
-          if (!reg) reg = allRegs[0];
+          if (cFirst && playerPrenom.includes(cFirst)) score += 2;
+          if (cLast && playerNom.includes(cLast)) score += 2;
+
+          // Exiger un score minimum (> 0) pour s'assurer que le formulaire correspond vraiment à cet enfant
+          if (score > 0 && score > bestScore) {
+            bestScore = score;
+            reg = candidate;
+          }
         }
       }
     }

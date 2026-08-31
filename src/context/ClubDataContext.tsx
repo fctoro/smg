@@ -520,7 +520,13 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
             };
 
             const urgenceNomPrenom = findInGroup(["UrgenceNomPrenom", "NomUrgence", "UrgenceNom", "ContactUrgence", "PersonneUrgence", "EmergencyName", "emergency_name", "NomContact"]);
-            const urgenceLien = findInGroup(["UrgenceLien", "LienUrgence", "LienParenteUrgence", "LienUrgent", "EmergencyRelation", "emergency_relation"]);
+            let urgenceLien = findInGroup(["UrgenceLien", "LienUrgence", "LienParenteUrgence", "LienUrgent", "EmergencyRelation", "emergency_relation"]);
+            
+            // Priorité 2 : Si vide, on récupère dans LienParente (où la donnée glissait par erreur)
+            if (!urgenceLien) {
+              urgenceLien = findInGroup(["LienParente"]);
+            }
+
             const urgenceTelephone = findInGroup(["UrgenceTelephone", "TelUrgence", "TelephoneUrgence", "UrgencePhone", "PhoneUrgence", "EmergencyPhone", "emergency_phone", "TelephoneContact"]);
             const urgenceEmail = findInGroup(["UrgenceEmail", "EmailUrgence", "EmergencyEmail", "emergency_email", "EmailContact"]);
             const urgenceAdresse = findInGroup(["UrgenceAdresse", "AdresseUrgence", "EmergencyAddress", "emergency_address", "AdresseContact"]);
@@ -588,7 +594,7 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
               parentTelephone,
               parentEmail,
               parentAdresse,
-              parentLien: group.find(g => g.LienParente)?.LienParente || primaryRecord.LienParente || "",
+              parentLien: "",
               urgenceNomPrenom,
               urgenceLien,
               urgenceTelephone,

@@ -57,7 +57,7 @@ export default function AccessControlPage() {
     "Super Admin": [...SECTIONS],
     "Admin": ["Dashboard", "Joueurs", "Parents", "Evenements", "Paiements", "Factures"],
     "Finance": ["Dashboard", "Paiements", "Factures"],
-    "Coach": ["Dashboard", "Joueurs", "Evenements"],
+    "Coach": ["Evenements"],
   });
 
   const [selectedSections, setSelectedSections] = useState<string[]>(rolePermissions["Admin"]);
@@ -116,12 +116,17 @@ export default function AccessControlPage() {
   const handleRoleSelect = (roleId: string) => {
     setFormData(prev => ({ ...prev, role: roleId }));
     setSelectedSections(rolePermissions[roleId] || []);
-    setSelectedPermissions({});
+    
     if (roleId === "Coach") {
+      setSelectedPermissions({
+        "Evenements": ["view", "create", "edit", "delete"]
+      });
       // Reset selected coach on role switch
       setSelectedCoachId("");
       setFormData(prev => ({ ...prev, email: "" }));
       setSelectedCategories([]);
+    } else {
+      setSelectedPermissions({});
     }
   };
 

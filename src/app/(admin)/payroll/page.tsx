@@ -179,16 +179,15 @@ export default function PayrollPage() {
     nombreJoursWeekend: 0,
     tauxJourWeekend: 0,
     bonus: 0,
-    deductions: 0,
-    prelevementPourcentage: 0,
+    prelevementPourcentage: 2,
     prelevementType: "taxe",
     prelevementSnowizz: 0,
     ajustement: 0,
     taxeIRI: 0,
-    taxeCFGDCT: 1,
-    taxeCAS: 1,
-    taxeFDU: 1,
-    taxeONA: 6,
+    taxeCFGDCT: 0,
+    taxeCAS: 0,
+    taxeFDU: 0,
+    taxeONA: 0,
     vacancesPayees: 0,
     congeSansSolde: 0,
     cumulPaiements: 0,
@@ -467,16 +466,15 @@ export default function PayrollPage() {
         nombreJoursWeekend: 0,
         tauxJourWeekend: 0,
         bonus: 0,
-        deductions: 0,
-        prelevementPourcentage: 0,
+        prelevementPourcentage: 2,
         prelevementType: "taxe",
         prelevementSnowizz: 0,
         ajustement: 0,
         taxeIRI: 0,
-        taxeCFGDCT: 1,
-        taxeCAS: 1,
-        taxeFDU: 1,
-        taxeONA: 6,
+        taxeCFGDCT: 0,
+        taxeCAS: 0,
+        taxeFDU: 0,
+        taxeONA: 0,
         vacancesPayees: 0,
         congeSansSolde: 0,
         cumulPaiements: 0,
@@ -575,10 +573,10 @@ export default function PayrollPage() {
       prelevementSnowizz: record.prelevementSnowizz || 0,
       ajustement: record.ajustement || 0,
       taxeIRI: record.taxeIRI || 0,
-      taxeCFGDCT: record.taxeCFGDCT ?? 1,
-      taxeCAS: record.taxeCAS ?? 1,
-      taxeFDU: record.taxeFDU ?? 1,
-      taxeONA: record.taxeONA ?? 6,
+      taxeCFGDCT: record.taxeCFGDCT ?? 0,
+      taxeCAS: record.taxeCAS ?? 0,
+      taxeFDU: record.taxeFDU ?? 0,
+      taxeONA: record.taxeONA ?? 0,
       vacancesPayees: record.vacancesPayees || 0,
       congeSansSolde: record.congeSansSolde || 0,
       cumulPaiements: record.cumulPaiements || 0,
@@ -1250,7 +1248,7 @@ export default function PayrollPage() {
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
                       <div>
                         <label className="mb-1 block text-[11px] font-semibold text-gray-700 dark:text-gray-300">
-                          Masse sal. (%)
+                          Taxe Revenu (%)
                         </label>
                         <input
                           type="number"
@@ -1261,7 +1259,7 @@ export default function PayrollPage() {
                             setFormData({ ...formData, prelevementPourcentage: e.target.value === "" ? 0 : parseFloat(e.target.value) || 0 })
                           }
                           placeholder="2"
-                          className="w-full rounded-lg border border-gray-300 bg-white p-2 text-xs font-semibold dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                          className="w-full rounded-lg border border-brand-300 bg-white p-2 text-xs font-semibold dark:border-brand-700 dark:bg-gray-800 dark:text-white"
                         />
                       </div>
                       <div>
@@ -1276,7 +1274,7 @@ export default function PayrollPage() {
                           onChange={(e) =>
                             setFormData({ ...formData, taxeIRI: e.target.value === "" ? 0 : parseFloat(e.target.value) || 0 })
                           }
-                          placeholder="0.00"
+                          placeholder="0"
                           className="w-full rounded-lg border border-gray-300 bg-white p-2 text-xs font-semibold dark:border-gray-700 dark:bg-gray-800 dark:text-white"
                         />
                       </div>
@@ -1292,7 +1290,7 @@ export default function PayrollPage() {
                           onChange={(e) =>
                             setFormData({ ...formData, taxeCFGDCT: e.target.value === "" ? 0 : parseFloat(e.target.value) || 0 })
                           }
-                          placeholder="1"
+                          placeholder="0"
                           className="w-full rounded-lg border border-gray-300 bg-white p-2 text-xs font-semibold dark:border-gray-700 dark:bg-gray-800 dark:text-white"
                         />
                       </div>
@@ -1308,7 +1306,7 @@ export default function PayrollPage() {
                           onChange={(e) =>
                             setFormData({ ...formData, taxeCAS: e.target.value === "" ? 0 : parseFloat(e.target.value) || 0 })
                           }
-                          placeholder="1"
+                          placeholder="0"
                           className="w-full rounded-lg border border-gray-300 bg-white p-2 text-xs font-semibold dark:border-gray-700 dark:bg-gray-800 dark:text-white"
                         />
                       </div>
@@ -1324,7 +1322,7 @@ export default function PayrollPage() {
                           onChange={(e) =>
                             setFormData({ ...formData, taxeFDU: e.target.value === "" ? 0 : parseFloat(e.target.value) || 0 })
                           }
-                          placeholder="1"
+                          placeholder="0"
                           className="w-full rounded-lg border border-gray-300 bg-white p-2 text-xs font-semibold dark:border-gray-700 dark:bg-gray-800 dark:text-white"
                         />
                       </div>
@@ -1340,7 +1338,7 @@ export default function PayrollPage() {
                           onChange={(e) =>
                             setFormData({ ...formData, taxeONA: e.target.value === "" ? 0 : parseFloat(e.target.value) || 0 })
                           }
-                          placeholder="6"
+                          placeholder="0"
                           className="w-full rounded-lg border border-gray-300 bg-white p-2 text-xs font-semibold dark:border-gray-700 dark:bg-gray-800 dark:text-white"
                         />
                       </div>
@@ -1681,10 +1679,10 @@ export default function PayrollPage() {
                   </tr>
                 )}
 
-                {(selectedSlip.prelevementPourcentage || 0) > 0 && (
+                {(getPrelevementAmount(selectedSlip) > 0 || (selectedSlip.prelevementPourcentage ?? 2) > 0) && (
                   <tr>
                     <td className="p-2.5">
-                      Retenue légale / Taxe sur masse salariale ({selectedSlip.prelevementPourcentage}%)
+                      Taxe sur le Revenu ({selectedSlip.prelevementPourcentage ?? 2}%)
                     </td>
                     <td className="p-2.5 text-right font-medium text-rose-600">
                       -{formatAmountWithDevise(getPrelevementAmount(selectedSlip), selectedSlip.devise)}

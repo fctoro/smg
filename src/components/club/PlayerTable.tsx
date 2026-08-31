@@ -467,8 +467,8 @@ export default function PlayerTable({
           </TableHeader>
 
           <TableBody className="divide-y divide-gray-100 dark:divide-gray-800">
-            {!hydrated ? (
-              <TableBodySkeleton rows={6} columns={visibleColumnsCount} />
+            {!hydrated && players.length === 0 ? (
+              <TableBodySkeleton rows={10} columns={visibleColumnsCount} />
             ) : pagedPlayers.length === 0 ? (
               <TableRow>
                 <TableCell

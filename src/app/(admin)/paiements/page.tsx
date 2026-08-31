@@ -72,7 +72,7 @@ export default function PaymentsPage() {
   const [isExportOpen, setIsExportOpen] = useState(false);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
-  const [currentPageSize, setCurrentPageSize] = useState(12);
+  const [currentPageSize, setCurrentPageSize] = useState(100);
   const [editingPayment, setEditingPayment] = useState<(typeof payments)[number] | null>(null);
   const [newAmount, setNewAmount] = useState<number | "">("");
   const [newPaymentDate, setNewPaymentDate] = useState(() => new Date().toISOString().split("T")[0]);
@@ -1077,8 +1077,8 @@ export default function PaymentsPage() {
               </TableRow>
             </TableHeader>
             <TableBody className="divide-y divide-gray-100 dark:divide-gray-800">
-              {!hydrated ? (
-                <TableBodySkeleton rows={6} columns={4} />
+              {!hydrated && payments.length === 0 ? (
+                <TableBodySkeleton rows={10} columns={4} />
               ) : pagedPayments.length === 0 ? (
                 <TableRow>
                   <td

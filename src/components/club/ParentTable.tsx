@@ -47,7 +47,7 @@ export default function ParentTable({
   const [selectedChildrenCount, setSelectedChildrenCount] = useState("all");
   const [selectedSeason, setSelectedSeason] = useState("all");
   const [currentPage, setCurrentPage] = useState(1);
-  const [currentPageSize, setCurrentPageSize] = useState(7);
+  const [currentPageSize, setCurrentPageSize] = useState(100);
   const [isExportOpen, setIsExportOpen] = useState(false);
 
   const playerMap = useMemo(
@@ -353,8 +353,8 @@ export default function ParentTable({
             </TableRow>
           </TableHeader>
           <TableBody className="divide-y divide-gray-100 dark:divide-gray-800">
-            {!hydrated ? (
-              <TableBodySkeleton rows={6} columns={6} />
+            {!hydrated && parents.length === 0 ? (
+              <TableBodySkeleton rows={10} columns={6} />
             ) : pagedParents.length === 0 ? (
               <TableRow>
                 <td

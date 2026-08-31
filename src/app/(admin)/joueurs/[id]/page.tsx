@@ -58,7 +58,7 @@ export default function PlayerDetailsPage() {
   const playerId = params.id;
   const { players, payments } = useClubData();
   const [currentPage, setCurrentPage] = useState(1);
-  const [currentPageSize, setCurrentPageSize] = useState(5);
+  const [currentPageSize, setCurrentPageSize] = useState(100);
 
   const player = players.find((item) => item.id === playerId);
   const playerPayments = payments.filter((p) => p.playerId === playerId);

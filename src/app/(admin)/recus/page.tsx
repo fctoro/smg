@@ -39,7 +39,7 @@ export default function RecusJoueursPage() {
   const [activeTab, setActiveTab] = useState<"all" | "paid" | "unpaid">("all");
   const [isExportOpen, setIsExportOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
-  const [currentPageSize, setCurrentPageSize] = useState(10);
+  const [currentPageSize, setCurrentPageSize] = useState(100);
 
   const categories = useMemo(
     () =>
@@ -790,8 +790,8 @@ export default function RecusJoueursPage() {
               </TableRow>
             </TableHeader>
             <TableBody className="divide-y divide-gray-100 dark:divide-gray-800">
-              {!hydrated ? (
-                <TableBodySkeleton rows={6} columns={6} />
+              {!hydrated && players.length === 0 ? (
+                <TableBodySkeleton rows={10} columns={6} />
               ) : pagedPlayers.length === 0 ? (
                 <TableRow>
                   <td

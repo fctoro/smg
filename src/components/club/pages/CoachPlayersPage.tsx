@@ -42,7 +42,7 @@ export default function CoachPlayersPage() {
 
   // Pagination
   const [pagePerCategory, setPagePerCategory] = useState<Record<string, number>>({});
-  const [playersPerPage, setPlayersPerPage] = useState(10);
+  const [playersPerPage, setPlayersPerPage] = useState(100);
 
   const handlePageChange = (category: string, newPage: number) => {
     setPagePerCategory(prev => ({ ...prev, [category]: newPage }));

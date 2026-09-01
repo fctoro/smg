@@ -180,7 +180,12 @@ export default function PlayerForm({
     }
   }, [formValues, draftKey]);
 
+  const prevDobRef = useRef(formValues.dateNaissance);
+    
   useEffect(() => {
+    if (prevDobRef.current === formValues.dateNaissance) return;
+    prevDobRef.current = formValues.dateNaissance;
+
     if (!formValues.dateNaissance) return;
     const dob = new Date(formValues.dateNaissance);
     if (isNaN(dob.getTime())) return;

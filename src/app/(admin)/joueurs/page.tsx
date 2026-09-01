@@ -15,7 +15,6 @@ import { Dropdown } from "@/components/ui/dropdown/Dropdown";
 import { DropdownItem } from "@/components/ui/dropdown/DropdownItem";
 import { useConfirm } from "@/hooks/useConfirm";
 import { usePermissions } from "@/hooks/usePermissions";
-import * as XLSX from "xlsx";
 
 import { PlayerViewModal } from "@/components/club/modals/PlayerViewModal";
 import { PlayerEditModal } from "@/components/club/modals/PlayerEditModal";
@@ -329,42 +328,54 @@ function PlayersPageContent() {
       message: "Voulez-vous vraiment exporter la liste des joueurs au format Excel ?",
       onConfirm: () => {
         const headers = ["Matricule", "Nom", "Prénom", "Poste", "Sexe", "Catégorie", "Statut", "Saison", "Téléphone", "Email", "Date Inscription"];
-        
-        const data = exportData.map(p => ({
-          "Matricule": p.matricule || "",
-          "Nom": p.nom || "",
-          "Prénom": p.prenom || "",
-          "Poste": p.poste || "",
-          "Sexe": p.sexe || "",
-          "Catégorie": p.categorie || "",
-          "Statut": p.statut || "",
-          "Saison": p.saison || "",
-          "Téléphone": p.telephone || "",
-          "Email": p.email || "",
-          "Date Inscription": p.dateInscription || ""
-        }));
+        const thead = headers.map((h) => `<th>${h}</th>`).join("");
+        const tbody = exportData
+          .map((p) => {
+            const row = [
+              p.matricule || "-",
+              p.nom || "-",
+              p.prenom || "-",
+              p.poste || "-",
+              p.sexe || "-",
+              p.categorie || "-",
+              p.statut || "-",
+              p.saison || "-",
+              p.telephone || "-",
+              p.email || "-",
+              p.dateInscription || "-",
+            ];
+            return `<tr>${row.map((field) => `<td>${String(field).replace(/</g, "&lt;").replace(/>/g, "&gt;")}</td>`).join("")}</tr>`;
+          })
+          .join("");
 
-        const worksheet = XLSX.utils.json_to_sheet(data, { header: headers });
-        
-        // Ajuster la largeur des colonnes pour un bon visuel
-        worksheet["!cols"] = [
-          { wch: 18 }, // Matricule
-          { wch: 20 }, // Nom
-          { wch: 20 }, // Prénom
-          { wch: 15 }, // Poste
-          { wch: 10 }, // Sexe
-          { wch: 15 }, // Catégorie
-          { wch: 12 }, // Statut
-          { wch: 15 }, // Saison
-          { wch: 18 }, // Téléphone
-          { wch: 30 }, // Email
-          { wch: 20 }, // Date Inscription
-        ];
+        const htmlContent = `
+          <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+          <head>
+            <meta charset="utf-8" />
+            <style>
+              table { border-collapse: collapse; width: 100%; font-family: Arial, sans-serif; font-size: 13px; }
+              td, th { border: 1px solid #cccccc; padding: 6px 10px; text-align: left; }
+              th { background-color: #107C41; color: white; font-weight: bold; }
+            </style>
+          </head>
+          <body>
+            <table>
+              <thead><tr>${thead}</tr></thead>
+              <tbody>${tbody}</tbody>
+            </table>
+          </body>
+          </html>
+        `;
 
-        const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, "Joueurs");
-        
-        XLSX.writeFile(workbook, "joueurs.xlsx");
+        const blob = new Blob([htmlContent], { type: "application/vnd.ms-excel;charset=utf-8;" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `joueurs_export.xls`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
       }
     });
   };

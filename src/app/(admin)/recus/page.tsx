@@ -86,25 +86,79 @@ export default function EtatDeCompteJoueursPage() {
           .filter(Boolean)
           .join(" / ") || formatClubCurrency(0, "US");
 
-      // Cotisation Prévue (Expected Fee) & Balance calculation
-      const expectedFee = player.cotisationMontant || 0;
-      const feeCurrency: "US" | "HTG" = player.cotisationDevise || "US";
-      const expectedFeeLabel = expectedFee > 0 ? formatClubCurrency(expectedFee, feeCurrency) : "Non spécifiée";
+      // 1. Check if Boursier
+      const playerStatusStr = String((player as any).statutJoueur || player.statut || "").toLowerCase();
+      const isBoursier = playerStatusStr.includes("bourse") || playerPayments.some(p => String(p.remarque || "").toLowerCase().includes("[plan:boursier]"));
 
-      let soldeUSD = 0;
-      let soldeHTG = 0;
-      if (feeCurrency === "HTG") {
-        soldeHTG = Math.max(0, expectedFee - totalPayeHTG);
+      // 2. Extract Total Due & Plan from Payment Tags ([TOTAL_DUE:XXXX])
+      let totalDueFromPaymentsUSD = 0;
+      let detectedPlan = "";
+      playerPayments.forEach((p) => {
+        const remark = String(p.remarque || "");
+        const match = remark.match(/\[TOTAL_DUE:\s*([\d.]+)\s*\]/i);
+        if (match && match[1]) {
+          const due = parseFloat(match[1]);
+          if (!isNaN(due) && due > totalDueFromPaymentsUSD) {
+            totalDueFromPaymentsUSD = due;
+          }
+        }
+        const planMatch = remark.match(/\[PLAN:\s*([A-Z_]+)\s*\]/i);
+        if (planMatch && planMatch[1]) {
+          detectedPlan = planMatch[1].toLowerCase();
+        }
+      });
+
+      // 3. Determine Expected Fee
+      const feeCurrency: "US" | "HTG" = player.cotisationDevise || "US";
+      let expectedFee = 0;
+
+      if (isBoursier) {
+        expectedFee = 0;
+      } else if (totalDueFromPaymentsUSD > 0) {
+        expectedFee = totalDueFromPaymentsUSD;
+      } else if (player.cotisationMontant && player.cotisationMontant > 0) {
+        expectedFee = player.cotisationMontant;
       } else {
-        soldeUSD = Math.max(0, expectedFee - totalPayeUSD);
+        // Fallback based on category/programme & plan
+        const cat = String(player.categorie || player.programme || "").toLowerCase();
+        const isTiToro = cat.includes("ti");
+        if (detectedPlan.includes("annuel") || String(player.planPaiement || "").toLowerCase().includes("annuel")) {
+          expectedFee = isTiToro ? 900 : 1215;
+        } else if (detectedPlan.includes("semestriel") || String(player.planPaiement || "").toLowerCase().includes("semestriel")) {
+          expectedFee = isTiToro ? 950 : 1282.50;
+        } else if (detectedPlan.includes("mensuel") || String(player.planPaiement || "").toLowerCase().includes("mensuel")) {
+          expectedFee = isTiToro ? 1035 : 1395;
+        } else {
+          expectedFee = isTiToro ? 1000 : 1350;
+        }
       }
 
-      const soldeLabel =
-        feeCurrency === "HTG"
-          ? formatClubCurrency(soldeHTG, "HTG")
-          : formatClubCurrency(soldeUSD, "US");
+      const expectedFeeLabel = isBoursier
+        ? "Boursier (0.00 US$)"
+        : expectedFee > 0
+        ? formatClubCurrency(expectedFee, feeCurrency)
+        : "Non spécifiée";
 
-      const isPaidInFull = (feeCurrency === "HTG" ? soldeHTG <= 0 : soldeUSD <= 0) && (totalPayeUSD > 0 || totalPayeHTG > 0 || expectedFee === 0);
+      // 4. Balance calculation
+      let soldeUSD = 0;
+      let soldeHTG = 0;
+
+      if (isBoursier) {
+        soldeUSD = 0;
+        soldeHTG = 0;
+      } else if (feeCurrency === "HTG") {
+        soldeHTG = Math.max(0, Math.round((expectedFee - totalPayeHTG) * 100) / 100);
+      } else {
+        soldeUSD = Math.max(0, Math.round((expectedFee - totalPayeUSD) * 100) / 100);
+      }
+
+      const soldeLabel = isBoursier
+        ? "0.00 US$"
+        : feeCurrency === "HTG"
+        ? formatClubCurrency(soldeHTG, "HTG")
+        : formatClubCurrency(soldeUSD, "US");
+
+      const isPaidInFull = isBoursier || (feeCurrency === "HTG" ? soldeHTG <= 0.01 : soldeUSD <= 0.01);
 
       const initials = (
         (player.nom?.charAt(0) || player.prenom?.charAt(0) || "J")

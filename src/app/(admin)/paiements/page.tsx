@@ -95,6 +95,7 @@ export default function PaymentsPage() {
   const [paymentPhotoError, setPaymentPhotoError] = useState<string | null>(null);
   const [nombreDeMois, setNombreDeMois] = useState<number>(1);
   const [isMonthlyPlan, setIsMonthlyPlan] = useState<boolean>(false);
+  const [editPlan, setEditPlan] = useState<string>("annuel");
 
   const [modalPlayerId, setModalPlayerId] = useState<string | undefined>(undefined);
   const [editDevise, setEditDevise] = useState<"US" | "HTG">("US");
@@ -197,7 +198,16 @@ export default function PaymentsPage() {
 
     const planLabel = getPaymentPlanLabel(payment.remarque);
     const remarkLower = (payment.remarque || "").toLowerCase();
-    const isMonthly = planLabel.toUpperCase() === "MENSUEL" || remarkLower.includes("[plan:mensuel]") || remarkLower.includes("mensuel");
+    let rawPlan = planLabel.toLowerCase();
+    if (rawPlan === "aucun") {
+      if (remarkLower.includes("boursier") || remarkLower.includes("bourse")) rawPlan = "boursier";
+      else if (remarkLower.includes("semestriel")) rawPlan = "semestriel";
+      else if (remarkLower.includes("mensuel")) rawPlan = "mensuel";
+      else rawPlan = "annuel";
+    }
+    setEditPlan(rawPlan);
+
+    const isMonthly = rawPlan === "mensuel" || remarkLower.includes("[plan:mensuel]") || remarkLower.includes("mensuel");
     setIsMonthlyPlan(isMonthly);
 
     const moisMatch = payment.remarque?.match(/\[MOIS_PAYES:\s*(\d+)\s*\]/i) || payment.remarque?.match(/(\d+)\s*mois/i);
@@ -284,12 +294,23 @@ export default function PaymentsPage() {
         : paymentPhotos.map((p) => ` [JUSTIFICATIF:${p.name}]`).join("");
 
       let baseRemarque = editingPayment.remarque || "";
-      if (isMonthlyPlan) {
+
+      // Mettre à jour le marqueur [PLAN:...]
+      const planUpper = editPlan.toUpperCase();
+      if (/\[PLAN:\s*[^\]]+\s*\]/i.test(baseRemarque)) {
+        baseRemarque = baseRemarque.replace(/\[PLAN:\s*[^\]]+\s*\]/gi, `[PLAN:${planUpper}]`);
+      } else {
+        baseRemarque = `[PLAN:${planUpper}] ${baseRemarque}`;
+      }
+
+      if (editPlan === "mensuel") {
         if (/\[MOIS_PAYES:\s*\d+\s*\]/i.test(baseRemarque)) {
           baseRemarque = baseRemarque.replace(/\[MOIS_PAYES:\s*\d+\s*\]/gi, `[MOIS_PAYES:${nombreDeMois}]`);
         } else {
           baseRemarque = `${baseRemarque} [MOIS_PAYES:${nombreDeMois}]`;
         }
+      } else {
+        baseRemarque = baseRemarque.replace(/\[MOIS_PAYES:\s*\d+\s*\]/gi, "").trim();
       }
 
       if (editDevise === "HTG" && newAmountNum > 0) {

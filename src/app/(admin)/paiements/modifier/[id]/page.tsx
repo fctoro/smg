@@ -38,6 +38,8 @@ export default function ModifyPaymentPage({ params }: { params: Promise<{ id: st
   const [newPhotoPreviews, setNewPhotoPreviews] = useState<{ file: File; url: string; name: string; isPdf: boolean }[]>([]);
   const [paymentPhotoError, setPaymentPhotoError] = useState<string | null>(null);
   const [toast, setToast] = useState<{ message: string; type?: "success" | "error" | "info" } | null>(null);
+  const [planPaiement, setPlanPaiement] = useState<string>("annuel");
+  const [nombreDeMois, setNombreDeMois] = useState<number>(1);
 
   const searchContainerRef = { current: null as HTMLDivElement | null };
 
@@ -122,16 +124,32 @@ export default function ModifyPaymentPage({ params }: { params: Promise<{ id: st
       }
 
       const adhesionMatch = rawRemarque.match(/\[ADHESION:\s*([A-Z_]+)\s*\]/i);
-      const planMatch = rawRemarque.match(/\[PLAN:\s*([A-Z]+)\s*\]/i);
+      const planMatch = rawRemarque.match(/\[PLAN:\s*([A-Z_]+)\s*\]/i);
       
-      let currentBaseAdhesion = 0;
       if (adhesionMatch && planMatch) {
         setAdhesionInfo({ code: adhesionMatch[1], plan: planMatch[1] });
       }
 
+      let initialPlan = "annuel";
+      if (planMatch && planMatch[1]) {
+        initialPlan = planMatch[1].toLowerCase();
+      } else {
+        const remarkLower = rawRemarque.toLowerCase();
+        if (remarkLower.includes("boursier") || remarkLower.includes("bourse")) initialPlan = "boursier";
+        else if (remarkLower.includes("semestriel")) initialPlan = "semestriel";
+        else if (remarkLower.includes("mensuel")) initialPlan = "mensuel";
+      }
+      setPlanPaiement(initialPlan);
+
+      const moisMatch = rawRemarque.match(/\[MOIS_PAYES:\s*(\d+)\s*\]/i) || rawRemarque.match(/(\d+)\s*mois/i);
+      if (moisMatch && moisMatch[1]) {
+        setNombreDeMois(parseInt(moisMatch[1], 10) || 1);
+        rawRemarque = rawRemarque.replace(/\[MOIS_PAYES:\s*\d+\s*\]/gi, "").trim();
+      }
+
       // Strip the tags from description
       rawRemarque = rawRemarque.replace(/\[ADHESION:\s*[A-Z_]+\s*\]/gi, "");
-      rawRemarque = rawRemarque.replace(/\[PLAN:\s*[A-Z]+\s*\]/gi, "");
+      rawRemarque = rawRemarque.replace(/\[PLAN:\s*[A-Z_]+\s*\]/gi, "");
       rawRemarque = rawRemarque.replace(/\[STATUT:\s*[A-Z]+\s*\]/gi, "");
 
       setDescription(rawRemarque.replace(/\s+/g, " ").trim());
@@ -233,11 +251,13 @@ export default function ModifyPaymentPage({ params }: { params: Promise<{ id: st
       const allPhotoUrls = [...existingPhotoUrls, ...newlyUploadedUrls];
 
       // Build remark with photo URLs
-      const adhesionPart = adhesionInfo ? `[ADHESION:${adhesionInfo.code}] [PLAN:${adhesionInfo.plan}] ` : "";
+      const adhesionPart = adhesionInfo ? `[ADHESION:${adhesionInfo.code}] ` : "";
+      const planPart = `[PLAN:${planPaiement.toUpperCase()}] `;
+      const moisPart = planPaiement === "mensuel" ? `[MOIS_PAYES:${nombreDeMois}] ` : "";
       const rabaisPart = rabaisValue > 0 ? `[RABAIS:${rabaisType === "percent" ? `${rabaisValue}%` : `$${rabaisValue}`}] ` : "";
       const totalDuePart = typeof totalDue === "number" ? `[TOTAL_DUE:${totalDue}] ` : "";
       
-      let finalRemarque = `${adhesionPart}${rabaisPart}${totalDuePart}${description.trim()}`.trim() || "Paiement complémentaire";
+      let finalRemarque = `${adhesionPart}${planPart}${moisPart}${rabaisPart}${totalDuePart}${description.trim()}`.trim() || "Paiement complémentaire";
       
       if (allPhotoUrls.length > 0) {
         const paymentPhotoNotes = allPhotoUrls.map((u) => ` [JUSTIFICATIF:${u}]`).join("");
@@ -370,6 +390,36 @@ export default function ModifyPaymentPage({ params }: { params: Promise<{ id: st
               </div>
             </div>
           </div>
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
+              Plan de paiement
+            </label>
+            <select
+              value={planPaiement}
+              onChange={(event) => setPlanPaiement(event.target.value)}
+              className={selectClassName}
+            >
+              <option value="annuel">Annuel - 10% de rabais</option>
+              <option value="semestriel">Semestriel - 5% de rabais</option>
+              <option value="mensuel">Mensuel - Tarif régulier</option>
+              <option value="boursier">Boursier</option>
+            </select>
+          </div>
+          {planPaiement === "mensuel" && (
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
+                Nombre de mois réglés
+              </label>
+              <input
+                type="number"
+                min={1}
+                step={1}
+                value={nombreDeMois}
+                onChange={(event) => setNombreDeMois(Math.max(1, parseInt(event.target.value) || 1))}
+                className={inputClassName}
+              />
+            </div>
+          )}
           <div>
             <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
               Devise

@@ -15,6 +15,7 @@ import { Dropdown } from "@/components/ui/dropdown/Dropdown";
 import { DropdownItem } from "@/components/ui/dropdown/DropdownItem";
 import { useConfirm } from "@/hooks/useConfirm";
 import { usePermissions } from "@/hooks/usePermissions";
+import * as XLSX from "xlsx";
 
 import { PlayerViewModal } from "@/components/club/modals/PlayerViewModal";
 import { PlayerEditModal } from "@/components/club/modals/PlayerEditModal";
@@ -328,22 +329,40 @@ function PlayersPageContent() {
       message: "Voulez-vous vraiment exporter la liste des joueurs au format Excel ?",
       onConfirm: () => {
         const headers = ["Matricule", "Nom", "Prénom", "Poste", "Sexe", "Catégorie", "Statut", "Téléphone", "Email", "Date Inscription"];
-        let csvContent = "\uFEFF" + headers.join(";") + "\n";
         
-        players.forEach(p => {
-          const row = [p.matricule, p.nom, p.prenom, p.poste, p.sexe, p.categorie, p.statut, p.telephone, p.email, p.dateInscription];
-          const csvRow = row.map(field => `"${(field || "").toString().replace(/"/g, '""')}"`);
-          csvContent += csvRow.join(";") + "\n";
-        });
+        const data = players.map(p => ({
+          "Matricule": p.matricule || "",
+          "Nom": p.nom || "",
+          "Prénom": p.prenom || "",
+          "Poste": p.poste || "",
+          "Sexe": p.sexe || "",
+          "Catégorie": p.categorie || "",
+          "Statut": p.statut || "",
+          "Téléphone": p.telephone || "",
+          "Email": p.email || "",
+          "Date Inscription": p.dateInscription || ""
+        }));
 
-        const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.href = url;
-        link.setAttribute("download", "joueurs_excel.csv");
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+        const worksheet = XLSX.utils.json_to_sheet(data, { header: headers });
+        
+        // Ajuster la largeur des colonnes pour un bon visuel
+        worksheet["!cols"] = [
+          { wch: 18 }, // Matricule
+          { wch: 20 }, // Nom
+          { wch: 20 }, // Prénom
+          { wch: 15 }, // Poste
+          { wch: 10 }, // Sexe
+          { wch: 15 }, // Catégorie
+          { wch: 12 }, // Statut
+          { wch: 18 }, // Téléphone
+          { wch: 30 }, // Email
+          { wch: 20 }, // Date Inscription
+        ];
+
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, "Joueurs");
+        
+        XLSX.writeFile(workbook, "joueurs.xlsx");
       }
     });
   };

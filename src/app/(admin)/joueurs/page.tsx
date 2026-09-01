@@ -322,15 +322,15 @@ function PlayersPageContent() {
   const tableColumns =
     enabledPlayerColumns.length > 0 ? enabledPlayerColumns : undefined;
 
-  const handleExportExcel = () => {
+  const handleExportExcel = (exportData: Player[]) => {
     setIsExportOpen(false);
     confirm({
       title: "Exporter la liste",
       message: "Voulez-vous vraiment exporter la liste des joueurs au format Excel ?",
       onConfirm: () => {
-        const headers = ["Matricule", "Nom", "Prénom", "Poste", "Sexe", "Catégorie", "Statut", "Téléphone", "Email", "Date Inscription"];
+        const headers = ["Matricule", "Nom", "Prénom", "Poste", "Sexe", "Catégorie", "Statut", "Saison", "Téléphone", "Email", "Date Inscription"];
         
-        const data = players.map(p => ({
+        const data = exportData.map(p => ({
           "Matricule": p.matricule || "",
           "Nom": p.nom || "",
           "Prénom": p.prenom || "",
@@ -338,6 +338,7 @@ function PlayersPageContent() {
           "Sexe": p.sexe || "",
           "Catégorie": p.categorie || "",
           "Statut": p.statut || "",
+          "Saison": p.saison || "",
           "Téléphone": p.telephone || "",
           "Email": p.email || "",
           "Date Inscription": p.dateInscription || ""
@@ -354,6 +355,7 @@ function PlayersPageContent() {
           { wch: 10 }, // Sexe
           { wch: 15 }, // Catégorie
           { wch: 12 }, // Statut
+          { wch: 15 }, // Saison
           { wch: 18 }, // Téléphone
           { wch: 30 }, // Email
           { wch: 20 }, // Date Inscription
@@ -367,17 +369,17 @@ function PlayersPageContent() {
     });
   };
 
-  const handleExportCSV = () => {
+  const handleExportCSV = (exportData: Player[]) => {
     setIsExportOpen(false);
     confirm({
       title: "Exporter la liste",
       message: "Voulez-vous vraiment exporter la liste des joueurs au format CSV ?",
       onConfirm: () => {
-        const headers = ["Matricule", "Nom", "Prénom", "Poste", "Sexe", "Catégorie", "Statut", "Téléphone", "Email", "Date Inscription"];
+        const headers = ["Matricule", "Nom", "Prénom", "Poste", "Sexe", "Catégorie", "Statut", "Saison", "Téléphone", "Email", "Date Inscription"];
         let csvContent = "\uFEFF" + headers.join(",") + "\n";
         
-        players.forEach(p => {
-          const row = [p.matricule, p.nom, p.prenom, p.poste, p.sexe, p.categorie, p.statut, p.telephone, p.email, p.dateInscription];
+        exportData.forEach(p => {
+          const row = [p.matricule, p.nom, p.prenom, p.poste, p.sexe, p.categorie, p.statut, p.saison, p.telephone, p.email, p.dateInscription];
           const csvRow = row.map(field => `"${(field || "").toString().replace(/"/g, '""')}"`);
           csvContent += csvRow.join(",") + "\n";
         });
@@ -422,7 +424,7 @@ function PlayersPageContent() {
               </button>
             )}
           </div>
-        }        exportButton={
+        }        exportButton={(filteredPlayers) => 
           <div className="relative">
             <button
               onClick={() => setIsExportOpen(!isExportOpen)}
@@ -444,12 +446,12 @@ function PlayersPageContent() {
               className="w-32"
             >
               <DropdownItem
-                onItemClick={handleExportExcel}
+                onItemClick={() => handleExportExcel(filteredPlayers)}
               >
                 Excel
               </DropdownItem>
               <DropdownItem
-                onItemClick={handleExportCSV}
+                onItemClick={() => handleExportCSV(filteredPlayers)}
               >
                 CSV
               </DropdownItem>

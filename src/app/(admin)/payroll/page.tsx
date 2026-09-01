@@ -209,7 +209,7 @@ export default function PayrollPage() {
     congeSansSolde: 0,
     cumulPaiements: 0,
     devise: "HTG",
-    statut: "paye",
+    statut: "en_attente",
     modePaiement: "virement",
     notes: "",
     file: null,
@@ -530,7 +530,12 @@ export default function PayrollPage() {
       netAPayer: net,
       devise: formData.devise,
       statut: formData.statut,
-      datePaiement: formData.statut === "paye" ? new Date().toISOString().split("T")[0] : undefined,
+      datePaiement:
+        formData.statut === "paye"
+          ? (editingPayrollId
+              ? (payrollRecords.find((r) => String(r.id) === String(editingPayrollId))?.datePaiement || new Date().toISOString().split("T")[0])
+              : new Date().toISOString().split("T")[0])
+          : undefined,
       modePaiement: formData.modePaiement,
       notes: formData.notes,
     };
@@ -568,6 +573,13 @@ export default function PayrollPage() {
           prelevementPourcentage: recordData.prelevementPourcentage,
           prelevementMontant: recordData.prelevementMontant,
           prelevementAvance: recordData.prelevementAvance,
+          prelevementSnowizz: recordData.prelevementSnowizz,
+          ajustement: recordData.ajustement,
+          taxeIRI: recordData.taxeIRI,
+          taxeCFGDCT: recordData.taxeCFGDCT,
+          taxeCAS: recordData.taxeCAS,
+          taxeFDU: recordData.taxeFDU,
+          taxeONA: recordData.taxeONA,
           prelevementType: recordData.prelevementType,
           vacancesPayees: recordData.vacancesPayees,
           congeSansSolde: recordData.congeSansSolde,
@@ -588,8 +600,8 @@ export default function PayrollPage() {
       setFileError(null);
       setFormData({
         employeId: "",
-        annee: currentYearStr,
-        mois: currentMonthStr,
+        annee: selectedYear !== "all" ? selectedYear : currentYearStr,
+        mois: selectedMonth !== "all" ? selectedMonth : currentMonthStr,
         salaireBase: 500,
         typeSalaire: "fixe",
         nombreSeances: 0,
@@ -613,7 +625,7 @@ export default function PayrollPage() {
         congeSansSolde: 0,
         cumulPaiements: 0,
         devise: "HTG",
-        statut: "paye",
+        statut: "en_attente",
         modePaiement: "virement",
         notes: "",
         file: null,
@@ -629,7 +641,7 @@ export default function PayrollPage() {
     if (!target) return;
 
     const nextStatut = target.statut === "paye" ? "en_attente" : "paye";
-    const nextDatePaiement = nextStatut === "paye" ? new Date().toISOString().split("T")[0] : undefined;
+    const nextDatePaiement = nextStatut === "paye" ? (target.datePaiement || new Date().toISOString().split("T")[0]) : undefined;
 
     setPayrollRecords((prev) =>
       prev.map((rec) => {
@@ -684,15 +696,15 @@ export default function PayrollPage() {
   };
 
   const handleEditPayroll = (record: PayrollRecord) => {
-    const [year, month] = record.mois.split("-");
+    const [year, month] = record.mois ? record.mois.split("-") : ["", ""];
     const prelevementPourcentage = record.prelevementPourcentage ?? 0;
     const prelevementMontant = record.prelevementMontant ?? calculatePrelevement(record.salaireBase, prelevementPourcentage);
     setEditingPayrollId(record.id);
     setFileError(null);
     setFormData({
       employeId: record.employeId,
-      annee: year || currentYearStr,
-      mois: month || "07",
+      annee: year || (selectedYear !== "all" ? selectedYear : currentYearStr),
+      mois: month || (selectedMonth !== "all" ? selectedMonth : currentMonthStr),
       salaireBase: record.salaireBase,
       typeSalaire: record.typeSalaire || "fixe",
       nombreSeances: record.nombreSeances || 0,
@@ -702,7 +714,7 @@ export default function PayrollPage() {
       nombreJoursWeekend: record.nombreJoursWeekend || 0,
       tauxJourWeekend: record.tauxJourWeekend || 0,
       bonus: record.bonus || 0,
-      deductions: record.prelevementAvance || Math.max(0, record.deductions - prelevementMontant - (record.congeSansSolde || 0)),
+      deductions: record.prelevementAvance || 0,
       prelevementPourcentage,
       prelevementType: record.prelevementType || "taxe",
       prelevementSnowizz: record.prelevementSnowizz || 0,
@@ -717,7 +729,7 @@ export default function PayrollPage() {
       cumulPaiements: record.cumulPaiements || 0,
       devise: record.devise || "HTG",
       statut: record.statut === "paye" ? "paye" : "en_attente",
-      modePaiement: record.modePaiement,
+      modePaiement: record.modePaiement || "virement",
       notes: record.notes || "",
       file: null,
     });
@@ -855,7 +867,43 @@ export default function PayrollPage() {
 
         <div className="shrink-0">
           <button
-            onClick={() => setShowModal(true)}
+            onClick={() => {
+              setEditingPayrollId(null);
+              setFileError(null);
+              setFormData({
+                employeId: "",
+                annee: selectedYear !== "all" ? selectedYear : currentYearStr,
+                mois: selectedMonth !== "all" ? selectedMonth : currentMonthStr,
+                salaireBase: 500,
+                typeSalaire: "fixe",
+                nombreSeances: 0,
+                tauxParSeance: 0,
+                nombreJoursSemaine: 0,
+                tauxJourSemaine: 0,
+                nombreJoursWeekend: 0,
+                tauxJourWeekend: 0,
+                bonus: 0,
+                deductions: 0,
+                prelevementPourcentage: 0,
+                prelevementType: "taxe",
+                prelevementSnowizz: 0,
+                ajustement: 0,
+                taxeIRI: 0,
+                taxeCFGDCT: 0,
+                taxeCAS: 0,
+                taxeFDU: 0,
+                taxeONA: 0,
+                vacancesPayees: 0,
+                congeSansSolde: 0,
+                cumulPaiements: 0,
+                devise: "HTG",
+                statut: "en_attente",
+                modePaiement: "virement",
+                notes: "",
+                file: null,
+              });
+              setShowModal(true);
+            }}
             className="inline-flex h-11 items-center justify-center whitespace-nowrap rounded-lg bg-brand-500 px-4 text-sm font-medium text-white shadow-theme-xs hover:bg-brand-600 transition-colors cursor-pointer"
           >
             + Nouveau Bulletin

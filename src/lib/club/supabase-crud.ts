@@ -964,6 +964,13 @@ export const addPayrollToSupabase = async (data: Omit<import("@/types/club").Pay
     PrelevementPourcentage: data.prelevementPourcentage,
     PrelevementMontant: data.prelevementMontant,
     PrelevementAvance: data.prelevementAvance || 0,
+    PrelevementSnowizz: data.prelevementSnowizz || 0,
+    Ajustement: data.ajustement || 0,
+    TaxeIRI: data.taxeIRI || 0,
+    TaxeCFGDCT: data.taxeCFGDCT || 0,
+    TaxeCAS: data.taxeCAS || 0,
+    TaxeFDU: data.taxeFDU || 0,
+    TaxeONA: data.taxeONA || 0,
     PrelevementType: data.prelevementType || "taxe",
     VacancesPayees: data.vacancesPayees || 0,
     CongeSansSolde: data.congeSansSolde || 0,
@@ -993,6 +1000,13 @@ export const addPayrollToSupabase = async (data: Omit<import("@/types/club").Pay
     delete insertPayload.PrelevementPourcentage;
     delete insertPayload.PrelevementMontant;
     delete insertPayload.PrelevementAvance;
+    delete insertPayload.PrelevementSnowizz;
+    delete insertPayload.Ajustement;
+    delete insertPayload.TaxeIRI;
+    delete insertPayload.TaxeCFGDCT;
+    delete insertPayload.TaxeCAS;
+    delete insertPayload.TaxeFDU;
+    delete insertPayload.TaxeONA;
     delete insertPayload.PrelevementType;
     delete insertPayload.TypeSalaire;
     delete insertPayload.NombreSeances;
@@ -1051,6 +1065,13 @@ export const updatePayrollInSupabase = async (id: string, data: Partial<import("
   if (data.prelevementPourcentage !== undefined) updatePayload.PrelevementPourcentage = data.prelevementPourcentage;
   if (data.prelevementMontant !== undefined) updatePayload.PrelevementMontant = data.prelevementMontant;
   if (data.prelevementAvance !== undefined) updatePayload.PrelevementAvance = data.prelevementAvance;
+  if (data.prelevementSnowizz !== undefined) updatePayload.PrelevementSnowizz = data.prelevementSnowizz;
+  if (data.ajustement !== undefined) updatePayload.Ajustement = data.ajustement;
+  if (data.taxeIRI !== undefined) updatePayload.TaxeIRI = data.taxeIRI;
+  if (data.taxeCFGDCT !== undefined) updatePayload.TaxeCFGDCT = data.taxeCFGDCT;
+  if (data.taxeCAS !== undefined) updatePayload.TaxeCAS = data.taxeCAS;
+  if (data.taxeFDU !== undefined) updatePayload.TaxeFDU = data.taxeFDU;
+  if (data.taxeONA !== undefined) updatePayload.TaxeONA = data.taxeONA;
   if (data.prelevementType !== undefined) updatePayload.PrelevementType = data.prelevementType;
   if (data.vacancesPayees !== undefined) updatePayload.VacancesPayees = data.vacancesPayees;
   if (data.congeSansSolde !== undefined) updatePayload.CongeSansSolde = data.congeSansSolde;

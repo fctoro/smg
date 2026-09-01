@@ -116,42 +116,6 @@ export default function ParentsPage() {
             + Ajouter un parent
           </button>
         }
-        exportButton={
-          <div className="relative">
-            <button
-              onClick={() => setIsExportOpen(!isExportOpen)}
-              className="inline-flex h-10 items-center justify-center gap-2 whitespace-nowrap rounded-lg bg-[#107C41] px-4 text-sm font-medium text-white shadow-theme-xs hover:bg-[#0c5e31] transition-colors"
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                <path d="M14 2v6h6"></path>
-                <path d="M8 13h2"></path>
-                <path d="M14 13h2"></path>
-                <path d="M8 17h2"></path>
-                <path d="M14 17h2"></path>
-              </svg>
-              Exporter Excel / CSV
-            </button>
-            <Dropdown
-              isOpen={isExportOpen}
-              onClose={() => setIsExportOpen(false)}
-              className="absolute right-0 top-full mt-1 w-40"
-            >
-              <DropdownItem
-                onItemClick={handleExportExcel}
-                className="cursor-pointer"
-              >
-                Excel
-              </DropdownItem>
-              <DropdownItem
-                onItemClick={handleExportCSV}
-                className="cursor-pointer"
-              >
-                CSV
-              </DropdownItem>
-            </Dropdown>
-          </div>
-        }
       />
       
       <ParentEditModal

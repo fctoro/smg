@@ -194,12 +194,12 @@ export default function PlayerForm({
 
     let autoCategory = "";
     if (age <= 5) autoCategory = "ti toro";
-    else if (age <= 7) autoCategory = "U8";
-    else if (age <= 9) autoCategory = "U10";
-    else if (age <= 11) autoCategory = "U12";
-    else if (age <= 13) autoCategory = "U14";
-    else if (age <= 15) autoCategory = "U16";
-    else if (age <= 17) autoCategory = "U18";
+    else if (age < 8) autoCategory = "U8";
+    else if (age < 10) autoCategory = "U10";
+    else if (age < 12) autoCategory = "U12";
+    else if (age < 14) autoCategory = "U14";
+    else if (age < 16) autoCategory = "U16";
+    else if (age < 18) autoCategory = "U18";
     else if (age === 18) autoCategory = "U19";
     else if (age >= 19) autoCategory = "U20";
 
@@ -816,11 +816,6 @@ export default function PlayerForm({
           <div>
             <label className="mb-1.5 block text-xs font-medium text-gray-700 dark:text-gray-300">Nom & Prénom *</label>
             <input required value={formValues.parentNomPrenom} onChange={(e) => updateField("parentNomPrenom", e.target.value)} className={inputClassName} />
-          </div>
-
-          <div>
-            <label className="mb-1.5 block text-xs font-medium text-gray-700 dark:text-gray-300">Lien avec le joueur</label>
-            <input value={formValues.parentLien} onChange={(e) => updateField("parentLien", e.target.value)} placeholder="Ex: Père, Mère, Tuteur..." className={inputClassName} />
           </div>
 
           <div>

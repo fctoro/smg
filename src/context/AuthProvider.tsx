@@ -19,39 +19,7 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
     router.refresh();
   }, [router]);
 
-  // Handle inactivity timer
-  useEffect(() => {
-    // We only care about inactivity if they are logged in
-    // However, if session is null, we can just skip
-    if (!session) return;
 
-    let timeoutId: NodeJS.Timeout;
-
-    const resetTimer = () => {
-      clearTimeout(timeoutId);
-      timeoutId = setTimeout(() => {
-        handleSignOut();
-      }, INACTIVITY_TIMEOUT);
-    };
-
-    // Events that count as "activity"
-    const events = ["mousedown", "mousemove", "keypress", "scroll", "touchstart"];
-
-    // Initialize timer
-    resetTimer();
-
-    // Add event listeners
-    events.forEach((event) => {
-      window.addEventListener(event, resetTimer);
-    });
-
-    return () => {
-      clearTimeout(timeoutId);
-      events.forEach((event) => {
-        window.removeEventListener(event, resetTimer);
-      });
-    };
-  }, [session, handleSignOut]);
 
   // Monitor auth state changes from Supabase
   useEffect(() => {

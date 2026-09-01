@@ -76,6 +76,47 @@ export default function ModifyPaymentPage({ params }: { params: Promise<{ id: st
         rawRemarque = rawRemarque.replace(/\[JUSTIFICATIF:.+?\]/g, "").trim();
       }
 
+      const adhesionMatch = rawRemarque.match(/\[ADHESION:\s*([A-Z_]+)\s*\]/i);
+      const planMatch = rawRemarque.match(/\[PLAN:\s*([A-Z]+)\s*\]/i);
+      const adhesionCode = adhesionMatch ? adhesionMatch[1] : "";
+      const planCode = planMatch ? planMatch[1] : "";
+      if (adhesionCode || planCode) {
+        setAdhesionInfo({ code: adhesionCode, plan: planCode });
+      }
+
+      let parsedRabaisType: "percent" | "amount" = "percent";
+      let parsedRabaisValue = 0;
+      let hasExplicitRabais = false;
+      
+      const rabaisPctMatch = rawRemarque.match(/\[RABAIS:\s*([\d.]+)%\s*\]/i);
+      if (rabaisPctMatch && rabaisPctMatch[1]) {
+        parsedRabaisValue = parseFloat(rabaisPctMatch[1]);
+        parsedRabaisType = "percent";
+        hasExplicitRabais = true;
+        rawRemarque = rawRemarque.replace(/\[RABAIS:\s*[\d.]+%\s*\]/i, "").trim();
+      } else {
+        const rabaisAmtMatch = rawRemarque.match(/\[RABAIS:\s*\$([\d.]+)\s*\]/i);
+        if (rabaisAmtMatch && rabaisAmtMatch[1]) {
+          parsedRabaisValue = parseFloat(rabaisAmtMatch[1]);
+          parsedRabaisType = "amount";
+          hasExplicitRabais = true;
+          rawRemarque = rawRemarque.replace(/\[RABAIS:\s*\$[\d.]+\s*\]/i, "").trim();
+        }
+      }
+
+      if (!hasExplicitRabais && planCode) {
+        if (planCode === "ANNUEL") {
+          parsedRabaisValue = 10;
+          parsedRabaisType = "percent";
+        } else if (planCode === "SEMESTRIEL") {
+          parsedRabaisValue = 5;
+          parsedRabaisType = "percent";
+        }
+      }
+
+      setRabaisType(parsedRabaisType);
+      setRabaisValue(parsedRabaisValue);
+
       let parsedTotalDue = 0;
       const dueMatch = rawRemarque.match(/\[TOTAL_DUE:\s*([\d.]+)\s*\]/i);
       if (dueMatch && dueMatch[1]) {
@@ -93,42 +134,21 @@ export default function ModifyPaymentPage({ params }: { params: Promise<{ id: st
         setTotalDue("");
       }
 
-      let parsedRabaisType: "percent" | "amount" = "percent";
-      let parsedRabaisValue = 0;
-      
-      const rabaisPctMatch = rawRemarque.match(/\[RABAIS:\s*([\d.]+)%\s*\]/i);
-      if (rabaisPctMatch && rabaisPctMatch[1]) {
-        parsedRabaisValue = parseFloat(rabaisPctMatch[1]);
-        parsedRabaisType = "percent";
-        rawRemarque = rawRemarque.replace(/\[RABAIS:\s*[\d.]+%\s*\]/i, "").trim();
-      } else {
-        const rabaisAmtMatch = rawRemarque.match(/\[RABAIS:\s*\$([\d.]+)\s*\]/i);
-        if (rabaisAmtMatch && rabaisAmtMatch[1]) {
-          parsedRabaisValue = parseFloat(rabaisAmtMatch[1]);
-          parsedRabaisType = "amount";
-          rawRemarque = rawRemarque.replace(/\[RABAIS:\s*\$[\d.]+\s*\]/i, "").trim();
-        }
-      }
-      
-      setRabaisType(parsedRabaisType);
-      setRabaisValue(parsedRabaisValue);
-
+      let calculatedBase = 0;
       if (parsedTotalDue > 0) {
         if (parsedRabaisType === "percent" && parsedRabaisValue > 0 && parsedRabaisValue < 100) {
-          setBaseTotalDueForRabais(parsedTotalDue / (1 - parsedRabaisValue / 100));
+          calculatedBase = Math.round((parsedTotalDue / (1 - parsedRabaisValue / 100)) * 100) / 100;
         } else if (parsedRabaisType === "amount" && parsedRabaisValue > 0) {
-          setBaseTotalDueForRabais(parsedTotalDue + parsedRabaisValue);
+          calculatedBase = Math.round((parsedTotalDue + parsedRabaisValue) * 100) / 100;
         } else {
-          setBaseTotalDueForRabais(parsedTotalDue);
+          calculatedBase = parsedTotalDue;
         }
+      } else if (adhesionCode === "TI_TORO") {
+        calculatedBase = 1000;
+      } else if (adhesionCode === "FC_TORO") {
+        calculatedBase = 1350;
       }
-
-      const adhesionMatch = rawRemarque.match(/\[ADHESION:\s*([A-Z_]+)\s*\]/i);
-      const planMatch = rawRemarque.match(/\[PLAN:\s*([A-Z_]+)\s*\]/i);
-      
-      if (adhesionMatch && planMatch) {
-        setAdhesionInfo({ code: adhesionMatch[1], plan: planMatch[1] });
-      }
+      setBaseTotalDueForRabais(calculatedBase);
 
       let initialPlan = "annuel";
       if (planMatch && planMatch[1]) {
@@ -165,12 +185,16 @@ export default function ModifyPaymentPage({ params }: { params: Promise<{ id: st
     const safeVal = isNaN(val) ? 0 : val;
     setRabaisValue(safeVal);
     setRabaisType(type);
-    
-    if (baseTotalDueForRabais > 0) {
+
+    const base = baseTotalDueForRabais > 0 ? baseTotalDueForRabais : (typeof totalDue === "number" ? totalDue : 0);
+    if (base > 0) {
+      setBaseTotalDueForRabais(base);
       if (type === "percent") {
-        setTotalDue(baseTotalDueForRabais * (1 - (safeVal / 100)));
+        const newTotal = Math.round((base * (1 - safeVal / 100)) * 100) / 100;
+        setTotalDue(newTotal);
       } else {
-        setTotalDue(Math.max(0, baseTotalDueForRabais - safeVal));
+        const newTotal = Math.max(0, Math.round((base - safeVal) * 100) / 100);
+        setTotalDue(newTotal);
       }
     }
   };
@@ -345,8 +369,17 @@ export default function ModifyPaymentPage({ params }: { params: Promise<{ id: st
                 const val = event.target.value ? Number(event.target.value) : "";
                 setTotalDue(val);
                 if (val !== "") {
-                  setBaseTotalDueForRabais(val);
-                  setRabaisValue(0); // Reset rabais because they are manually overriding
+                  if (rabaisValue > 0) {
+                    if (rabaisType === "percent" && rabaisValue < 100) {
+                      setBaseTotalDueForRabais(Math.round((val / (1 - rabaisValue / 100)) * 100) / 100);
+                    } else if (rabaisType === "amount") {
+                      setBaseTotalDueForRabais(Math.round((val + rabaisValue) * 100) / 100);
+                    } else {
+                      setBaseTotalDueForRabais(val);
+                    }
+                  } else {
+                    setBaseTotalDueForRabais(val);
+                  }
                 }
               }}
               className={inputClassName}

@@ -10,6 +10,7 @@ import autoTable from "jspdf-autotable";
 import { Dropdown } from "@/components/ui/dropdown";
 import { DropdownItem } from "@/components/ui/dropdown/DropdownItem";
 import Pagination from "@/components/tables/Pagination";
+import Badge from "@/components/ui/badge/Badge";
 import {
   Table,
   TableBody,
@@ -18,7 +19,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { TableBodySkeleton } from "@/components/ui/skeleton/Skeleton";
-import { Player } from "@/types/club";
 import { useConfirm } from "@/hooks/useConfirm";
 
 function getDeterministicDigits(id: string): string {
@@ -27,10 +27,10 @@ function getDeterministicDigits(id: string): string {
     hash = (hash << 5) - hash + id.charCodeAt(i);
     hash |= 0;
   }
-  return String(Math.abs(hash) % 90000 + 10000);
+  return String((Math.abs(hash) % 90000) + 10000);
 }
 
-export default function RecusJoueursPage() {
+export default function EtatDeCompteJoueursPage() {
   const { players, payments, hydrated } = useClubData();
   const { confirm, ConfirmComponent } = useConfirm();
   const [searchQuery, setSearchQuery] = useState("");
@@ -39,29 +39,38 @@ export default function RecusJoueursPage() {
   const [activeTab, setActiveTab] = useState<"all" | "paid" | "unpaid">("all");
   const [isExportOpen, setIsExportOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
-  const [currentPageSize, setCurrentPageSize] = useState(10);
+  const [currentPageSize, setCurrentPageSize] = useState(100);
+
+  // 1. Uniquement les joueurs actifs (Exclure les Alumni et Inactifs)
+  const activePlayers = useMemo(() => {
+    return players.filter((player) => {
+      const status = (player.statut || "").toLowerCase();
+      const statutJoueur = (player.statutJoueur || "").toLowerCase();
+      return status !== "alumni" && status !== "inactif" && statutJoueur !== "inactif";
+    });
+  }, [players]);
 
   const categories = useMemo(
     () =>
-      [...new Set(players.map((player) => player.categorie).filter(Boolean))].sort(
+      [...new Set(activePlayers.map((player) => player.categorie).filter(Boolean))].sort(
         (a, b) => (a || "").localeCompare(b || ""),
       ),
-    [players],
+    [activePlayers],
   );
 
   const seasons = useMemo(
     () =>
-      [...new Set(players.map((player) => player.saison).filter(Boolean))].sort(
+      [...new Set(activePlayers.map((player) => player.saison).filter(Boolean))].sort(
         (a, b) => (b || "").localeCompare(a || ""),
       ),
-    [players],
+    [activePlayers],
   );
 
-  // 1. Transformer les données par Joueur avec leurs paiements associés
+  // 2. Transformer les données des Joueurs Actifs avec leur État de Compte et Solde
   const uniquePlayersData = useMemo(() => {
-    return players.map((player, index) => {
+    return activePlayers.map((player, index) => {
       const playerPayments = payments.filter((pay) => pay.playerId === player.id);
-      
+
       const totalPayeUSD = playerPayments
         .filter((p) => p.devise !== "HTG")
         .reduce((sum, pay) => sum + (pay.montant || 0), 0);
@@ -77,13 +86,33 @@ export default function RecusJoueursPage() {
           .filter(Boolean)
           .join(" / ") || formatClubCurrency(0, "US");
 
+      // Cotisation Prévue (Expected Fee) & Balance calculation
+      const expectedFee = player.cotisationMontant || 0;
+      const feeCurrency: "US" | "HTG" = player.cotisationDevise || "US";
+      const expectedFeeLabel = expectedFee > 0 ? formatClubCurrency(expectedFee, feeCurrency) : "Non spécifiée";
+
+      let soldeUSD = 0;
+      let soldeHTG = 0;
+      if (feeCurrency === "HTG") {
+        soldeHTG = Math.max(0, expectedFee - totalPayeHTG);
+      } else {
+        soldeUSD = Math.max(0, expectedFee - totalPayeUSD);
+      }
+
+      const soldeLabel =
+        feeCurrency === "HTG"
+          ? formatClubCurrency(soldeHTG, "HTG")
+          : formatClubCurrency(soldeUSD, "US");
+
+      const isPaidInFull = (feeCurrency === "HTG" ? soldeHTG <= 0 : soldeUSD <= 0) && (totalPayeUSD > 0 || totalPayeHTG > 0 || expectedFee === 0);
+
       const initials = (
         (player.nom?.charAt(0) || player.prenom?.charAt(0) || "J")
       ).toUpperCase();
       const digits = player.matricule
         ? player.matricule.replace(/\D/g, "").slice(-5) || getDeterministicDigits(player.id)
         : getDeterministicDigits(player.id);
-      const receiptNo = `RP-FCT-${initials}-${digits}`;
+      const receiptNo = `EC-FCT-${initials}-${digits}`;
 
       const sortedPayments = [...playerPayments].sort((a, b) => {
         const dateA = a.datePaiement ? new Date(a.datePaiement).getTime() : 0;
@@ -112,11 +141,24 @@ export default function RecusJoueursPage() {
         totalPayeUSD,
         totalPayeHTG,
         totalPaye: totalPayeLabel,
+        expectedFee,
+        feeCurrency,
+        expectedFeeLabel,
+        soldeUSD,
+        soldeHTG,
+        soldeLabel,
+        isPaidInFull,
       };
+    }).sort((a, b) => {
+      const nomA = (a.nom || "").trim();
+      const nomB = (b.nom || "").trim();
+      const nomCompare = nomA.localeCompare(nomB, "fr", { sensitivity: "base" });
+      if (nomCompare !== 0) return nomCompare;
+      return (a.prenom || "").trim().localeCompare((b.prenom || "").trim(), "fr", { sensitivity: "base" });
     });
-  }, [players, payments]);
+  }, [activePlayers, payments]);
 
-  // 2. Filtrer la liste des joueurs
+  // 3. Filtrer la liste par recherche, onglets (À jour / Solde restant) et catégories
   const filteredPlayers = useMemo(() => {
     return uniquePlayersData.filter((p) => {
       const query = searchQuery.trim().toLowerCase();
@@ -133,9 +175,9 @@ export default function RecusJoueursPage() {
 
       if (!queryMatch) return false;
 
-      // Filtre par onglet (Tous, Avec paiements, Sans versement)
-      if (activeTab === "paid" && p.playerPayments.length === 0) return false;
-      if (activeTab === "unpaid" && p.playerPayments.length > 0) return false;
+      // Filtre par onglet (Tous, À jour, Solde restant)
+      if (activeTab === "paid" && !p.isPaidInFull) return false;
+      if (activeTab === "unpaid" && p.isPaidInFull) return false;
 
       // Filtre par catégorie
       if (selectedCategory !== "all" && p.categorie !== selectedCategory) {
@@ -164,18 +206,20 @@ export default function RecusJoueursPage() {
     setIsExportOpen(false);
     confirm({
       title: "Exporter la liste",
-      message: "Voulez-vous vraiment exporter la liste des RP Joueurs au format CSV ?",
+      message: "Voulez-vous vraiment exporter l'État de Compte des Joueurs Actifs au format CSV ?",
       confirmText: "Exporter",
       cancelText: "Annuler",
       onConfirm: () => {
         const headers = [
-          "N° Rapport",
+          "N° État de Compte",
           "Matricule",
           "Joueur",
           "Catégorie",
           "Programme",
-          "Nombre Versements",
+          "Cotisation Prévue",
           "Total Payé",
+          "Solde Restant",
+          "Statut Financier",
         ];
         let csvContent = headers.join(",") + "\n";
         filteredPlayers.forEach((p) => {
@@ -185,8 +229,10 @@ export default function RecusJoueursPage() {
             p.fullName,
             p.categorie,
             p.programme,
-            String(p.playerPayments.length),
+            p.expectedFeeLabel,
             p.totalPaye,
+            p.soldeLabel,
+            p.isPaidInFull ? "À jour" : "Solde Restant",
           ];
           const csvRow = row.map(
             (field) => `"${(field || "").toString().replace(/"/g, '""')}"`,
@@ -197,7 +243,7 @@ export default function RecusJoueursPage() {
         const url = URL.createObjectURL(blob);
         const link = document.createElement("a");
         link.href = url;
-        link.setAttribute("download", `rp_joueurs_${new Date().toISOString().slice(0, 10)}.csv`);
+        link.setAttribute("download", `etat_de_compte_joueurs_${new Date().toISOString().slice(0, 10)}.csv`);
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
@@ -209,42 +255,48 @@ export default function RecusJoueursPage() {
     setIsExportOpen(false);
     confirm({
       title: "Exporter la liste",
-      message: "Voulez-vous vraiment exporter la liste des RP Joueurs au format Excel ?",
+      message: "Voulez-vous vraiment exporter l'État de Compte des Joueurs Actifs au format Excel ?",
       confirmText: "Exporter",
       cancelText: "Annuler",
       onConfirm: () => {
         const headers = [
-          "N° Rapport",
+          "N° État de Compte",
           "Matricule",
           "Joueur",
           "Catégorie",
           "Programme",
-          "Nombre Versements",
+          "Cotisation Prévue",
           "Total Payé",
+          "Solde Restant",
+          "Statut Financier",
         ];
-        
-        const thead = headers.map(h => `<th>${h}</th>`).join("");
-        const tbody = filteredPlayers.map((p) => {
-          const row = [
-            p.receiptNo,
-            p.matricule,
-            p.fullName,
-            p.categorie,
-            p.programme,
-            String(p.playerPayments.length),
-            p.totalPaye,
-          ];
-          return `<tr>${row.map(field => `<td>${(field || "").toString().replace(/</g, "&lt;").replace(/>/g, "&gt;")}</td>`).join("")}</tr>`;
-        }).join("");
+
+        const thead = headers.map((h) => `<th>${h}</th>`).join("");
+        const tbody = filteredPlayers
+          .map((p) => {
+            const row = [
+              p.receiptNo,
+              p.matricule,
+              p.fullName,
+              p.categorie,
+              p.programme,
+              p.expectedFeeLabel,
+              p.totalPaye,
+              p.soldeLabel,
+              p.isPaidInFull ? "À jour" : "Solde Restant",
+            ];
+            return `<tr>${row.map((field) => `<td>${(field || "").toString().replace(/</g, "&lt;").replace(/>/g, "&gt;")}</td>`).join("")}</tr>`;
+          })
+          .join("");
 
         const htmlContent = `
           <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
           <head>
             <meta charset="utf-8" />
             <style>
-              table { border-collapse: collapse; }
-              td, th { border: 1px solid #dddddd; padding: 4px; }
-              th { background-color: #f2f2f2; font-weight: bold; }
+              table { border-collapse: collapse; width: 100%; }
+              td, th { border: 1px solid #dddddd; padding: 6px; text-align: left; }
+              th { background-color: #107C41; color: white; font-weight: bold; }
             </style>
           </head>
           <body>
@@ -255,12 +307,13 @@ export default function RecusJoueursPage() {
           </body>
           </html>
         `;
-
-        const blob = new Blob([htmlContent], { type: "application/vnd.ms-excel;charset=utf-8" });
+        const blob = new Blob([htmlContent], {
+          type: "application/vnd.ms-excel;charset=utf-8;",
+        });
         const url = URL.createObjectURL(blob);
         const link = document.createElement("a");
         link.href = url;
-        link.setAttribute("download", `rp_joueurs_${new Date().toISOString().slice(0, 10)}.xls`);
+        link.setAttribute("download", `etat_de_compte_joueurs_${new Date().toISOString().slice(0, 10)}.xls`);
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
@@ -268,13 +321,13 @@ export default function RecusJoueursPage() {
     });
   };
 
-  // Génération de Rapport RP Joueur PDF
+  // Génération de la Fiche "État de Compte Joueur" (PDF Complet)
   const handleGeneratePDF = (playerData: any) => {
     if (!playerData) return;
 
     const doc = new jsPDF();
     const playerFullName = playerData.fullName || "Joueur";
-    const receiptNo = playerData.receiptNo || `RP-FCT-0001`;
+    const receiptNo = playerData.receiptNo || `EC-FCT-0001`;
 
     const grayDark: [number, number, number] = [31, 41, 55];
     const grayMedium: [number, number, number] = [107, 114, 128];
@@ -303,14 +356,14 @@ export default function RecusJoueursPage() {
     doc.textWithLink("www.fctoro.com", 43, 44, { url: "https://www.fctoro.com" });
 
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(20);
+    doc.setFontSize(18);
     doc.setTextColor(grayDark[0], grayDark[1], grayDark[2]);
-    doc.text("RP JOUEUR", 196, 26, { align: "right" });
+    doc.text("ÉTAT DE COMPTE", 196, 26, { align: "right" });
 
     doc.setFontSize(10);
     doc.setFont("helvetica", "normal");
     doc.setTextColor(grayMedium[0], grayMedium[1], grayMedium[2]);
-    doc.text("N° Rapport :", 155, 34, { align: "right" });
+    doc.text("N° Référence :", 155, 34, { align: "right" });
 
     doc.setFont("helvetica", "bold");
     doc.setTextColor(grayDark[0], grayDark[1], grayDark[2]);
@@ -344,50 +397,85 @@ export default function RecusJoueursPage() {
     doc.setFont("helvetica", "bold");
     doc.setFontSize(8);
     doc.setTextColor(headerTextColor[0], headerTextColor[1], headerTextColor[2]);
-    doc.text("INFORMATIONS DU JOUEUR", 14, 60);
+    doc.text("INFORMATIONS DU JOUEUR", 14, 58);
 
     doc.setFont("helvetica", "bold");
     doc.setFontSize(11);
     doc.setTextColor(grayDark[0], grayDark[1], grayDark[2]);
-    doc.text(playerFullName, 14, 66);
+    doc.text(playerFullName, 14, 64);
 
     doc.setFont("helvetica", "normal");
     doc.setFontSize(9);
     doc.setTextColor(grayMedium[0], grayMedium[1], grayMedium[2]);
+    let yPos = 70;
     if (playerData.matricule) {
-      doc.text(`Matricule : ${playerData.matricule}`, 14, 72);
+      doc.text(`Matricule : ${playerData.matricule}`, 14, yPos);
+      yPos += 5;
     }
-    doc.text(`Catégorie : ${playerData.categorie || "Non spécifiée"}`, 14, playerData.matricule ? 77 : 72);
+    doc.text(`Catégorie : ${playerData.categorie || "Non spécifiée"}`, 14, yPos);
+    yPos += 5;
     if (playerData.programme) {
-      doc.text(`Programme : ${playerData.programme}`, 14, playerData.matricule ? 82 : 77);
+      doc.text(`Programme : ${playerData.programme}`, 14, yPos);
+      yPos += 5;
+    }
+    if (playerData.saison) {
+      doc.text(`Saison : ${playerData.saison}`, 14, yPos);
     }
 
-    // Section 2: Informations Parent / Responsable
+    // Section 2: Parent / Responsable
     doc.setFont("helvetica", "bold");
     doc.setFontSize(8);
     doc.setTextColor(headerTextColor[0], headerTextColor[1], headerTextColor[2]);
-    doc.text("PARENT / RESPONSABLE", 120, 60);
+    doc.text("PARENT / RESPONSABLE", 120, 58);
 
     doc.setFont("helvetica", "bold");
     doc.setFontSize(10);
     doc.setTextColor(grayDark[0], grayDark[1], grayDark[2]);
-    doc.text(playerData.parentNomPrenom || "Non renseigné", 120, 66);
+    doc.text(playerData.parentNomPrenom || "Non renseigné", 120, 64);
 
     doc.setFont("helvetica", "normal");
     doc.setFontSize(9);
     doc.setTextColor(grayMedium[0], grayMedium[1], grayMedium[2]);
-    doc.text(`Tél : ${playerData.parentTelephone || "-"}`, 120, 72);
-    doc.text(`Email : ${playerData.parentEmail || "-"}`, 120, 78);
+    doc.text(`Tél : ${playerData.parentTelephone || "-"}`, 120, 70);
+    doc.text(`Email : ${playerData.parentEmail || "-"}`, 120, 75);
     if (playerData.parentAdresse) {
       const shortAddress =
         playerData.parentAdresse.length > 40
           ? playerData.parentAdresse.substring(0, 37) + "..."
           : playerData.parentAdresse;
-      doc.text(`Adresse : ${shortAddress}`, 120, 84);
+      doc.text(`Adresse : ${shortAddress}`, 120, 80);
     }
 
-    const tableStartY = 95;
-    const tableColumn = ["Date", "Description / Rubrique", "Mode", "Montant"];
+    // Section 3: RÉCAPITULATIF FINANCIER & BALANCE (Cadre récapitulatif)
+    const boxY = 92;
+    doc.setFillColor(248, 250, 252);
+    doc.roundedRect(14, boxY, 182, 24, 2, 2, "F");
+    doc.setDrawColor(226, 232, 240);
+    doc.roundedRect(14, boxY, 182, 24, 2, 2, "D");
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8);
+    doc.setTextColor(grayMedium[0], grayMedium[1], grayMedium[2]);
+    doc.text("COTISATION PRÉVUE", 22, boxY + 7);
+    doc.text("TOTAL PAYÉ", 85, boxY + 7);
+    doc.text("SOLDE RESTANT (BALANCE)", 142, boxY + 7);
+
+    doc.setFontSize(11);
+    doc.setTextColor(grayDark[0], grayDark[1], grayDark[2]);
+    doc.text(playerData.expectedFeeLabel, 22, boxY + 16);
+    doc.text(playerData.totalPaye, 85, boxY + 16);
+
+    if (playerData.isPaidInFull) {
+      doc.setTextColor(16, 185, 129); // Green
+      doc.text("0.00 (À jour)", 142, boxY + 16);
+    } else {
+      doc.setTextColor(225, 29, 72); // Red / Rose
+      doc.text(playerData.soldeLabel, 142, boxY + 16);
+    }
+
+    // Section 4: Tableau détaillé des versements
+    const tableStartY = 124;
+    const tableColumn = ["Date", "Description / Rubrique", "Mode", "Montant Versé"];
     const tableRows: any[] = [];
 
     const mapMode = (mode: any) => {
@@ -420,7 +508,7 @@ export default function RecusJoueursPage() {
     if (playerData.playerPayments.length === 0) {
       tableRows.push([
         "-",
-        "Aucun versement enregistré",
+        "Aucun versement enregistré à ce jour",
         "-",
         formatClubCurrency(0, "US"),
       ]);
@@ -496,18 +584,18 @@ export default function RecusJoueursPage() {
     doc.setFont("helvetica", "normal");
     doc.setFontSize(10);
     doc.setTextColor(grayMedium[0], grayMedium[1], grayMedium[2]);
-    doc.text("Sous-total", 110, finalY + 10);
+    doc.text("Total des versements effectués", 100, finalY + 10);
     doc.text(playerData.totalPaye, 196, finalY + 10, { align: "right" });
 
     doc.setDrawColor(grayLight[0], grayLight[1], grayLight[2]);
     doc.setLineWidth(0.5);
-    doc.line(100, finalY + 15, 196, finalY + 15);
+    doc.line(100, finalY + 14, 196, finalY + 14);
 
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(12);
+    doc.setFontSize(11);
     doc.setTextColor(black[0], black[1], black[2]);
-    doc.text("TOTAL PAYÉ", 110, finalY + 22);
-    doc.text(playerData.totalPaye, 196, finalY + 22, { align: "right" });
+    doc.text("SOLDE DE COMPTE", 100, finalY + 21);
+    doc.text(playerData.soldeLabel, 196, finalY + 21, { align: "right" });
 
     doc.setFont("helvetica", "bold");
     doc.setFontSize(9);
@@ -531,7 +619,7 @@ export default function RecusJoueursPage() {
         doc.line(14, bottomLineY, 196, bottomLineY);
 
         const logoH = 3.5;
-        const logoW = logoH * 5.638; // ~19.73 mm
+        const logoW = logoH * 5.638;
         const gap = 2;
 
         doc.setFont("helvetica", "normal");
@@ -551,27 +639,21 @@ export default function RecusJoueursPage() {
 
         let curX = startX;
 
-        // 1. "Powered by"
         doc.setTextColor(grayMedium[0], grayMedium[1], grayMedium[2]);
         doc.text(textPrefix, curX, textY);
         curX += wPrefix + gap;
 
-        // 2. Logo OCTACORE
         if (OCTACORE_LOGO) {
           doc.addImage(OCTACORE_LOGO, "PNG", curX, 284.4, logoW, logoH, undefined, "FAST");
         }
         curX += logoW + gap;
 
-        // 3. "•"
         doc.setTextColor(grayMedium[0], grayMedium[1], grayMedium[2]);
         doc.text(textSeparator, curX, textY);
         curX += wSep + gap;
 
-        // 4. "www.octacore.io"
         doc.setTextColor(59, 130, 246);
         doc.text(textUrl, curX, textY);
-
-        // Lien cliquable interactif dans le PDF vers https://octacore.io
         doc.link(startX, 283.5, totalBlockW, 6, { url: "https://octacore.io" });
       }
     } catch (err) {
@@ -579,7 +661,7 @@ export default function RecusJoueursPage() {
     }
 
     doc.save(
-      `Rapport_Joueur_${playerFullName.replace(/\s+/g, "_")}_${
+      `Etat_De_Compte_${playerFullName.replace(/\s+/g, "_")}_${
         new Date().toISOString().split("T")[0]
       }.pdf`,
     );
@@ -587,7 +669,7 @@ export default function RecusJoueursPage() {
 
   return (
     <div className="space-y-6">
-      <PageBreadcrumb pageTitle="RP Joueurs" />
+      <PageBreadcrumb pageTitle="État de Compte Joueurs" />
 
       {/* Barre d'outils et Filtres */}
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -600,15 +682,16 @@ export default function RecusJoueursPage() {
                 setSearchQuery(e.target.value);
                 setCurrentPage(1);
               }}
-              placeholder="Rechercher (joueur, parent, matricule...)"
+              placeholder="Rechercher un joueur (Nom, matricule, parent)..."
               className="h-11 w-full min-w-0 max-w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs placeholder:text-gray-400 focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
             />
           </div>
+
           <div className="min-w-0">
             <select
               value={selectedCategory}
-              onChange={(event) => {
-                setSelectedCategory(event.target.value);
+              onChange={(e) => {
+                setSelectedCategory(e.target.value);
                 setCurrentPage(1);
               }}
               className="h-11 w-full min-w-0 max-w-full truncate rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
@@ -621,11 +704,12 @@ export default function RecusJoueursPage() {
               ))}
             </select>
           </div>
+
           <div className="min-w-0">
             <select
               value={selectedSeason}
-              onChange={(event) => {
-                setSelectedSeason(event.target.value);
+              onChange={(e) => {
+                setSelectedSeason(e.target.value);
                 setCurrentPage(1);
               }}
               className="h-11 w-full min-w-0 max-w-full truncate rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
@@ -633,120 +717,109 @@ export default function RecusJoueursPage() {
               <option value="all">Toutes les saisons</option>
               {seasons.map((season) => (
                 <option key={season} value={season}>
-                  {String(season).toLowerCase().startsWith("saison")
-                    ? season
-                    : `Saison ${season}`}
+                  {String(season).toLowerCase().startsWith("saison") ? season : `Saison ${season}`}
                 </option>
               ))}
             </select>
           </div>
         </div>
+
+        {/* Bouton Exporter Excel / CSV */}
+        <div className="relative shrink-0">
+          <button
+            onClick={() => setIsExportOpen(!isExportOpen)}
+            className="inline-flex h-11 items-center justify-center gap-2 whitespace-nowrap rounded-lg bg-[#107C41] px-4 text-sm font-medium text-white shadow-theme-xs hover:bg-[#0c5e31] transition-colors cursor-pointer"
+          >
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <path d="M14 2v6h6"></path>
+              <path d="M8 13h2"></path>
+              <path d="M14 13h2"></path>
+              <path d="M8 17h2"></path>
+              <path d="M14 17h2"></path>
+            </svg>
+            Exporter Excel / CSV
+          </button>
+          <Dropdown
+            isOpen={isExportOpen}
+            onClose={() => setIsExportOpen(false)}
+            className="w-36"
+          >
+            <DropdownItem onItemClick={handleExportExcel}>
+              Excel (.xls)
+            </DropdownItem>
+            <DropdownItem onItemClick={handleExportCSV}>
+              CSV (.csv)
+            </DropdownItem>
+          </Dropdown>
+        </div>
       </div>
 
-      {/* Conteneur principal de la table */}
-      <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03] sm:p-6">
-        <div className="mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      {/* Onglets de filtrage rapide (Tous, À jour, Solde restant) */}
+      <div className="flex border-b border-gray-200 dark:border-gray-800">
+        <button
+          onClick={() => {
+            setActiveTab("all");
+            setCurrentPage(1);
+          }}
+          className={`pb-3 pt-2 px-4 text-sm font-medium border-b-2 transition-colors cursor-pointer ${
+            activeTab === "all"
+              ? "border-brand-500 text-brand-600 dark:text-brand-400 font-semibold"
+              : "border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+          }`}
+        >
+          Tous les joueurs actifs ({uniquePlayersData.length})
+        </button>
+        <button
+          onClick={() => {
+            setActiveTab("paid");
+            setCurrentPage(1);
+          }}
+          className={`pb-3 pt-2 px-4 text-sm font-medium border-b-2 transition-colors cursor-pointer ${
+            activeTab === "paid"
+              ? "border-brand-500 text-brand-600 dark:text-brand-400 font-semibold"
+              : "border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+          }`}
+        >
+          À jour / Régler ({uniquePlayersData.filter((p) => p.isPaidInFull).length})
+        </button>
+        <button
+          onClick={() => {
+            setActiveTab("unpaid");
+            setCurrentPage(1);
+          }}
+          className={`pb-3 pt-2 px-4 text-sm font-medium border-b-2 transition-colors cursor-pointer ${
+            activeTab === "unpaid"
+              ? "border-brand-500 text-brand-600 dark:text-brand-400 font-semibold"
+              : "border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+          }`}
+        >
+          Solde Restant ({uniquePlayersData.filter((p) => !p.isPaidInFull).length})
+        </button>
+      </div>
+
+      {/* Carte Principale du Tableau */}
+      <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white px-4 pb-3 pt-4 dark:border-gray-800 dark:bg-white/[0.03] sm:px-6">
+        <div className="mb-4 flex items-center justify-between">
           <div>
             <h3 className="text-lg font-semibold text-gray-800 dark:text-white/90">
-              Liste des RP Joueurs
+              Liste des États de Compte (Joueurs Actifs)
             </h3>
             <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-              {filteredPlayers.length} joueur(s) trouvé(s)
+              {filteredPlayers.length} joueur(s) actif(s) affiché(s)
             </p>
           </div>
-
-          {/* Bouton d'exportation Excel / CSV */}
-          <div className="relative shrink-0">
-            <button
-              onClick={() => setIsExportOpen(!isExportOpen)}
-              className="inline-flex h-10 items-center justify-center gap-2 whitespace-nowrap rounded-lg bg-[#107C41] px-4 text-sm font-medium text-white shadow-theme-xs hover:bg-[#0c5e31] transition-colors cursor-pointer"
-            >
-              <svg
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                <path d="M14 2v6h6"></path>
-                <path d="M8 13h2"></path>
-                <path d="M14 13h2"></path>
-                <path d="M8 17h2"></path>
-                <path d="M14 17h2"></path>
-              </svg>
-              Exporter Excel / CSV
-            </button>
-            <Dropdown
-              isOpen={isExportOpen}
-              onClose={() => setIsExportOpen(false)}
-              className="absolute right-0 top-full mt-1 w-40 z-30"
-            >
-              <DropdownItem
-                onItemClick={handleExportExcel}
-                className="cursor-pointer"
-              >
-                Excel
-              </DropdownItem>
-              <DropdownItem
-                onItemClick={handleExportCSV}
-                className="cursor-pointer"
-              >
-                CSV
-              </DropdownItem>
-            </Dropdown>
-          </div>
         </div>
 
-        {/* Onglets de filtrage par statut de paiement */}
-        <div className="flex items-center gap-2 border-b border-gray-200 dark:border-gray-800 pb-3 mb-4 overflow-x-auto">
-          <button
-            onClick={() => {
-              setActiveTab("all");
-              setCurrentPage(1);
-            }}
-            className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors cursor-pointer whitespace-nowrap ${
-              activeTab === "all"
-                ? "bg-brand-500 text-white shadow-sm"
-                : "bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
-            }`}
-          >
-            Tous ({uniquePlayersData.length})
-          </button>
-          <button
-            onClick={() => {
-              setActiveTab("paid");
-              setCurrentPage(1);
-            }}
-            className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors cursor-pointer whitespace-nowrap ${
-              activeTab === "paid"
-                ? "bg-brand-500 text-white shadow-sm"
-                : "bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
-            }`}
-          >
-            Avec paiements (
-            {uniquePlayersData.filter((p) => p.playerPayments.length > 0).length})
-          </button>
-          <button
-            onClick={() => {
-              setActiveTab("unpaid");
-              setCurrentPage(1);
-            }}
-            className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors cursor-pointer whitespace-nowrap ${
-              activeTab === "unpaid"
-                ? "bg-brand-500 text-white shadow-sm"
-                : "bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
-            }`}
-          >
-            Sans versement (
-            {uniquePlayersData.filter((p) => p.playerPayments.length === 0).length})
-          </button>
-        </div>
-
-        {/* Tableau des RP Joueurs */}
         <div className="max-w-full overflow-x-auto">
           <Table>
             <TableHeader className="border-y border-gray-100 dark:border-gray-800">
@@ -755,7 +828,7 @@ export default function RecusJoueursPage() {
                   isHeader
                   className="py-3 text-start text-theme-xs font-medium text-gray-500 dark:text-gray-400"
                 >
-                  N° Rapport
+                  N° Réf.
                 </TableCell>
                 <TableCell
                   isHeader
@@ -771,15 +844,27 @@ export default function RecusJoueursPage() {
                 </TableCell>
                 <TableCell
                   isHeader
-                  className="py-3 text-center text-theme-xs font-medium text-gray-500 dark:text-gray-400 whitespace-nowrap"
+                  className="py-3 text-right text-theme-xs font-medium text-gray-500 dark:text-gray-400 whitespace-nowrap"
                 >
-                  Paiements
+                  Cotisation Prévue
                 </TableCell>
                 <TableCell
                   isHeader
                   className="py-3 text-right text-theme-xs font-medium text-gray-500 dark:text-gray-400 whitespace-nowrap"
                 >
                   Total Payé
+                </TableCell>
+                <TableCell
+                  isHeader
+                  className="py-3 text-right text-theme-xs font-medium text-gray-500 dark:text-gray-400 whitespace-nowrap"
+                >
+                  Solde Restant
+                </TableCell>
+                <TableCell
+                  isHeader
+                  className="py-3 text-center text-theme-xs font-medium text-gray-500 dark:text-gray-400 whitespace-nowrap"
+                >
+                  Statut
                 </TableCell>
                 <TableCell
                   isHeader
@@ -790,16 +875,16 @@ export default function RecusJoueursPage() {
               </TableRow>
             </TableHeader>
             <TableBody className="divide-y divide-gray-100 dark:divide-gray-800">
-              {!hydrated ? (
-                <TableBodySkeleton rows={6} columns={6} />
+              {!hydrated && activePlayers.length === 0 ? (
+                <TableBodySkeleton rows={10} columns={8} />
               ) : pagedPlayers.length === 0 ? (
                 <TableRow>
-                  <td
-                    colSpan={6}
+                  <TableCell
+                    colSpan={8}
                     className="py-8 text-center text-theme-sm text-gray-500 dark:text-gray-400"
                   >
-                    Aucun joueur trouvé pour ces critères.
-                  </td>
+                    Aucun joueur actif trouvé pour ces critères.
+                  </TableCell>
                 </TableRow>
               ) : (
                 pagedPlayers.map((playerData) => (
@@ -854,24 +939,34 @@ export default function RecusJoueursPage() {
                         )}
                       </div>
                     </TableCell>
-                    <TableCell className="py-3 text-theme-sm text-center">
-                      <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${
-                        playerData.playerPayments.length > 0
-                          ? "bg-brand-50 text-brand-700 dark:bg-brand-500/10 dark:text-brand-400"
-                          : "bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400"
-                      }`}>
-                        {playerData.playerPayments.length} versement(s)
-                      </span>
+                    <TableCell className="py-3 text-theme-sm text-right font-medium text-gray-700 dark:text-gray-300">
+                      {playerData.expectedFeeLabel}
                     </TableCell>
-                    <TableCell className="py-3 text-theme-sm text-right font-bold text-gray-900 dark:text-white">
+                    <TableCell className="py-3 text-theme-sm text-right font-bold text-emerald-600 dark:text-emerald-400">
                       {playerData.totalPaye}
+                    </TableCell>
+                    <TableCell className="py-3 text-theme-sm text-right font-bold">
+                      {playerData.isPaidInFull ? (
+                        <span className="text-emerald-600 dark:text-emerald-400">0.00</span>
+                      ) : (
+                        <span className="text-rose-600 dark:text-rose-400">{playerData.soldeLabel}</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="py-3 text-theme-sm text-center">
+                      <Badge
+                        variant="light"
+                        color={playerData.isPaidInFull ? "success" : "warning"}
+                        size="sm"
+                      >
+                        {playerData.isPaidInFull ? "À jour" : "Solde Restant"}
+                      </Badge>
                     </TableCell>
                     <TableCell className="py-3 text-theme-sm text-center">
                       <button
                         onClick={() => handleGeneratePDF(playerData)}
                         className="inline-flex items-center justify-center text-brand-500 hover:text-brand-600 dark:text-brand-400 dark:hover:text-brand-300 transition cursor-pointer p-1.5 rounded-lg hover:bg-brand-50 dark:hover:bg-brand-500/10"
-                        aria-label="Télécharger le rapport RP Joueur (PDF)"
-                        title="Télécharger le rapport RP Joueur (PDF)"
+                        aria-label="Télécharger la fiche État de compte (PDF)"
+                        title="Télécharger la fiche État de compte (PDF)"
                       >
                         <svg
                           className="size-5"

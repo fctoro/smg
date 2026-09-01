@@ -136,11 +136,8 @@ async function upsertProfile(profile: Record<string, any>) {
 
 export async function createUser(formData: FormData) {
   try {
-    const fs = require('fs');
-    fs.appendFileSync('server_action.log', `[${new Date().toISOString()}] createUser called\n`);
     const email = formData.get("email") as string;
     const password = formData.get("password") as string;
-    fs.appendFileSync('server_action.log', `Email: ${email}, Role: ${formData.get("role")}\n`);
     const rawFullName = formData.get("fullName") as string;
     const role = formData.get("role") as string;
     const rawSections = formData.get("sections") as string;
@@ -156,46 +153,51 @@ export async function createUser(formData: FormData) {
     const permissions = rawPermissions ? JSON.parse(rawPermissions) : {};
     const fullName = rawFullName && rawFullName.trim() ? rawFullName.trim() : email;
 
-    const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
-      email: email,
-      password: password,
-      email_confirm: true,
-      user_metadata: { full_name: fullName, role: role, sections: sections, categories: categories, permissions: permissions }
-    });
-    fs.appendFileSync('server_action.log', `createUser auth done. authError: ${!!authError}\n`);
+    // Timeout de 15 secondes pour empêcher le blocage
+    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("Délai d'attente dépassé (Timeout Supabase)")), 15000));
+    
+    const { data: authData, error: authError } = await Promise.race([
+      supabaseAdmin.auth.admin.createUser({
+        email: email,
+        password: password,
+        email_confirm: true,
+        user_metadata: { full_name: fullName, role: role, sections: sections, categories: categories, permissions: permissions }
+      }),
+      timeoutPromise
+    ]) as any;
 
     if (authError) {
-      fs.appendFileSync('server_action.log', `authError message: ${authError.message}\n`);
       return { error: authError.message };
     }
 
     if (authData.user) {
-      fs.appendFileSync('server_action.log', `upserting profile for user ${authData.user.id}\n`);
-      const { error: profileError } = await upsertProfile({
-        id: authData.user.id,
-        full_name: fullName,
-        role: role,
-        sections: sections,
-      });
+      const { error: profileError } = await Promise.race([
+        upsertProfile({
+          id: authData.user.id,
+          full_name: fullName,
+          role: role,
+          sections: sections,
+        }),
+        new Promise((resolve) => setTimeout(() => resolve({ error: { message: "Timeout upsertProfile" } }), 10000))
+      ]) as any;
 
       if (profileError) {
         console.error("Profile upsert error:", profileError);
-        fs.appendFileSync('server_action.log', `profileError: ${JSON.stringify(profileError)}\n`);
       }
 
       if (role.toLowerCase() === "coach") {
-        await syncCoachTable(email, fullName, categories);
+        await Promise.race([
+          syncCoachTable(email, fullName, categories),
+          new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout syncCoachTable")), 10000))
+        ]);
       }
     }
 
-    fs.appendFileSync('server_action.log', `revalidating path\n`);
     revalidatePath("/parametres/acces");
-    fs.appendFileSync('server_action.log', `done\n`);
     return { success: true };
     
   } catch (err: any) {
-    const fs = require('fs');
-    fs.appendFileSync('server_action.log', `Catch block hit: ${err?.message}\n${err?.stack}\n`);
+    console.error("createUser Catch block hit:", err);
     return { error: err.message || "Une erreur inattendue est survenue." };
   }
 }

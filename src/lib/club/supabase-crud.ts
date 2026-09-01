@@ -40,23 +40,29 @@ export const updatePlayerInSupabase = async (playerId: string, data: Partial<Pla
   if (data.sexe !== undefined) updatePayload.Sexe = data.sexe === "Féminin" ? "F" : "M";
   if (data.categorie !== undefined) updatePayload.Categorie = data.categorie;
   // Sauvegarder le statut dans la table séparée player_status
-  const statusToUpdate = data.statutJoueur || data.statut;
+  const statusToUpdate = data.statutJoueur !== undefined ? data.statutJoueur : data.statut;
   if (statusToUpdate !== undefined) {
     try {
       const { upsertPlayerStatusAdmin } = await import("@/app/actions/club");
       await upsertPlayerStatusAdmin(Number(resolveEtudiantId(playerId)), statusToUpdate);
     } catch (e) {
-      await supabase
-        .from('player_status')
-        .upsert({ 
-          player_id: resolveEtudiantId(playerId), 
-          status: statusToUpdate,
-          updated_at: new Date().toISOString()
-        }, { onConflict: 'player_id' });
+      if (!statusToUpdate || statusToUpdate.trim() === "") {
+        await supabase
+          .from('player_status')
+          .delete()
+          .eq('player_id', resolveEtudiantId(playerId));
+      } else {
+        await supabase
+          .from('player_status')
+          .upsert({ 
+            player_id: resolveEtudiantId(playerId), 
+            status: statusToUpdate.trim(),
+            updated_at: new Date().toISOString()
+          }, { onConflict: 'player_id' });
+      }
     }
   }
 
-  if (data.cotisationDevise !== undefined) updatePayload.CotisationDevise = data.cotisationDevise;
   if (data.telephone !== undefined) updatePayload.Telephone = data.telephone;
   if (data.email !== undefined) updatePayload.Email = data.email;
   if (data.dateNaissance !== undefined) updatePayload.DateNaissance = data.dateNaissance;
@@ -217,6 +223,7 @@ export const updatePlayerInSupabase = async (playerId: string, data: Partial<Pla
     delete updatePayload.TailleShort;
     delete updatePayload.Saison;
     delete updatePayload.PhotoUrl;
+    delete updatePayload.Programme;
     result = await updatePlayerAdmin(resolveEtudiantId(playerId), updatePayload);
   }
 
@@ -643,10 +650,10 @@ export const updatePaymentInSupabase = async (paymentId: string, data: Partial<i
   if (data.montant !== undefined) {
     if (data.devise === "HTG") {
       updatePayload.MntPayeGd = data.montant;
-      updatePayload.MntPayeUS = null;
+      updatePayload.MntPayeUS = 0;
     } else {
       updatePayload.MntPayeUS = data.montant;
-      updatePayload.MntPayeGd = null;
+      updatePayload.MntPayeGd = 0;
     }
   }
   if (data.datePaiement !== undefined) updatePayload.DateTransact = data.datePaiement;
@@ -921,29 +928,29 @@ export const addPayrollToSupabase = async (data: Omit<import("@/types/club").Pay
 
   // 1. Upload file to Supabase Storage if a file is provided
   if (file) {
-    const fileExt = file.name.split('.').pop();
-    const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
-    const filePath = `receipts/${fileName}`;
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+      const filePath = `receipts/${fileName}`;
 
-    const { error: uploadError } = await supabase.storage
-      .from("payroll-attachments")
-      .upload(filePath, file);
+      const { error: uploadError } = await supabase.storage
+        .from("payroll-attachments")
+        .upload(filePath, file);
 
-    if (uploadError) {
-      console.error("Error uploading file:", uploadError);
-      throw new Error("Erreur lors du téléversement du fichier.");
+      if (!uploadError) {
+        const { data: publicUrlData } = supabase.storage
+          .from("payroll-attachments")
+          .getPublicUrl(filePath);
+        pieceJointeUrl = publicUrlData.publicUrl;
+      }
+    } catch (e) {
+      console.warn("Storage upload failed, continuing without file upload:", e);
     }
-
-    const { data: publicUrlData } = supabase.storage
-      .from("payroll-attachments")
-      .getPublicUrl(filePath);
-
-    pieceJointeUrl = publicUrlData.publicUrl;
   }
 
   // 2. Insert into tblPayroll
   const insertPayload: any = {
-    EmployeId: parseInt(data.employeId, 10),
+    EmployeId: parseInt(data.employeId, 10) || Number(data.employeId) || 0,
     EmployeNom: data.employeNom,
     EmployePrenom: data.employePrenom,
     Fonction: data.fonction,
@@ -970,6 +977,12 @@ export const addPayrollToSupabase = async (data: Omit<import("@/types/club").Pay
     PieceJointe: pieceJointeUrl,
   };
 
+  const { insertPayrollAdmin } = await import("@/app/actions/club");
+  const adminResult = await insertPayrollAdmin(insertPayload);
+  if (adminResult.success && adminResult.data) {
+    return { ...adminResult.data, PieceJointe: pieceJointeUrl };
+  }
+
   let { data: insertedData, error } = await supabase
     .from("tblPayroll")
     .insert(insertPayload)
@@ -994,7 +1007,10 @@ export const addPayrollToSupabase = async (data: Omit<import("@/types/club").Pay
       .single());
   }
 
-  if (error) throw error;
+  if (error) {
+    console.error("Erreur insertion paie :", error);
+    throw error;
+  }
   return { ...insertedData, PieceJointe: pieceJointeUrl };
 };
 
@@ -1002,24 +1018,24 @@ export const updatePayrollInSupabase = async (id: string, data: Partial<import("
   let pieceJointeUrl = data.pieceJointe;
 
   if (file) {
-    const fileExt = file.name.split('.').pop();
-    const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
-    const filePath = `receipts/${fileName}`;
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+      const filePath = `receipts/${fileName}`;
 
-    const { error: uploadError } = await supabase.storage
-      .from("payroll-attachments")
-      .upload(filePath, file);
+      const { error: uploadError } = await supabase.storage
+        .from("payroll-attachments")
+        .upload(filePath, file);
 
-    if (uploadError) {
-      console.error("Error uploading file:", uploadError);
-      throw new Error("Erreur lors du téléversement du fichier.");
+      if (!uploadError) {
+        const { data: publicUrlData } = supabase.storage
+          .from("payroll-attachments")
+          .getPublicUrl(filePath);
+        pieceJointeUrl = publicUrlData.publicUrl;
+      }
+    } catch (e) {
+      console.warn("Storage upload failed in update, continuing:", e);
     }
-
-    const { data: publicUrlData } = supabase.storage
-      .from("payroll-attachments")
-      .getPublicUrl(filePath);
-
-    pieceJointeUrl = publicUrlData.publicUrl;
   }
 
   const updatePayload: any = {};
@@ -1042,6 +1058,12 @@ export const updatePayrollInSupabase = async (id: string, data: Partial<import("
   if (data.netAPayer !== undefined) updatePayload.NetAPayer = data.netAPayer;
   if (data.notes !== undefined) updatePayload.Notes = data.notes;
   if (pieceJointeUrl !== undefined) updatePayload.PieceJointe = pieceJointeUrl;
+
+  const { updatePayrollAdmin } = await import("@/app/actions/club");
+  const adminResult = await updatePayrollAdmin(id, updatePayload);
+  if (adminResult.success) {
+    return { PieceJointe: pieceJointeUrl };
+  }
 
   let { error } = await supabase
     .from("tblPayroll")
@@ -1074,6 +1096,10 @@ export const updatePayrollInSupabase = async (id: string, data: Partial<import("
 };
 
 export const deletePayrollInSupabase = async (id: string) => {
+  const { deletePayrollAdmin } = await import("@/app/actions/club");
+  const adminResult = await deletePayrollAdmin(id);
+  if (adminResult.success) return;
+
   const { error } = await supabase
     .from("tblPayroll")
     .delete()
@@ -1166,14 +1192,18 @@ export const DEFAULT_PRICING_ITEMS: import("@/types/club").PricingItem[] = [
 
 export const fetchRubriquesFromSupabase = async (): Promise<import("@/types/club").PricingItem[]> => {
   try {
-    const { data, error } = await supabase
-      .from("tblRubriques")
-      .select("*")
-      .order("created_at", { ascending: true });
+    const { getRubriquesAdmin } = await import("@/app/actions/club");
+    const adminRes = await getRubriquesAdmin();
+    let data = adminRes.success ? adminRes.data : null;
 
-    if (error) {
-      console.warn("Table tblRubriques introuvable ou erreur Supabase, utilisation des rubriques par défaut:", error.message);
-      return DEFAULT_PRICING_ITEMS;
+    if (!data || data.length === 0) {
+      const { data: clientData } = await supabase
+        .from("tblRubriques")
+        .select("*")
+        .order("created_at", { ascending: true });
+      if (clientData && clientData.length > 0) {
+        data = clientData;
+      }
     }
 
     if (!data || data.length === 0) {
@@ -1209,9 +1239,14 @@ export const addRubriqueToSupabase = async (data: Omit<import("@/types/club").Pr
     actif: data.actif !== undefined ? Boolean(data.actif) : true,
   };
 
-  const { error } = await supabase.from("tblRubriques").insert(payload);
-  if (error) {
-    console.warn("Erreur Supabase lors de l'ajout de rubrique :", error.message);
+  try {
+    const { insertRubriqueAdmin } = await import("@/app/actions/club");
+    const adminRes = await insertRubriqueAdmin(payload);
+    if (!adminRes.success) {
+      await supabase.from("tblRubriques").insert(payload);
+    }
+  } catch (e) {
+    await supabase.from("tblRubriques").insert(payload);
   }
 
   return {
@@ -1232,16 +1267,26 @@ export const updateRubriqueInSupabase = async (id: string, data: Partial<import(
   if (data.estAdhesion !== undefined) payload.est_adhesion = data.estAdhesion;
   if (data.actif !== undefined) payload.actif = data.actif;
 
-  const { error } = await supabase.from("tblRubriques").update(payload).eq("id", id);
-  if (error) {
-    console.warn("Erreur Supabase lors de la modification de rubrique :", error.message);
+  try {
+    const { updateRubriqueAdmin } = await import("@/app/actions/club");
+    const adminRes = await updateRubriqueAdmin(id, payload);
+    if (!adminRes.success) {
+      await supabase.from("tblRubriques").update(payload).eq("id", id);
+    }
+  } catch (e) {
+    await supabase.from("tblRubriques").update(payload).eq("id", id);
   }
 };
 
 export const deleteRubriqueInSupabase = async (id: string) => {
-  const { error } = await supabase.from("tblRubriques").delete().eq("id", id);
-  if (error) {
-    console.warn("Erreur Supabase lors de la suppression de rubrique :", error.message);
+  try {
+    const { deleteRubriqueAdmin } = await import("@/app/actions/club");
+    const adminRes = await deleteRubriqueAdmin(id);
+    if (!adminRes.success) {
+      await supabase.from("tblRubriques").delete().eq("id", id);
+    }
+  } catch (e) {
+    await supabase.from("tblRubriques").delete().eq("id", id);
   }
 };
 

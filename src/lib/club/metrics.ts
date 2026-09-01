@@ -4,9 +4,9 @@ export * from "./season";
 export const getPlayerFullName = (player: Player) =>
   `${player.prenom} ${player.nom}`;
 
-export const formatClubDate = (date: string) => {
+export const formatClubDate = (date: string | Date | null | undefined) => {
   if (!date) return "-";
-  const parsed = new Date(date);
+  const parsed = typeof date === "string" ? new Date(date) : date;
   if (isNaN(parsed.getTime())) return "-";
   return new Intl.DateTimeFormat("fr-FR", {
     day: "2-digit",

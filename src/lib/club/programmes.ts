@@ -2,17 +2,29 @@ import { supabase } from "../supabaseClient";
 import { ProgrammeMatch } from "@/types/club";
 
 export async function fetchProgrammes(): Promise<ProgrammeMatch[]> {
+  try {
+    const { fetchProgrammesAdmin } = await import("@/app/actions/club");
+    const adminRes = await fetchProgrammesAdmin();
+    if (adminRes.success && adminRes.data) {
+      return adminRes.data as ProgrammeMatch[];
+    }
+  } catch (err) {
+    // fallback to client-side supabase client
+  }
+
+  if (!supabase) return [];
+
   const { data, error } = await supabase
     .from("programmes_match")
     .select("*")
     .order("date_programme", { ascending: false });
 
   if (error) {
-    console.error("Error fetching programmes:", error);
+    console.error("Error fetching programmes:", error?.message || error?.details || JSON.stringify(error));
     return [];
   }
 
-  return data as ProgrammeMatch[];
+  return (data || []) as ProgrammeMatch[];
 }
 
 export async function createProgramme(programme: Omit<ProgrammeMatch, "id" | "created_at">): Promise<ProgrammeMatch | null> {
@@ -22,6 +34,8 @@ export async function createProgramme(programme: Omit<ProgrammeMatch, "id" | "cr
     return adminRes.data as ProgrammeMatch;
   }
 
+  if (!supabase) return null;
+
   const { data, error } = await supabase
     .from("programmes_match")
     .insert([programme])
@@ -29,7 +43,7 @@ export async function createProgramme(programme: Omit<ProgrammeMatch, "id" | "cr
     .single();
 
   if (error) {
-    console.error("Error creating programme:", error);
+    console.error("Error creating programme:", error?.message || error?.details || JSON.stringify(error));
     return null;
   }
 
@@ -43,6 +57,8 @@ export async function updateProgramme(id: string, updates: Partial<ProgrammeMatc
     return adminRes.data as ProgrammeMatch;
   }
 
+  if (!supabase) return null;
+
   const { data, error } = await supabase
     .from("programmes_match")
     .update(updates)
@@ -51,7 +67,7 @@ export async function updateProgramme(id: string, updates: Partial<ProgrammeMatc
     .single();
 
   if (error) {
-    console.error("Error updating programme:", error);
+    console.error("Error updating programme:", error?.message || error?.details || JSON.stringify(error));
     return null;
   }
 
@@ -65,13 +81,15 @@ export async function deleteProgramme(id: string): Promise<boolean> {
     return true;
   }
 
+  if (!supabase) return false;
+
   const { error } = await supabase
     .from("programmes_match")
     .delete()
     .eq("id", id);
 
   if (error) {
-    console.error("Error deleting programme:", error);
+    console.error("Error deleting programme:", error?.message || error?.details || JSON.stringify(error));
     return false;
   }
 

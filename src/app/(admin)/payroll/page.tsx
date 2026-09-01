@@ -12,6 +12,7 @@ import {
 import { ConfirmModal } from "@/components/ui/modal/ConfirmModal";
 import { Dropdown } from "@/components/ui/dropdown/Dropdown";
 import { DropdownItem } from "@/components/ui/dropdown/DropdownItem";
+import { formatClubDate } from "@/lib/club/metrics";
 
 // Professional SVG Icons
 const Icons = {
@@ -111,14 +112,29 @@ const formatAmountWithDevise = (amount: number, devise?: "US" | "HTG") => {
   return `$${amount.toLocaleString("en-US")}`;
 };
 
+const getDefaultTaxPercentage = (salary: number) => (salary > 5000 ? 2 : 0);
+
 const calculatePrelevement = (salary: number, percentage: number) =>
   Math.round(((salary * percentage) / 100) * 100) / 100;
 
 const getPrelevementAmount = (record: PayrollRecord) =>
-  record.prelevementMontant ?? calculatePrelevement(record.salaireBase, record.prelevementPourcentage ?? 2);
+  record.prelevementMontant ?? calculatePrelevement(record.salaireBase, record.prelevementPourcentage ?? getDefaultTaxPercentage(record.salaireBase));
 
 export default function PayrollPage() {
   const { employees, payrollRecords, setPayrollRecords, rubriques } = useClubData();
+
+  // Liste triée par ordre alphabétique (Nom, Prénom A-Z) des employés et coachs
+  const sortedEmployees = useMemo(() => {
+    return [...employees].sort((a, b) => {
+      const nomA = (a.nom || "").trim();
+      const nomB = (b.nom || "").trim();
+      const nomCompare = nomA.localeCompare(nomB, "fr", { sensitivity: "base" });
+      if (nomCompare !== 0) return nomCompare;
+      const prenomA = (a.prenom || "").trim();
+      const prenomB = (b.prenom || "").trim();
+      return prenomA.localeCompare(prenomB, "fr", { sensitivity: "base" });
+    });
+  }, [employees]);
 
   // Filters
   const currentYearStr = String(CURRENT_YEAR);
@@ -185,10 +201,10 @@ export default function PayrollPage() {
     prelevementSnowizz: 0,
     ajustement: 0,
     taxeIRI: 0,
-    taxeCFGDCT: 1,
-    taxeCAS: 1,
-    taxeFDU: 1,
-    taxeONA: 6,
+    taxeCFGDCT: 0,
+    taxeCAS: 0,
+    taxeFDU: 0,
+    taxeONA: 0,
     vacancesPayees: 0,
     congeSansSolde: 0,
     cumulPaiements: 0,
@@ -199,20 +215,30 @@ export default function PayrollPage() {
     file: null,
   });
 
-  // Filtered List
+  // Filtered & Alphabetically Sorted List
   const filteredRecords = useMemo(() => {
-    return payrollRecords.filter((rec) => {
-      const [recYear, recMonth] = rec.mois ? rec.mois.split("-") : ["", ""];
+    return payrollRecords
+      .filter((rec) => {
+        const [recYear, recMonth] = rec.mois ? rec.mois.split("-") : ["", ""];
 
-      const matchYear = selectedYear === "all" || recYear === selectedYear;
-      const matchMonth = selectedMonth === "all" || recMonth === selectedMonth;
+        const matchYear = selectedYear === "all" || recYear === selectedYear;
+        const matchMonth = selectedMonth === "all" || recMonth === selectedMonth;
 
-      const fullName = `${rec.employePrenom} ${rec.employeNom} ${rec.fonction}`.toLowerCase();
-      const matchSearch = fullName.includes(searchTerm.toLowerCase());
-      const matchStatus = statusFilter === "all" || rec.statut === statusFilter;
+        const fullName = `${rec.employePrenom} ${rec.employeNom} ${rec.fonction}`.toLowerCase();
+        const matchSearch = fullName.includes(searchTerm.toLowerCase());
+        const matchStatus = statusFilter === "all" || rec.statut === statusFilter;
 
-      return matchYear && matchMonth && matchSearch && matchStatus;
-    });
+        return matchYear && matchMonth && matchSearch && matchStatus;
+      })
+      .sort((a, b) => {
+        const nomA = (a.employeNom || "").trim();
+        const nomB = (b.employeNom || "").trim();
+        const nomCompare = nomA.localeCompare(nomB, "fr", { sensitivity: "base" });
+        if (nomCompare !== 0) return nomCompare;
+        const prenomA = (a.employePrenom || "").trim();
+        const prenomB = (b.employePrenom || "").trim();
+        return prenomA.localeCompare(prenomB, "fr", { sensitivity: "base" });
+      });
   }, [payrollRecords, selectedYear, selectedMonth, searchTerm, statusFilter]);
 
   // KPI Calculations based on active filters (separate by currency)
@@ -294,12 +320,105 @@ export default function PayrollPage() {
 
   const handleExportExcel = () => {
     setIsExportOpen(false);
-    const content = generatePayrollExportContent(";");
-    const blob = new Blob([content], { type: "text/csv;charset=utf-8;" });
+    const headers = [
+      "Nom & Prénom",
+      "Fonction / Rôle",
+      "Période",
+      "Type de Salaire",
+      "Salaire de Base",
+      "Primes & Bonus",
+      "Vacances Payées",
+      "Taxe Revenu (2%)",
+      "Net à Payer",
+      "Devise",
+      "Statut",
+      "Date de Paiement",
+      "Mode de Paiement",
+      "Remarques / Notes",
+    ];
+
+    const totalNetHTG = filteredRecords
+      .filter((r) => r.devise === "HTG")
+      .reduce((sum, r) => sum + (r.netAPayer || 0), 0);
+    const totalNetUSD = filteredRecords
+      .filter((r) => r.devise !== "HTG")
+      .reduce((sum, r) => sum + (r.netAPayer || 0), 0);
+
+    const thead = headers.map((h) => `<th>${h}</th>`).join("");
+    const tbody = filteredRecords
+      .map((r) => {
+        const nomComplet = r.employeNom ? `${r.employeNom.toUpperCase()} ${r.employePrenom}` : r.employePrenom;
+        const row = [
+          nomComplet,
+          r.fonction || "-",
+          formatMonthYearDisplay(r.mois),
+          r.typeSalaire === "variable" ? "Variable / Séance" : "Fixe",
+          Number(r.salaireBase || 0).toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+          Number(r.bonus || 0).toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+          Number(r.vacancesPayees || 0).toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+          Number(r.deductions || 0).toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+          Number(r.netAPayer || 0).toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+          r.devise || "HTG",
+          r.statut === "paye" ? "Payé" : "En attente",
+          r.datePaiement ? formatClubDate(r.datePaiement) : "-",
+          r.modePaiement || "-",
+          r.notes || "-",
+        ];
+        return `<tr>${row
+          .map(
+            (field) =>
+              `<td>${String(field || "")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")}</td>`,
+          )
+          .join("")}</tr>`;
+      })
+      .join("");
+
+    const summaryRows = `
+      <tr style="background-color: #f8fafc; font-weight: bold;">
+        <td colspan="8" style="text-align: right;">TOTAL NET HTG :</td>
+        <td>${totalNetHTG.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+        <td>HTG</td>
+        <td colspan="4"></td>
+      </tr>
+      <tr style="background-color: #f8fafc; font-weight: bold;">
+        <td colspan="8" style="text-align: right;">TOTAL NET USD :</td>
+        <td>${totalNetUSD.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+        <td>USD</td>
+        <td colspan="4"></td>
+      </tr>
+    `;
+
+    const htmlContent = `
+      <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+      <head>
+        <meta charset="utf-8" />
+        <style>
+          table { border-collapse: collapse; width: 100%; font-family: Arial, sans-serif; font-size: 13px; }
+          td, th { border: 1px solid #cccccc; padding: 6px 10px; text-align: left; }
+          th { background-color: #107C41; color: white; font-weight: bold; }
+        </style>
+      </head>
+      <body>
+        <table>
+          <thead><tr>${thead}</tr></thead>
+          <tbody>
+            ${tbody}
+            ${summaryRows}
+          </tbody>
+        </table>
+      </body>
+      </html>
+    `;
+
+    const blob = new Blob([htmlContent], {
+      type: "application/vnd.ms-excel;charset=utf-8;",
+    });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `payroll_export_${selectedYear}_${selectedMonth}.csv`;
+    a.download = `payroll_export_${selectedYear}_${selectedMonth}.xls`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -332,6 +451,20 @@ export default function PayrollPage() {
     const targetEmp = employees.find((emp) => emp.id === formData.employeId);
     if (!targetEmp) return;
 
+    const targetMois = `${formData.annee}-${formData.mois}`;
+
+    // Anti-doublon Payroll: Vérifier si un bulletin existe déjà pour cet employé et ce mois
+    if (!editingPayrollId) {
+      const duplicatePayroll = payrollRecords.find(
+        (rec) => rec.employeId === targetEmp.id && rec.mois === targetMois
+      );
+      if (duplicatePayroll) {
+        const errorMsg = `❌ Un bulletin de paie existe déjà pour ${targetEmp.nom.toUpperCase()} ${targetEmp.prenom} pour la période ${formatMonthYearDisplay(targetMois)}. La création d'un doublon est bloquée.`;
+        alert(errorMsg);
+        return;
+      }
+    }
+
     // Calculate gross base salary based on fixed vs variable per session
     const grossBaseSalary =
       formData.typeSalaire === "variable"
@@ -356,7 +489,6 @@ export default function PayrollPage() {
     
     // Net Pay = Gross + Bonus + Paid Vacations - Total Deductions
     const net = grossBaseSalary + formData.bonus + formData.vacancesPayees - totalDeductions;
-    const targetMois = `${formData.annee}-${formData.mois}`;
 
     // Calculate cumulative payments for this employee
     const existingEmpRecords = payrollRecords.filter(
@@ -473,10 +605,10 @@ export default function PayrollPage() {
         prelevementSnowizz: 0,
         ajustement: 0,
         taxeIRI: 0,
-        taxeCFGDCT: 1,
-        taxeCAS: 1,
-        taxeFDU: 1,
-        taxeONA: 6,
+        taxeCFGDCT: 0,
+        taxeCAS: 0,
+        taxeFDU: 0,
+        taxeONA: 0,
         vacancesPayees: 0,
         congeSansSolde: 0,
         cumulPaiements: 0,
@@ -486,8 +618,9 @@ export default function PayrollPage() {
         notes: "",
         file: null,
       });
-    } catch (error) {
-      alert("Erreur lors de l'enregistrement du bulletin de paie.");
+    } catch (error: any) {
+      console.error("Erreur lors de l'enregistrement du bulletin de paie :", error);
+      alert(`Erreur lors de l'enregistrement du bulletin de paie : ${error?.message || error || "Veuillez réessayer."}`);
     }
   };
 
@@ -575,10 +708,10 @@ export default function PayrollPage() {
       prelevementSnowizz: record.prelevementSnowizz || 0,
       ajustement: record.ajustement || 0,
       taxeIRI: record.taxeIRI || 0,
-      taxeCFGDCT: record.taxeCFGDCT ?? 1,
-      taxeCAS: record.taxeCAS ?? 1,
-      taxeFDU: record.taxeFDU ?? 1,
-      taxeONA: record.taxeONA ?? 6,
+      taxeCFGDCT: record.taxeCFGDCT ?? 0,
+      taxeCAS: record.taxeCAS ?? 0,
+      taxeFDU: record.taxeFDU ?? 0,
+      taxeONA: record.taxeONA ?? 0,
       vacancesPayees: record.vacancesPayees || 0,
       congeSansSolde: record.congeSansSolde || 0,
       cumulPaiements: record.cumulPaiements || 0,
@@ -951,8 +1084,8 @@ export default function PayrollPage() {
                       value={formData.employeId}
                       onChange={(e) => {
                         const empId = e.target.value;
-                        const emp = employees.find((x) => x.id === empId);
-                        const empSal = emp?.salaire || 500;
+                        const emp = sortedEmployees.find((x) => x.id === empId);
+                        const empSal = emp?.salaire || 0;
                         const empDev: "US" | "HTG" = emp?.devise || (empSal >= 1000 ? "HTG" : "US");
                         const isCoach = (emp?.fonction || emp?.role || "").toLowerCase().includes("coach");
                         const defaultType = emp?.typeSalaire || (isCoach ? "variable" : "fixe");
@@ -963,16 +1096,16 @@ export default function PayrollPage() {
                           typeSalaire: defaultType,
                           tauxParSeance: defaultTaux,
                           salaireBase: empSal,
-                          prelevementPourcentage: prev.prelevementPourcentage || 2,
+                          prelevementPourcentage: getDefaultTaxPercentage(empSal),
                           devise: empDev,
                         }));
                       }}
                       className="w-full rounded-xl border border-gray-300 bg-white p-2.5 text-sm font-semibold text-gray-900 dark:border-gray-700 dark:bg-gray-800 dark:text-white"
                     >
-                      <option value="">-- Choisir un employé --</option>
-                      {employees.map((emp) => (
+                      <option value="">-- Choisir un employé / coach (A-Z) --</option>
+                      {sortedEmployees.map((emp) => (
                         <option key={emp.id} value={emp.id}>
-                          {emp.prenom} {emp.nom} ({emp.fonction || "Employé"})
+                          {emp.nom ? `${emp.nom.toUpperCase()} ${emp.prenom}` : `${emp.prenom}`} ({emp.fonction || emp.role || "Employé"})
                         </option>
                       ))}
                     </select>
@@ -1047,9 +1180,17 @@ export default function PayrollPage() {
                           min="0"
                           step="any"
                           value={formData.nombreJoursSemaine === 0 ? "" : formData.nombreJoursSemaine}
-                          onChange={(e) =>
-                            setFormData({ ...formData, nombreJoursSemaine: e.target.value === "" ? 0 : parseFloat(e.target.value) || 0 })
-                          }
+                          onChange={(e) => {
+                            const val = e.target.value === "" ? 0 : parseFloat(e.target.value) || 0;
+                            setFormData((prev) => {
+                              const total = (val * prev.tauxJourSemaine) + (prev.nombreJoursWeekend * prev.tauxJourWeekend) + (prev.nombreSeances * prev.tauxParSeance);
+                              return {
+                                ...prev,
+                                nombreJoursSemaine: val,
+                                prelevementPourcentage: getDefaultTaxPercentage(total),
+                              };
+                            });
+                          }}
                           placeholder="Ex: 8"
                           className="w-full rounded-xl border border-gray-300 bg-white p-2.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
                         />
@@ -1063,9 +1204,17 @@ export default function PayrollPage() {
                           min="0"
                           step="any"
                           value={formData.tauxJourSemaine === 0 ? "" : formData.tauxJourSemaine}
-                          onChange={(e) =>
-                            setFormData({ ...formData, tauxJourSemaine: e.target.value === "" ? 0 : parseFloat(e.target.value) || 0 })
-                          }
+                          onChange={(e) => {
+                            const val = e.target.value === "" ? 0 : parseFloat(e.target.value) || 0;
+                            setFormData((prev) => {
+                              const total = (prev.nombreJoursSemaine * val) + (prev.nombreJoursWeekend * prev.tauxJourWeekend) + (prev.nombreSeances * prev.tauxParSeance);
+                              return {
+                                ...prev,
+                                tauxJourSemaine: val,
+                                prelevementPourcentage: getDefaultTaxPercentage(total),
+                              };
+                            });
+                          }}
                           placeholder="Ex: 500"
                           className="w-full rounded-xl border border-gray-300 bg-white p-2.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
                         />
@@ -1079,9 +1228,17 @@ export default function PayrollPage() {
                           min="0"
                           step="any"
                           value={formData.nombreJoursWeekend === 0 ? "" : formData.nombreJoursWeekend}
-                          onChange={(e) =>
-                            setFormData({ ...formData, nombreJoursWeekend: e.target.value === "" ? 0 : parseFloat(e.target.value) || 0 })
-                          }
+                          onChange={(e) => {
+                            const val = e.target.value === "" ? 0 : parseFloat(e.target.value) || 0;
+                            setFormData((prev) => {
+                              const total = (prev.nombreJoursSemaine * prev.tauxJourSemaine) + (val * prev.tauxJourWeekend) + (prev.nombreSeances * prev.tauxParSeance);
+                              return {
+                                ...prev,
+                                nombreJoursWeekend: val,
+                                prelevementPourcentage: getDefaultTaxPercentage(total),
+                              };
+                            });
+                          }}
                           placeholder="Ex: 4"
                           className="w-full rounded-xl border border-gray-300 bg-white p-2.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
                         />
@@ -1095,9 +1252,17 @@ export default function PayrollPage() {
                           min="0"
                           step="any"
                           value={formData.tauxJourWeekend === 0 ? "" : formData.tauxJourWeekend}
-                          onChange={(e) =>
-                            setFormData({ ...formData, tauxJourWeekend: e.target.value === "" ? 0 : parseFloat(e.target.value) || 0 })
-                          }
+                          onChange={(e) => {
+                            const val = e.target.value === "" ? 0 : parseFloat(e.target.value) || 0;
+                            setFormData((prev) => {
+                              const total = (prev.nombreJoursSemaine * prev.tauxJourSemaine) + (prev.nombreJoursWeekend * val) + (prev.nombreSeances * prev.tauxParSeance);
+                              return {
+                                ...prev,
+                                tauxJourWeekend: val,
+                                prelevementPourcentage: getDefaultTaxPercentage(total),
+                              };
+                            });
+                          }}
                           placeholder="Ex: 750"
                           className="w-full rounded-xl border border-gray-300 bg-white p-2.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
                         />
@@ -1114,9 +1279,17 @@ export default function PayrollPage() {
                           min="0"
                           step="any"
                           value={formData.nombreSeances === 0 ? "" : formData.nombreSeances}
-                          onChange={(e) =>
-                            setFormData({ ...formData, nombreSeances: e.target.value === "" ? 0 : parseFloat(e.target.value) || 0 })
-                          }
+                          onChange={(e) => {
+                            const val = e.target.value === "" ? 0 : parseFloat(e.target.value) || 0;
+                            setFormData((prev) => {
+                              const total = (prev.nombreJoursSemaine * prev.tauxJourSemaine) + (prev.nombreJoursWeekend * prev.tauxJourWeekend) + (val * prev.tauxParSeance);
+                              return {
+                                ...prev,
+                                nombreSeances: val,
+                                prelevementPourcentage: getDefaultTaxPercentage(total),
+                              };
+                            });
+                          }}
                           className="w-full rounded-xl border border-gray-300 bg-white p-2.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
                           placeholder="Ex: 2"
                         />
@@ -1130,9 +1303,17 @@ export default function PayrollPage() {
                           min="0"
                           step="any"
                           value={formData.tauxParSeance === 0 ? "" : formData.tauxParSeance}
-                          onChange={(e) =>
-                            setFormData({ ...formData, tauxParSeance: e.target.value === "" ? 0 : parseFloat(e.target.value) || 0 })
-                          }
+                          onChange={(e) => {
+                            const val = e.target.value === "" ? 0 : parseFloat(e.target.value) || 0;
+                            setFormData((prev) => {
+                              const total = (prev.nombreJoursSemaine * prev.tauxJourSemaine) + (prev.nombreJoursWeekend * prev.tauxJourWeekend) + (prev.nombreSeances * val);
+                              return {
+                                ...prev,
+                                tauxParSeance: val,
+                                prelevementPourcentage: getDefaultTaxPercentage(total),
+                              };
+                            });
+                          }}
                           className="w-full rounded-xl border border-gray-300 bg-white p-2.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
                           placeholder="Ex: 1000"
                         />
@@ -1194,9 +1375,14 @@ export default function PayrollPage() {
                         step="any"
                         required
                         value={formData.salaireBase === 0 ? "" : formData.salaireBase}
-                        onChange={(e) =>
-                          setFormData({ ...formData, salaireBase: e.target.value === "" ? 0 : parseFloat(e.target.value) || 0 })
-                        }
+                        onChange={(e) => {
+                          const val = e.target.value === "" ? 0 : parseFloat(e.target.value) || 0;
+                          setFormData((prev) => ({
+                            ...prev,
+                            salaireBase: val,
+                            prelevementPourcentage: getDefaultTaxPercentage(val),
+                          }));
+                        }}
                         placeholder="0.00"
                         className="w-full rounded-xl border border-gray-300 bg-white p-2.5 text-sm font-semibold dark:border-gray-700 dark:bg-gray-800 dark:text-white"
                       />
@@ -1250,7 +1436,7 @@ export default function PayrollPage() {
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
                       <div>
                         <label className="mb-1 block text-[11px] font-semibold text-gray-700 dark:text-gray-300">
-                          Masse sal. (%)
+                          Taxe Revenu (%)
                         </label>
                         <input
                           type="number"
@@ -1261,7 +1447,7 @@ export default function PayrollPage() {
                             setFormData({ ...formData, prelevementPourcentage: e.target.value === "" ? 0 : parseFloat(e.target.value) || 0 })
                           }
                           placeholder="2"
-                          className="w-full rounded-lg border border-gray-300 bg-white p-2 text-xs font-semibold dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                          className="w-full rounded-lg border border-brand-300 bg-white p-2 text-xs font-semibold dark:border-brand-700 dark:bg-gray-800 dark:text-white"
                         />
                       </div>
                       <div>
@@ -1276,7 +1462,7 @@ export default function PayrollPage() {
                           onChange={(e) =>
                             setFormData({ ...formData, taxeIRI: e.target.value === "" ? 0 : parseFloat(e.target.value) || 0 })
                           }
-                          placeholder="0.00"
+                          placeholder="0"
                           className="w-full rounded-lg border border-gray-300 bg-white p-2 text-xs font-semibold dark:border-gray-700 dark:bg-gray-800 dark:text-white"
                         />
                       </div>
@@ -1292,7 +1478,7 @@ export default function PayrollPage() {
                           onChange={(e) =>
                             setFormData({ ...formData, taxeCFGDCT: e.target.value === "" ? 0 : parseFloat(e.target.value) || 0 })
                           }
-                          placeholder="1"
+                          placeholder="0"
                           className="w-full rounded-lg border border-gray-300 bg-white p-2 text-xs font-semibold dark:border-gray-700 dark:bg-gray-800 dark:text-white"
                         />
                       </div>
@@ -1308,7 +1494,7 @@ export default function PayrollPage() {
                           onChange={(e) =>
                             setFormData({ ...formData, taxeCAS: e.target.value === "" ? 0 : parseFloat(e.target.value) || 0 })
                           }
-                          placeholder="1"
+                          placeholder="0"
                           className="w-full rounded-lg border border-gray-300 bg-white p-2 text-xs font-semibold dark:border-gray-700 dark:bg-gray-800 dark:text-white"
                         />
                       </div>
@@ -1324,7 +1510,7 @@ export default function PayrollPage() {
                           onChange={(e) =>
                             setFormData({ ...formData, taxeFDU: e.target.value === "" ? 0 : parseFloat(e.target.value) || 0 })
                           }
-                          placeholder="1"
+                          placeholder="0"
                           className="w-full rounded-lg border border-gray-300 bg-white p-2 text-xs font-semibold dark:border-gray-700 dark:bg-gray-800 dark:text-white"
                         />
                       </div>
@@ -1340,7 +1526,7 @@ export default function PayrollPage() {
                           onChange={(e) =>
                             setFormData({ ...formData, taxeONA: e.target.value === "" ? 0 : parseFloat(e.target.value) || 0 })
                           }
-                          placeholder="6"
+                          placeholder="0"
                           className="w-full rounded-lg border border-gray-300 bg-white p-2 text-xs font-semibold dark:border-gray-700 dark:bg-gray-800 dark:text-white"
                         />
                       </div>
@@ -1681,10 +1867,10 @@ export default function PayrollPage() {
                   </tr>
                 )}
 
-                {(selectedSlip.prelevementPourcentage || 0) > 0 && (
+                {(getPrelevementAmount(selectedSlip) > 0 || (selectedSlip.prelevementPourcentage ?? getDefaultTaxPercentage(selectedSlip.salaireBase)) > 0) && (
                   <tr>
                     <td className="p-2.5">
-                      Retenue légale / Taxe sur masse salariale ({selectedSlip.prelevementPourcentage}%)
+                      Taxe sur le Revenu ({selectedSlip.prelevementPourcentage ?? getDefaultTaxPercentage(selectedSlip.salaireBase)}%)
                     </td>
                     <td className="p-2.5 text-right font-medium text-rose-600">
                       -{formatAmountWithDevise(getPrelevementAmount(selectedSlip), selectedSlip.devise)}

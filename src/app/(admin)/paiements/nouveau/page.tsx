@@ -321,7 +321,9 @@ export default function NewPaymentPage() {
       // Le montant total dû est basé sur le total des rubriques sélectionnées
       const montantAvecPlan = totalRubriques;
       const totalDueInUSD = devise === "HTG" ? (taux > 0 ? montantAvecPlan / taux : montantAvecPlan) : montantAvecPlan;
-      const paymentMarkers = `[ADHESION:${adhesionCode}] [PLAN:${planCode}] [STATUT:${statusCode}] [TOTAL_DUE:${totalDueInUSD}]`;
+      const planRabaisPct = selectedPlan === "annuel" ? 10 : selectedPlan === "semestriel" ? 5 : 0;
+      const rabaisTag = planRabaisPct > 0 ? ` [RABAIS:${planRabaisPct}%]` : "";
+      const paymentMarkers = `[ADHESION:${adhesionCode}] [PLAN:${planCode}]${rabaisTag} [STATUT:${statusCode}] [TOTAL_DUE:${totalDueInUSD}]`;
       const finalRemarque = `${paymentMarkers} ${description.trim()} ${adhesionRemark} ${planRemark}`.trim();
       const uploadPromise = paymentPhotos.length > 0 ? uploadPaymentPhotosToSupabase(paymentPhotos) : Promise.resolve([]);
 

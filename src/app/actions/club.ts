@@ -19,16 +19,26 @@ export async function insertPlayerAdmin(insertPayload: any) {
   if (!supabaseAdmin) return { success: false, error: "Service role Supabase indisponible." };
 
   const calculateMaxId = async (): Promise<number> => {
-    const { data: allRows } = await supabaseAdmin
-      .from("tblEtudiants")
-      .select("EtudiantID");
-    
     let maxId = 0;
-    if (allRows && allRows.length > 0) {
-      allRows.forEach((r: any) => {
+    let from = 0;
+    const step = 1000;
+    while (true) {
+      const { data: rows, error } = await supabaseAdmin
+        .from("tblEtudiants")
+        .select("EtudiantID")
+        .range(from, from + step - 1);
+
+      if (error || !rows || rows.length === 0) break;
+
+      for (const r of rows) {
         const num = Number(r.EtudiantID);
-        if (!isNaN(num) && num > maxId) maxId = num;
-      });
+        if (!isNaN(num) && num > maxId) {
+          maxId = num;
+        }
+      }
+
+      if (rows.length < step) break;
+      from += step;
     }
     return maxId;
   };
@@ -125,11 +135,21 @@ export async function updatePlayerAdmin(etudiantId: number | string, updatePaylo
 
 export async function upsertPlayerStatusAdmin(etudiantId: number, status: string) {
   if (!supabaseAdmin) return { success: false, error: "Service role Supabase indisponible." };
+  
+  if (!status || status.trim() === "") {
+    const { error } = await supabaseAdmin
+      .from('player_status')
+      .delete()
+      .eq('player_id', etudiantId);
+    if (error) return { success: false, error: error.message };
+    return { success: true };
+  }
+
   const { error } = await supabaseAdmin
     .from('player_status')
     .upsert({ 
       player_id: etudiantId, 
-      status: status,
+      status: status.trim(),
       updated_at: new Date().toISOString()
     }, { onConflict: 'player_id' });
 
@@ -170,6 +190,15 @@ export async function softDeletePlayerAdmin(etudiantId: number) {
   }
 
   return { success: true };
+}
+export async function getEmployeesAdmin() {
+  if (!supabaseAdmin) return { success: false, error: "Service role Supabase indisponible." };
+  const { data, error } = await supabaseAdmin
+    .from("tblEmployes")
+    .select("*")
+    .order("EmployeId", { ascending: true });
+  if (error) return { success: false, error: error.message };
+  return { success: true, data };
 }
 
 export async function insertEmployeeAdmin(insertPayload: any) {
@@ -213,32 +242,21 @@ export async function softDeleteEmployeeAdmin(employeeId: number | string) {
   const numId = Number(strId.replace(/\D/g, ""));
   const targetId = !isNaN(numId) && numId > 0 ? numId : strId;
 
-  // Attempt 1: Desactive = true, IsDeleted = 1
   let res = await supabaseAdmin
     .from("tblEmployes")
-    .update({ Desactive: true, IsDeleted: 1 })
+    .update({ Desactive: 1 })
     .or(`EmployeId.eq.${targetId},EmployeId.eq.${strId}`);
 
   if (res.error) {
-    // Attempt 2: Desactive = 1, IsDeleted = 1
     res = await supabaseAdmin
       .from("tblEmployes")
-      .update({ Desactive: 1, IsDeleted: 1 })
-      .or(`EmployeId.eq.${targetId},EmployeId.eq.${strId}`);
-  }
-
-  if (res.error) {
-    // Attempt 3: Hard delete fallback
-    res = await supabaseAdmin
-      .from("tblEmployes")
-      .delete()
+      .update({ Desactive: true })
       .or(`EmployeId.eq.${targetId},EmployeId.eq.${strId}`);
   }
 
   if (res.error) {
     return { success: false, error: res.error.message };
   }
-
   return { success: true };
 }
 
@@ -278,6 +296,16 @@ export async function deleteParentAdmin(playerIds: (number | string)[]) {
   return { success: true };
 }
 
+export async function fetchProgrammesAdmin() {
+  if (!supabaseAdmin) return { success: false, error: "Service role Supabase indisponible." };
+  const { data, error } = await supabaseAdmin
+    .from("programmes_match")
+    .select("*")
+    .order("date_programme", { ascending: false });
+  if (error) return { success: false, error: error.message };
+  return { success: true, data };
+}
+
 export async function createProgrammeAdmin(payload: any) {
   if (!supabaseAdmin) return { success: false, error: "Service role Supabase indisponible." };
   const { data, error } = await supabaseAdmin.from("programmes_match").insert([payload]).select().single();
@@ -304,10 +332,16 @@ export async function insertPaymentAdmin(paymentPayload: Record<string, any>) {
     return { success: false, error: "Service role Supabase indisponible." };
   }
 
+  const payload = {
+    FactureId: 0,
+    Annule: 0,
+    ...paymentPayload,
+  };
+
   try {
     const { data, error } = await supabaseAdmin
       .from("tblPaiements")
-      .insert(paymentPayload)
+      .insert(payload)
       .select("Id")
       .single();
 
@@ -386,3 +420,270 @@ export async function updateSiteStatus(field: "inscriptions_ouvertes" | "detecti
     return { success: false, error: error.message };
   }
 }
+
+export async function getRubriquesAdmin() {
+  if (!supabaseAdmin) return { success: false, error: "Service role Supabase indisponible." };
+  const { data, error } = await supabaseAdmin
+    .from("tblRubriques")
+    .select("*")
+    .order("created_at", { ascending: true });
+  if (error) return { success: false, error: error.message };
+  return { success: true, data };
+}
+
+export async function insertRubriqueAdmin(payload: any) {
+  if (!supabaseAdmin) return { success: false, error: "Service role Supabase indisponible." };
+  const { data, error } = await supabaseAdmin
+    .from("tblRubriques")
+    .insert([payload])
+    .select()
+    .single();
+  if (error) return { success: false, error: error.message };
+  return { success: true, data };
+}
+
+export async function updateRubriqueAdmin(id: string, payload: any) {
+  if (!supabaseAdmin) return { success: false, error: "Service role Supabase indisponible." };
+  const { data, error } = await supabaseAdmin
+    .from("tblRubriques")
+    .update(payload)
+    .eq("id", id)
+    .select()
+    .single();
+  if (error) return { success: false, error: error.message };
+  return { success: true, data };
+}
+
+export async function deleteRubriqueAdmin(id: string) {
+  if (!supabaseAdmin) return { success: false, error: "Service role Supabase indisponible." };
+  const { error } = await supabaseAdmin
+    .from("tblRubriques")
+    .delete()
+    .eq("id", id);
+  if (error) return { success: false, error: error.message };
+  return { success: true };
+}
+
+export async function fetchCoachesAdmin() {
+  if (!supabaseAdmin) return { success: false, error: "Service role Supabase indisponible." };
+  const { data, error } = await supabaseAdmin
+    .from("tblCoachs")
+    .select("*")
+    .order("nom", { ascending: true });
+  if (error) return { success: false, error: error.message };
+  return { success: true, data };
+}
+
+export async function createCoachAdmin(payload: any) {
+  if (!supabaseAdmin) return { success: false, error: "Service role Supabase indisponible." };
+  const { data, error } = await supabaseAdmin
+    .from("tblCoachs")
+    .insert([payload])
+    .select()
+    .single();
+  if (error) return { success: false, error: error.message };
+  return { success: true, data };
+}
+
+export async function updateCoachAdmin(id: string, payload: any) {
+  if (!supabaseAdmin) return { success: false, error: "Service role Supabase indisponible." };
+  const { data, error } = await supabaseAdmin
+    .from("tblCoachs")
+    .update(payload)
+    .eq("id", id)
+    .select()
+    .single();
+  if (error) return { success: false, error: error.message };
+  return { success: true, data };
+}
+
+export async function deleteCoachAdmin(id: string) {
+  if (!supabaseAdmin) return { success: false, error: "Service role Supabase indisponible." };
+  const { error } = await supabaseAdmin
+    .from("tblCoachs")
+    .delete()
+    .eq("id", id);
+  if (error) return { success: false, error: error.message };
+  return { success: true };
+}
+
+export async function getSiteMessagesAdmin() {
+  if (!supabaseAdmin) return { success: false, error: "Service role Supabase indisponible." };
+  let allData: any[] = [];
+  let from = 0;
+  const step = 1000;
+  while (true) {
+    const { data, error } = await supabaseAdmin
+      .from("site_messages")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .range(from, from + step - 1);
+
+    if (error) break;
+    if (data && data.length > 0) {
+      allData = [...allData, ...data];
+      if (data.length < step) break;
+      from += step;
+    } else {
+      break;
+    }
+  }
+  return { success: true, data: allData };
+}
+
+export async function getDetectionRegistrationsAdmin() {
+  if (!supabaseAdmin) return { success: false, error: "Service role Supabase indisponible." };
+  let allData: any[] = [];
+  let from = 0;
+  const step = 1000;
+  while (true) {
+    const { data, error } = await supabaseAdmin
+      .from("detection_registrations")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .range(from, from + step - 1);
+
+    if (error) break;
+    if (data && data.length > 0) {
+      allData = [...allData, ...data];
+      if (data.length < step) break;
+      from += step;
+    } else {
+      break;
+    }
+  }
+  return { success: true, data: allData };
+}
+
+export async function getPaiementsAdmin() {
+  if (!supabaseAdmin) return { success: false, error: "Service role Supabase indisponible." };
+  let allData: any[] = [];
+  let from = 0;
+  const step = 1000;
+  while (true) {
+    const { data, error } = await supabaseAdmin
+      .from("tblPaiements")
+      .select("*")
+      .order("Id", { ascending: false })
+      .range(from, from + step - 1);
+
+    if (error) break;
+    if (data && data.length > 0) {
+      allData = [...allData, ...data];
+      if (data.length < step) break;
+      from += step;
+    } else {
+      break;
+    }
+  }
+  return { success: true, data: allData };
+}
+
+export async function insertPayrollAdmin(insertPayload: any) {
+  if (!supabaseAdmin) return { success: false, error: "Service role Supabase indisponible." };
+  try {
+    const calculateMaxId = async (): Promise<number> => {
+      const { data, error } = await supabaseAdmin
+        .from("tblPayroll")
+        .select("Id")
+        .order("Id", { ascending: false })
+        .limit(1);
+      if (!error && data && data.length > 0) {
+        const num = Number(data[0].Id);
+        return !isNaN(num) ? num : 0;
+      }
+      return 0;
+    };
+
+    if (!insertPayload.Id) {
+      const maxId = await calculateMaxId();
+      if (maxId > 0) {
+        insertPayload.Id = maxId + 1;
+      }
+    }
+
+    let { data, error } = await supabaseAdmin
+      .from("tblPayroll")
+      .insert(insertPayload)
+      .select("*")
+      .single();
+
+    if (error) {
+      const payloadCopy = { ...insertPayload };
+      const optionalCols = [
+        "PrelevementSnowizz", "Ajustement", "TaxeIRI", "TaxeCFGDCT",
+        "TaxeCAS", "TaxeFDU", "TaxeONA", "VacancesPayees", "CongeSansSolde",
+        "CumulPaiements", "PrelevementPourcentage", "PrelevementMontant",
+        "PrelevementAvance", "PrelevementType", "TypeSalaire", "NombreSeances",
+        "TauxParSeance", "Devise", "PieceJointe"
+      ];
+      for (const col of optionalCols) {
+        delete payloadCopy[col];
+      }
+      const retry = await supabaseAdmin
+        .from("tblPayroll")
+        .insert(payloadCopy)
+        .select("*")
+        .single();
+      if (!retry.error) {
+        return { success: true, data: retry.data || { Id: insertPayload.Id } };
+      }
+      return { success: false, error: error.message || String(error) };
+    }
+    return { success: true, data: data || { Id: insertPayload.Id } };
+  } catch (err: any) {
+    return { success: false, error: err?.message || String(err) };
+  }
+}
+
+export async function updatePayrollAdmin(id: string, updatePayload: any) {
+  if (!supabaseAdmin) return { success: false, error: "Service role Supabase indisponible." };
+  try {
+    let { data, error } = await supabaseAdmin
+      .from("tblPayroll")
+      .update(updatePayload)
+      .eq("Id", parseInt(id, 10))
+      .select("*");
+
+    if (error) {
+      const payloadCopy = { ...updatePayload };
+      const optionalCols = [
+        "PrelevementSnowizz", "Ajustement", "TaxeIRI", "TaxeCFGDCT",
+        "TaxeCAS", "TaxeFDU", "TaxeONA", "VacancesPayees", "CongeSansSolde",
+        "CumulPaiements", "PrelevementPourcentage", "PrelevementMontant",
+        "PrelevementAvance", "PrelevementType", "TypeSalaire", "NombreSeances",
+        "TauxParSeance", "Devise", "PieceJointe"
+      ];
+      for (const col of optionalCols) {
+        delete payloadCopy[col];
+      }
+      const retry = await supabaseAdmin
+        .from("tblPayroll")
+        .update(payloadCopy)
+        .eq("Id", parseInt(id, 10))
+        .select("*");
+      if (!retry.error) {
+        return { success: true, data: retry.data };
+      }
+      return { success: false, error: error.message || String(error) };
+    }
+    return { success: true, data };
+  } catch (err: any) {
+    return { success: false, error: err?.message || String(err) };
+  }
+}
+
+export async function deletePayrollAdmin(id: string) {
+  if (!supabaseAdmin) return { success: false, error: "Service role Supabase indisponible." };
+  try {
+    const { error } = await supabaseAdmin
+      .from("tblPayroll")
+      .delete()
+      .eq("Id", parseInt(id, 10));
+    if (error) return { success: false, error: error.message || String(error) };
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err?.message || String(err) };
+  }
+}
+

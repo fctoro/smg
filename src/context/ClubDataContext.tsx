@@ -36,6 +36,7 @@ import {
   deleteRubriqueInSupabase,
   DEFAULT_PRICING_ITEMS,
 } from "@/lib/club/supabase-crud";
+import { getPaiementsAdmin } from "@/app/actions/club";
 
 type SetState<T> = React.Dispatch<React.SetStateAction<T>>;
 
@@ -235,17 +236,27 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
           return allData;
         };
 
-        const [etudiantsData, paiementsData, inscriptionsData, sessionsData, facturesData, employesData, evenementsData, payrollData, playerStatusData] = await Promise.all([
-          fetchAll("tblEtudiants"),
-          fetchAll("tblPaiements"),
-          fetchAll("tblInscriptions"),
-          fetchAll("tblSessions"),
-          fetchAll("tblFacture"),
-          fetchAll("tblEmployes"),
-          fetchAll("tblEvenements").catch(() => []),
-          fetchAll("tblPayroll").catch(() => []),
-          fetchAll("player_status").catch(() => [])
-        ]);
+          const fetchPaiements = async () => {
+            try {
+              const res = await getPaiementsAdmin();
+              if (res.success && res.data && res.data.length > 0) return res.data;
+            } catch (e) {
+              console.warn("getPaiementsAdmin fallback error:", e);
+            }
+            return fetchAll("tblPaiements");
+          };
+
+          const [etudiantsData, paiementsData, inscriptionsData, sessionsData, facturesData, employesData, evenementsData, payrollData, playerStatusData] = await Promise.all([
+            fetchAll("tblEtudiants"),
+            fetchPaiements(),
+            fetchAll("tblInscriptions"),
+            fetchAll("tblSessions"),
+            fetchAll("tblFacture"),
+            fetchAll("tblEmployes"),
+            fetchAll("tblEvenements").catch(() => []),
+            fetchAll("tblPayroll").catch(() => []),
+            fetchAll("player_status").catch(() => [])
+          ]);
 
         console.log("[DEBUG ClubDataContext] etudiantsData length:", etudiantsData?.length);
 
@@ -509,7 +520,13 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
             };
 
             const urgenceNomPrenom = findInGroup(["UrgenceNomPrenom", "NomUrgence", "UrgenceNom", "ContactUrgence", "PersonneUrgence", "EmergencyName", "emergency_name", "NomContact"]);
-            const urgenceLien = findInGroup(["UrgenceLien", "LienUrgence", "LienParenteUrgence", "LienUrgent", "EmergencyRelation", "emergency_relation"]);
+            let urgenceLien = findInGroup(["UrgenceLien", "LienUrgence", "LienParenteUrgence", "LienUrgent", "EmergencyRelation", "emergency_relation"]);
+            
+            // Priorité 2 : Si vide, on récupère dans LienParente (où la donnée glissait par erreur)
+            if (!urgenceLien) {
+              urgenceLien = findInGroup(["LienParente"]);
+            }
+
             const urgenceTelephone = findInGroup(["UrgenceTelephone", "TelUrgence", "TelephoneUrgence", "UrgencePhone", "PhoneUrgence", "EmergencyPhone", "emergency_phone", "TelephoneContact"]);
             const urgenceEmail = findInGroup(["UrgenceEmail", "EmailUrgence", "EmergencyEmail", "emergency_email", "EmailContact"]);
             const urgenceAdresse = findInGroup(["UrgenceAdresse", "AdresseUrgence", "EmergencyAddress", "emergency_address", "AdresseContact"]);
@@ -546,13 +563,13 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
                     const currentYear = new Date().getFullYear();
                     const age = currentYear - birthYear;
 
-                    if (age <= 6) return "ti toro";
-                    if (age <= 8) return "U8";
-                    if (age <= 10) return "U10";
-                    if (age <= 12) return "U12";
-                    if (age <= 14) return "U14";
-                    if (age <= 16) return "U16";
-                    if (age <= 18) return "U18";
+                    if (age <= 5) return "ti toro";
+                    if (age < 8) return "U8";
+                    if (age < 10) return "U10";
+                    if (age < 12) return "U12";
+                    if (age < 14) return "U14";
+                    if (age < 16) return "U16";
+                    if (age < 18) return "U18";
                     return "Senior";
                   }
                 }
@@ -577,7 +594,7 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
               parentTelephone,
               parentEmail,
               parentAdresse,
-              parentLien: group.find(g => g.LienParente)?.LienParente || primaryRecord.LienParente || "",
+              parentLien: "",
               urgenceNomPrenom,
               urgenceLien,
               urgenceTelephone,
@@ -699,6 +716,7 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
               };
             });
             setPayments(fetchedPayments);
+            safeSetItem(STORAGE_KEYS.payments, fetchedPayments);
           } else {
             setPayments(parseStoredArray<Payment>(window.localStorage.getItem(STORAGE_KEYS.payments), []));
           }
@@ -760,32 +778,57 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
           );
         }
 
-        if (employesData) {
-          const fetchedEmployees: Employee[] = employesData
+        let rawEmployesData = employesData;
+        if (!rawEmployesData || rawEmployesData.length === 0) {
+          try {
+            const { getEmployeesAdmin } = await import("@/app/actions/club");
+            const adminRes = await getEmployeesAdmin();
+            if (adminRes.success && adminRes.data && adminRes.data.length > 0) {
+              rawEmployesData = adminRes.data;
+            }
+          } catch (err) {
+            console.warn("Erreur chargement fallback getEmployeesAdmin:", err);
+          }
+        }
+
+        if (rawEmployesData && rawEmployesData.length > 0) {
+          const fetchedEmployees: Employee[] = rawEmployesData
             .filter((e: any) => {
               const isDesactive = e.Desactive === 1 || e.Desactive === true || String(e.Desactive).toLowerCase() === "true";
-              const isDeleted = e.IsDeleted === 1 || e.IsDeleted === true || String(e.IsDeleted).toLowerCase() === "true";
-              return !isDesactive && !isDeleted;
+              return !isDesactive;
             })
-            .map((e: any) => ({
-              id: String(e.EmployeId),
-              employeId: e.EmployeId,
-              nom: e.Nom || "",
-              prenom: e.Prenom || "",
-              sexe: e.Sexe || "",
-              fonction: e.Fonction || e.Profession || "Employé",
-              role: e.Fonction || e.Profession || "Employé",
-              salaire: e.Salaire || null,
-              dateEmbauche: e.DateEmbauche ? e.DateEmbauche.split("T")[0] : "",
-              dateDebut: e.DateEmbauche ? e.DateEmbauche.split("T")[0] : "",
-              telephone: e.Telephone || "",
-              email: e.Email || "",
-              adresse: e.Adresse || "",
-              niveauEtude: e.NiveauEtude || "",
-              profession: e.Profession || "",
-              photoUrl: e.Photo || "/images/user/silhouette.svg",
-              desactive: false,
-            }));
+            .map((e: any) => {
+              const rawDevise = (e.Devise || e.devise || "").toUpperCase();
+              const salNum = Number(e.Salaire || 0);
+              const devise: "US" | "HTG" = rawDevise === "HTG" || rawDevise === "GDES" || rawDevise === "GOURDES"
+                ? "HTG"
+                : rawDevise === "US" || rawDevise === "USD"
+                ? "US"
+                : (salNum >= 1000 ? "HTG" : "US");
+
+              return {
+                id: String(e.EmployeId || e.employeid),
+                employeId: e.EmployeId || e.employeid,
+                nom: e.Nom || "",
+                prenom: e.Prenom || "",
+                sexe: e.Sexe || "",
+                fonction: e.Fonction || e.Profession || "Employé",
+                role: e.Fonction || e.Profession || "Employé",
+                typeSalaire: e.TypeSalaire || e.typesalaire || "fixe",
+                tauxParSeance: e.TauxParSeance ? Number(e.TauxParSeance) : null,
+                salaire: e.Salaire ? Number(e.Salaire) : null,
+                devise,
+                dateEmbauche: e.DateEmbauche ? e.DateEmbauche.split("T")[0] : "",
+                dateDebut: e.DateEmbauche ? e.DateEmbauche.split("T")[0] : "",
+                telephone: e.Telephone || "",
+                email: e.Email || "",
+                adresse: e.Adresse || "",
+                niveauEtude: e.NiveauEtude || "",
+                profession: e.Profession || "",
+                photoUrl: e.Photo || "/images/user/silhouette.svg",
+                desactive: false,
+              };
+            });
           setEmployees(fetchedEmployees);
           setStaff(fetchedEmployees);
         } else {
@@ -869,8 +912,13 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
 
       setHydrated(true);
     };
-
     fetchData();
+
+    // Auto-refresh when the user switches back to this tab
+    window.addEventListener("focus", fetchData);
+    return () => {
+      window.removeEventListener("focus", fetchData);
+    };
   }, []);
 
   useEffect(() => {

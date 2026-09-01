@@ -30,7 +30,7 @@ export default function AlumniPage() {
   const [isExportOpen, setIsExportOpen] = useState(false);
   const { confirm, ConfirmComponent } = useConfirm();
   const [currentPage, setCurrentPage] = useState(1);
-  const [currentPageSize, setCurrentPageSize] = useState(10);
+  const [currentPageSize, setCurrentPageSize] = useState(100);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [selectedEditAlumni, setSelectedEditAlumni] = useState<Alumni | null>(null);
 

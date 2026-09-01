@@ -28,10 +28,11 @@ export async function updateSession(request: NextRequest) {
       })
     : null
 
-  // FIX: Prevent consuming refresh tokens on Next.js prefetch requests
+  // FIX: Prevent consuming refresh tokens on Next.js prefetch requests and API routes
   if (
     request.headers.get('x-middleware-prefetch') === '1' ||
-    request.headers.get('purpose') === 'prefetch'
+    request.headers.get('purpose') === 'prefetch' ||
+    request.nextUrl.pathname.startsWith('/api/')
   ) {
     return supabaseResponse;
   }
@@ -45,20 +46,25 @@ export async function updateSession(request: NextRequest) {
       } = await supabase.auth.getUser()
 
       user = authenticatedUser
+      if (!user) {
+        const { data: { session } } = await supabase.auth.getSession()
+        user = session?.user || null
+      }
     } catch (err) {
       console.error('Supabase Middleware Error:', err);
-      // Nous ne supprimons plus les cookies agressivement ici.
-      // Cela évite les déconnexions intempestives lors de micro-coupures ou race conditions.
     }
   }
 
-  const isAuthPage = 
+  const isPublicRoute = 
     request.nextUrl.pathname.startsWith('/signin') || 
     request.nextUrl.pathname.startsWith('/signup') ||
     request.nextUrl.pathname.startsWith('/forgot-password') ||
-    request.nextUrl.pathname.startsWith('/reset-password')
+    request.nextUrl.pathname.startsWith('/reset-password') ||
+    request.nextUrl.pathname.startsWith('/api/') ||
+    request.nextUrl.pathname.startsWith('/detection') ||
+    request.nextUrl.pathname.startsWith('/inscription')
 
-  if (!user && !isAuthPage) {
+  if (!user && !isPublicRoute) {
     const redirectUrl = request.nextUrl.clone()
     redirectUrl.pathname = '/signin'
     const redirectResponse = NextResponse.redirect(redirectUrl)

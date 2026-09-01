@@ -234,19 +234,21 @@ export default function PlayerTable({
         return nameMatches && categoryMatches && seasonMatches && programmeMatches && statusMatches;
       })
       .sort((a, b) => {
-        // 1. Statut Actif en premier
-        if (a.statut === "actif" && b.statut !== "actif") return -1;
-        if (a.statut !== "actif" && b.statut === "actif") return 1;
+        // 1. Statut Actif en premier (priorité aux joueurs actifs)
+        const isAActif = (a.statut || "").toLowerCase() === "actif";
+        const isBActif = (b.statut || "").toLowerCase() === "actif";
+        if (isAActif && !isBActif) return -1;
+        if (!isAActif && isBActif) return 1;
 
-        // 2. Saison la plus récente en premier (ex: 2026-2027 avant 2025-2026)
-        const saisonA = a.saison || "";
-        const saisonB = b.saison || "";
-        if (saisonA !== saisonB) {
-          return saisonB.localeCompare(saisonA);
-        }
+        // 2. Ordre alphabétique A-Z (Nom de famille, puis Prénom)
+        const nomA = (a.nom || "").trim();
+        const nomB = (b.nom || "").trim();
+        const nomCompare = nomA.localeCompare(nomB, "fr", { sensitivity: "base" });
+        if (nomCompare !== 0) return nomCompare;
 
-        // 3. Inscription la plus récente
-        return new Date(b.dateInscription).getTime() - new Date(a.dateInscription).getTime();
+        const prenomA = (a.prenom || "").trim();
+        const prenomB = (b.prenom || "").trim();
+        return prenomA.localeCompare(prenomB, "fr", { sensitivity: "base" });
       });
   }, [players, searchQuery, selectedCategory, selectedSeason, selectedProgramme, selectedStatus]);
 
@@ -278,96 +280,94 @@ export default function PlayerTable({
   };
 
   return (
-    <div className="space-y-4">
-      {/* Toolbar en dehors de la carte du tableau, sur la même ligne que Ajouter */}
-      {showToolbar || actionButton ? (
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          {showToolbar ? (
-            <div className="grid flex-1 gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 min-w-0">
-              <div className="min-w-0">
-                <input
-                  value={searchQuery}
-                  onChange={(event) => setSearchQuery(event.target.value)}
-                  placeholder="Rechercher un joueur"
-                  className="h-11 w-full min-w-0 max-w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs placeholder:text-gray-400 focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
-                />
-              </div>
-              <div className="min-w-0">
-                <select
-                  value={selectedCategory}
-                  onChange={(event) => setSelectedCategory(event.target.value)}
-                  className="h-11 w-full min-w-0 max-w-full truncate rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
-                >
-                  <option value="all">Toutes catégories</option>
-                  {categories.map((category) => (
-                    <option key={category} value={category}>
-                      {category}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="min-w-0">
-                <select
-                  value={selectedSeason}
-                  onChange={(event) => setSelectedSeason(event.target.value)}
-                  className="h-11 w-full min-w-0 max-w-full truncate rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
-                >
-                  <option value="all">Toutes les saisons</option>
-                  {seasons.map((season) => (
-                    <option key={season} value={season}>
-                      {String(season).toLowerCase().startsWith('saison') ? season : `Saison ${season}`}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="min-w-0">
-                <select
-                  value={selectedProgramme}
-                  onChange={(event) => setSelectedProgramme(event.target.value)}
-                  className="h-11 w-full min-w-0 max-w-full truncate rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
-                >
-                  <option value="all">Tous les programmes</option>
-                  {programmes.map((prog) => (
-                    <option key={prog} value={prog}>
-                      {prog}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="min-w-0">
-                <select
-                  value={selectedStatus}
-                  onChange={(event) => setSelectedStatus(event.target.value)}
-                  className="h-11 w-full min-w-0 max-w-full truncate rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
-                >
-                  <option value="all">Tous statuts</option>
-                  <option value="actif">Actif</option>
-                  <option value="inactif">Inactif</option>
-                </select>
-              </div>
-            </div>
-          ) : null}
+    <div className="w-full max-w-full overflow-hidden rounded-2xl border border-gray-200 bg-white px-4 pb-3 pt-4 dark:border-gray-800 dark:bg-white/[0.03] sm:px-6">
+      {/* En-tête avec Titre à gauche, Boutons d'action à droite */}
+      <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between w-full max-w-full min-w-0">
+        <div className="min-w-0">
+          <h3 className="text-lg font-semibold text-gray-800 dark:text-white/90">
+            {title}
+          </h3>
+          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+            {!hydrated && players.length === 0 ? "Chargement..." : `${filteredPlayers.length} joueur(s)`}
+          </p>
+        </div>
 
+        <div className="flex flex-wrap items-center gap-2 max-w-full min-w-0">
           {actionButton ? (
-            <div className="shrink-0">{actionButton}</div>
+            <div className="shrink-0 max-w-full">{actionButton}</div>
           ) : null}
+          {exportButton ? (
+            <div className="shrink-0 max-w-full">{exportButton}</div>
+          ) : null}
+        </div>
+      </div>
+
+      {/* Barre d'outils de filtres responsive */}
+      {showToolbar ? (
+        <div className="mb-4 grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5 w-full max-w-full min-w-0">
+          <div className="min-w-0 w-full max-w-full">
+            <input
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder="Rechercher un joueur"
+              className="h-11 w-full min-w-0 max-w-full truncate rounded-lg border border-gray-300 bg-white px-3.5 py-2.5 text-sm text-gray-800 shadow-theme-xs placeholder:text-gray-400 focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
+            />
+          </div>
+          <div className="min-w-0 w-full max-w-full">
+            <select
+              value={selectedCategory}
+              onChange={(event) => setSelectedCategory(event.target.value)}
+              className="h-11 w-full min-w-0 max-w-full truncate rounded-lg border border-gray-300 bg-white px-3.5 py-2.5 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
+            >
+              <option value="all">Toutes catégories</option>
+              {categories.map((category) => (
+                <option key={category} value={category}>
+                  {category}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="min-w-0 w-full max-w-full">
+            <select
+              value={selectedSeason}
+              onChange={(event) => setSelectedSeason(event.target.value)}
+              className="h-11 w-full min-w-0 max-w-full truncate rounded-lg border border-gray-300 bg-white px-3.5 py-2.5 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
+            >
+              <option value="all">Toutes les saisons</option>
+              {seasons.map((season) => (
+                <option key={season} value={season}>
+                  {String(season).toLowerCase().startsWith('saison') ? season : `Saison ${season}`}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="min-w-0 w-full max-w-full">
+            <select
+              value={selectedProgramme}
+              onChange={(event) => setSelectedProgramme(event.target.value)}
+              className="h-11 w-full min-w-0 max-w-full truncate rounded-lg border border-gray-300 bg-white px-3.5 py-2.5 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
+            >
+              <option value="all">Tous les programmes</option>
+              {programmes.map((prog) => (
+                <option key={prog} value={prog}>
+                  {prog}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="min-w-0 w-full max-w-full">
+            <select
+              value={selectedStatus}
+              onChange={(event) => setSelectedStatus(event.target.value)}
+              className="h-11 w-full min-w-0 max-w-full truncate rounded-lg border border-gray-300 bg-white px-3.5 py-2.5 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
+            >
+              <option value="all">Tous statuts</option>
+              <option value="actif">Actif</option>
+              <option value="inactif">Inactif</option>
+            </select>
+          </div>
         </div>
       ) : null}
-
-      <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white px-4 pb-3 pt-4 dark:border-gray-800 dark:bg-white/[0.03] sm:px-6">
-        <div className="mb-4 flex items-center justify-between">
-          <div>
-            <h3 className="text-lg font-semibold text-gray-800 dark:text-white/90">
-              {title}
-            </h3>
-            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-              {filteredPlayers.length} joueur(s)
-            </p>
-          </div>
-          {exportButton ? (
-            <div className="shrink-0">{exportButton}</div>
-          ) : null}
-        </div>
 
       <div className="max-w-full overflow-x-auto">
         <Table>
@@ -465,8 +465,8 @@ export default function PlayerTable({
           </TableHeader>
 
           <TableBody className="divide-y divide-gray-100 dark:divide-gray-800">
-            {!hydrated ? (
-              <TableBodySkeleton rows={6} columns={visibleColumnsCount} />
+            {!hydrated && players.length === 0 ? (
+              <TableBodySkeleton rows={10} columns={visibleColumnsCount} />
             ) : pagedPlayers.length === 0 ? (
               <TableRow>
                 <TableCell
@@ -666,7 +666,6 @@ export default function PlayerTable({
           pageSize={currentPageSize}
           onPageSizeChange={setCurrentPageSize}
         />
-      </div>
       </div>
     </div>
   );

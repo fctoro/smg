@@ -72,7 +72,7 @@ export default function PaymentsPage() {
   const [isExportOpen, setIsExportOpen] = useState(false);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
-  const [currentPageSize, setCurrentPageSize] = useState(12);
+  const [currentPageSize, setCurrentPageSize] = useState(100);
   const [editingPayment, setEditingPayment] = useState<(typeof payments)[number] | null>(null);
   const [newAmount, setNewAmount] = useState<number | "">("");
   const [newPaymentDate, setNewPaymentDate] = useState(() => new Date().toISOString().split("T")[0]);
@@ -414,8 +414,9 @@ export default function PaymentsPage() {
           console.error("Erreur lors de l'envoi du mail de solde:", emailErr);
         }
       })();
-    } catch (error) {
-      setEditError(error instanceof Error ? error.message : "Impossible d'enregistrer la modification.");
+    } catch (error: any) {
+      console.error("Erreur complète:", error);
+      setEditError(error?.message || "Impossible d'enregistrer la modification.");
     } finally {
       setIsSaving(false);
     }
@@ -949,7 +950,21 @@ export default function PaymentsPage() {
               Paiements
             </h3>
             <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-              {filteredPayments.length} paiement(s)
+              {filteredPayments.length === payments.length
+                ? `${payments.length} paiement(s)`
+                : `${filteredPayments.length} sur ${payments.length} paiement(s)`}
+              {filteredPayments.length !== payments.length && (
+                <button
+                  onClick={() => {
+                    setSearchQuery("");
+                    setDeviseFilter("all");
+                    setSelectedSeason("all");
+                  }}
+                  className="ml-2 text-xs text-brand-500 hover:underline font-medium"
+                >
+                  (Afficher tous les {payments.length} paiements)
+                </button>
+              )}
             </p>
           </div>
           <div className="flex items-center gap-3 relative">
@@ -1083,8 +1098,8 @@ export default function PaymentsPage() {
               </TableRow>
             </TableHeader>
             <TableBody className="divide-y divide-gray-100 dark:divide-gray-800">
-              {!hydrated ? (
-                <TableBodySkeleton rows={6} columns={4} />
+              {!hydrated && payments.length === 0 ? (
+                <TableBodySkeleton rows={10} columns={4} />
               ) : pagedPayments.length === 0 ? (
                 <TableRow>
                   <td
@@ -1243,7 +1258,7 @@ export default function PaymentsPage() {
 
       {editingPayment && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 sm:p-6 overflow-y-auto"
+          className="fixed inset-0 z-[999999] flex items-center justify-center bg-black/50 p-4 sm:p-6 overflow-y-auto"
           role="dialog"
           aria-modal="true"
           aria-labelledby="edit-payment-title"
@@ -1265,7 +1280,7 @@ export default function PaymentsPage() {
                 ×
               </button>
             </div>
-            <div className="flex-1 min-h-0 overflow-y-auto pr-1.5 space-y-4 custom-scrollbar">
+            <div className="flex-1 min-h-0 overflow-y-auto pr-1.5 pb-4 space-y-4 custom-scrollbar">
               <div>
                 <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">Joueur</label>
                 <p className="rounded-lg bg-gray-100 px-3 py-2 text-sm font-semibold text-gray-700 dark:bg-gray-800 dark:text-gray-300">

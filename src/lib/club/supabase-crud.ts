@@ -63,7 +63,6 @@ export const updatePlayerInSupabase = async (playerId: string, data: Partial<Pla
     }
   }
 
-  if (data.cotisationDevise !== undefined) updatePayload.CotisationDevise = data.cotisationDevise;
   if (data.telephone !== undefined) updatePayload.Telephone = data.telephone;
   if (data.email !== undefined) updatePayload.Email = data.email;
   if (data.dateNaissance !== undefined) updatePayload.DateNaissance = data.dateNaissance;

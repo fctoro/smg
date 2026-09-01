@@ -180,12 +180,7 @@ export default function PlayerForm({
     }
   }, [formValues, draftKey]);
 
-  const prevDobRef = useRef(formValues.dateNaissance);
-    
   useEffect(() => {
-    if (prevDobRef.current === formValues.dateNaissance) return;
-    prevDobRef.current = formValues.dateNaissance;
-
     if (!formValues.dateNaissance) return;
     const dob = new Date(formValues.dateNaissance);
     if (isNaN(dob.getTime())) return;
@@ -199,12 +194,12 @@ export default function PlayerForm({
 
     let autoCategory = "";
     if (age <= 5) autoCategory = "ti toro";
-    else if (age <= 7) autoCategory = "U8";
-    else if (age <= 9) autoCategory = "U10";
-    else if (age <= 11) autoCategory = "U12";
-    else if (age <= 13) autoCategory = "U14";
-    else if (age <= 15) autoCategory = "U16";
-    else if (age <= 17) autoCategory = "U18";
+    else if (age < 8) autoCategory = "U8";
+    else if (age < 10) autoCategory = "U10";
+    else if (age < 12) autoCategory = "U12";
+    else if (age < 14) autoCategory = "U14";
+    else if (age < 16) autoCategory = "U16";
+    else if (age < 18) autoCategory = "U18";
     else if (age === 18) autoCategory = "U19";
     else if (age >= 19) autoCategory = "U20";
 

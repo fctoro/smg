@@ -531,43 +531,6 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
             const urgenceEmail = findInGroup(["UrgenceEmail", "EmailUrgence", "EmergencyEmail", "emergency_email", "EmailContact"]);
             const urgenceAdresse = findInGroup(["UrgenceAdresse", "AdresseUrgence", "EmergencyAddress", "emergency_address", "AdresseContact"]);
 
-            const rawCat = (group.find(g => g.Categorie || g.categorie || g.Category || g.category)?.Categorie || primaryRecord.Categorie || "").toString().trim();
-            const lowerCat = rawCat.toLowerCase();
-            let finalCategorie = rawCat || "Senior";
-            let ageForCat: number | null = null;
-            
-            if (dateNaissance) {
-              const dt = new Date(dateNaissance);
-              if (!isNaN(dt.getTime())) {
-                ageForCat = new Date().getFullYear() - dt.getFullYear();
-              }
-            }
-
-            const getCategoryByAge = (age: number) => {
-              if (age <= 5) return "ti toro";
-              if (age < 8) return "U8";
-              if (age < 10) return "U10";
-              if (age < 12) return "U12";
-              if (age < 14) return "U14";
-              if (age < 16) return "U16";
-              if (age < 18) return "U18";
-              return "Senior";
-            };
-
-            // Use explicitly saved category if it's not "default"
-            if (rawCat && lowerCat !== "default") {
-              if (/^u-?\d+$/i.test(lowerCat)) {
-                finalCategorie = `U${lowerCat.replace(/[^\d]/g, "")}`;
-              }
-            } else if (ageForCat !== null) {
-              finalCategorie = getCategoryByAge(ageForCat);
-            }
-
-            // HARD RULE: If age > 5, player CANNOT be in Ti Toro. Recalculate based on age.
-            if (ageForCat !== null && ageForCat > 5 && finalCategorie.toLowerCase().includes("ti toro")) {
-              finalCategorie = getCategoryByAge(ageForCat);
-            }
-
             fetchedPlayers.push({
               id: primaryId,
               matricule: matricule,
@@ -581,7 +544,38 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
               carnetVaccinationUrl,
               poste,
               sexe,
-              categorie: finalCategorie,
+              categorie: (() => {
+                const rawCat = (group.find(g => g.Categorie || g.categorie || g.Category || g.category)?.Categorie || primaryRecord.Categorie || "").toString().trim();
+                const lowerCat = rawCat.toLowerCase();
+
+                if (rawCat && lowerCat !== "ti toro" && lowerCat !== "titoro" && lowerCat !== "default") {
+                  if (/^u-?\d+$/i.test(lowerCat)) {
+                    const num = lowerCat.replace(/[^\d]/g, "");
+                    return `U${num}`;
+                  }
+                  return rawCat;
+                }
+
+                if (dateNaissance) {
+                  const dt = new Date(dateNaissance);
+                  if (!isNaN(dt.getTime())) {
+                    const birthYear = dt.getFullYear();
+                    const currentYear = new Date().getFullYear();
+                    const age = currentYear - birthYear;
+
+                    if (age <= 5) return "ti toro";
+                    if (age < 8) return "U8";
+                    if (age < 10) return "U10";
+                    if (age < 12) return "U12";
+                    if (age < 14) return "U14";
+                    if (age < 16) return "U16";
+                    if (age < 18) return "U18";
+                    return "Senior";
+                  }
+                }
+
+                return rawCat || "Senior";
+              })(),
                statut: playerStatus,
               statutJoueur: finalStatutJoueur,
               sourceDetection: isDetection,
@@ -613,19 +607,11 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
               experienceSoccer: group.find(g => g.ExperienceFoot || g.Experience)?.ExperienceFoot || group.find(g => g.Experience)?.Experience || primaryRecord.ExperienceFoot || primaryRecord.Experience || "",
               planPaiement: group.find(g => g.PlanPaiement || g.PaymentPlan)?.PlanPaiement || group.find(g => g.PaymentPlan)?.PaymentPlan || primaryRecord.PlanPaiement || primaryRecord.PaymentPlan || "",
               modePaiementChoisi: group.find(g => g.MethodePaiement)?.MethodePaiement || primaryRecord.MethodePaiement || "",
-              programme: (() => {
-                let prog = group.find(g => g.Programme)?.Programme || primaryRecord.Programme;
-                if (!prog) {
-                  prog = finalCategorie.toLowerCase().includes("ti toro") ? "Ti Toro" : "FC Toro";
-                }
-                // Enforce consistency with the >5 age rule: if category was forced out of ti toro, programme must be FC Toro.
-                if (finalCategorie.toLowerCase().includes("ti toro")) {
-                  prog = "Ti Toro";
-                } else if (prog.toLowerCase().includes("ti toro")) {
-                  prog = "FC Toro";
-                }
-                return prog;
-              })(),
+              programme: group.find(g => g.Programme)?.Programme || primaryRecord.Programme || (
+                (group.find(g => g.Categorie || g.categorie)?.Categorie || primaryRecord.Categorie || "").toLowerCase().includes("ti toro")
+                  ? "Ti Toro"
+                  : "FC Toro"
+              ),
               commentIdentifie: (() => {
                 const info1 = group.find(g => g.Info1)?.Info1 || "";
                 const match = String(info1).match(/IDENTIFIE:([^|]+)/);

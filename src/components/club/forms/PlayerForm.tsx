@@ -161,7 +161,7 @@ export default function PlayerForm({
     }
 
     setFormValues(merged);
-  }, [initialValues, draftKey]);
+  }, [playerId, draftKey]);
 
   useEffect(() => {
     if (draftKey && !playerId) {

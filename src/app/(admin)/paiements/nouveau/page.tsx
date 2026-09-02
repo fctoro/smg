@@ -127,6 +127,52 @@ const paymentPlans: PaymentPlan[] = [
   },
 ];
 
+const isPlayerTiToro = (player: Player | null | undefined): boolean => {
+  if (!player) return false;
+  const prog = (player.programme || "").toLowerCase().trim();
+  const cat = (player.categorie || "").toLowerCase().trim();
+  if (prog.includes("ti toro") || prog.includes("ti") || prog === "titoro") return true;
+  if (cat.includes("ti toro") || cat.includes("ti") || cat === "titoro") return true;
+  if (["u6", "u7", "u8"].includes(cat)) return true;
+  return false;
+};
+
+const getAdhesionIdForPlayer = (player: Player, options: PricingItem[]): string => {
+  const isTi = isPlayerTiToro(player);
+  if (isTi) {
+    const tiItem = options.find(
+      (r) =>
+        r.id === "adhesion-ti" ||
+        (r.estAdhesion && (r.rubrique.toLowerCase().includes("ti toro") || r.categorie?.toLowerCase().includes("ti")))
+    );
+    return tiItem?.id || "adhesion-ti";
+  } else {
+    const fcItem = options.find(
+      (r) =>
+        r.id === "adhesion-fc" ||
+        (r.estAdhesion && (r.rubrique.toLowerCase().includes("fc toro") || r.categorie?.toLowerCase().includes("fc")))
+    );
+    return fcItem?.id || "adhesion-fc";
+  }
+};
+
+const applyAutoAdhesionForPlayer = (
+  player: Player,
+  currentPricing: string[],
+  options: PricingItem[]
+): string[] => {
+  const isBoursier = (player.statutJoueur || "").toLowerCase().includes("bourse");
+  if (isBoursier) return currentPricing;
+
+  const targetAdhesionId = getAdhesionIdForPlayer(player, options);
+  const otherAdhesionIds = options
+    .filter((r) => r.estAdhesion || r.id === "adhesion-fc" || r.id === "adhesion-ti")
+    .map((r) => r.id);
+
+  const filteredPricing = currentPricing.filter((id) => !otherAdhesionIds.includes(id));
+  return [...filteredPricing, targetAdhesionId];
+};
+
 export default function NewPaymentPage() {
   const router = useRouter();
   const { players, setPayments, rubriques, refreshRubriques } = useClubData();
@@ -404,6 +450,7 @@ export default function NewPaymentPage() {
     setPlayerId(player.id);
     setPlayerSearch("");
     setShowPlayerDropdown(false);
+    setSelectedPricing((prev) => applyAutoAdhesionForPlayer(player, prev, pricingItems));
   };
 
   const handlePricingChange = (pricingId: string) => {
@@ -428,6 +475,9 @@ export default function NewPaymentPage() {
 
   const handlePlanChange = (planId: string) => {
     setSelectedPlan(planId);
+    if (planId && selectedPlayer) {
+      setSelectedPricing((prev) => applyAutoAdhesionForPlayer(selectedPlayer, prev, pricingItems));
+    }
   };
 
   const totalRubriques = useMemo(() => {
@@ -761,6 +811,10 @@ export default function NewPaymentPage() {
                   onClick={() => {
                     setPlayerId("");
                     setPlayerSearch("");
+                    const otherAdhesionIds = pricingItems
+                      .filter((r: PricingItem) => r.estAdhesion || r.id === "adhesion-fc" || r.id === "adhesion-ti")
+                      .map((r: PricingItem) => r.id);
+                    setSelectedPricing((prev) => prev.filter((id) => !otherAdhesionIds.includes(id)));
                   }}
                   className="rounded-full p-1 text-brand-600 hover:bg-brand-100 dark:text-brand-300 dark:hover:bg-brand-500/20"
                   title="Changer de joueur"

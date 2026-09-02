@@ -321,44 +321,76 @@ function PlayersPageContent() {
   const tableColumns =
     enabledPlayerColumns.length > 0 ? enabledPlayerColumns : undefined;
 
-  const handleExportExcel = () => {
+  const handleExportExcel = (exportData: Player[]) => {
     setIsExportOpen(false);
     confirm({
       title: "Exporter la liste",
       message: "Voulez-vous vraiment exporter la liste des joueurs au format Excel ?",
       onConfirm: () => {
-        const headers = ["Matricule", "Nom", "Prénom", "Poste", "Sexe", "Catégorie", "Statut", "Téléphone", "Email", "Date Inscription"];
-        let csvContent = "\uFEFF" + headers.join(";") + "\n";
-        
-        players.forEach(p => {
-          const row = [p.matricule, p.nom, p.prenom, p.poste, p.sexe, p.categorie, p.statut, p.telephone, p.email, p.dateInscription];
-          const csvRow = row.map(field => `"${(field || "").toString().replace(/"/g, '""')}"`);
-          csvContent += csvRow.join(";") + "\n";
-        });
+        const headers = ["Matricule", "Nom", "Prénom", "Poste", "Sexe", "Catégorie", "Statut", "Saison", "Téléphone", "Email", "Date Inscription"];
+        const thead = headers.map((h) => `<th>${h}</th>`).join("");
+        const tbody = exportData
+          .map((p) => {
+            const row = [
+              p.matricule || "-",
+              p.nom || "-",
+              p.prenom || "-",
+              p.poste || "-",
+              p.sexe || "-",
+              p.categorie || "-",
+              p.statut || "-",
+              p.saison || "-",
+              p.telephone || "-",
+              p.email || "-",
+              p.dateInscription || "-",
+            ];
+            return `<tr>${row.map((field) => `<td>${String(field).replace(/</g, "&lt;").replace(/>/g, "&gt;")}</td>`).join("")}</tr>`;
+          })
+          .join("");
 
-        const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+        const htmlContent = `
+          <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+          <head>
+            <meta charset="utf-8" />
+            <style>
+              table { border-collapse: collapse; width: 100%; font-family: Arial, sans-serif; font-size: 13px; }
+              td, th { border: 1px solid #cccccc; padding: 6px 10px; text-align: left; }
+              th { background-color: #107C41; color: white; font-weight: bold; }
+            </style>
+          </head>
+          <body>
+            <table>
+              <thead><tr>${thead}</tr></thead>
+              <tbody>${tbody}</tbody>
+            </table>
+          </body>
+          </html>
+        `;
+
+        const blob = new Blob([htmlContent], { type: "application/vnd.ms-excel;charset=utf-8;" });
         const url = URL.createObjectURL(blob);
         const link = document.createElement("a");
         link.href = url;
-        link.setAttribute("download", "joueurs_excel.csv");
+        link.download = `joueurs_export.xls`;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
+        URL.revokeObjectURL(url);
       }
     });
   };
 
-  const handleExportCSV = () => {
+  const handleExportCSV = (exportData: Player[]) => {
     setIsExportOpen(false);
     confirm({
       title: "Exporter la liste",
       message: "Voulez-vous vraiment exporter la liste des joueurs au format CSV ?",
       onConfirm: () => {
-        const headers = ["Matricule", "Nom", "Prénom", "Poste", "Sexe", "Catégorie", "Statut", "Téléphone", "Email", "Date Inscription"];
+        const headers = ["Matricule", "Nom", "Prénom", "Poste", "Sexe", "Catégorie", "Statut", "Saison", "Téléphone", "Email", "Date Inscription"];
         let csvContent = "\uFEFF" + headers.join(",") + "\n";
         
-        players.forEach(p => {
-          const row = [p.matricule, p.nom, p.prenom, p.poste, p.sexe, p.categorie, p.statut, p.telephone, p.email, p.dateInscription];
+        exportData.forEach(p => {
+          const row = [p.matricule, p.nom, p.prenom, p.poste, p.sexe, p.categorie, p.statut, p.saison, p.telephone, p.email, p.dateInscription];
           const csvRow = row.map(field => `"${(field || "").toString().replace(/"/g, '""')}"`);
           csvContent += csvRow.join(",") + "\n";
         });
@@ -403,7 +435,7 @@ function PlayersPageContent() {
               </button>
             )}
           </div>
-        }        exportButton={
+        }        exportButton={(filteredPlayers) => 
           <div className="relative">
             <button
               onClick={() => setIsExportOpen(!isExportOpen)}
@@ -425,12 +457,12 @@ function PlayersPageContent() {
               className="w-32"
             >
               <DropdownItem
-                onItemClick={handleExportExcel}
+                onItemClick={() => handleExportExcel(filteredPlayers)}
               >
                 Excel
               </DropdownItem>
               <DropdownItem
-                onItemClick={handleExportCSV}
+                onItemClick={() => handleExportCSV(filteredPlayers)}
               >
                 CSV
               </DropdownItem>

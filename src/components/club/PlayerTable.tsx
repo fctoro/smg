@@ -53,7 +53,7 @@ interface PlayerTableProps {
   onDeletePlayer?: (player: Player) => void;
   onAddPaymentForPlayer?: (player: Player) => void;
   actionButton?: React.ReactNode;
-  exportButton?: React.ReactNode;
+  exportButton?: React.ReactNode | ((filteredPlayers: Player[]) => React.ReactNode);
   availableCategories?: string[];
 }
 
@@ -297,7 +297,9 @@ export default function PlayerTable({
             <div className="shrink-0 max-w-full">{actionButton}</div>
           ) : null}
           {exportButton ? (
-            <div className="shrink-0 max-w-full">{exportButton}</div>
+            <div className="shrink-0 max-w-full">
+              {typeof exportButton === "function" ? exportButton(filteredPlayers) : exportButton}
+            </div>
           ) : null}
         </div>
       </div>

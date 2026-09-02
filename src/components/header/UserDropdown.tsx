@@ -166,6 +166,29 @@ export default function UserDropdown() {
               Profil utilisateur
             </DropdownItem>
           </li>
+          {isSuperAdmin && (
+            <li>
+              <DropdownItem
+                onItemClick={closeDropdown}
+                tag="a"
+                href="/parametres/sauvegarde"
+                className="flex items-center gap-3 px-3 py-2 font-medium text-brand-700 bg-brand-50/50 rounded-lg group text-theme-sm hover:bg-brand-100 hover:text-brand-800 dark:text-brand-300 dark:bg-brand-500/10 dark:hover:bg-brand-500/20"
+              >
+                <svg
+                  className="fill-none stroke-current"
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                </svg>
+                Sauvegarde Système
+              </DropdownItem>
+            </li>
+          )}
         </ul>
         <button
           onClick={handleSignOut}

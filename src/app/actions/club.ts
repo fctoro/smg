@@ -687,3 +687,241 @@ export async function deletePayrollAdmin(id: string) {
   }
 }
 
+export async function getSystemStatsAction() {
+  if (!supabaseAdmin) return { success: false, error: "Service role Supabase indisponible." };
+
+  const tables = [
+    { key: "joueurs", table: "tblEtudiants", label: "Joueurs" },
+    { key: "statuts_speciaux", table: "player_status", label: "Statuts Spéciaux" },
+    { key: "paiements", table: "tblPaiements", label: "Paiements" },
+    { key: "factures", table: "tblFacture", label: "Factures" },
+    { key: "inscriptions", table: "tblInscriptions", label: "Inscriptions" },
+    { key: "sessions", table: "tblSessions", label: "Sessions / Saisons" },
+    { key: "employes", table: "tblEmployes", label: "Employés" },
+    { key: "payroll", table: "tblPayroll", label: "Fiches de paie" },
+    { key: "rubriques", table: "tblRubriques", label: "Rubriques tarifaires" },
+    { key: "effectifs", table: "tblEffectifs", label: "Effectifs / Matchs" },
+    { key: "evenements", table: "tblEvenements", label: "Événements" },
+    { key: "demandes", table: "player_registrations", label: "Demandes d'inscription" },
+    { key: "detections", table: "detection_registrations", label: "Demandes de détection" },
+    { key: "profils", table: "profiles", label: "Comptes d'accès" },
+    { key: "alumni", table: "tblAlumni", label: "Alumni" },
+    { key: "parents", table: "tblParents", label: "Parents" },
+    { key: "staff", table: "tblStaff", label: "Staff" },
+    { key: "coachs", table: "tblCoaches", label: "Coachs" },
+    { key: "programmes", table: "tblProgrammes", label: "Programmes" },
+    { key: "presences", table: "tblPresences", label: "Présences" },
+  ];
+
+  const counts: Record<string, { label: string; count: number; table: string }> = {};
+  let total = 0;
+
+  await Promise.all(
+    tables.map(async (t) => {
+      try {
+        let { count, error } = await supabaseAdmin
+          .from(t.table)
+          .select("*", { count: "exact", head: true });
+        
+        // Fallback for tables with singular/plural variants
+        if ((error || count === null) && t.table === "tblPaiements") {
+          const fallback = await supabaseAdmin.from("tblPaiement").select("*", { count: "exact", head: true });
+          if (!fallback.error && fallback.count !== null) {
+            count = fallback.count;
+            error = null;
+          }
+        }
+
+        const countVal = (!error && count !== null) ? count : 0;
+        counts[t.key] = { label: t.label, count: countVal, table: t.table };
+        total += countVal;
+      } catch {
+        counts[t.key] = { label: t.label, count: 0, table: t.table };
+      }
+    })
+  );
+
+  return { success: true, counts, total };
+}
+
+export async function exportFullSystemBackupAction(userEmail?: string) {
+  if (!supabaseAdmin) return { success: false, error: "Service role Supabase indisponible." };
+
+  const tableList = [
+    "tblEtudiants",
+    "player_status",
+    "tblPaiements",
+    "tblFacture",
+    "tblInscriptions",
+    "tblSessions",
+    "tblEmployes",
+    "tblPayroll",
+    "tblRubriques",
+    "tblEffectifs",
+    "tblEvenements",
+    "player_registrations",
+    "detection_registrations",
+    "profiles",
+    "tblAlumni",
+    "tblParents",
+    "tblStaff",
+    "tblCoaches",
+    "tblProgrammes",
+    "tblPresences"
+  ];
+
+  const fetchTableData = async (tableName: string) => {
+    const pageSize = 1000;
+    let from = 0;
+    const allRows: any[] = [];
+    while (true) {
+      try {
+        let { data, error } = await supabaseAdmin
+          .from(tableName)
+          .select("*")
+          .range(from, from + pageSize - 1);
+
+        // Fallback if table name is tblPaiement without s
+        if (error && tableName === "tblPaiements") {
+          const fallback = await supabaseAdmin.from("tblPaiement").select("*").range(from, from + pageSize - 1);
+          if (!fallback.error) {
+            data = fallback.data;
+            error = null;
+          }
+        }
+
+        if (error) {
+          console.warn(`[Backup] Note sur la table ${tableName}:`, error.message);
+          break;
+        }
+        if (!data || data.length === 0) break;
+        allRows.push(...data);
+        if (data.length < pageSize) break;
+        from += pageSize;
+      } catch (err: any) {
+        console.warn(`[Backup] Erreur lors de l'extraction de ${tableName}:`, err?.message);
+        break;
+      }
+    }
+    return allRows;
+  };
+
+  try {
+    const backupData: Record<string, any[]> = {};
+    const summary: Record<string, number> = {};
+    let totalRecords = 0;
+
+    for (const table of tableList) {
+      const rows = await fetchTableData(table);
+      backupData[table] = rows;
+      summary[table] = rows.length;
+      totalRecords += rows.length;
+    }
+
+    const payload = {
+      metadata: {
+        appName: "FC TORO Management System",
+        version: "2.0",
+        timestamp: new Date().toISOString(),
+        exportedBy: userEmail || "Superadmin",
+        totalRecords,
+        tablesCount: tableList.length,
+        summary,
+      },
+      data: backupData,
+    };
+
+    return { success: true, payload };
+  } catch (error: any) {
+    console.error("[Backup] Erreur globale export:", error);
+    return { success: false, error: error?.message || "Erreur lors de l'exportation du backup." };
+  }
+}
+
+export async function restoreFullSystemBackupAction(backupPayload: any) {
+  if (!supabaseAdmin) return { success: false, error: "Service role Supabase indisponible." };
+
+  if (!backupPayload || !backupPayload.data || typeof backupPayload.data !== "object") {
+    return { success: false, error: "Fichier de sauvegarde invalide ou corrompu." };
+  }
+
+  const { data: tablesData } = backupPayload;
+  const restorationReport: Record<string, { total: number; restored: number; error?: string }> = {};
+
+  // Table order for foreign keys safety
+  const orderedTables = [
+    "profiles",
+    "tblRubriques",
+    "tblSessions",
+    "tblParents",
+    "tblStaff",
+    "tblEmployes",
+    "tblCoaches",
+    "tblEtudiants",
+    "player_status",
+    "tblInscriptions",
+    "tblPaiements",
+    "tblPaiement",
+    "tblFacture",
+    "tblPayroll",
+    "tblAlumni",
+    "tblEvenements",
+    "tblEffectifs",
+    "tblProgrammes",
+    "player_registrations",
+    "detection_registrations",
+    "tblPresences"
+  ];
+
+  for (const tableName of orderedTables) {
+    const rows = tablesData[tableName];
+    if (!Array.isArray(rows) || rows.length === 0) {
+      restorationReport[tableName] = { total: 0, restored: 0 };
+      continue;
+    }
+
+    const batchSize = 100;
+    let restoredCount = 0;
+    let tableError: string | undefined;
+
+    for (let i = 0; i < rows.length; i += batchSize) {
+      const batch = rows.slice(i, i + batchSize);
+      try {
+        const { error } = await supabaseAdmin
+          .from(tableName)
+          .upsert(batch, { ignoreDuplicates: false });
+
+        if (error) {
+          // If upsert fails, attempt sequential insert ignoring errors
+          tableError = error.message;
+          for (const item of batch) {
+            try {
+              const { error: singleErr } = await supabaseAdmin
+                .from(tableName)
+                .upsert(item);
+              if (!singleErr) restoredCount++;
+            } catch {}
+          }
+        } else {
+          restoredCount += batch.length;
+        }
+      } catch (batchErr: any) {
+        tableError = batchErr?.message;
+      }
+    }
+
+    restorationReport[tableName] = {
+      total: rows.length,
+      restored: restoredCount,
+      error: tableError,
+    };
+  }
+
+  return {
+    success: true,
+    report: restorationReport,
+    timestamp: new Date().toISOString(),
+  };
+}
+
+

@@ -4,6 +4,8 @@ import Link from "next/link";
 import { FormEvent, useState } from "react";
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 
+import { useUserRole } from "@/context/UserRoleContext";
+
 interface ClubSettingsForm {
   clubName: string;
   logoUrl: string;
@@ -26,6 +28,7 @@ const inputClassName =
   "h-11 w-full rounded-lg border border-gray-300 bg-transparent px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs placeholder:text-gray-400 focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90";
 
 export default function SettingsPage() {
+  const { isSuperAdmin } = useUserRole();
   const [formValues, setFormValues] = useState<ClubSettingsForm>(defaultSettings);
   const [savedAt, setSavedAt] = useState<string | null>(null);
 
@@ -45,6 +48,39 @@ export default function SettingsPage() {
     <div className="space-y-6">
       <PageBreadcrumb pageTitle="Parametres" />
 
+      {/* Superadmin Quick Access Banner */}
+      {isSuperAdmin && (
+        <div className="rounded-2xl border border-brand-200 bg-gradient-to-r from-brand-50 to-brand-100/60 p-5 dark:border-brand-900/40 dark:bg-brand-950/20">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+              <span className="text-xs font-bold uppercase tracking-wider text-brand-700 dark:text-brand-300">
+                🛡️ Espace Super Administrateur
+              </span>
+              <h3 className="text-base font-bold text-gray-900 dark:text-white mt-0.5">
+                Sauvegarde et Gestion de la Base de Données
+              </h3>
+              <p className="text-xs text-gray-600 dark:text-gray-400 mt-0.5">
+                Téléchargez une sauvegarde intégrale du système sur votre Bureau ou gérez les comptes d'accès.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2.5">
+              <Link
+                href="/parametres/sauvegarde"
+                className="inline-flex items-center gap-2 rounded-xl bg-brand-600 px-4 py-2.5 text-xs font-bold text-white shadow-sm hover:bg-brand-700 transition-colors"
+              >
+                💾 Sauvegarde Système
+              </Link>
+              <Link
+                href="/parametres/acces"
+                className="inline-flex items-center gap-2 rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-white/5 transition-colors"
+              >
+                🔒 Gestion des accès
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03] sm:p-6">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -55,12 +91,14 @@ export default function SettingsPage() {
               Logo, couleurs, categories et roles metier
             </p>
           </div>
-          <Link
-            href="/parametres/dashboard"
-            className="rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-white/[0.03]"
-          >
-            Config dashboard
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link
+              href="/parametres/dashboard"
+              className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-white/[0.03]"
+            >
+              Config dashboard
+            </Link>
+          </div>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-5">

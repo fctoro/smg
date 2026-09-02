@@ -151,6 +151,12 @@ const baseOthersItems: NavItem[] = [
     path: "/parametres/acces",
     sections: ["Paramètres"],
   },
+  {
+    icon: <DocsIcon />,
+    name: "Sauvegarde Système",
+    path: "/parametres/sauvegarde",
+    sections: ["Paramètres"],
+  },
 ];
 
 const AppSidebar: React.FC = () => {
@@ -182,7 +188,15 @@ const AppSidebar: React.FC = () => {
     return () => {
       window.removeEventListener('update-unread-count', handleUpdate);
     };
-  }, [pathname]);
+  }, []);
+
+  const checkAccess = useCallback((item: NavItem) => {
+    if (isSuperAdmin) return true;
+    if (item.sections) {
+      return item.sections.some((s) => userSections.includes(s));
+    }
+    return userSections.includes(item.name);
+  }, [isSuperAdmin, userSections]);
 
   const inCoachArea = pathname.startsWith("/coach");
 
@@ -191,12 +205,6 @@ const AppSidebar: React.FC = () => {
     if (isSuperAdmin) {
       return adminNavItems;
     }
-    const checkAccess = (item: NavItem) => {
-      if (item.sections) {
-        return item.sections.some((sec) => userSections.includes(sec));
-      }
-      return userSections.includes(item.name);
-    };
     if (isCoach) {
       // Coach: always show coach items first, then any extra admin sections granted by super admin
       const grantedAdminSections = adminNavItems
@@ -205,7 +213,7 @@ const AppSidebar: React.FC = () => {
       return [...coachNavItems, ...grantedAdminSections];
     }
     return adminNavItems.filter(checkAccess);
-  }, [isCoach, isSuperAdmin, userSections]);
+  }, [isCoach, isSuperAdmin, checkAccess]);
 
   // Filter Parametres items
   const filteredOthersItems = useMemo(() => {
@@ -215,7 +223,7 @@ const AppSidebar: React.FC = () => {
     if (!userSections.includes("Paramètres")) {
       return [];
     }
-    return baseOthersItems.filter((item) => item.path !== "/parametres/acces");
+    return baseOthersItems.filter((item) => item.path !== "/parametres/acces" && item.path !== "/parametres/sauvegarde");
   }, [isSuperAdmin, userSections]);
 
   const displayMainItems = mounted ? filteredMainItems : adminNavItems;

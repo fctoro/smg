@@ -238,9 +238,13 @@ export default function StatutsSpeciauxPage() {
     if (!playerPendingRemoval) return;
 
     try {
-      await updatePlayerInSupabase(playerPendingRemoval.id, { statutJoueur: "" });
+      const pIds = (playerPendingRemoval as any).playerIds || [playerPendingRemoval.id];
+      await updatePlayerInSupabase(playerPendingRemoval.id, { 
+        statutJoueur: "Normal",
+        playerIds: pIds,
+      } as any);
       setPlayers((prev) =>
-        prev.map((p) => (p.id === playerPendingRemoval.id ? { ...p, statutJoueur: "" } : p))
+        prev.map((p) => (p.id === playerPendingRemoval.id ? { ...p, statutJoueur: "Normal" } : p))
       );
       setPlayerPendingRemoval(null);
     } catch (err) {

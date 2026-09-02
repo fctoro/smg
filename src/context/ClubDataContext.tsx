@@ -487,14 +487,18 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
               playerStatus = "inactif";
             }
 
-            let finalStatutJoueur = (primaryRecord.StatutJoueur && !["inactif", "actif", "normal"].includes(savedPlayerStatus)) ? primaryRecord.StatutJoueur : undefined;
+            let finalStatutJoueur = (primaryRecord.StatutJoueur && !["inactif", "actif", "normal", "aucun", "standard"].includes(savedPlayerStatus)) ? primaryRecord.StatutJoueur : undefined;
             
             // Override explicite provenant de la table player_status (priorité absolue admin)
             for (const id of allGroupIds) {
               const st = playerStatusMap.get(String(id));
               if (st) {
-                if (["actif", "inactif", "blesse", "suspendu", "abandonne", "alumni"].includes(st.toLowerCase())) {
-                  playerStatus = st.toLowerCase() as PlayerStatus;
+                const stLower = st.trim().toLowerCase();
+                if (stLower === "normal" || stLower === "aucun" || stLower === "standard") {
+                  finalStatutJoueur = undefined;
+                } else if (["actif", "inactif", "blesse", "suspendu", "abandonne", "alumni"].includes(stLower)) {
+                  playerStatus = stLower as PlayerStatus;
+                  finalStatutJoueur = undefined;
                 } else {
                   finalStatutJoueur = st;
                 }
@@ -502,8 +506,11 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
             }
 
             // Fallback pour le statut principal si finalStatutJoueur contenait un statut de base
-            if (finalStatutJoueur && ["actif", "inactif", "blesse", "suspendu", "abandonne", "alumni"].includes(finalStatutJoueur.toLowerCase())) {
-              playerStatus = finalStatutJoueur.toLowerCase() as PlayerStatus;
+            if (finalStatutJoueur && ["actif", "inactif", "blesse", "suspendu", "abandonne", "alumni", "normal", "aucun", "standard"].includes(finalStatutJoueur.toLowerCase())) {
+              const fLower = finalStatutJoueur.toLowerCase();
+              if (["actif", "inactif", "blesse", "suspendu", "abandonne", "alumni"].includes(fLower)) {
+                playerStatus = fLower as PlayerStatus;
+              }
               finalStatutJoueur = undefined;
             }
 

@@ -520,7 +520,7 @@ export default function PayrollPage() {
     const onaMontant = formData.devise === "HTG" ? calculatePrelevement(grossBaseSalary, formData.taxeONA) : 0;
     
     const totalTaxes = prelevementMontant + iriMontant + cfgdctMontant + casMontant + fduMontant + onaMontant;
-    const snowizzDeduction = formData.devise === "HTG" ? formData.prelevementSnowizz : 0;
+    const snowizzDeduction = Number(formData.prelevementSnowizz || 0);
     const ajustementVal = formData.devise === "HTG" ? formData.ajustement : 0;
     const usdDeduction = formData.devise === "US" ? formData.deductions : 0;
 
@@ -1804,7 +1804,23 @@ export default function PayrollPage() {
                     </div>
                     <div>
                       <label className="mb-1 block text-xs font-semibold text-gray-700 dark:text-gray-300">
-                        Prélèvement / Ajustements ($)
+                        Prélèvement Snowizz / Prêt ($)
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="any"
+                        value={formData.prelevementSnowizz === 0 ? "" : formData.prelevementSnowizz}
+                        onChange={(e) =>
+                          setFormData({ ...formData, prelevementSnowizz: e.target.value === "" ? 0 : parseFloat(e.target.value) || 0 })
+                        }
+                        placeholder="0.00"
+                        className="w-full rounded-xl border border-gray-300 bg-white p-2.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-semibold text-gray-700 dark:text-gray-300">
+                        Autres Prélèvements / Avances ($)
                       </label>
                       <input
                         type="number"

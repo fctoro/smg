@@ -35,6 +35,10 @@ const isMissingPrelevementColumnError = (error: any) => {
 export const updatePlayerInSupabase = async (playerId: string, data: Partial<Player & { photoIdentiteUrl?: string; acteNaissanceUrl?: string; carteIdentiteParentUrl?: string }>) => {
   const updatePayload: any = {};
   
+  const targetIds = (data as any).playerIds && Array.isArray((data as any).playerIds) && (data as any).playerIds.length > 0
+    ? (data as any).playerIds
+    : [resolveEtudiantId(playerId)];
+
   if (data.nom !== undefined) updatePayload.Nom = data.nom;
   if (data.prenom !== undefined) updatePayload.Prenom = data.prenom;
   if (data.sexe !== undefined) updatePayload.Sexe = data.sexe === "Féminin" ? "F" : "M";
@@ -44,22 +48,9 @@ export const updatePlayerInSupabase = async (playerId: string, data: Partial<Pla
   if (statusToUpdate !== undefined) {
     try {
       const { upsertPlayerStatusAdmin } = await import("@/app/actions/club");
-      await upsertPlayerStatusAdmin(Number(resolveEtudiantId(playerId)), statusToUpdate);
+      await upsertPlayerStatusAdmin(targetIds, statusToUpdate);
     } catch (e) {
-      if (!statusToUpdate || statusToUpdate.trim() === "") {
-        await supabase
-          .from('player_status')
-          .delete()
-          .eq('player_id', resolveEtudiantId(playerId));
-      } else {
-        await supabase
-          .from('player_status')
-          .upsert({ 
-            player_id: resolveEtudiantId(playerId), 
-            status: statusToUpdate.trim(),
-            updated_at: new Date().toISOString()
-          }, { onConflict: 'player_id' });
-      }
+      console.warn("Erreur upsertPlayerStatusAdmin fallback:", e);
     }
   }
 
@@ -211,7 +202,7 @@ export const updatePlayerInSupabase = async (playerId: string, data: Partial<Pla
   });
 
   const { updatePlayerAdmin } = await import("@/app/actions/club");
-  let result = await updatePlayerAdmin(resolveEtudiantId(playerId), updatePayload);
+  let result = await updatePlayerAdmin(targetIds, updatePayload);
 
   if (!result.success && (result.error?.includes("PGRST204") || result.error?.toLowerCase().includes("column"))) {
     delete updatePayload.UrgenceNomPrenom;
@@ -224,11 +215,12 @@ export const updatePlayerInSupabase = async (playerId: string, data: Partial<Pla
     delete updatePayload.Saison;
     delete updatePayload.PhotoUrl;
     delete updatePayload.Programme;
-    result = await updatePlayerAdmin(resolveEtudiantId(playerId), updatePayload);
+    result = await updatePlayerAdmin(targetIds, updatePayload);
   }
 
   if (!result.success) {
-    console.warn("Mise à jour directe Supabase ignorée (état local mis à jour) :", result.error);
+    console.warn("Mise à jour Supabase :", result.error);
+    throw new Error(result.error || "Erreur de mise à jour dans la base de données.");
   }
 
   return {

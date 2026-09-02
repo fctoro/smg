@@ -55,7 +55,8 @@ export const PlayerEditModal: React.FC<PlayerEditModalProps> = ({
     const today = new Date().toISOString().slice(0, 10);
     
     try {
-      const updatedDocs = await updatePlayerInSupabase(player.id, normalized);
+      const pIds = (player as any).playerIds || [player.id];
+      const updatedDocs = await updatePlayerInSupabase(player.id, { ...normalized, playerIds: pIds } as any);
       
       setPlayers((prevPlayers) => {
         const newPlayers = prevPlayers.map((p) => {

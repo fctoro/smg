@@ -78,21 +78,33 @@ export async function insertPlayerAdmin(insertPayload: any) {
   return { success: false, error: lastError?.message || "Erreur lors de l'insertion." };
 }
 
-export async function updatePlayerAdmin(etudiantId: number | string, updatePayload: any) {
+export async function updatePlayerAdmin(etudiantId: number | string | (number | string)[], updatePayload: any) {
   if (!supabaseAdmin) return { success: false, error: "Service role Supabase indisponible." };
 
   let payload = { ...updatePayload };
+  const idList = Array.isArray(etudiantId) ? etudiantId : [etudiantId];
+  const targetIds: number[] = [];
+  const strIds: string[] = [];
 
-  const strId = String(etudiantId).trim();
-  const numId = Number(strId.replace(/\D/g, ""));
-  const targetId = !isNaN(numId) && numId > 0 ? numId : strId;
+  for (const rawId of idList) {
+    const sId = String(rawId).trim();
+    const nId = Number(sId.replace(/\D/g, ""));
+    if (!isNaN(nId) && nId > 0) targetIds.push(nId);
+    if (sId) strIds.push(sId);
+  }
+
+  if (targetIds.length === 0 && strIds.length === 0) {
+    return { success: false, error: "Identifiant étudiant invalide" };
+  }
 
   // Attempt 1: Full payload
-  let { data, error } = await supabaseAdmin
-    .from("tblEtudiants")
-    .update(payload)
-    .or(`EtudiantID.eq.${targetId},EtudiantID.eq.${strId}`);
-
+  let query = supabaseAdmin.from("tblEtudiants").update(payload);
+  if (targetIds.length > 0) {
+    query = query.in("EtudiantID", targetIds);
+  } else {
+    query = query.in("EtudiantID", strIds);
+  }
+  let { data, error } = await query;
   if (!error) return { success: true, data };
 
   // Attempt 2: Toggle EstAlumni boolean/number representation
@@ -102,60 +114,69 @@ export async function updatePlayerAdmin(etudiantId: number | string, updatePaylo
       : (payload.EstAlumni === 1);
   }
 
-  let res2 = await supabaseAdmin
-    .from("tblEtudiants")
-    .update(payload)
-    .or(`EtudiantID.eq.${targetId},EtudiantID.eq.${strId}`);
-
+  let query2 = supabaseAdmin.from("tblEtudiants").update(payload);
+  if (targetIds.length > 0) query2 = query2.in("EtudiantID", targetIds);
+  else query2 = query2.in("EtudiantID", strIds);
+  let res2 = await query2;
   if (!res2.error) return { success: true, data: res2.data };
 
-  // Attempt 3: Strip non-standard columns (StatutJoueur, photoUrl, photoIdentiteUrl)
-  delete payload.StatutJoueur;
-  delete payload.photoUrl;
+  // Attempt 3: Strip non-standard columns
+  const optionalCols = [
+    "StatutJoueur", "photoUrl", "photoIdentiteUrl", "carteIdentiteParentUrl",
+    "acteNaissanceUrl", "fiche9eUrl", "carnetVaccinationUrl", "UrgenceNomPrenom",
+    "UrgenceLien", "UrgenceTelephone", "UrgenceEmail", "UrgenceAdresse",
+    "TailleHaut", "TailleShort", "Poste", "Experience", "PlanPaiement",
+    "MethodePaiement", "NumerosPreferes", "Ecole", "Programme", "Info1", "Info2", "Info3"
+  ];
+  for (const col of optionalCols) {
+    delete payload[col];
+  }
 
-  let res3 = await supabaseAdmin
-    .from("tblEtudiants")
-    .update(payload)
-    .or(`EtudiantID.eq.${targetId},EtudiantID.eq.${strId}`);
-
+  let query3 = supabaseAdmin.from("tblEtudiants").update(payload);
+  if (targetIds.length > 0) query3 = query3.in("EtudiantID", targetIds);
+  else query3 = query3.in("EtudiantID", strIds);
+  let res3 = await query3;
   if (!res3.error) return { success: true, data: res3.data };
 
   // Attempt 4: Strip EstAlumni if causing column error
   delete payload.EstAlumni;
 
-  let res4 = await supabaseAdmin
-    .from("tblEtudiants")
-    .update(payload)
-    .or(`EtudiantID.eq.${targetId},EtudiantID.eq.${strId}`);
-
+  let query4 = supabaseAdmin.from("tblEtudiants").update(payload);
+  if (targetIds.length > 0) query4 = query4.in("EtudiantID", targetIds);
+  else query4 = query4.in("EtudiantID", strIds);
+  let res4 = await query4;
   if (!res4.error) return { success: true, data: res4.data };
 
   return { success: false, error: res4.error?.message || "Erreur de mise à jour" };
 }
 
-export async function upsertPlayerStatusAdmin(etudiantId: number, status: string) {
+export async function upsertPlayerStatusAdmin(etudiantId: number | string | (number | string)[], status: string) {
   if (!supabaseAdmin) return { success: false, error: "Service role Supabase indisponible." };
   
-  if (!status || status.trim() === "") {
+  const idList = Array.isArray(etudiantId) ? etudiantId : [etudiantId];
+  const normalizedStatus = (status || "").trim();
+
+  for (const rawId of idList) {
+    const numId = Number(String(rawId).replace(/\D/g, ""));
+    if (isNaN(numId) || numId <= 0) continue;
+
+    const finalSt = (!normalizedStatus || normalizedStatus.toLowerCase() === "normal" || normalizedStatus.toLowerCase() === "aucun" || normalizedStatus.toLowerCase() === "standard")
+      ? "Normal"
+      : normalizedStatus;
+
     const { error } = await supabaseAdmin
       .from('player_status')
-      .delete()
-      .eq('player_id', etudiantId);
-    if (error) return { success: false, error: error.message };
-    return { success: true };
+      .upsert({ 
+        player_id: numId, 
+        status: finalSt,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'player_id' });
+
+    if (error) {
+      console.warn(`Erreur upsert player_status pour ${numId}:`, error);
+    }
   }
 
-  const { error } = await supabaseAdmin
-    .from('player_status')
-    .upsert({ 
-      player_id: etudiantId, 
-      status: status.trim(),
-      updated_at: new Date().toISOString()
-    }, { onConflict: 'player_id' });
-
-  if (error) {
-    return { success: false, error: error.message };
-  }
   return { success: true };
 }
 

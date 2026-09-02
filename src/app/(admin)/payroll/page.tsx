@@ -115,7 +115,7 @@ const formatAmountWithDevise = (amount: number, devise?: "US" | "HTG") => {
 
 const getDefaultTaxPercentage = (salary: number, devise: "US" | "HTG" = "HTG") => {
   if (devise === "HTG") {
-    return salary >= 5000 ? 2 : 0;
+    return salary > 5000 ? 2 : 0;
   }
   return 0;
 };
@@ -125,7 +125,7 @@ const calculatePrelevement = (salary: number, percentage: number) =>
 
 const getPrelevementAmount = (record: PayrollRecord) => {
   const baseSalary = record.salaireBase || 0;
-  const isExempt = (record.devise || "HTG") === "HTG" && baseSalary < 5000;
+  const isExempt = (record.devise || "HTG") === "HTG" && baseSalary <= 5000;
   if (isExempt) return 0;
   return record.prelevementMontant ?? calculatePrelevement(baseSalary, record.prelevementPourcentage ?? getDefaultTaxPercentage(baseSalary, record.devise));
 };
@@ -508,8 +508,8 @@ export default function PayrollPage() {
           (formData.nombreSeances * formData.tauxParSeance)
         : formData.salaireBase;
 
-    // Règle d'exonération fiscale : si salaire brut < 5000 HTG, taxe 2% = 0% et 0 HTG
-    const isExempt2Percent = formData.devise === "HTG" && grossBaseSalary < 5000;
+    // Règle d'exonération fiscale : si salaire brut <= 5000 HTG, taxe 2% = 0% et 0 HTG
+    const isExempt2Percent = formData.devise === "HTG" && grossBaseSalary <= 5000;
     const effectivePrelevementPourcentage = isExempt2Percent ? 0 : formData.prelevementPourcentage;
     const prelevementMontant = isExempt2Percent ? 0 : calculatePrelevement(grossBaseSalary, effectivePrelevementPourcentage);
 
@@ -1614,7 +1614,7 @@ export default function PayrollPage() {
                             ((formData.nombreJoursWeekend || 0) * (formData.tauxJourWeekend || 0)) +
                             ((formData.nombreSeances || 0) * (formData.tauxParSeance || 0))
                           : (formData.salaireBase || 0);
-                        const isExempt = curGross < 5000;
+                        const isExempt = curGross <= 5000;
 
                         return (
                           <div>
@@ -1646,7 +1646,7 @@ export default function PayrollPage() {
                             />
                             {isExempt && (
                               <span className="mt-1 block text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">
-                                Exonéré (&lt; 5 000 HTG)
+                                Exonéré (≤ 5 000 HTG)
                               </span>
                             )}
                           </div>
@@ -1904,7 +1904,7 @@ export default function PayrollPage() {
                     ((formData.nombreSeances || 0) * (formData.tauxParSeance || 0))
                   : formData.salaireBase;
 
-                const isExempt = formData.devise === "HTG" && gross < 5000;
+                const isExempt = formData.devise === "HTG" && gross <= 5000;
                 const taxBase = isExempt ? 0 : calculatePrelevement(gross, formData.prelevementPourcentage);
                 const iriAmt = formData.devise === "HTG" ? (formData.taxeIRI || 0) : 0;
                 const cfgdctAmt = formData.devise === "HTG" ? calculatePrelevement(gross, formData.taxeCFGDCT) : 0;
@@ -2072,7 +2072,7 @@ export default function PayrollPage() {
 
                 {(() => {
                   const baseSalary = selectedSlip.salaireBase || 0;
-                  const isExempt = (selectedSlip.devise || "HTG") === "HTG" && baseSalary < 5000;
+                  const isExempt = (selectedSlip.devise || "HTG") === "HTG" && baseSalary <= 5000;
                   const taxAmount = isExempt ? 0 : getPrelevementAmount(selectedSlip);
                   const taxPercent = isExempt ? 0 : (selectedSlip.prelevementPourcentage ?? getDefaultTaxPercentage(baseSalary, selectedSlip.devise));
                   if (taxAmount <= 0 && taxPercent <= 0) return null;

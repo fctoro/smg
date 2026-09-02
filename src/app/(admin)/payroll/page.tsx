@@ -13,6 +13,7 @@ import { ConfirmModal } from "@/components/ui/modal/ConfirmModal";
 import { Dropdown } from "@/components/ui/dropdown/Dropdown";
 import { DropdownItem } from "@/components/ui/dropdown/DropdownItem";
 import { formatClubDate } from "@/lib/club/metrics";
+import { ToastNotification, ToastType } from "@/components/ui/toast/ToastNotification";
 
 // Professional SVG Icons
 const Icons = {
@@ -112,13 +113,22 @@ const formatAmountWithDevise = (amount: number, devise?: "US" | "HTG") => {
   return `$${amount.toLocaleString("en-US")}`;
 };
 
-const getDefaultTaxPercentage = (salary: number) => (salary > 5000 ? 2 : 0);
+const getDefaultTaxPercentage = (salary: number, devise: "US" | "HTG" = "HTG") => {
+  if (devise === "HTG") {
+    return salary >= 5000 ? 2 : 0;
+  }
+  return 0;
+};
 
 const calculatePrelevement = (salary: number, percentage: number) =>
   Math.round(((salary * percentage) / 100) * 100) / 100;
 
-const getPrelevementAmount = (record: PayrollRecord) =>
-  record.prelevementMontant ?? calculatePrelevement(record.salaireBase, record.prelevementPourcentage ?? getDefaultTaxPercentage(record.salaireBase));
+const getPrelevementAmount = (record: PayrollRecord) => {
+  const baseSalary = record.salaireBase || 0;
+  const isExempt = (record.devise || "HTG") === "HTG" && baseSalary < 5000;
+  if (isExempt) return 0;
+  return record.prelevementMontant ?? calculatePrelevement(baseSalary, record.prelevementPourcentage ?? getDefaultTaxPercentage(baseSalary, record.devise));
+};
 
 export default function PayrollPage() {
   const { employees, payrollRecords, setPayrollRecords, rubriques } = useClubData();
@@ -148,6 +158,8 @@ export default function PayrollPage() {
   const [selectedSlip, setSelectedSlip] = useState<PayrollRecord | null>(null);
   const [editingPayrollId, setEditingPayrollId] = useState<string | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
+  const [modalError, setModalError] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ message: string; type: ToastType } | null>(null);
   const [deletingRecord, setDeletingRecord] = useState<PayrollRecord | null>(null);
 
   // Modal form state
@@ -276,7 +288,8 @@ export default function PayrollPage() {
       "Salaire_Base",
       "Primes_Bonus",
       "Vacances_Payees",
-      "Retenues_Taxes",
+      "Snowizz_Pret",
+      "Autres_Retenues",
       "Net_A_Payer",
       "Devise",
       "Statut",
@@ -287,6 +300,8 @@ export default function PayrollPage() {
     csvContent += headers.join(delimiter) + "\n";
 
     filteredRecords.forEach((r) => {
+      const snowizzAmt = Number(r.prelevementSnowizz || 0);
+      const otherDeductions = Math.max(0, Number(r.deductions || 0) - snowizzAmt);
       const row = [
         r.employeNom,
         r.employePrenom,
@@ -296,7 +311,8 @@ export default function PayrollPage() {
         Number(r.salaireBase || 0).toFixed(2),
         Number(r.bonus || 0).toFixed(2),
         Number(r.vacancesPayees || 0).toFixed(2),
-        Number(r.deductions || 0).toFixed(2),
+        snowizzAmt.toFixed(2),
+        otherDeductions.toFixed(2),
         Number(r.netAPayer || 0).toFixed(2),
         r.devise || "HTG",
         r.statut === "paye" ? "Payé" : "En attente",
@@ -328,7 +344,8 @@ export default function PayrollPage() {
       "Salaire de Base",
       "Primes & Bonus",
       "Vacances Payées",
-      "Taxe Revenu (2%)",
+      "Snowizz / Prêt",
+      "Autres Retenues",
       "Net à Payer",
       "Devise",
       "Statut",
@@ -348,6 +365,8 @@ export default function PayrollPage() {
     const tbody = filteredRecords
       .map((r) => {
         const nomComplet = r.employeNom ? `${r.employeNom.toUpperCase()} ${r.employePrenom}` : r.employePrenom;
+        const snowizzAmt = Number(r.prelevementSnowizz || 0);
+        const otherDeductions = Math.max(0, Number(r.deductions || 0) - snowizzAmt);
         const row = [
           nomComplet,
           r.fonction || "-",
@@ -356,7 +375,8 @@ export default function PayrollPage() {
           Number(r.salaireBase || 0).toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
           Number(r.bonus || 0).toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
           Number(r.vacancesPayees || 0).toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
-          Number(r.deductions || 0).toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+          snowizzAmt.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+          otherDeductions.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
           Number(r.netAPayer || 0).toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
           r.devise || "HTG",
           r.statut === "paye" ? "Payé" : "En attente",
@@ -441,15 +461,29 @@ export default function PayrollPage() {
 
   const handleCreatePayroll = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.employeId) return;
+    setModalError(null);
+
+    if (!formData.employeId) {
+      setModalError("Veuillez sélectionner un employé ou coach dans la liste.");
+      return;
+    }
+
+    if (formData.typeSalaire === "fixe" && (!formData.salaireBase || formData.salaireBase <= 0)) {
+      setModalError("Veuillez indiquer un salaire de base valide supérieur à 0.");
+      return;
+    }
 
     if (formData.file && formData.file.size > 5 * 1024 * 1024) {
       setFileError("La photo justificative doit faire au maximum 5 MB.");
+      setModalError("La photo justificative dépasse la taille autorisée (maximum 5 MB).");
       return;
     }
 
     const targetEmp = employees.find((emp) => emp.id === formData.employeId);
-    if (!targetEmp) return;
+    if (!targetEmp) {
+      setModalError("Employé introuvable. Veuillez re-sélectionner l'employé.");
+      return;
+    }
 
     const targetMois = `${formData.annee}-${formData.mois}`;
 
@@ -459,8 +493,9 @@ export default function PayrollPage() {
         (rec) => rec.employeId === targetEmp.id && rec.mois === targetMois
       );
       if (duplicatePayroll) {
-        const errorMsg = `❌ Un bulletin de paie existe déjà pour ${targetEmp.nom.toUpperCase()} ${targetEmp.prenom} pour la période ${formatMonthYearDisplay(targetMois)}. La création d'un doublon est bloquée.`;
-        alert(errorMsg);
+        const errorMsg = `Un bulletin de paie existe déjà pour ${targetEmp.nom ? targetEmp.nom.toUpperCase() : ""} ${targetEmp.prenom} pour la période ${formatMonthYearDisplay(targetMois)}. La création d'un doublon est bloquée.`;
+        setModalError(errorMsg);
+        setToast({ message: errorMsg, type: "error" });
         return;
       }
     }
@@ -473,7 +508,11 @@ export default function PayrollPage() {
           (formData.nombreSeances * formData.tauxParSeance)
         : formData.salaireBase;
 
-    const prelevementMontant = calculatePrelevement(grossBaseSalary, formData.prelevementPourcentage);
+    // Règle d'exonération fiscale : si salaire brut < 5000 HTG, taxe 2% = 0% et 0 HTG
+    const isExempt2Percent = formData.devise === "HTG" && grossBaseSalary < 5000;
+    const effectivePrelevementPourcentage = isExempt2Percent ? 0 : formData.prelevementPourcentage;
+    const prelevementMontant = isExempt2Percent ? 0 : calculatePrelevement(grossBaseSalary, effectivePrelevementPourcentage);
+
     const iriMontant = formData.devise === "HTG" ? (formData.taxeIRI || 0) : 0;
     const cfgdctMontant = formData.devise === "HTG" ? calculatePrelevement(grossBaseSalary, formData.taxeCFGDCT) : 0;
     const casMontant = formData.devise === "HTG" ? calculatePrelevement(grossBaseSalary, formData.taxeCAS) : 0;
@@ -513,7 +552,7 @@ export default function PayrollPage() {
       tauxJourWeekend: formData.tauxJourWeekend,
       bonus: formData.bonus,
       deductions: totalDeductions,
-      prelevementPourcentage: formData.prelevementPourcentage,
+      prelevementPourcentage: effectivePrelevementPourcentage,
       prelevementMontant,
       prelevementAvance: usdDeduction,
       prelevementSnowizz: formData.prelevementSnowizz,
@@ -630,9 +669,19 @@ export default function PayrollPage() {
         notes: "",
         file: null,
       });
+
+      setShowModal(false);
+      setToast({
+        message: editingPayrollId
+          ? "Bulletin de paie mis à jour avec succès !"
+          : "Nouveau bulletin de paie créé avec succès !",
+        type: "success",
+      });
     } catch (error: any) {
       console.error("Erreur lors de l'enregistrement du bulletin de paie :", error);
-      alert(`Erreur lors de l'enregistrement du bulletin de paie : ${error?.message || error || "Veuillez réessayer."}`);
+      const errMsg = `Erreur lors de l'enregistrement du bulletin : ${error?.message || error || "Veuillez réessayer."}`;
+      setModalError(errMsg);
+      setToast({ message: errMsg, type: "error" });
     }
   };
 
@@ -662,8 +711,13 @@ export default function PayrollPage() {
           statut: nextStatut,
           datePaiement: nextDatePaiement,
         });
+        setToast({
+          message: `Statut mis à jour : ${nextStatut === "paye" ? "Payé" : "En attente"}.`,
+          type: "info",
+        });
       } catch (err) {
         console.error("Erreur mise à jour statut paie :", err);
+        setToast({ message: "Erreur lors de la mise à jour du statut.", type: "error" });
       }
     }
   };
@@ -681,9 +735,13 @@ export default function PayrollPage() {
     if (!strId.startsWith("pay-")) {
       try {
         await deletePayrollInSupabase(strId);
+        setToast({ message: "Bulletin de paie supprimé avec succès.", type: "info" });
       } catch (err) {
         console.error("Erreur suppression paie :", err);
+        setToast({ message: "Erreur lors de la suppression.", type: "error" });
       }
+    } else {
+      setToast({ message: "Bulletin supprimé.", type: "info" });
     }
     setDeletingRecord(null);
   };
@@ -701,6 +759,7 @@ export default function PayrollPage() {
     const prelevementMontant = record.prelevementMontant ?? calculatePrelevement(record.salaireBase, prelevementPourcentage);
     setEditingPayrollId(record.id);
     setFileError(null);
+    setModalError(null);
     setFormData({
       employeId: record.employeId,
       annee: year || (selectedYear !== "all" ? selectedYear : currentYearStr),
@@ -738,6 +797,14 @@ export default function PayrollPage() {
 
   return (
     <div className="space-y-6">
+      {toast && (
+        <ToastNotification
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
+      )}
+
       <div className="print:hidden">
         <PageBreadcrumb pageTitle="Payroll / Gestion Historique des Salaires" />
       </div>
@@ -902,6 +969,8 @@ export default function PayrollPage() {
                 notes: "",
                 file: null,
               });
+              setModalError(null);
+              setFileError(null);
               setShowModal(true);
             }}
             className="inline-flex h-11 items-center justify-center whitespace-nowrap rounded-lg bg-brand-500 px-4 text-sm font-medium text-white shadow-theme-xs hover:bg-brand-600 transition-colors cursor-pointer"
@@ -967,7 +1036,8 @@ export default function PayrollPage() {
                 <th className="px-6 py-4 font-bold">Période (Mois/Année)</th>
                 <th className="px-6 py-4 font-bold">Salaire Base</th>
                 <th className="px-6 py-4 font-bold">Primes</th>
-                <th className="px-6 py-4 font-bold">Retenues</th>
+                <th className="px-6 py-4 font-bold">Snowizz / Prêt</th>
+                <th className="px-6 py-4 font-bold">Autres Retenues</th>
                 <th className="px-6 py-4 font-bold">Net à Payer</th>
                 <th className="px-6 py-4 font-bold">Statut</th>
                 <th className="px-6 py-4 text-right font-bold">Actions</th>
@@ -976,7 +1046,7 @@ export default function PayrollPage() {
             <tbody className="divide-y divide-gray-200 dark:divide-gray-800">
               {filteredRecords.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-6 py-12 text-center text-gray-500 dark:text-gray-400">
+                  <td colSpan={9} className="px-6 py-12 text-center text-gray-500 dark:text-gray-400">
                     <div className="flex flex-col items-center justify-center gap-2">
                       <Icons.Calendar />
                       <p className="font-semibold">Aucun enregistrement trouvé pour ces critères de recherche.</p>
@@ -1004,8 +1074,23 @@ export default function PayrollPage() {
                     <td className="px-6 py-4 font-semibold text-emerald-600 dark:text-emerald-400">
                       +{formatAmountWithDevise(record.bonus, record.devise)}
                     </td>
+                    <td className="px-6 py-4 font-medium text-amber-700 dark:text-amber-400">
+                      {(record.prelevementSnowizz || 0) > 0 ? (
+                        `-${formatAmountWithDevise(record.prelevementSnowizz || 0, record.devise)}`
+                      ) : (
+                        <span className="text-gray-400">-</span>
+                      )}
+                    </td>
                     <td className="px-6 py-4 font-semibold text-rose-600 dark:text-rose-400">
-                      -{formatAmountWithDevise(record.deductions, record.devise)}
+                      {(() => {
+                        const snowizzAmt = record.prelevementSnowizz || 0;
+                        const otherDeductions = Math.max(0, (record.deductions || 0) - snowizzAmt);
+                        return otherDeductions > 0 ? (
+                          `-${formatAmountWithDevise(otherDeductions, record.devise)}`
+                        ) : (
+                          <span className="text-gray-400">-</span>
+                        );
+                      })()}
                     </td>
                     <td className="px-6 py-4 font-extrabold text-gray-900 dark:text-white">
                       {formatAmountWithDevise(record.netAPayer, record.devise)}
@@ -1082,7 +1167,34 @@ export default function PayrollPage() {
               </button>
             </div>
 
-            <form onSubmit={handleCreatePayroll} className="space-y-6">
+            {/* In-system Error Notification Banner */}
+            {modalError && (
+              <div className="mb-5 flex items-start justify-between gap-3 rounded-xl border border-rose-200 bg-rose-50 p-4 text-rose-800 dark:border-rose-900/50 dark:bg-rose-950/40 dark:text-rose-200 animate-in fade-in duration-200 shadow-xs">
+                <div className="flex items-start gap-3">
+                  <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-rose-100 text-rose-600 dark:bg-rose-900/60 dark:text-rose-300 mt-0.5">
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h5 className="text-xs font-bold uppercase tracking-wider text-rose-900 dark:text-rose-100">
+                      Message du système
+                    </h5>
+                    <p className="text-xs font-medium mt-0.5 leading-relaxed">{modalError}</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setModalError(null)}
+                  className="rounded-lg p-1 text-rose-400 hover:bg-rose-100 hover:text-rose-700 dark:hover:bg-rose-900/50 transition-colors cursor-pointer"
+                  aria-label="Fermer"
+                >
+                  ✕
+                </button>
+              </div>
+            )}
+
+            <form noValidate onSubmit={handleCreatePayroll} className="space-y-6">
               {/* SECTION 1: INFORMATIONS GÉNÉRALES (4 colonnes) */}
               <div className="rounded-xl border border-gray-100 bg-gray-50/50 dark:border-gray-800 dark:bg-gray-800/30 p-4 space-y-3">
                 <h4 className="text-xs font-bold text-gray-800 dark:text-gray-200 uppercase tracking-wider">
@@ -1144,7 +1256,7 @@ export default function PayrollPage() {
                           typeSalaire: defaultType,
                           tauxParSeance: defaultTaux,
                           salaireBase: empSal,
-                          prelevementPourcentage: getDefaultTaxPercentage(empSal),
+                          prelevementPourcentage: getDefaultTaxPercentage(empSal, empDev),
                           devise: empDev,
                         }));
                       }}
@@ -1184,7 +1296,21 @@ export default function PayrollPage() {
                     </label>
                     <select
                       value={formData.devise}
-                      onChange={(e) => setFormData({ ...formData, devise: e.target.value as "US" | "HTG" })}
+                      onChange={(e) => {
+                        const newDev = e.target.value as "US" | "HTG";
+                        setFormData((prev) => {
+                          const gross = prev.typeSalaire === "variable"
+                            ? ((prev.nombreJoursSemaine || 0) * (prev.tauxJourSemaine || 0)) +
+                              ((prev.nombreJoursWeekend || 0) * (prev.tauxJourWeekend || 0)) +
+                              ((prev.nombreSeances || 0) * (prev.tauxParSeance || 0))
+                            : prev.salaireBase;
+                          return {
+                            ...prev,
+                            devise: newDev,
+                            prelevementPourcentage: getDefaultTaxPercentage(gross, newDev),
+                          };
+                        });
+                      }}
                       className="w-full rounded-xl border border-gray-300 bg-white p-2.5 text-sm font-semibold dark:border-gray-700 dark:bg-gray-800 dark:text-white"
                     >
                       <option value="HTG">Gourdes (HTG / Gdes)</option>
@@ -1235,7 +1361,7 @@ export default function PayrollPage() {
                               return {
                                 ...prev,
                                 nombreJoursSemaine: val,
-                                prelevementPourcentage: getDefaultTaxPercentage(total),
+                                prelevementPourcentage: getDefaultTaxPercentage(total, prev.devise),
                               };
                             });
                           }}
@@ -1259,7 +1385,7 @@ export default function PayrollPage() {
                               return {
                                 ...prev,
                                 tauxJourSemaine: val,
-                                prelevementPourcentage: getDefaultTaxPercentage(total),
+                                prelevementPourcentage: getDefaultTaxPercentage(total, prev.devise),
                               };
                             });
                           }}
@@ -1283,7 +1409,7 @@ export default function PayrollPage() {
                               return {
                                 ...prev,
                                 nombreJoursWeekend: val,
-                                prelevementPourcentage: getDefaultTaxPercentage(total),
+                                prelevementPourcentage: getDefaultTaxPercentage(total, prev.devise),
                               };
                             });
                           }}
@@ -1307,7 +1433,7 @@ export default function PayrollPage() {
                               return {
                                 ...prev,
                                 tauxJourWeekend: val,
-                                prelevementPourcentage: getDefaultTaxPercentage(total),
+                                prelevementPourcentage: getDefaultTaxPercentage(total, prev.devise),
                               };
                             });
                           }}
@@ -1334,7 +1460,7 @@ export default function PayrollPage() {
                               return {
                                 ...prev,
                                 nombreSeances: val,
-                                prelevementPourcentage: getDefaultTaxPercentage(total),
+                                prelevementPourcentage: getDefaultTaxPercentage(total, prev.devise),
                               };
                             });
                           }}
@@ -1358,7 +1484,7 @@ export default function PayrollPage() {
                               return {
                                 ...prev,
                                 tauxParSeance: val,
-                                prelevementPourcentage: getDefaultTaxPercentage(total),
+                                prelevementPourcentage: getDefaultTaxPercentage(total, prev.devise),
                               };
                             });
                           }}
@@ -1428,7 +1554,7 @@ export default function PayrollPage() {
                           setFormData((prev) => ({
                             ...prev,
                             salaireBase: val,
-                            prelevementPourcentage: getDefaultTaxPercentage(val),
+                            prelevementPourcentage: getDefaultTaxPercentage(val, prev.devise),
                           }));
                         }}
                         placeholder="0.00"
@@ -1482,22 +1608,50 @@ export default function PayrollPage() {
                 {formData.devise === "HTG" ? (
                   <div className="space-y-3">
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
-                      <div>
-                        <label className="mb-1 block text-[11px] font-semibold text-gray-700 dark:text-gray-300">
-                          Taxe Revenu (%)
-                        </label>
-                        <input
-                          type="number"
-                          min="0"
-                          step="any"
-                          value={formData.prelevementPourcentage === 0 ? "" : formData.prelevementPourcentage}
-                          onChange={(e) =>
-                            setFormData({ ...formData, prelevementPourcentage: e.target.value === "" ? 0 : parseFloat(e.target.value) || 0 })
-                          }
-                          placeholder="2"
-                          className="w-full rounded-lg border border-brand-300 bg-white p-2 text-xs font-semibold dark:border-brand-700 dark:bg-gray-800 dark:text-white"
-                        />
-                      </div>
+                      {(() => {
+                        const curGross = formData.typeSalaire === "variable"
+                          ? ((formData.nombreJoursSemaine || 0) * (formData.tauxJourSemaine || 0)) +
+                            ((formData.nombreJoursWeekend || 0) * (formData.tauxJourWeekend || 0)) +
+                            ((formData.nombreSeances || 0) * (formData.tauxParSeance || 0))
+                          : (formData.salaireBase || 0);
+                        const isExempt = curGross < 5000;
+
+                        return (
+                          <div>
+                            <div className="flex items-center justify-between mb-1">
+                              <label className="block text-[11px] font-semibold text-gray-700 dark:text-gray-300">
+                                Taxe Revenu (%)
+                              </label>
+                              {isExempt && (
+                                <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-1 py-0.5 rounded">
+                                  Exonéré
+                                </span>
+                              )}
+                            </div>
+                            <input
+                              type="number"
+                              min="0"
+                              step="any"
+                              disabled={isExempt}
+                              value={isExempt ? 0 : (formData.prelevementPourcentage === 0 ? "" : formData.prelevementPourcentage)}
+                              onChange={(e) =>
+                                setFormData({ ...formData, prelevementPourcentage: e.target.value === "" ? 0 : parseFloat(e.target.value) || 0 })
+                              }
+                              placeholder={isExempt ? "0" : "2"}
+                              className={`w-full rounded-lg border p-2 text-xs font-semibold ${
+                                isExempt
+                                  ? "border-emerald-200 bg-emerald-50/50 text-emerald-800 dark:border-emerald-900/50 dark:bg-emerald-950/20 dark:text-emerald-300 cursor-not-allowed"
+                                  : "border-brand-300 bg-white dark:border-brand-700 dark:bg-gray-800 dark:text-white"
+                              }`}
+                            />
+                            {isExempt && (
+                              <span className="mt-1 block text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">
+                                Exonéré (&lt; 5 000 HTG)
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })()}
                       <div>
                         <label className="mb-1 block text-[11px] font-semibold text-gray-700 dark:text-gray-300">
                           IRI (Gdes)
@@ -1750,7 +1904,8 @@ export default function PayrollPage() {
                     ((formData.nombreSeances || 0) * (formData.tauxParSeance || 0))
                   : formData.salaireBase;
 
-                const taxBase = calculatePrelevement(gross, formData.prelevementPourcentage);
+                const isExempt = formData.devise === "HTG" && gross < 5000;
+                const taxBase = isExempt ? 0 : calculatePrelevement(gross, formData.prelevementPourcentage);
                 const iriAmt = formData.devise === "HTG" ? (formData.taxeIRI || 0) : 0;
                 const cfgdctAmt = formData.devise === "HTG" ? calculatePrelevement(gross, formData.taxeCFGDCT) : 0;
                 const casAmt = formData.devise === "HTG" ? calculatePrelevement(gross, formData.taxeCAS) : 0;
@@ -1915,16 +2070,24 @@ export default function PayrollPage() {
                   </tr>
                 )}
 
-                {(getPrelevementAmount(selectedSlip) > 0 || (selectedSlip.prelevementPourcentage ?? getDefaultTaxPercentage(selectedSlip.salaireBase)) > 0) && (
-                  <tr>
-                    <td className="p-2.5">
-                      Taxe sur le Revenu ({selectedSlip.prelevementPourcentage ?? getDefaultTaxPercentage(selectedSlip.salaireBase)}%)
-                    </td>
-                    <td className="p-2.5 text-right font-medium text-rose-600">
-                      -{formatAmountWithDevise(getPrelevementAmount(selectedSlip), selectedSlip.devise)}
-                    </td>
-                  </tr>
-                )}
+                {(() => {
+                  const baseSalary = selectedSlip.salaireBase || 0;
+                  const isExempt = (selectedSlip.devise || "HTG") === "HTG" && baseSalary < 5000;
+                  const taxAmount = isExempt ? 0 : getPrelevementAmount(selectedSlip);
+                  const taxPercent = isExempt ? 0 : (selectedSlip.prelevementPourcentage ?? getDefaultTaxPercentage(baseSalary, selectedSlip.devise));
+                  if (taxAmount <= 0 && taxPercent <= 0) return null;
+
+                  return (
+                    <tr>
+                      <td className="p-2.5">
+                        Taxe sur le Revenu ({taxPercent}%)
+                      </td>
+                      <td className="p-2.5 text-right font-medium text-rose-600">
+                        -{formatAmountWithDevise(taxAmount, selectedSlip.devise)}
+                      </td>
+                    </tr>
+                  );
+                })()}
 
                 {(selectedSlip.taxeIRI || 0) > 0 && (
                   <tr>

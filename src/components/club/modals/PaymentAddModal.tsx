@@ -30,6 +30,8 @@ interface PricingItem {
   devise: "US" | "HTG";
   precision: string;
   categorie?: string;
+  estAdhesion?: boolean;
+  actif?: boolean;
 }
 
 interface PaymentPlan {

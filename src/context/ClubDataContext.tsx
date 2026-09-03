@@ -687,6 +687,8 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
               3: "virement",
               4: "mobile",
               5: "mobile",
+              6: "cheque",
+              7: "depot",
             };
             const fetchedPayments: Payment[] = paiementsData.map((p: any) => {
               const rawPid = String(p.EtudiantId);
@@ -701,8 +703,10 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
                 methode = modeMap[p.ModePaiement] || "especes";
               } else if (typeof p.ModePaiement === "string") {
                 const lower = p.ModePaiement.toLowerCase();
-                if (lower.includes("vir") || lower === "3") methode = "virement";
+                if (lower.includes("depot") || lower.includes("dépôt") || lower === "7") methode = "depot";
+                else if (lower.includes("vir") || lower === "3") methode = "virement";
                 else if (lower.includes("cart") || lower === "2") methode = "carte";
+                else if (lower.includes("cheq") || lower === "6") methode = "cheque";
                 else if (lower.includes("mob") || lower.includes("moncash") || lower === "4" || lower === "5") methode = "mobile";
                 else methode = "especes";
               }

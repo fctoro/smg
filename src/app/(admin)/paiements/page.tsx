@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import { Dropdown } from "@/components/ui/dropdown";
 import { DropdownItem } from "@/components/ui/dropdown/DropdownItem";
@@ -63,12 +64,25 @@ const paymentPlans: PaymentPlan[] = [
 import { PaymentAddModal } from "@/components/club/modals/PaymentAddModal";
 import { TableBodySkeleton } from "@/components/ui/skeleton/Skeleton";
 
-export default function PaymentsPage() {
+function PaymentsPageContent() {
+  const searchParams = useSearchParams();
+  const urlMethode = searchParams.get("methode") || "all";
+
   const { payments, players, parents, setPayments, hydrated, rubriques } = useClubData();
   const { confirm, ConfirmComponent } = useConfirm();
   const [searchQuery, setSearchQuery] = useState("");
+  const [methodeFilter, setMethodeFilter] = useState(urlMethode);
   const [deviseFilter, setDeviseFilter] = useState("all");
   const [selectedSeason, setSelectedSeason] = useState("all");
+
+  useEffect(() => {
+    const m = searchParams.get("methode");
+    if (m) {
+      setMethodeFilter(m);
+    } else {
+      setMethodeFilter("all");
+    }
+  }, [searchParams]);
   const [isExportOpen, setIsExportOpen] = useState(false);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
@@ -587,6 +601,11 @@ export default function PaymentsPage() {
     const query = searchQuery.trim().toLowerCase();
     return payments
       .filter((payment) => {
+        if (methodeFilter !== "all") {
+          const m = (payment.methode || "").toLowerCase().trim();
+          const target = methodeFilter.toLowerCase().trim();
+          if (m !== target) return false;
+        }
         if (deviseFilter !== "all" && payment.devise !== deviseFilter) return false;
         const player = playerMap.get(payment.playerId);
         if (!player) return false;
@@ -602,7 +621,7 @@ export default function PaymentsPage() {
         const idB = parseInt(String(b.id).replace(/\D/g, ""), 10) || 0;
         return idB - idA;
       });
-  }, [payments, playerMap, searchQuery, deviseFilter, selectedSeason]);
+  }, [payments, playerMap, searchQuery, methodeFilter, deviseFilter, selectedSeason]);
 
   // ----- Logique de Rappel en Masse -----
   const targetPlayers = useMemo(() => {
@@ -894,7 +913,7 @@ export default function PaymentsPage() {
       <PageBreadcrumb pageTitle="Paiements" />
 
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <div className="grid flex-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid flex-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
           <input
             value={searchQuery}
             onChange={(event) => {
@@ -904,6 +923,22 @@ export default function PaymentsPage() {
             placeholder="Rechercher un joueur"
             className="h-11 w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs placeholder:text-gray-400 focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
           />
+          <select
+            value={methodeFilter}
+            onChange={(event) => {
+              setMethodeFilter(event.target.value);
+              setCurrentPage(1);
+            }}
+            className="h-11 w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
+          >
+            <option value="all">Tous les modes de paiements</option>
+            <option value="especes">Cash / Espèces</option>
+            <option value="virement">Virement bancaire</option>
+            <option value="mobile">MonCash / Mobile</option>
+            <option value="cheque">Chèque</option>
+            <option value="carte">Carte bancaire</option>
+            <option value="depot">Dépôt bancaire</option>
+          </select>
           <select
             value={deviseFilter}
             onChange={(event) => {
@@ -1136,7 +1171,20 @@ export default function PaymentsPage() {
                         {payment.datePaiement ? formatClubDate(payment.datePaiement) : "-"}
                       </TableCell>
                       <TableCell className="py-3 text-theme-sm text-gray-500 dark:text-gray-400">
-                        {formatClubCurrency(payment.montant, payment.devise)}
+                        <div className="flex flex-col">
+                          <span className="font-semibold text-gray-900 dark:text-white">
+                            {formatClubCurrency(payment.montant, payment.devise)}
+                          </span>
+                          <span className="text-[11px] text-gray-400 dark:text-gray-500 font-medium capitalize">
+                            {payment.methode === "especes" ? "Cash / Espèces" :
+                             payment.methode === "virement" ? "Virement bancaire" :
+                             payment.methode === "depot" ? "Dépôt bancaire" :
+                             payment.methode === "mobile" ? "MonCash / Mobile" :
+                             payment.methode === "cheque" ? "Chèque" :
+                             payment.methode === "carte" ? "Carte bancaire" :
+                             payment.methode || "-"}
+                          </span>
+                        </div>
                       </TableCell>
                       <TableCell className="py-3 text-theme-sm">
                         {balance.balance > 0 ? (
@@ -1541,5 +1589,13 @@ export default function PaymentsPage() {
 
       <ConfirmComponent />
     </div>
+  );
+}
+
+export default function PaymentsPage() {
+  return (
+    <Suspense fallback={null}>
+      <PaymentsPageContent />
+    </Suspense>
   );
 }

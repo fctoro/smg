@@ -129,8 +129,8 @@ export default function UserDropdown() {
           <span className="block font-medium text-gray-700 text-theme-sm dark:text-gray-400 truncate">
             {userEmail}
           </span>
-          <span className="mt-2 inline-flex flex-wrap items-center gap-1.5 rounded-full bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-700 dark:bg-brand-500/15 dark:text-brand-300" suppressHydrationWarning>
-            <span className="h-1.5 w-1.5 rounded-full bg-brand-500" />
+          <span className="mt-2 inline-flex flex-wrap items-center gap-1.5 rounded-full border border-gray-200 bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300" suppressHydrationWarning>
+            <span className="h-1.5 w-1.5 rounded-full bg-gray-500 dark:bg-gray-400" />
             Connecté en {displayRoleLabel}
             {isCoach && userCategories && userCategories.length > 0 && (
               <span className="opacity-80">

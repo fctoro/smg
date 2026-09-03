@@ -655,7 +655,8 @@ export const updatePaymentInSupabase = async (paymentId: string, data: Partial<i
       'carte': 2,
       'virement': 3,
       'mobile': 4,
-      'cheque': 1
+      'cheque': 6,
+      'depot': 7,
     };
     updatePayload.ModePaiement = modePaiementMap[data.methode] || 1;
   }
@@ -729,7 +730,8 @@ export const addPaymentToSupabase = async (data: Omit<import("@/types/club").Pay
     'carte': 2,
     'virement': 3,
     'mobile': 4,
-    'cheque': 1
+    'cheque': 6,
+    'depot': 7,
   };
 
   const insertPayload: any = {

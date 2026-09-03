@@ -1335,11 +1335,12 @@ export function PaymentAddModal({ isOpen, onClose, initialPlayerId }: PaymentAdd
                 onChange={(event) => setMethode(event.target.value as PaymentMethod)}
                 className={selectClassName}
               >
-                <option value="virement">Virement</option>
-                <option value="carte">Carte bancaire</option>
-                <option value="especes">Espèces</option>
+                <option value="virement">Virement bancaire</option>
+                <option value="depot">Dépôt bancaire</option>
+                <option value="especes">Espèces / Cash</option>
                 <option value="cheque">Chèque</option>
-                <option value="mobile">Dépôt bancaire</option>
+                <option value="carte">Carte bancaire</option>
+                <option value="mobile">MonCash / Mobile</option>
               </select>
             </div>
 

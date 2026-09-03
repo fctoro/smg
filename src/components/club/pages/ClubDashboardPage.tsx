@@ -109,19 +109,32 @@ export default function ClubDashboardPage() {
     return Object.keys(cats).map((cat) => ({ label: cat || "Autre", count: cats[cat] }));
   }, [players]);
 
+  const pendingPaymentsCount = useMemo(() => {
+    return payments.filter(
+      (p) => p.statut === "pending" && (isAllTime || p.periode.startsWith(selectedYear))
+    ).length;
+  }, [payments, selectedYear, isAllTime]);
+
   const methodData = useMemo(() => {
-    const methods: Record<string, { totalUS: number; totalHTG: number }> = {};
+    const methods: Record<string, { totalUS: number; totalHTG: number; count: number; pendingCount: number }> = {};
     payments.forEach((p) => {
-      if (p.statut === "paid" && (isAllTime || p.periode.startsWith(selectedYear))) {
-        if (!methods[p.methode]) methods[p.methode] = { totalUS: 0, totalHTG: 0 };
-        methods[p.methode].totalUS += p.montantUS || 0;
-        methods[p.methode].totalHTG += p.montantHTG || 0;
+      if (isAllTime || p.periode.startsWith(selectedYear)) {
+        if (!methods[p.methode]) methods[p.methode] = { totalUS: 0, totalHTG: 0, count: 0, pendingCount: 0 };
+        if (p.statut === "paid") {
+          methods[p.methode].totalUS += p.montantUS || 0;
+          methods[p.methode].totalHTG += p.montantHTG || 0;
+          methods[p.methode].count += 1;
+        } else if (p.statut === "pending") {
+          methods[p.methode].pendingCount += 1;
+        }
       }
     });
     return Object.keys(methods).map((m) => ({
       method: m,
       totalUS: methods[m].totalUS,
       totalHTG: methods[m].totalHTG,
+      count: methods[m].count || 0,
+      pendingCount: methods[m].pendingCount || 0,
     }));
   }, [payments, selectedYear, isAllTime]);
 
@@ -241,7 +254,7 @@ export default function ClubDashboardPage() {
       </div>
 
       <div className="col-span-12 lg:col-span-8">
-        <PaymentMethodChart methodData={methodData} />
+        <PaymentMethodChart methodData={methodData} pendingCount={pendingPaymentsCount} />
       </div>
 
       {enabledWidgetKeys.includes("alerts") ? (

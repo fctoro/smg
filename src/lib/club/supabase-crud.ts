@@ -915,6 +915,20 @@ export const addEventToSupabase = async (data: Omit<import("@/types/club").ClubE
 
 // --- PAYROLL (tblPayroll) ---
 
+const buildPayrollNotesWithMeta = (notes: string = "", data: any) => {
+  let baseNotes = String(notes || "").replace(/\[(SNOWIZZ|IRI|CFGDCT|CAS|FDU|ONA|AJUSTEMENT):[^\]]+\]/gi, "").trim();
+  const tags: string[] = [];
+  if (data.prelevementSnowizz) tags.push(`[SNOWIZZ:${data.prelevementSnowizz}]`);
+  if (data.taxeIRI) tags.push(`[IRI:${data.taxeIRI}]`);
+  if (data.taxeCFGDCT) tags.push(`[CFGDCT:${data.taxeCFGDCT}]`);
+  if (data.taxeCAS) tags.push(`[CAS:${data.taxeCAS}]`);
+  if (data.taxeFDU) tags.push(`[FDU:${data.taxeFDU}]`);
+  if (data.taxeONA) tags.push(`[ONA:${data.taxeONA}]`);
+  if (data.ajustement) tags.push(`[AJUSTEMENT:${data.ajustement}]`);
+  
+  return tags.length > 0 ? `${baseNotes} ${tags.join(" ")}`.trim() : baseNotes;
+};
+
 export const addPayrollToSupabase = async (data: Omit<import("@/types/club").PayrollRecord, "id">, file?: File) => {
   let pieceJointeUrl = data.pieceJointe || null;
 
@@ -941,6 +955,7 @@ export const addPayrollToSupabase = async (data: Omit<import("@/types/club").Pay
   }
 
   // 2. Insert into tblPayroll
+  const notesWithMeta = buildPayrollNotesWithMeta(data.notes, data);
   const insertPayload: any = {
     EmployeId: parseInt(data.employeId, 10) || Number(data.employeId) || 0,
     EmployeNom: data.employeNom,
@@ -955,7 +970,8 @@ export const addPayrollToSupabase = async (data: Omit<import("@/types/club").Pay
     Deductions: data.deductions,
     PrelevementPourcentage: data.prelevementPourcentage,
     PrelevementMontant: data.prelevementMontant,
-    PrelevementAvance: data.prelevementAvance || 0,
+    PrelevementAvance: data.prelevementAvance || data.prelevementSnowizz || 0,
+    Avance: data.prelevementSnowizz || 0,
     PrelevementSnowizz: data.prelevementSnowizz || 0,
     Ajustement: data.ajustement || 0,
     TaxeIRI: data.taxeIRI || 0,
@@ -972,7 +988,7 @@ export const addPayrollToSupabase = async (data: Omit<import("@/types/club").Pay
     Statut: data.statut,
     DatePaiement: data.datePaiement || new Date().toISOString(),
     ModePaiement: data.modePaiement,
-    Notes: data.notes || "",
+    Notes: notesWithMeta,
     PieceJointe: pieceJointeUrl,
   };
 
@@ -991,7 +1007,6 @@ export const addPayrollToSupabase = async (data: Omit<import("@/types/club").Pay
   if (error && isMissingPrelevementColumnError(error)) {
     delete insertPayload.PrelevementPourcentage;
     delete insertPayload.PrelevementMontant;
-    delete insertPayload.PrelevementAvance;
     delete insertPayload.PrelevementSnowizz;
     delete insertPayload.Ajustement;
     delete insertPayload.TaxeIRI;
@@ -1044,6 +1059,8 @@ export const updatePayrollInSupabase = async (id: string, data: Partial<import("
     }
   }
 
+  const notesWithMeta = buildPayrollNotesWithMeta(data.notes, data);
+
   const updatePayload: any = {};
   if (data.statut !== undefined) updatePayload.Statut = data.statut;
   if (data.datePaiement !== undefined) updatePayload.DatePaiement = data.datePaiement;
@@ -1056,7 +1073,10 @@ export const updatePayrollInSupabase = async (id: string, data: Partial<import("
   if (data.deductions !== undefined) updatePayload.Deductions = data.deductions;
   if (data.prelevementPourcentage !== undefined) updatePayload.PrelevementPourcentage = data.prelevementPourcentage;
   if (data.prelevementMontant !== undefined) updatePayload.PrelevementMontant = data.prelevementMontant;
-  if (data.prelevementAvance !== undefined) updatePayload.PrelevementAvance = data.prelevementAvance;
+  if (data.prelevementAvance !== undefined || data.prelevementSnowizz !== undefined) {
+    updatePayload.PrelevementAvance = data.prelevementAvance || data.prelevementSnowizz || 0;
+    updatePayload.Avance = data.prelevementSnowizz || data.prelevementAvance || 0;
+  }
   if (data.prelevementSnowizz !== undefined) updatePayload.PrelevementSnowizz = data.prelevementSnowizz;
   if (data.ajustement !== undefined) updatePayload.Ajustement = data.ajustement;
   if (data.taxeIRI !== undefined) updatePayload.TaxeIRI = data.taxeIRI;
@@ -1069,7 +1089,7 @@ export const updatePayrollInSupabase = async (id: string, data: Partial<import("
   if (data.congeSansSolde !== undefined) updatePayload.CongeSansSolde = data.congeSansSolde;
   if (data.cumulPaiements !== undefined) updatePayload.CumulPaiements = data.cumulPaiements;
   if (data.netAPayer !== undefined) updatePayload.NetAPayer = data.netAPayer;
-  if (data.notes !== undefined) updatePayload.Notes = data.notes;
+  updatePayload.Notes = notesWithMeta;
   if (pieceJointeUrl !== undefined) updatePayload.PieceJointe = pieceJointeUrl;
 
   const { updatePayrollAdmin } = await import("@/app/actions/club");

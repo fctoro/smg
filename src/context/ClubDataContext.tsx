@@ -866,6 +866,30 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
             const empIdStr = String(p.EmployeId || p.employeid || p.employe_id);
             const emp = employesData?.find((e: any) => String(e.EmployeId || e.employeid) === empIdStr);
 
+            const rawNotes = String(p.Notes || p.notes || "");
+            const snowizzMatch = rawNotes.match(/\[SNOWIZZ:([\d.]+)\]/i);
+            const snowizzFromNotes = snowizzMatch ? parseFloat(snowizzMatch[1]) : 0;
+
+            const iriMatch = rawNotes.match(/\[IRI:([\d.]+)\]/i);
+            const iriFromNotes = iriMatch ? parseFloat(iriMatch[1]) : 0;
+
+            const cfgdctMatch = rawNotes.match(/\[CFGDCT:([\d.]+)\]/i);
+            const cfgdctFromNotes = cfgdctMatch ? parseFloat(cfgdctMatch[1]) : 0;
+
+            const casMatch = rawNotes.match(/\[CAS:([\d.]+)\]/i);
+            const casFromNotes = casMatch ? parseFloat(casMatch[1]) : 0;
+
+            const fduMatch = rawNotes.match(/\[FDU:([\d.]+)\]/i);
+            const fduFromNotes = fduMatch ? parseFloat(fduMatch[1]) : 0;
+
+            const onaMatch = rawNotes.match(/\[ONA:([\d.]+)\]/i);
+            const onaFromNotes = onaMatch ? parseFloat(onaMatch[1]) : 0;
+
+            const ajustMatch = rawNotes.match(/\[AJUSTEMENT:([-\d.]+)\]/i);
+            const ajustFromNotes = ajustMatch ? parseFloat(ajustMatch[1]) : 0;
+
+            const cleanNotes = rawNotes.replace(/\[(SNOWIZZ|IRI|CFGDCT|CAS|FDU|ONA|AJUSTEMENT):[^\]]+\]/gi, "").trim();
+
             const baseSalary = p.SalaireBase || p.salairebase || p.salaire_base || (emp ? emp.Salaire : 0) || 0;
             const bonus = p.Bonus || p.bonus || 0;
             const deductions = p.Deductions || p.deductions || 0;
@@ -876,6 +900,15 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
               p.prelevement_montant ||
               Math.round(baseSalary * prelevementPourcentage) / 100;
             const fallbackNet = baseSalary + bonus - deductions;
+
+            const resolvedSnowizz = Number(
+              p.PrelevementSnowizz ||
+              snowizzFromNotes ||
+              p.prelevementsnowizz ||
+              p.prelevement_snowizz ||
+              (p.PrelevementType === "avance" || p.prelevement_type === "avance" ? (p.PrelevementAvance || p.Avance) : 0) ||
+              0
+            );
 
             return {
               id: String(p.Id || p.id),
@@ -893,13 +926,13 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
               prelevementPourcentage,
               prelevementMontant,
               prelevementAvance: p.PrelevementAvance || p.prelevementavance || p.prelevement_avance || 0,
-              prelevementSnowizz: p.PrelevementSnowizz || p.prelevementsnowizz || p.prelevement_snowizz || 0,
-              ajustement: p.Ajustement || p.ajustement || 0,
-              taxeIRI: p.TaxeIRI || p.taxeiri || p.taxe_iri || 0,
-              taxeCFGDCT: p.TaxeCFGDCT || p.taxecfgdct || p.taxe_cfgdct || 0,
-              taxeCAS: p.TaxeCAS || p.taxecas || p.taxe_cas || 0,
-              taxeFDU: p.TaxeFDU || p.taxefdu || p.taxe_fdu || 0,
-              taxeONA: p.TaxeONA || p.taxeona || p.taxe_ona || 0,
+              prelevementSnowizz: resolvedSnowizz,
+              ajustement: p.Ajustement || ajustFromNotes || p.ajustement || 0,
+              taxeIRI: p.TaxeIRI || iriFromNotes || p.taxeiri || p.taxe_iri || 0,
+              taxeCFGDCT: p.TaxeCFGDCT || cfgdctFromNotes || p.taxecfgdct || p.taxe_cfgdct || 0,
+              taxeCAS: p.TaxeCAS || casFromNotes || p.taxecas || p.taxe_cas || 0,
+              taxeFDU: p.TaxeFDU || fduFromNotes || p.taxefdu || p.taxe_fdu || 0,
+              taxeONA: p.TaxeONA || onaFromNotes || p.taxeona || p.taxe_ona || 0,
               prelevementType: p.PrelevementType || p.prelevementtype || p.prelevement_type || "taxe",
               vacancesPayees: p.VacancesPayees || p.vacancespayees || p.vacances_payees || 0,
               congeSansSolde: p.CongeSansSolde || p.congesanssolde || p.conge_sans_solde || 0,
@@ -909,7 +942,7 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
               statut: p.Statut || p.statut || "en_attente",
               datePaiement: p.DatePaiement || p.datepaiement || p.date_paiement ? (p.DatePaiement || p.datepaiement || p.date_paiement).split("T")[0] : undefined,
               modePaiement: p.ModePaiement || p.modepaiement || p.mode_paiement || "especes",
-              notes: p.Notes || p.notes || "",
+              notes: cleanNotes,
               pieceJointe: p.PieceJointe || p.piecejointe || p.piece_jointe || "",
             };
           });

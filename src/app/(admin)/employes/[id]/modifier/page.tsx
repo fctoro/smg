@@ -12,7 +12,7 @@ export default function EditEmployeePage() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
   const empId = params.id;
-  const { employees, setEmployees } = useClubData();
+  const { employees, setEmployees, setPayrollRecords } = useClubData();
 
   const targetEmployee = employees.find((emp) => emp.id === empId);
 
@@ -39,6 +39,18 @@ export default function EditEmployeePage() {
       setEmployees((prev) =>
         prev.map((emp) =>
           emp.id === empId ? { ...emp, ...values } : emp,
+        ),
+      );
+      setPayrollRecords((prev) =>
+        prev.map((rec) =>
+          String(rec.employeId) === String(empId)
+            ? {
+                ...rec,
+                employeNom: values.nom ?? rec.employeNom,
+                employePrenom: values.prenom ?? rec.employePrenom,
+                fonction: values.fonction ?? rec.fonction,
+              }
+            : rec,
         ),
       );
       router.push("/employes");

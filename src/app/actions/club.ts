@@ -251,6 +251,23 @@ export async function updateEmployeeAdmin(employeeId: number | string, updatePay
   if (error) {
     return { success: false, error: error.message };
   }
+
+  // Synchroniser automatiquement le nom, prénom et la fonction dans tblPayroll
+  if (updatePayload.Nom !== undefined || updatePayload.Prenom !== undefined || updatePayload.Fonction !== undefined) {
+    const payrollUpdates: any = {};
+    if (updatePayload.Nom !== undefined) payrollUpdates.EmployeNom = updatePayload.Nom;
+    if (updatePayload.Prenom !== undefined) payrollUpdates.EmployePrenom = updatePayload.Prenom;
+    if (updatePayload.Fonction !== undefined) payrollUpdates.Fonction = updatePayload.Fonction;
+
+    const strTargetId = String(targetId);
+    const numTargetId = typeof targetId === "number" ? targetId : parseInt(strTargetId, 10);
+
+    await supabaseAdmin
+      .from("tblPayroll")
+      .update(payrollUpdates)
+      .or(`EmployeId.eq.${numTargetId},EmployeId.eq.${strTargetId}`);
+  }
+
   return { success: true, data };
 }
 

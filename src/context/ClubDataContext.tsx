@@ -880,9 +880,9 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
             return {
               id: String(p.Id || p.id),
               employeId: empIdStr,
-              employeNom: p.EmployeNom || p.employenom || p.employe_nom || (emp ? emp.Nom : ""),
-              employePrenom: p.EmployePrenom || p.employeprenom || p.employe_prenom || (emp ? emp.Prenom : ""),
-              fonction: p.Fonction || p.fonction || (emp ? (emp.Fonction || emp.Profession) : ""),
+              employeNom: (emp ? (emp.Nom || emp.nom) : "") || p.EmployeNom || p.employenom || p.employe_nom || "",
+              employePrenom: (emp ? (emp.Prenom || emp.prenom) : "") || p.EmployePrenom || p.employeprenom || p.employe_prenom || "",
+              fonction: (emp ? (emp.Fonction || emp.Profession || emp.fonction) : "") || p.Fonction || p.fonction || "",
               mois: p.Mois || p.mois || "",
               salaireBase: baseSalary,
               typeSalaire: p.TypeSalaire || p.typesalaire || p.type_salaire || "fixe",

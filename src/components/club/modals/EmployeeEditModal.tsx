@@ -16,7 +16,7 @@ export const EmployeeEditModal: React.FC<EmployeeEditModalProps> = ({
   onClose,
   employee,
 }) => {
-  const { setEmployees } = useClubData();
+  const { setEmployees, setPayrollRecords } = useClubData();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   if (!employee) return null;
@@ -28,6 +28,18 @@ export const EmployeeEditModal: React.FC<EmployeeEditModalProps> = ({
       setEmployees((prev) =>
         prev.map((emp) =>
           emp.id === employee.id ? { ...emp, ...values } : emp,
+        ),
+      );
+      setPayrollRecords((prev) =>
+        prev.map((rec) =>
+          String(rec.employeId) === String(employee.id)
+            ? {
+                ...rec,
+                employeNom: values.nom ?? rec.employeNom,
+                employePrenom: values.prenom ?? rec.employePrenom,
+                fonction: values.fonction ?? rec.fonction,
+              }
+            : rec,
         ),
       );
       onClose();

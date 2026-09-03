@@ -227,6 +227,21 @@ export default function PayrollPage() {
     file: null,
   });
 
+  // Helper to resolve live employee info (name, surname, function)
+  const getEmployeeDisplayInfo = (record: { employeId: string; employeNom?: string; employePrenom?: string; fonction?: string }) => {
+    const emp = employees.find((e) => String(e.id) === String(record.employeId));
+    const nom = emp?.nom || record.employeNom || "";
+    const prenom = emp?.prenom || record.employePrenom || "";
+    const fonction = emp?.fonction || emp?.role || record.fonction || "Employé";
+    return {
+      nom,
+      prenom,
+      fonction,
+      fullName: nom ? `${nom.toUpperCase()} ${prenom}` : prenom,
+      displayFullName: `${prenom} ${nom}`.trim(),
+    };
+  };
+
   // Filtered & Alphabetically Sorted List
   const filteredRecords = useMemo(() => {
     return payrollRecords
@@ -236,22 +251,21 @@ export default function PayrollPage() {
         const matchYear = selectedYear === "all" || recYear === selectedYear;
         const matchMonth = selectedMonth === "all" || recMonth === selectedMonth;
 
-        const fullName = `${rec.employePrenom} ${rec.employeNom} ${rec.fonction}`.toLowerCase();
+        const empInfo = getEmployeeDisplayInfo(rec);
+        const fullName = `${empInfo.prenom} ${empInfo.nom} ${empInfo.fonction}`.toLowerCase();
         const matchSearch = fullName.includes(searchTerm.toLowerCase());
         const matchStatus = statusFilter === "all" || rec.statut === statusFilter;
 
         return matchYear && matchMonth && matchSearch && matchStatus;
       })
       .sort((a, b) => {
-        const nomA = (a.employeNom || "").trim();
-        const nomB = (b.employeNom || "").trim();
-        const nomCompare = nomA.localeCompare(nomB, "fr", { sensitivity: "base" });
+        const infoA = getEmployeeDisplayInfo(a);
+        const infoB = getEmployeeDisplayInfo(b);
+        const nomCompare = infoA.nom.trim().localeCompare(infoB.nom.trim(), "fr", { sensitivity: "base" });
         if (nomCompare !== 0) return nomCompare;
-        const prenomA = (a.employePrenom || "").trim();
-        const prenomB = (b.employePrenom || "").trim();
-        return prenomA.localeCompare(prenomB, "fr", { sensitivity: "base" });
+        return infoA.prenom.trim().localeCompare(infoB.prenom.trim(), "fr", { sensitivity: "base" });
       });
-  }, [payrollRecords, selectedYear, selectedMonth, searchTerm, statusFilter]);
+  }, [payrollRecords, employees, selectedYear, selectedMonth, searchTerm, statusFilter]);
 
   // KPI Calculations based on active filters (separate by currency)
   const kpis = useMemo(() => {
@@ -300,12 +314,13 @@ export default function PayrollPage() {
     csvContent += headers.join(delimiter) + "\n";
 
     filteredRecords.forEach((r) => {
+      const empInfo = getEmployeeDisplayInfo(r);
       const snowizzAmt = Number(r.prelevementSnowizz || 0);
       const otherDeductions = Math.max(0, Number(r.deductions || 0) - snowizzAmt);
       const row = [
-        r.employeNom,
-        r.employePrenom,
-        r.fonction,
+        empInfo.nom,
+        empInfo.prenom,
+        empInfo.fonction,
         formatMonthYearDisplay(r.mois),
         r.typeSalaire === "variable" ? "Variable / Séance" : "Fixe",
         Number(r.salaireBase || 0).toFixed(2),
@@ -364,12 +379,13 @@ export default function PayrollPage() {
     const thead = headers.map((h) => `<th>${h}</th>`).join("");
     const tbody = filteredRecords
       .map((r) => {
-        const nomComplet = r.employeNom ? `${r.employeNom.toUpperCase()} ${r.employePrenom}` : r.employePrenom;
+        const empInfo = getEmployeeDisplayInfo(r);
+        const nomComplet = empInfo.fullName;
         const snowizzAmt = Number(r.prelevementSnowizz || 0);
         const otherDeductions = Math.max(0, Number(r.deductions || 0) - snowizzAmt);
         const row = [
           nomComplet,
-          r.fonction || "-",
+          empInfo.fonction || "-",
           formatMonthYearDisplay(r.mois),
           r.typeSalaire === "variable" ? "Variable / Séance" : "Fixe",
           Number(r.salaireBase || 0).toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
@@ -1055,14 +1071,16 @@ export default function PayrollPage() {
                   </td>
                 </tr>
               ) : (
-                filteredRecords.map((record) => (
-                  <tr key={record.id} className="transition-colors hover:bg-gray-50/60 dark:hover:bg-gray-800/40">
-                    <td className="px-6 py-4">
-                      <div className="font-bold text-gray-900 dark:text-white">
-                        {record.employePrenom} {record.employeNom}
-                      </div>
-                      <div className="text-xs text-gray-500 dark:text-gray-400">{record.fonction}</div>
-                    </td>
+                filteredRecords.map((record) => {
+                  const empInfo = getEmployeeDisplayInfo(record);
+                  return (
+                    <tr key={record.id} className="transition-colors hover:bg-gray-50/60 dark:hover:bg-gray-800/40">
+                      <td className="px-6 py-4">
+                        <div className="font-bold text-gray-900 dark:text-white">
+                          {empInfo.fullName}
+                        </div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400">{empInfo.fonction}</div>
+                      </td>
                     <td className="px-6 py-4">
                       <span className="inline-flex items-center gap-1.5 rounded-lg bg-gray-100 px-2.5 py-1 text-xs font-bold text-gray-800 dark:bg-gray-800 dark:text-gray-200">
                         {formatMonthYearDisplay(record.mois)}
@@ -1138,7 +1156,8 @@ export default function PayrollPage() {
                       </div>
                     </td>
                   </tr>
-                ))
+                  );
+                })
               )}
             </tbody>
           </table>
@@ -2018,9 +2037,9 @@ export default function PayrollPage() {
               <div className="text-right">
                 <h2 className="mb-3 text-[20px] font-black uppercase tracking-wide text-slate-800">BULLETIN DE PAIE</h2>
                 <p className="text-[13px] font-bold text-gray-800">
-                  {selectedSlip.employePrenom} {selectedSlip.employeNom}
+                  {getEmployeeDisplayInfo(selectedSlip).displayFullName}
                 </p>
-                <p className="text-[11px] text-gray-500">Fonction: {selectedSlip.fonction}</p>
+                <p className="text-[11px] text-gray-500">Fonction: {getEmployeeDisplayInfo(selectedSlip).fonction}</p>
                 <p className="text-[11px] text-gray-500">ID Employé: {String(selectedSlip.employeId).replace(/\D/g, '') || selectedSlip.employeId}</p>
               </div>
             </div>
@@ -2235,7 +2254,11 @@ export default function PayrollPage() {
         onClose={() => setDeletingRecord(null)}
         onConfirm={handleConfirmDelete}
         title="Supprimer la fiche de paie"
-        message={`Êtes-vous sûr de vouloir supprimer la fiche de paie de ${deletingRecord?.employePrenom} ${deletingRecord?.employeNom} (${deletingRecord ? formatMonthYearDisplay(deletingRecord.mois) : ""}) ? Cette action est irréversible.`}
+        message={(() => {
+          if (!deletingRecord) return "";
+          const delEmpInfo = getEmployeeDisplayInfo(deletingRecord);
+          return `Êtes-vous sûr de vouloir supprimer la fiche de paie de ${delEmpInfo.displayFullName} (${formatMonthYearDisplay(deletingRecord.mois)}) ? Cette action est irréversible.`;
+        })()}
         confirmText="Supprimer"
         cancelText="Annuler"
         isDestructive

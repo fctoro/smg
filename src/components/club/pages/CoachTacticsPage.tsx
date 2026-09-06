@@ -296,9 +296,29 @@ export default function CoachTacticsPage({ planId, effectifId }: { planId?: stri
   const originalAssignments = useRef<Record<string, string>>({});
 
   const [isPlanLoaded, setIsPlanLoaded] = useState(false);
-  const { userEmail } = useUserRole();
+  const { userEmail, userCategories } = useUserRole();
   const [coachRosters, setCoachRosters] = useState<Effectif[]>([]);
   const [loadingCoachRosters, setLoadingCoachRosters] = useState(false);
+
+  // Category filter state
+  const availableCategories = useMemo(() => {
+    let cats = userCategories && userCategories.length > 0 ? [...userCategories] : [];
+    if (cats.length === 0) {
+      cats = Array.from(new Set(players.map((p) => p.categorie).filter(Boolean)));
+    }
+    if (effectif?.categorie && !cats.includes(effectif.categorie)) {
+      cats.push(effectif.categorie);
+    }
+    return Array.from(new Set(cats)).sort();
+  }, [userCategories, players, effectif]);
+
+  const [selectedCategory, setSelectedCategory] = useState<string>("all");
+
+  useEffect(() => {
+    if (userCategories && userCategories.length > 0) {
+      setSelectedCategory((prev) => (prev === "all" ? userCategories[0] : prev));
+    }
+  }, [userCategories]);
 
   useEffect(() => {
     if (userEmail) {
@@ -315,6 +335,9 @@ export default function CoachTacticsPage({ planId, effectifId }: { planId?: stri
       fetchEffectifById(effectifId).then(data => {
         if (data) {
           setEffectif(data);
+          if (data.categorie) {
+            setSelectedCategory(data.categorie);
+          }
           setSquadIds(data.joueurs || []);
           originalSquadIds.current = data.joueurs || [];
           
@@ -357,7 +380,16 @@ export default function CoachTacticsPage({ planId, effectifId }: { planId?: stri
     () => {
       // Allow players that are either active OR part of the current effectif roster
       const rosterIds = new Set(effectif?.joueurs || []);
-      const validPlayers = [...players].filter((player) => player.statut === "actif" || rosterIds.has(player.id));
+      let validPlayers = [...players].filter((player) => player.statut === "actif" || rosterIds.has(player.id));
+      
+      // Filter by selected category
+      if (selectedCategory && selectedCategory !== "all") {
+        const targetCat = selectedCategory.trim().toLowerCase();
+        validPlayers = validPlayers.filter((p) => (p.categorie || "").trim().toLowerCase() === targetCat || rosterIds.has(p.id));
+      } else if (userCategories && userCategories.length > 0) {
+        validPlayers = validPlayers.filter((p) => userCategories.includes(p.categorie) || rosterIds.has(p.id));
+      }
+
       const uniquePlayers = [];
       const seen = new Set();
       for (const p of validPlayers) {
@@ -368,7 +400,7 @@ export default function CoachTacticsPage({ planId, effectifId }: { planId?: stri
       }
       return uniquePlayers.sort(byPlayerName);
     },
-    [players, effectif],
+    [players, effectif, selectedCategory, userCategories],
   );
 
   const unavailablePlayers = useMemo(
@@ -864,7 +896,14 @@ export default function CoachTacticsPage({ planId, effectifId }: { planId?: stri
                     </div>
                     <div className="min-w-0">
                       <p className="truncate text-sm font-semibold text-gray-800 dark:text-white/90">{getPlayerFullName(player)}</p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">{player.poste || "—"}</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1.5 mt-0.5">
+                        <span>{player.poste || "—"}</span>
+                        {player.categorie && (
+                          <span className="inline-block px-1.5 py-0.2 rounded bg-gray-200/80 dark:bg-gray-700 text-[10px] font-bold text-gray-700 dark:text-gray-300">
+                            {player.categorie}
+                          </span>
+                        )}
+                      </p>
                     </div>
                   </div>
                   <button type="button" onClick={(e) => { e.stopPropagation(); removeFromSquad(player.id); }} title="Retirer du banc"
@@ -882,8 +921,14 @@ export default function CoachTacticsPage({ planId, effectifId }: { planId?: stri
           {/* JOUEURS RESTANTS */}
           <div className="rounded-2xl border border-gray-200 bg-gray-50/60 p-5 dark:border-gray-700 dark:bg-white/[0.02]">
             <div className="flex items-center justify-between mb-1">
-              <h3 className="text-base font-semibold text-gray-800 dark:text-white/90">
-                Restants <span className="ml-1 rounded-full bg-gray-100 px-2 py-0.5 text-xs font-bold text-gray-600 dark:bg-gray-700 dark:text-gray-300">{remainingPlayers.length}</span>
+              <h3 className="text-base font-semibold text-gray-800 dark:text-white/90 flex items-center gap-1.5">
+                <span>Restants</span>
+                {effectif ? (
+                  <span className="text-xs font-medium text-brand-600 dark:text-brand-400">({effectif.categorie})</span>
+                ) : selectedCategory !== "all" ? (
+                  <span className="text-xs font-medium text-brand-600 dark:text-brand-400">({selectedCategory})</span>
+                ) : null}
+                <span className="ml-1 rounded-full bg-gray-100 px-2 py-0.5 text-xs font-bold text-gray-600 dark:bg-gray-700 dark:text-gray-300">{remainingPlayers.length}</span>
               </h3>
               {remainingPlayers.length > 0 && squadIds.length < 25 && (
                 <button type="button" onClick={autoBenchRemaining} className="text-xs font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300 transition-colors">
@@ -912,7 +957,14 @@ export default function CoachTacticsPage({ planId, effectifId }: { planId?: stri
                     </div>
                     <div className="min-w-0">
                       <p className="truncate text-sm font-semibold text-gray-500 group-hover:text-gray-900 dark:text-gray-400 dark:group-hover:text-white/90 transition-colors">{getPlayerFullName(player)}</p>
-                      <p className="text-xs text-gray-400 dark:text-gray-500">{player.poste || "—"}</p>
+                      <p className="text-xs text-gray-400 dark:text-gray-500 flex items-center gap-1.5 mt-0.5">
+                        <span>{player.poste || "—"}</span>
+                        {player.categorie && (
+                          <span className="inline-block px-1.5 py-0.2 rounded bg-gray-200/80 dark:bg-gray-700 text-[10px] font-bold text-gray-700 dark:text-gray-300">
+                            {player.categorie}
+                          </span>
+                        )}
+                      </p>
                     </div>
                   </div>
                   <button type="button" onClick={() => addToBench(player.id)} title="Ajouter au banc"
@@ -1039,24 +1091,55 @@ export default function CoachTacticsPage({ planId, effectifId }: { planId?: stri
                 <div className="order-1 xl:order-1">
           <div className="p-0">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-              <div>
-                <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Formation active
-                </label>
-                <select
-                  value={formationId}
-                  onChange={(event) => {
-                    setFormationId(event.target.value);
-                    if (effectif) setIsEffectifModified(true);
-                  }}
-                  className="h-11 min-w-[200px] rounded-lg border border-gray-300 bg-transparent px-3 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
-                >
-                  {fifaFormations.map((formation) => (
-                    <option key={formation.id} value={formation.id}>
-                      {formation.label} - {formation.family}
-                    </option>
-                  ))}
-                </select>
+              <div className="flex flex-wrap items-center gap-4">
+                {/* Catégorie Selector */}
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Catégorie
+                  </label>
+                  <select
+                    value={selectedCategory}
+                    onChange={(event) => {
+                      const newCat = event.target.value;
+                      setSelectedCategory(newCat);
+                      if (effectif) {
+                        setEffectif((prev) => (prev ? { ...prev, categorie: newCat } : null));
+                        setIsEffectifModified(true);
+                      }
+                    }}
+                    className="h-11 min-w-[160px] rounded-lg border border-gray-300 bg-white px-3 text-sm font-semibold text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
+                  >
+                    {availableCategories.length > 1 && (
+                      <option value="all">Toutes mes catégories</option>
+                    )}
+                    {availableCategories.map((cat) => (
+                      <option key={cat} value={cat}>
+                        {cat}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Formation active */}
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Formation active
+                  </label>
+                  <select
+                    value={formationId}
+                    onChange={(event) => {
+                      setFormationId(event.target.value);
+                      if (effectif) setIsEffectifModified(true);
+                    }}
+                    className="h-11 min-w-[200px] rounded-lg border border-gray-300 bg-white px-3 text-sm font-semibold text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
+                  >
+                    {fifaFormations.map((formation) => (
+                      <option key={formation.id} value={formation.id}>
+                        {formation.label} - {formation.family}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
 
               <div className="flex flex-wrap gap-3">

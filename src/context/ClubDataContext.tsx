@@ -493,7 +493,7 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
             for (const id of allGroupIds) {
               const st = playerStatusMap.get(String(id));
               if (st) {
-                const stLower = st.trim().toLowerCase();
+                const stLower = st.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
                 if (stLower === "normal" || stLower === "aucun" || stLower === "standard") {
                   finalStatutJoueur = undefined;
                 } else if (["actif", "inactif", "blesse", "suspendu", "abandonne", "alumni"].includes(stLower)) {
@@ -506,12 +506,14 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
             }
 
             // Fallback pour le statut principal si finalStatutJoueur contenait un statut de base
-            if (finalStatutJoueur && ["actif", "inactif", "blesse", "suspendu", "abandonne", "alumni", "normal", "aucun", "standard"].includes(finalStatutJoueur.toLowerCase())) {
-              const fLower = finalStatutJoueur.toLowerCase();
-              if (["actif", "inactif", "blesse", "suspendu", "abandonne", "alumni"].includes(fLower)) {
-                playerStatus = fLower as PlayerStatus;
+            if (finalStatutJoueur) {
+              const fLower = finalStatutJoueur.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+              if (["actif", "inactif", "blesse", "suspendu", "abandonne", "alumni", "normal", "aucun", "standard"].includes(fLower)) {
+                if (["actif", "inactif", "blesse", "suspendu", "abandonne", "alumni"].includes(fLower)) {
+                  playerStatus = fLower as PlayerStatus;
+                }
+                finalStatutJoueur = undefined;
               }
-              finalStatutJoueur = undefined;
             }
 
             // Contact d'urgence (recherche robuste sur toutes les colonnes et entrées du groupe)

@@ -275,17 +275,19 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
                 }`}>
                   {playerStatusLabel[player.statut as keyof typeof playerStatusLabel] || player.statut}
                 </span>
-                <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-                  finSummary.isBoursier ? "bg-purple-100 text-purple-700 dark:bg-purple-500/15 dark:text-purple-400" :
-                  finSummary.hasNoPayments ? "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300" :
-                  finSummary.isPaidInFull ? "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-400" :
-                  "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400"
-                }`}>
-                  {finSummary.isBoursier ? "🎓 Boursier (Exonéré)" :
-                   finSummary.hasNoPayments ? "⚪ Aucun versement" :
-                   finSummary.isPaidInFull ? "✓ À jour (Payé)" :
-                   `⚠️ Solde dû : ${formatClubCurrency(finSummary.balance, finSummary.devise)}`}
-                </span>
+                {!isConfidential && (
+                  <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                    finSummary.isBoursier ? "bg-purple-100 text-purple-700 dark:bg-purple-500/15 dark:text-purple-400" :
+                    finSummary.hasNoPayments ? "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300" :
+                    finSummary.isPaidInFull ? "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-400" :
+                    "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400"
+                  }`}>
+                    {finSummary.isBoursier ? "🎓 Boursier (Exonéré)" :
+                     finSummary.hasNoPayments ? "⚪ Aucun versement" :
+                     finSummary.isPaidInFull ? "✓ À jour (Payé)" :
+                     `⚠️ Solde dû : ${formatClubCurrency(finSummary.balance, finSummary.devise)}`}
+                  </span>
+                )}
                 <span className="text-xs text-gray-400">
                   Inscrit le {formatClubDate(player.dateInscription)}
                 </span>

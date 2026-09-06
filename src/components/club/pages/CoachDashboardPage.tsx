@@ -58,11 +58,15 @@ export default function CoachDashboardPage() {
   );
 
   // Calculate position counts
-  const countPosition = (posStr: string) => coachPlayers.filter(
-    (p) => p.poste?.toLowerCase().includes(posStr.toLowerCase())
-  ).length;
+  const countPosition = (posStr: string) => coachPlayers.filter((p) => {
+    const pStr = (p.poste || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    return pStr.includes(posStr.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, ""));
+  }).length;
 
-  const countGK = coachPlayers.filter((p) => p.poste === "GK" || p.poste === "Gardien").length;
+  const countGK = coachPlayers.filter((p) => {
+    const pStr = (p.poste || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    return pStr.includes("gardien") || pStr === "gk";
+  }).length;
   const countDEF = countPosition("def") + countPosition("cb") + countPosition("lb") + countPosition("rb");
   const countMID = countPosition("mil") + countPosition("md") + countPosition("mc") + countPosition("mo") + countPosition("cdm") + countPosition("cm") + countPosition("cam");
   const countATT = countPosition("att") + countPosition("av") + countPosition("st") + countPosition("rw") + countPosition("lw");
@@ -80,10 +84,11 @@ export default function CoachDashboardPage() {
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {/* Effectif Total */}
         <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-900">
           <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full border border-gray-200 bg-gray-50 text-gray-700 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300">
-              <GroupIcon />
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center text-blue-600 dark:text-blue-400">
+              <GroupIcon className="h-7 w-7" />
             </div>
             <div>
               <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Effectif Total</p>
@@ -92,11 +97,12 @@ export default function CoachDashboardPage() {
           </div>
         </div>
 
+        {/* Joueurs Actifs (Vert) */}
         <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-900">
           <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full border border-gray-200 bg-gray-50 text-gray-700 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300">
-              <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center text-emerald-500 dark:text-emerald-400">
+              <svg className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
               </svg>
             </div>
             <div>
@@ -106,10 +112,11 @@ export default function CoachDashboardPage() {
           </div>
         </div>
 
+        {/* Blessés (Jaune) */}
         <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-900">
           <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full border border-gray-200 bg-gray-50 text-gray-700 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300">
-              <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center text-amber-500 dark:text-amber-400">
+              <svg className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
               </svg>
             </div>
@@ -120,10 +127,11 @@ export default function CoachDashboardPage() {
           </div>
         </div>
 
+        {/* Suspendus (Rouge) */}
         <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-900">
           <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full border border-gray-200 bg-gray-50 text-gray-700 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300">
-              <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center text-rose-500 dark:text-rose-400">
+              <svg className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
               </svg>
             </div>
@@ -138,25 +146,123 @@ export default function CoachDashboardPage() {
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
         {/* Position Breakdown */}
         <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-900 md:col-span-2">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-            Répartition par Poste
-          </h3>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            <div className="rounded-xl border border-gray-100 bg-gray-50/50 p-4 text-center dark:border-gray-800 dark:bg-gray-800/30">
-              <p className="text-sm text-gray-500 dark:text-gray-400">Gardiens</p>
-              <p className="mt-1 text-2xl font-bold text-gray-900 dark:text-white">{countGK}</p>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-5">
+            <div>
+              <h3 className="text-lg font-bold text-gray-900 dark:text-white">
+                Répartition par Poste
+              </h3>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                Effectif tactique détaillé selon les postes sur le terrain
+              </p>
             </div>
-            <div className="rounded-xl border border-gray-100 bg-gray-50/50 p-4 text-center dark:border-gray-800 dark:bg-gray-800/30">
-              <p className="text-sm text-gray-500 dark:text-gray-400">Défenseurs</p>
-              <p className="mt-1 text-2xl font-bold text-gray-900 dark:text-white">{countDEF}</p>
+            <span className="self-start sm:self-auto px-3 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300">
+              {totalPlayers} joueurs au total
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* Gardiens */}
+            <div className="group relative overflow-hidden rounded-2xl border border-gray-200/90 bg-gray-50/50 p-5 dark:border-gray-800 dark:bg-gray-800/30 transition-all hover:bg-gray-50 dark:hover:bg-gray-800/60 hover:shadow-xs">
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <span className="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                    Gardiens
+                  </span>
+                  <p className="mt-2 text-3xl font-extrabold text-gray-900 dark:text-white">
+                    {countGK}
+                  </p>
+                  <span className="text-[11px] text-gray-400 dark:text-gray-500 mt-1 block font-medium">
+                    {countGK > 1 ? "Gardiens disponibles" : "Gardien disponible"}
+                  </span>
+                </div>
+                <div className="relative h-13 w-13 sm:h-14 sm:w-14 shrink-0 transition-transform duration-300 group-hover:scale-105">
+                  <Image
+                    src="/images/positions/gardien.png"
+                    alt="Gardien"
+                    fill
+                    className="object-contain"
+                    unoptimized
+                  />
+                </div>
+              </div>
             </div>
-            <div className="rounded-xl border border-gray-100 bg-gray-50/50 p-4 text-center dark:border-gray-800 dark:bg-gray-800/30">
-              <p className="text-sm text-gray-500 dark:text-gray-400">Milieux</p>
-              <p className="mt-1 text-2xl font-bold text-gray-900 dark:text-white">{countMID}</p>
+
+            {/* Défenseurs */}
+            <div className="group relative overflow-hidden rounded-2xl border border-gray-200/90 bg-gray-50/50 p-5 dark:border-gray-800 dark:bg-gray-800/30 transition-all hover:bg-gray-50 dark:hover:bg-gray-800/60 hover:shadow-xs">
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <span className="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                    Défenseurs
+                  </span>
+                  <p className="mt-2 text-3xl font-extrabold text-gray-900 dark:text-white">
+                    {countDEF}
+                  </p>
+                  <span className="text-[11px] text-gray-400 dark:text-gray-500 mt-1 block font-medium">
+                    {countDEF > 1 ? "Défenseurs disponibles" : "Défenseur disponible"}
+                  </span>
+                </div>
+                <div className="relative h-16 w-16 sm:h-18 sm:w-18 shrink-0 transition-transform duration-300 group-hover:scale-105">
+                  <Image
+                    src="/images/positions/defenseur.png"
+                    alt="Défenseur"
+                    fill
+                    className="object-contain"
+                    unoptimized
+                  />
+                </div>
+              </div>
             </div>
-            <div className="rounded-xl border border-gray-100 bg-gray-50/50 p-4 text-center dark:border-gray-800 dark:bg-gray-800/30">
-              <p className="text-sm text-gray-500 dark:text-gray-400">Attaquants</p>
-              <p className="mt-1 text-2xl font-bold text-gray-900 dark:text-white">{countATT}</p>
+
+            {/* Milieux */}
+            <div className="group relative overflow-hidden rounded-2xl border border-gray-200/90 bg-gray-50/50 p-5 dark:border-gray-800 dark:bg-gray-800/30 transition-all hover:bg-gray-50 dark:hover:bg-gray-800/60 hover:shadow-xs">
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <span className="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                    Milieux
+                  </span>
+                  <p className="mt-2 text-3xl font-extrabold text-gray-900 dark:text-white">
+                    {countMID}
+                  </p>
+                  <span className="text-[11px] text-gray-400 dark:text-gray-500 mt-1 block font-medium">
+                    {countMID > 1 ? "Milieux disponibles" : "Milieu disponible"}
+                  </span>
+                </div>
+                <div className="relative h-15 w-15 sm:h-16 sm:w-16 shrink-0 transition-transform duration-300 group-hover:scale-105">
+                  <Image
+                    src="/images/positions/milieu.png"
+                    alt="Milieu"
+                    fill
+                    className="object-contain"
+                    unoptimized
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Attaquants */}
+            <div className="group relative overflow-hidden rounded-2xl border border-gray-200/90 bg-gray-50/50 p-5 dark:border-gray-800 dark:bg-gray-800/30 transition-all hover:bg-gray-50 dark:hover:bg-gray-800/60 hover:shadow-xs">
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <span className="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                    Attaquants
+                  </span>
+                  <p className="mt-2 text-3xl font-extrabold text-gray-900 dark:text-white">
+                    {countATT}
+                  </p>
+                  <span className="text-[11px] text-gray-400 dark:text-gray-500 mt-1 block font-medium">
+                    {countATT > 1 ? "Attaquants disponibles" : "Attaquant disponible"}
+                  </span>
+                </div>
+                <div className="relative h-16 w-16 sm:h-18 sm:w-18 shrink-0 transition-transform duration-300 group-hover:scale-105">
+                  <Image
+                    src="/images/positions/attaquant.png"
+                    alt="Attaquant"
+                    fill
+                    className="object-contain"
+                    unoptimized
+                  />
+                </div>
+              </div>
             </div>
           </div>
         </div>

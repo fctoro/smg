@@ -11,8 +11,41 @@ interface CoachPlayerStatusModalProps {
   onSuccess: (updatedPlayer: Player) => void;
 }
 
-const STATUS_OPTIONS = ["Actif", "Blessé", "Suspendu", "Inactif", "En test"];
-const POSTE_OPTIONS = ["Joueur", "Gardien", "Défenseur", "Milieu", "Attaquant"];
+const STATUS_OPTIONS = [
+  { value: "actif", label: "Actif" },
+  { value: "blesse", label: "Blessé" },
+  { value: "suspendu", label: "Suspendu" },
+  { value: "inactif", label: "Inactif" },
+  { value: "en test", label: "En test" },
+];
+
+const POSTE_OPTIONS = [
+  { value: "Joueur", label: "Joueur (Non spécifié)" },
+  { value: "Gardien", label: "Gardien" },
+  { value: "Défenseur", label: "Défenseur" },
+  { value: "Milieu", label: "Milieu" },
+  { value: "Attaquant", label: "Attaquant" },
+];
+
+const normalizeStatutValue = (val?: string) => {
+  const s = (val || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+  if (s === "blesse" || s === "blessure") return "blesse";
+  if (s === "suspendu" || s === "suspension") return "suspendu";
+  if (s === "inactif") return "inactif";
+  if (s === "en test" || s === "test") return "en test";
+  return "actif";
+};
+
+const normalizePosteValue = (val?: string) => {
+  const p = (val || "").trim();
+  if (!p) return "Joueur";
+  const pLower = p.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  if (pLower.includes("gardien") || pLower === "gk") return "Gardien";
+  if (pLower.includes("def") || pLower.includes("defenseur") || pLower === "cb" || pLower === "lb" || pLower === "rb") return "Défenseur";
+  if (pLower.includes("mil") || pLower.includes("milieu") || pLower === "cm" || pLower === "cdm" || pLower === "cam") return "Milieu";
+  if (pLower.includes("att") || pLower.includes("attaquant") || pLower === "st" || pLower === "rw" || pLower === "lw") return "Attaquant";
+  return p;
+};
 
 export function CoachPlayerStatusModal({
   isOpen,
@@ -20,15 +53,15 @@ export function CoachPlayerStatusModal({
   player,
   onSuccess,
 }: CoachPlayerStatusModalProps) {
-  const [status, setStatus] = useState(player?.statut || "Actif");
-  const [poste, setPoste] = useState(player?.poste || "Joueur");
+  const [status, setStatus] = useState(() => normalizeStatutValue(player?.statut));
+  const [poste, setPoste] = useState(() => normalizePosteValue(player?.poste));
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Update local state when player changes
   React.useEffect(() => {
     if (player) {
-      setStatus(player.statut || "Actif");
-      setPoste(player.poste || "Joueur");
+      setStatus(normalizeStatutValue(player.statut));
+      setPoste(normalizePosteValue(player.poste));
     }
   }, [player]);
 
@@ -38,9 +71,12 @@ export function CoachPlayerStatusModal({
     e.preventDefault();
     setIsSubmitting(true);
     try {
+      const normalizedStatus = normalizeStatutValue(status) as any;
+      const normalizedPoste = normalizePosteValue(poste);
+      const pIds = (player as any).playerIds || [player.id];
       // Update the status and poste fields in the database
-      await updatePlayerInSupabase(player.id, { statut: status as any, poste });
-      onSuccess({ ...player, statut: status as any, poste });
+      await updatePlayerInSupabase(player.id, { statut: normalizedStatus, poste: normalizedPoste, playerIds: pIds } as any);
+      onSuccess({ ...player, statut: normalizedStatus, poste: normalizedPoste });
       onClose();
     } catch (error) {
       console.error("Error updating player status and poste:", error);
@@ -72,8 +108,8 @@ export function CoachPlayerStatusModal({
             className="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm text-gray-800 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
           >
             {STATUS_OPTIONS.map((opt) => (
-              <option key={opt} value={opt}>
-                {opt}
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
               </option>
             ))}
           </select>
@@ -89,8 +125,8 @@ export function CoachPlayerStatusModal({
             className="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm text-gray-800 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
           >
             {POSTE_OPTIONS.map((opt) => (
-              <option key={opt} value={opt}>
-                {opt}
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
               </option>
             ))}
           </select>

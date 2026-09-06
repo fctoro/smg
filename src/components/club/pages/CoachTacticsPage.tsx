@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, useRef } from "react";
 import Image from "next/image";
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import { Modal } from "@/components/ui/modal";
+import { toPng, toBlob } from "html-to-image";
 import { useClubData } from "@/context/ClubDataContext";
 import {
   defaultFifaFormationId,
@@ -192,8 +193,8 @@ const getLineLabels = (role: TacticalRole, count: number, y: number) => {
 };
 
 const createFormationSlots = (formation: TacticalFormation): FormationSlot[] => {
-  const defensiveLineY = 76;
-  const attackingLineY = 22;
+  const defensiveLineY = 72;
+  const attackingLineY = 18;
   const totalLines = formation.lines.length;
 
   const slots: FormationSlot[] = [
@@ -202,7 +203,7 @@ const createFormationSlots = (formation: TacticalFormation): FormationSlot[] => 
       role: "GK",
       label: "GK",
       x: 50,
-      y: 90,
+      y: 87,
     },
   ];
 
@@ -299,6 +300,14 @@ export default function CoachTacticsPage({ planId, effectifId }: { planId?: stri
   const { userEmail, userCategories } = useUserRole();
   const [coachRosters, setCoachRosters] = useState<Effectif[]>([]);
   const [loadingCoachRosters, setLoadingCoachRosters] = useState(false);
+
+  // Export match sheet state
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+  const [isExportingImage, setIsExportingImage] = useState(false);
+  const [copiedExportText, setCopiedExportText] = useState(false);
+  const [copiedExportImage, setCopiedExportImage] = useState(false);
+  const [customJerseyNumbers, setCustomJerseyNumbers] = useState<Record<string, string>>({});
+  const exportCardRef = useRef<HTMLDivElement>(null);
 
   // Category filter state
   const availableCategories = useMemo(() => {
@@ -842,6 +851,92 @@ export default function CoachTacticsPage({ planId, effectifId }: { planId?: stri
     applySwap(pendingSwap.slotId, pendingSwap.benchPlayerId);
   };
 
+  const handleDownloadExportImage = async () => {
+    if (!exportCardRef.current) return;
+    try {
+      setIsExportingImage(true);
+      const dataUrl = await toPng(exportCardRef.current, {
+        quality: 0.98,
+        pixelRatio: 2,
+        backgroundColor: "#0b1329",
+        cacheBust: true,
+      });
+      const link = document.createElement("a");
+      const safeName = (effectif?.nom || "compo_match").replace(/[^a-zA-Z0-9_-]/g, "_");
+      link.download = `FC_TORO_${safeName}_${selectedCategory || "match"}.png`;
+      link.href = dataUrl;
+      link.click();
+    } catch (err) {
+      console.error("Erreur lors de l'export image :", err);
+      alert("Erreur lors de la génération de l'image.");
+    } finally {
+      setIsExportingImage(false);
+    }
+  };
+
+  const handleCopyExportImage = async () => {
+    if (!exportCardRef.current) return;
+    try {
+      setIsExportingImage(true);
+      const blob = await toBlob(exportCardRef.current, {
+        quality: 0.98,
+        pixelRatio: 2,
+        backgroundColor: "#0b1329",
+        cacheBust: true,
+      });
+      if (!blob) throw new Error("Impossible de générer le blob");
+
+      await navigator.clipboard.write([
+        new ClipboardItem({ "image/png": blob }),
+      ]);
+      setCopiedExportImage(true);
+      setTimeout(() => setCopiedExportImage(false), 3000);
+    } catch (err) {
+      console.error("Erreur copie image :", err);
+      // Fallback: download the image if clipboard write isn't supported
+      handleDownloadExportImage();
+    } finally {
+      setIsExportingImage(false);
+    }
+  };
+
+  const handleCopyExportText = () => {
+    const lines: string[] = [
+      "⚽ *FC TORO - CONVOCATION & COMPOSITION*",
+      `📋 *Match :* ${effectif?.nom || "Match"}`,
+      `🏷️ *Catégorie :* ${effectif?.categorie || (selectedCategory !== "all" ? selectedCategory : "Toutes")}`,
+      `📐 *Formation :* ${selectedFormation.label} (${selectedFormation.style || ""})`,
+      ...(effectif?.date_match ? [`📅 *Date :* ${new Date(effectif.date_match).toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" })}`] : []),
+      "",
+      "🟢 *XI DE DÉPART (TITULAIRES)*",
+    ];
+
+    starters.forEach(({ slot, player }) => {
+      if (player) {
+        lines.push(`• [${slot.label}] ${getPlayerFullName(player)}${player.numeroMaillot ? ` (#${player.numeroMaillot})` : ""}`);
+      } else {
+        lines.push(`• [${slot.label}] Libre`);
+      }
+    });
+
+    lines.push("");
+    lines.push("🟡 *REMPLAÇANTS (BANC)*");
+    if (benchPlayers.length > 0) {
+      benchPlayers.forEach((p, idx) => {
+        lines.push(`${idx + 1}. ${getPlayerFullName(p)} (${p.poste || "—"}${p.numeroMaillot ? ` #${p.numeroMaillot}` : ""})`);
+      });
+    } else {
+      lines.push("_Aucun remplaçant_");
+    }
+
+    lines.push("");
+    lines.push("🔴 *Allez FC Toro !* 🐂🔥");
+
+    navigator.clipboard.writeText(lines.join("\n"));
+    setCopiedExportText(true);
+    setTimeout(() => setCopiedExportText(false), 3000);
+  };
+
   return (
     <div className="space-y-6">
       <ConfirmComponent />
@@ -1243,6 +1338,22 @@ export default function CoachTacticsPage({ planId, effectifId }: { planId?: stri
                   </div>
                 ))}
               </div>
+
+              {/* BOUTON DE PARTAGE EN DESSOUS DU TERRAIN */}
+              <div className="mt-4 flex justify-center">
+                <button
+                  type="button"
+                  onClick={() => setIsExportModalOpen(true)}
+                  className="inline-flex w-full sm:w-auto items-center justify-center gap-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white px-7 py-3 text-sm font-bold shadow-lg shadow-emerald-600/30 active:scale-[0.98] transition-all"
+                  title="Partager la feuille de match et la composition"
+                >
+                  {/* Icône flèche de partage (Share icon) */}
+                  <svg className="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                  </svg>
+                  <span>Partager</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -1343,6 +1454,285 @@ export default function CoachTacticsPage({ planId, effectifId }: { planId?: stri
             >
               <SwapArrowsIcon className="h-4 w-4" />
               Confirmer l&apos;echange
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={isExportModalOpen}
+        onClose={() => setIsExportModalOpen(false)}
+        className="mx-2 sm:mx-auto max-w-3xl p-0 overflow-hidden bg-transparent border-0 shadow-2xl"
+      >
+        <div className="flex flex-col max-h-[92vh] bg-[#091122] text-white rounded-2xl overflow-hidden relative border border-white/10 shadow-2xl">
+          {/* Close button top right directly on poster */}
+          <button
+            type="button"
+            onClick={() => setIsExportModalOpen(false)}
+            className="absolute top-3 right-3 z-30 p-2 rounded-full bg-black/40 hover:bg-black/70 text-slate-300 hover:text-white backdrop-blur-md transition border border-white/10"
+            title="Fermer"
+          >
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+
+          {/* Visual sheet to capture - Full width & height */}
+          <div className="overflow-y-auto flex-1 min-h-0 flex flex-col justify-center">
+            <div
+              ref={exportCardRef}
+              className="w-full h-full bg-gradient-to-br from-[#060a14] via-[#0b1329] to-[#040710] p-6 sm:p-8 relative overflow-hidden text-white flex flex-col justify-between border border-white/10"
+            >
+              {/* Grand logo FC Toro en filigrane central/droit (Watermark) avec lueur */}
+              <div className="absolute -right-16 -bottom-14 w-[420px] h-[420px] opacity-20 pointer-events-none select-none flex items-center justify-center">
+                <Image
+                  src="/images/logo/fc-toro.png"
+                  alt="FC Toro Watermark"
+                  width={450}
+                  height={450}
+                  className="w-full h-full object-contain filter drop-shadow-[0_0_50px_rgba(239,68,68,0.2)]"
+                  unoptimized
+                />
+              </div>
+
+              {/* EN-TÊTE OFFICIEL ULTRA NET ET PROPRE */}
+              <div className="flex items-center justify-between pb-4 border-b border-white/10 relative z-10">
+                <div className="flex items-center gap-4">
+                  {/* Logo net avec fond sombre et bordure fine */}
+                  <div className="h-14 w-14 rounded-xl bg-slate-950 p-1.5 flex items-center justify-center border border-white/20 shadow-md shrink-0">
+                    <Image
+                      src="/images/logo/fc-toro.png"
+                      alt="FC Toro Logo"
+                      width={50}
+                      height={50}
+                      className="h-full w-full object-contain"
+                      unoptimized
+                    />
+                  </div>
+
+                  <div>
+                    <div className="flex items-center gap-2.5">
+                      <h2 className="text-2xl sm:text-3xl font-black tracking-wider text-white uppercase font-serif drop-shadow-md">
+                        FC TORO
+                      </h2>
+                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-widest bg-gradient-to-r from-red-600 to-red-700 text-white shadow-sm shadow-red-900/50 border border-red-400/30">
+                        {effectif?.categorie || (selectedCategory !== "all" ? selectedCategory : "U18")}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+                      <p className="text-xs font-black text-amber-400 italic tracking-wider font-serif uppercase">
+                        &quot;Mache sou yo !&quot;
+                      </p>
+                      {effectif?.nom && (
+                        <span className="text-xs text-slate-400 font-medium">
+                          • {effectif.nom}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="text-right">
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/5 border border-white/10 shadow-inner backdrop-blur-md">
+                    <span className="text-amber-400 font-bold text-xs">⚽</span>
+                    <span className="text-xs font-bold uppercase tracking-wider text-slate-200">
+                      {selectedFormation.label}
+                    </span>
+                  </div>
+                  {effectif?.date_match && (
+                    <p className="text-[11px] text-slate-400 mt-1 font-medium tracking-wide">
+                      {new Date(effectif.date_match).toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "long" })}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* CORPS PRINCIPAL : LE 11 DE DÉPART (STYLE MATCHDAY STARTERS) */}
+              <div className="py-4 relative z-10 flex-1 flex flex-col justify-center">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-2">
+                  {starters.map(({ slot, player }, index) => {
+                    const defaultNum = player?.numeroMaillot ? `${player.numeroMaillot}` : `${index + 1}`;
+                    const currentNum =
+                      player && customJerseyNumbers[player.id] !== undefined
+                        ? customJerseyNumbers[player.id]
+                        : defaultNum;
+
+                    return (
+                      <div
+                        key={slot.id}
+                        className="group flex items-center gap-3 px-2.5 py-1.5 rounded-xl bg-white/[0.03] hover:bg-white/[0.07] border border-white/[0.05] hover:border-white/15 transition-all duration-200 shadow-sm"
+                      >
+                        {/* Numéro de dossard stylisé avec effet badge doré */}
+                        {player ? (
+                          <div className="relative shrink-0 flex items-center justify-center">
+                            <input
+                              type="text"
+                              value={currentNum}
+                              title="Cliquez pour modifier le dossard"
+                              onFocus={(e) => e.target.select()}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setCustomJerseyNumbers((prev) => ({
+                                  ...prev,
+                                  [player.id]: val,
+                                }));
+                              }}
+                              className="w-8 h-7 text-center font-serif italic font-black text-amber-300 text-sm bg-gradient-to-br from-amber-400/20 to-amber-600/10 hover:from-amber-400/30 hover:to-amber-600/20 focus:bg-slate-900 border border-amber-400/30 focus:border-amber-400 rounded-lg transition-all outline-none shadow-sm cursor-pointer"
+                            />
+                          </div>
+                        ) : (
+                          <div className="w-8 h-7 rounded-lg bg-white/5 border border-dashed border-white/20 flex items-center justify-center shrink-0">
+                            <span className="font-serif italic font-bold text-slate-500 text-xs">
+                              {index + 1}
+                            </span>
+                          </div>
+                        )}
+
+                        {/* Nom du joueur */}
+                        <div className="flex-1 min-w-0 flex items-center justify-between">
+                          <span className="truncate text-xs sm:text-[13px] font-bold text-slate-100 tracking-wide group-hover:text-white transition">
+                            {player ? getPlayerFullName(player) : <span className="text-slate-500 italic font-normal">Poste libre</span>}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* SECTION REMPLAÇANTS (SUBSTITUTES) STYLE VIP BENCH */}
+              <div className="pt-3.5 border-t border-white/10 relative z-10 bg-slate-950/40 -mx-6 -mb-6 sm:-mx-8 sm:-mb-8 p-4 sm:p-5 rounded-b-2xl backdrop-blur-md">
+                <div className="flex items-start gap-4">
+                  <div className="shrink-0 pt-0.5">
+                    <span className="px-2 py-0.5 rounded bg-amber-400/15 border border-amber-400/30 text-[9px] font-black uppercase tracking-widest text-amber-300 block font-serif">
+                      BANC ({benchPlayers.length})
+                    </span>
+                  </div>
+
+                  <div className="flex-1 min-w-0">
+                    {benchPlayers.length > 0 ? (
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                        {benchPlayers.map((p, idx) => {
+                          const defaultNum = p.numeroMaillot ? `${p.numeroMaillot}` : `${idx + 1}`;
+                          const currentNum =
+                            customJerseyNumbers[p.id] !== undefined
+                              ? customJerseyNumbers[p.id]
+                              : defaultNum;
+
+                          return (
+                            <span key={p.id} className="inline-flex items-center gap-1 text-xs text-slate-300 bg-white/[0.04] px-2 py-0.5 rounded-lg border border-white/5 hover:border-white/15 transition">
+                              <input
+                                type="text"
+                                value={currentNum}
+                                title="Modifier dossard"
+                                onFocus={(e) => e.target.select()}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  setCustomJerseyNumbers((prev) => ({
+                                    ...prev,
+                                    [p.id]: val,
+                                  }));
+                                }}
+                                className="w-5 h-4 text-center font-serif italic font-bold text-amber-300 text-[11px] bg-transparent hover:bg-white/10 focus:bg-slate-900 border-b border-amber-400/40 focus:border-amber-400 outline-none"
+                              />
+                              <span className="font-semibold text-slate-100">{getPlayerFullName(p)}</span>
+                            </span>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-slate-400 italic">Aucun remplaçant désigné</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Actions d'export (Téléchargement PNG direct + Copier Texte) */}
+          <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-4 border-t border-slate-800 bg-slate-950 shrink-0">
+            <button
+              onClick={() => {
+                const lines: string[] = [
+                  "⚽ *FC TORO - CONVOCATION & COMPOSITION*",
+                  `📋 *Match :* ${effectif?.nom || "Match"}`,
+                  `🏷️ *Catégorie :* ${effectif?.categorie || (selectedCategory !== "all" ? selectedCategory : "Toutes")}`,
+                  `📐 *Formation :* ${selectedFormation.label} (${selectedFormation.style || ""})`,
+                  ...(effectif?.date_match ? [`📅 *Date :* ${new Date(effectif.date_match).toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" })}`] : []),
+                  "",
+                  "🟢 *XI DE DÉPART (TITULAIRES)*",
+                ];
+
+                starters.forEach(({ player }, index) => {
+                  if (player) {
+                    const num = customJerseyNumbers[player.id] || player.numeroMaillot || `${index + 1}`;
+                    lines.push(`${num}. ${getPlayerFullName(player)}`);
+                  } else {
+                    lines.push(`${index + 1}. Libre`);
+                  }
+                });
+
+                lines.push("");
+                lines.push("🟡 *REMPLAÇANTS (BANC)*");
+                if (benchPlayers.length > 0) {
+                  benchPlayers.forEach((p, idx) => {
+                    const num = customJerseyNumbers[p.id] || p.numeroMaillot || `${idx + 1}`;
+                    lines.push(`${num}. ${getPlayerFullName(p)}`);
+                  });
+                } else {
+                  lines.push("_Aucun remplaçant_");
+                }
+
+                lines.push("");
+                lines.push("🔴 *Mache sou yo !* 🐂🔥");
+
+                navigator.clipboard.writeText(lines.join("\n"));
+                setCopiedExportText(true);
+                setTimeout(() => setCopiedExportText(false), 3000);
+              }}
+              type="button"
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-slate-700 bg-slate-800 text-slate-200 text-xs font-bold hover:bg-slate-700 transition"
+            >
+              {copiedExportText ? (
+                <>
+                  <svg className="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                  </svg>
+                  <span className="text-emerald-400">Texte copié !</span>
+                </>
+              ) : (
+                <>
+                  <svg className="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                  </svg>
+                  Copier le texte WhatsApp
+                </>
+              )}
+            </button>
+
+            <button
+              onClick={handleDownloadExportImage}
+              disabled={isExportingImage}
+              type="button"
+              className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-500 text-white text-xs font-bold shadow-lg shadow-brand-600/30 transition disabled:opacity-50"
+            >
+              {isExportingImage ? (
+                <>
+                  <svg className="animate-spin h-4 w-4 text-white" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+                  </svg>
+                  Génération de l&apos;Affiche...
+                </>
+              ) : (
+                <>
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                  </svg>
+                  Télécharger l&apos;Affiche PNG (HD)
+                </>
+              )}
             </button>
           </div>
         </div>

@@ -78,6 +78,7 @@ export interface Player {
   email: string;
   dateInscription: string;
   dateNaissance: string;
+  numeroMaillot?: string | number;
   adresse: string;
   cotisationMontant: number;
   cotisationDevise: "US" | "HTG";
@@ -376,3 +377,74 @@ export interface SiteMessage {
   created_at: string;
   metadata?: any;
 }
+
+// --- AQUA SPACE (Club de Natation) ---
+export type AquaSpaceNiveau = "Apprentissage" | "Perfectionnement" | "Nage libre" | "Aqua gym";
+
+export interface AquaSpaceMember {
+  id: string;
+  matricule: string;
+  etudiantId?: string | number | null; // Lien optionnel si joueur FC Toro
+  nom: string;
+  prenom: string;
+  dateNaissance: string;
+  sexe: "Féminin" | "Masculin";
+  adresse: string;
+  photoUrl?: string;
+  niveau: AquaSpaceNiveau;
+  statut: "actif" | "inactif" | "en_attente";
+  dateInscription: string;
+
+  // Parent / Personne Responsable
+  parentNom: string;
+  parentPrenom: string;
+  parentEmail: string;
+  parentTelephone: string;
+  parentAdresse: string;
+
+  // Contact d'urgence
+  urgenceLien: string;
+  urgenceNom: string;
+  urgencePrenom: string;
+  urgenceTelephone: string;
+  urgenceEmail: string;
+
+  // Fiche Médicale & Préventive
+  maladies: string[]; // ["Asthme", "Diabète", "Épilepsie"]
+  autreMaladie?: string;
+  allergies?: string;
+  priseMedicaments: boolean;
+  medicamentsDetails?: string;
+  autoAdministrationMedicaments: boolean;
+  blessuresAnterieures?: string;
+
+  // Paiement & Autorisations
+  modePaiementSouhaite?: "Cash/chèque" | "Carte bancaire" | "Transfert bancaire";
+  autorisationPhotos: boolean;
+  absenceContreIndication: boolean;
+  autorisationUrgence: boolean;
+  notes?: string;
+
+  // Champs calculés pour la vue
+  cotisationStatut?: "paid" | "pending" | "late";
+  dernierPaiementDate?: string;
+  montantTotalPaye?: number;
+}
+
+export interface AquaSpacePayment {
+  id: string;
+  memberId: string;
+  etudiantId?: string | number | null;
+  nomMembre: string;
+  matricule: string;
+  montant: number;
+  devise: "US" | "HTG";
+  periode: string; // Ex: "Septembre 2026", "Session Automne 2026"
+  typePaiement: "Cotisation" | "Inscription" | "Session" | "Autre";
+  methode: "especes" | "virement" | "carte" | "cheque" | "mobile";
+  statut: "paid" | "pending";
+  datePaiement: string;
+  remarque?: string;
+  recuNumero?: string;
+}
+

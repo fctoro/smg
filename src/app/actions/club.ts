@@ -962,4 +962,81 @@ export async function restoreFullSystemBackupAction(backupPayload: any) {
   };
 }
 
+// --- AQUA SPACE SERVER ACTIONS ---
+
+export async function fetchAquaSpaceMembersAdmin() {
+  if (!supabaseAdmin) return { success: false, error: "Service role Supabase indisponible." };
+  const { data, error } = await supabaseAdmin
+    .from("aqua_space_members")
+    .select("*")
+    .order("created_at", { ascending: false });
+  if (error) return { success: false, error: error.message };
+  return { success: true, data };
+}
+
+export async function createAquaSpaceMemberAdmin(payload: any) {
+  if (!supabaseAdmin) return { success: false, error: "Service role Supabase indisponible." };
+  const { data, error } = await supabaseAdmin
+    .from("aqua_space_members")
+    .insert([payload])
+    .select()
+    .single();
+  if (error) return { success: false, error: error.message };
+  return { success: true, data };
+}
+
+export async function updateAquaSpaceMemberAdmin(id: string | number, updates: any) {
+  if (!supabaseAdmin) return { success: false, error: "Service role Supabase indisponible." };
+  const { data, error } = await supabaseAdmin
+    .from("aqua_space_members")
+    .update(updates)
+    .eq("id", id)
+    .select()
+    .single();
+  if (error) return { success: false, error: error.message };
+  return { success: true, data };
+}
+
+export async function deleteAquaSpaceMemberAdmin(id: string | number) {
+  if (!supabaseAdmin) return { success: false, error: "Service role Supabase indisponible." };
+  const { error } = await supabaseAdmin
+    .from("aqua_space_members")
+    .delete()
+    .eq("id", id);
+  if (error) return { success: false, error: error.message };
+  return { success: true };
+}
+
+export async function fetchAquaSpacePaymentsAdmin() {
+  if (!supabaseAdmin) return { success: false, error: "Service role Supabase indisponible." };
+  const { data, error } = await supabaseAdmin
+    .from("aqua_space_payments")
+    .select("*")
+    .order("date_paiement", { ascending: false });
+  if (error) return { success: false, error: error.message };
+  return { success: true, data };
+}
+
+export async function createAquaSpacePaymentAdmin(payload: any) {
+  if (!supabaseAdmin) return { success: false, error: "Service role Supabase indisponible." };
+  const { data, error } = await supabaseAdmin
+    .from("aqua_space_payments")
+    .insert([payload])
+    .select()
+    .single();
+  if (error) return { success: false, error: error.message };
+  return { success: true, data };
+}
+
+export async function deleteAquaSpacePaymentAdmin(id: string | number) {
+  if (!supabaseAdmin) return { success: false, error: "Service role Supabase indisponible." };
+  const { error } = await supabaseAdmin
+    .from("aqua_space_payments")
+    .delete()
+    .eq("id", id);
+  if (error) return { success: false, error: error.message };
+  return { success: true };
+}
+
+
 

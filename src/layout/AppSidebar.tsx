@@ -35,6 +35,12 @@ type NavItem = {
   subItems?: { name: string; path: string; pro?: boolean; new?: boolean }[];
 };
 
+const AquaSpaceIcon = () => (
+  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.8">
+    <path strokeLinecap="round" strokeLinejoin="round" d="M3 15c2.5 0 2.5-2 5-2s2.5 2 5 2 2.5-2 5-2 2.5 2 5 2M3 19c2.5 0 2.5-2 5-2s2.5 2 5 2 2.5-2 5-2 2.5 2 5 2M3 11c2.5 0 2.5-2 5-2s2.5 2 5 2 2.5-2 5-2 2.5 2 5 2" />
+  </svg>
+);
+
 // Standard Admin items
 const adminNavItems: NavItem[] = [
   {
@@ -51,6 +57,12 @@ const adminNavItems: NavItem[] = [
     icon: <UserCircleIcon />,
     name: "Joueurs",
     path: "/joueurs",
+  },
+  {
+    icon: <AquaSpaceIcon />,
+    name: "Aqua Space",
+    path: "/aqua-space",
+    new: true,
   },
   {
     icon: <DollarLineIcon />,

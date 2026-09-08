@@ -160,91 +160,35 @@ export default function CoachPlayersPage() {
     downloadCSV(csvContent, `Joueurs_${selectedCategory || 'Coach'}.csv`);
   };
 
-  const renderMatchSummary = (roster: Effectif) => {
-    const events = roster.match_events || [];
-    if (events.length === 0) return null;
-
-    // Helper to get short display name
-    const getShortName = (id: string) => {
-      const p = coachPlayers.find(pl => pl.id === id) || allPlayers.find(pl => pl.id === id);
-      if (!p) return "Joueur";
-      return p.nom ? `${p.prenom ? p.prenom.charAt(0) + '. ' : ''}${p.nom}` : p.prenom || "Joueur";
+  const parseTeams = (nom: string) => {
+    const clean = nom || "";
+    const parts = clean.split(/\s+vs\.?\s+/i);
+    if (parts.length === 2) {
+      return {
+        team1: parts[0].trim(),
+        team2: parts[1].trim(),
+        isToroHome: parts[0].toLowerCase().includes("toro"),
+      };
+    }
+    return {
+      team1: "FC Toro",
+      team2: clean.replace(/^FC Toro\s*/i, "").trim() || "Adversaire",
+      isToroHome: true,
     };
+  };
 
-    // 1. Scorers
+  const getScorers = (roster: Effectif) => {
+    const events = roster.match_events || [];
     const goalEvents = events.filter(e => e.type === "goal");
     const scorersMap = new Map<string, { name: string; count: number }>();
     goalEvents.forEach(ev => {
-      const name = getShortName(ev.scorerId);
+      const p = coachPlayers.find(pl => pl.id === ev.scorerId) || allPlayers.find(pl => pl.id === ev.scorerId);
+      const name = p ? (p.nom ? `${p.prenom ? p.prenom.charAt(0) + '. ' : ''}${p.nom}` : p.prenom || "Joueur") : "Joueur";
       const cur = scorersMap.get(ev.scorerId) || { name, count: 0 };
       cur.count += 1;
       scorersMap.set(ev.scorerId, cur);
     });
-    const scorersList = Array.from(scorersMap.values());
-
-    // 2. Assists
-    const assistEvents = events.filter(e => e.type === "goal" && e.assistId);
-    const assistsMap = new Map<string, { name: string; count: number }>();
-    assistEvents.forEach(ev => {
-      if (!ev.assistId) return;
-      const name = getShortName(ev.assistId);
-      const cur = assistsMap.get(ev.assistId) || { name, count: 0 };
-      cur.count += 1;
-      assistsMap.set(ev.assistId, cur);
-    });
-    const assistsList = Array.from(assistsMap.values());
-
-    // 3. Yellow cards
-    const yellowEvents = events.filter(e => e.type === "yellow_card");
-    const yellowsMap = new Map<string, { name: string; count: number }>();
-    yellowEvents.forEach(ev => {
-      const name = getShortName(ev.scorerId);
-      const cur = yellowsMap.get(ev.scorerId) || { name, count: 0 };
-      cur.count += 1;
-      yellowsMap.set(ev.scorerId, cur);
-    });
-    const yellowsList = Array.from(yellowsMap.values());
-
-    // 4. Red cards
-    const redEvents = events.filter(e => e.type === "red_card");
-    const redsMap = new Map<string, { name: string; count: number }>();
-    redEvents.forEach(ev => {
-      const name = getShortName(ev.scorerId);
-      const cur = redsMap.get(ev.scorerId) || { name, count: 0 };
-      cur.count += 1;
-      redsMap.set(ev.scorerId, cur);
-    });
-    const redsList = Array.from(redsMap.values());
-
-    return (
-      <div className="my-2.5 flex flex-wrap items-center gap-1.5 text-[11px]">
-        {scorersList.map(s => (
-          <span key={s.name} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 font-medium border border-gray-200/60 dark:border-gray-700">
-            <span>⚽</span>
-            <span>{s.name}</span>
-            {s.count > 1 && <span className="text-emerald-600 dark:text-emerald-400 font-bold">({s.count})</span>}
-          </span>
-        ))}
-        {assistsList.map(a => (
-          <span key={a.name} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 font-medium border border-gray-200/60 dark:border-gray-700">
-            <span>👟</span>
-            <span>{a.name}</span>
-          </span>
-        ))}
-        {yellowsList.map(y => (
-          <span key={y.name} className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-amber-500/10 text-amber-600 dark:text-amber-400 font-medium border border-amber-500/20">
-            <span className="h-2.5 w-2 bg-amber-400 rounded-xs inline-block" />
-            <span>{y.name}</span>
-          </span>
-        ))}
-        {redsList.map(r => (
-          <span key={r.name} className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-red-500/10 text-red-600 dark:text-red-400 font-medium border border-red-500/20">
-            <span className="h-2.5 w-2 bg-red-600 rounded-xs inline-block" />
-            <span>{r.name}</span>
-          </span>
-        ))}
-      </div>
-    );
+    return Array.from(scorersMap.values());
   };
 
   return (
@@ -366,28 +310,85 @@ export default function CoachPlayersPage() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {filteredRosters.map((roster) => {
+                const { team1, team2, isToroHome } = parseTeams(roster.nom);
+                const scorers = getScorers(roster);
                 const hasScore = roster.score_toro !== null && roster.score_toro !== undefined;
+                const scoreLeft = isToroHome ? roster.score_toro : roster.score_adversaire;
+                const scoreRight = isToroHome ? roster.score_adversaire : roster.score_toro;
+
                 return (
-                  <div key={roster.id} className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-5 shadow-sm hover:shadow-md transition-shadow">
-                    <div className="flex justify-between items-start gap-2 mb-2">
-                      <div className="min-w-0">
-                        <h3 className="font-bold text-gray-900 dark:text-white line-clamp-1">{roster.nom}</h3>
-                        <p className="text-xs text-gray-500 mt-0.5">
-                          {roster.date_match} • {roster.categorie} • {(roster.joueurs || []).length} joueurs
-                        </p>
-                      </div>
-                      {hasScore && (
-                        <span className="shrink-0 px-2.5 py-0.5 rounded-lg bg-slate-900 text-white dark:bg-white dark:text-slate-900 font-black tracking-tight text-xs shadow-xs">
-                          {roster.score_toro} - {roster.score_adversaire ?? 0}
-                        </span>
-                      )}
+                  <div key={roster.id} className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
+                    {/* Top Date / Cat pill centered */}
+                    <div className="flex justify-center mb-3">
+                      <span className="px-3 py-1 rounded-full text-xs font-semibold bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300">
+                        {roster.date_match} • {roster.categorie} • {(roster.joueurs || []).length} joueurs
+                      </span>
                     </div>
-                    
-                    {/* Résumé Match (Buteurs, Passeurs, Cartons en micro-tags) */}
-                    {renderMatchSummary(roster)}
+
+                    {/* Match Scoreboard Row */}
+                    <div className="grid grid-cols-12 items-center gap-2 my-2">
+                      <div className="col-span-5 text-center">
+                        <span className="font-bold text-gray-900 dark:text-white text-base block truncate">
+                          {team1}
+                        </span>
+                      </div>
+
+                      <div className="col-span-2 text-center">
+                        {hasScore ? (
+                          <span className="font-black text-xl text-gray-900 dark:text-white tracking-tight">
+                            {scoreLeft ?? 0} - {scoreRight ?? 0}
+                          </span>
+                        ) : (
+                          <span className="font-bold text-xs text-gray-400 dark:text-gray-500 uppercase tracking-wider">
+                            VS
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="col-span-5 text-center">
+                        <span className="font-bold text-gray-900 dark:text-white text-base block truncate">
+                          {team2}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Scorers Section */}
+                    {scorers.length > 0 && (
+                      <div className="grid grid-cols-12 items-start gap-2 pt-1 pb-2 text-xs text-gray-700 dark:text-gray-300">
+                        {isToroHome ? (
+                          <>
+                            <div className="col-span-5 text-right space-y-0.5">
+                              {scorers.map(s => (
+                                <div key={s.name} className="font-medium">
+                                  {s.name} {s.count > 1 ? `(${s.count})` : ""}
+                                </div>
+                              ))}
+                            </div>
+                            <div className="col-span-2 flex justify-center pt-0.5">
+                              <span className="text-sm leading-none">⚽</span>
+                            </div>
+                            <div className="col-span-5" />
+                          </>
+                        ) : (
+                          <>
+                            <div className="col-span-5" />
+                            <div className="col-span-2 flex justify-center pt-0.5">
+                              <span className="text-sm leading-none">⚽</span>
+                            </div>
+                            <div className="col-span-5 text-left space-y-0.5">
+                              {scorers.map(s => (
+                                <div key={s.name} className="font-medium">
+                                  {s.name} {s.count > 1 ? `(${s.count})` : ""}
+                                </div>
+                              ))}
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    )}
 
                     {roster.tactique_id ? (
-                      <div className="mb-3 text-xs flex items-center gap-1.5 text-brand-600 dark:text-brand-400">
+                      <div className="mt-2 mb-3 text-xs flex items-center gap-1.5 text-brand-600 dark:text-brand-400">
                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                         </svg>
@@ -396,7 +397,7 @@ export default function CoachPlayersPage() {
                         </Link>
                       </div>
                     ) : (
-                      <div className="mb-3 text-xs flex items-center gap-1.5 text-gray-500 dark:text-gray-400">
+                      <div className="mt-2 mb-3 text-xs flex items-center gap-1.5 text-gray-500 dark:text-gray-400">
                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 21v-4m0 0V5a2 2 0 012-2h6.5l1 1H21l-3 6 3 6h-8.5l-1-1H5a2 2 0 00-2 2zm9-13.5V9" />
                         </svg>

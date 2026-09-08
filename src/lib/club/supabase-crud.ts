@@ -86,7 +86,10 @@ export const updatePlayerInSupabase = async (playerId: string, data: Partial<Pla
 
   if (data.telephone !== undefined) updatePayload.Telephone = data.telephone;
   if (data.email !== undefined) updatePayload.Email = data.email;
-  if (data.dateNaissance !== undefined) updatePayload.DateNaissance = data.dateNaissance;
+  if (data.dateNaissance !== undefined) {
+    const trimmedDate = String(data.dateNaissance).trim();
+    updatePayload.DateNaissance = trimmedDate.length >= 8 ? trimmedDate : null;
+  }
   if (data.photoUrl !== undefined && data.photoUrl !== "/images/user/silhouette.svg") updatePayload.PhotoIdentiteUrl = data.photoUrl;
   if (data.saison !== undefined) updatePayload.Saison = data.saison;
   updatePayload.StatutJoueur = statusToUpdate;
@@ -97,10 +100,13 @@ export const updatePlayerInSupabase = async (playerId: string, data: Partial<Pla
   if (data.urgenceEmail !== undefined) updatePayload.UrgenceEmail = data.urgenceEmail;
   if (data.urgenceAdresse !== undefined) updatePayload.UrgenceAdresse = data.urgenceAdresse;
   if (data.tailleHaut !== undefined) {
-    updatePayload.TailleHaut = data.tailleHaut;
-    updatePayload.TailleMaillot = data.tailleHaut;
+    const val = data.tailleHaut === "Choisir" ? null : data.tailleHaut;
+    updatePayload.TailleHaut = val;
+    updatePayload.TailleMaillot = val;
   }
-  if (data.tailleShort !== undefined) updatePayload.TailleShort = data.tailleShort;
+  if (data.tailleShort !== undefined) {
+    updatePayload.TailleShort = data.tailleShort === "Choisir" ? null : data.tailleShort;
+  }
   if (data.poste !== undefined) updatePayload.Poste = data.poste;
   if ((data as any).experienceSoccer !== undefined) {
     updatePayload.Experience = (data as any).experienceSoccer;
@@ -108,7 +114,8 @@ export const updatePlayerInSupabase = async (playerId: string, data: Partial<Pla
   }
   if (data.planPaiement !== undefined) {
     updatePayload.PlanPaiement = data.planPaiement;
-    updatePayload.PaymentPlan = data.planPaiement;
+    const planNum = parseInt(String(data.planPaiement).replace(/\D/g, ""), 10);
+    updatePayload.PaymentPlan = !isNaN(planNum) && planNum > 0 ? planNum : null;
   }
   if (data.modePaiementChoisi !== undefined) updatePayload.MethodePaiement = data.modePaiementChoisi;
   if ((data as any).numerosPreferes !== undefined) updatePayload.NumerosPreferes = (data as any).numerosPreferes;
@@ -135,7 +142,7 @@ export const updatePlayerInSupabase = async (playerId: string, data: Partial<Pla
   if (data.parentLien !== undefined) updatePayload.LienParente = data.parentLien;
 
   if (data.statut !== undefined) {
-    updatePayload.EstAlumni = data.statut === "alumni" ? 1 : 0;
+    updatePayload.EstAlumni = data.statut === "alumni";
     if (data.statut === "abandonne") {
       updatePayload.IsDeleted = 1;
     } else {
@@ -252,8 +259,28 @@ export const updatePlayerInSupabase = async (playerId: string, data: Partial<Pla
   const result = await updatePlayerAdmin(targetIds, updatePayload);
 
   if (!result.success) {
-    console.warn("Mise à jour Supabase :", result.error);
-    throw new Error(result.error || "Erreur de mise à jour dans la base de données.");
+    console.warn("Mise à jour via server action échouée, tentative fallback client :", result.error);
+    if (supabase) {
+      let clientSuccess = false;
+      for (const id of targetIds) {
+        const numId = Number(String(id).replace(/\D/g, ""));
+        const { error: clientError } = await supabase
+          .from("tblEtudiants")
+          .update(updatePayload)
+          .eq("EtudiantID", !isNaN(numId) && numId > 0 ? numId : id);
+
+        if (!clientError) {
+          clientSuccess = true;
+        } else {
+          console.error(`Erreur fallback client Supabase pour ${id}:`, clientError);
+        }
+      }
+      if (!clientSuccess) {
+        throw new Error(result.error || "Erreur de mise à jour dans la base de données.");
+      }
+    } else {
+      throw new Error(result.error || "Erreur de mise à jour dans la base de données.");
+    }
   }
 
   return {

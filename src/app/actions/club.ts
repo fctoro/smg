@@ -91,6 +91,18 @@ export async function updatePlayerAdmin(etudiantId: number | string | (number | 
   delete payload.carnetVaccinationUrl;
   delete payload.playerIds;
 
+  // Prévention des incompatibilités de types PostgreSQL
+  if (typeof payload.PaymentPlan === "string") {
+    const num = payload.PaymentPlan.match(/\d+/)?.[0];
+    payload.PaymentPlan = num ? parseInt(num, 10) : null;
+  }
+  if (typeof payload.DateNaissance === "string" && payload.DateNaissance.trim().length < 8) {
+    payload.DateNaissance = null;
+  }
+  if ("EstAlumni" in payload && typeof payload.EstAlumni === "number") {
+    payload.EstAlumni = payload.EstAlumni === 1;
+  }
+
   const idList = Array.isArray(etudiantId) ? etudiantId : [etudiantId];
   const targetIds: number[] = [];
   const strIds: string[] = [];
@@ -130,7 +142,22 @@ export async function updatePlayerAdmin(etudiantId: number | string | (number | 
     error = res2.error;
   }
 
-  // Attempt 3: If a specific column is missing from schema cache, strip only that column and retry
+  // Attempt 3: Gestion des erreurs de syntaxe PostgreSQL (22P02, 22007)
+  if (error && (error.code === "22P02" || error.message?.includes("integer") || error.message?.includes("PaymentPlan"))) {
+    delete payload.PaymentPlan;
+    const resType = await runUpdate(payload);
+    if (!resType.error) return { success: true, data: resType.data };
+    error = resType.error;
+  }
+
+  if (error && (error.code === "22007" || error.message?.includes("date") || error.message?.includes("timestamp"))) {
+    delete payload.DateNaissance;
+    const resDate = await runUpdate(payload);
+    if (!resDate.error) return { success: true, data: resDate.data };
+    error = resDate.error;
+  }
+
+  // Attempt 4: If a specific column is missing from schema cache, strip only that column and retry
   let retries = 0;
   while (error && retries < 5 && (error.code === "PGRST204" || error.message?.includes("Could not find the") || error.message?.includes("column"))) {
     retries++;

@@ -118,9 +118,9 @@ export const PlayerEditModal: React.FC<PlayerEditModalProps> = ({
           onClose();
         }, 800);
       }
-    } catch (error) {
-      console.error(error);
-      alert("Erreur lors de la mise a jour. Veuillez reessayer.");
+    } catch (error: any) {
+      console.error("Erreur handleSubmit PlayerEditModal:", error);
+      alert(error?.message || "Erreur lors de la mise à jour. Veuillez réessayer.");
     } finally {
       setIsSubmitting(false);
     }

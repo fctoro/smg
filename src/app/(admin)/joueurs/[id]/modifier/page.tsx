@@ -91,9 +91,10 @@ export default function EditPlayerPage() {
       }
 
       router.push("/joueurs?updated=true");
-    } catch (error) {
-      console.error(error);
-      setToast({ message: "Erreur lors de la modification. Veuillez réessayer.", type: "error" });
+    } catch (error: any) {
+      console.error("Erreur handleSubmit:", error);
+      const errMsg = error?.message || "Erreur lors de la modification. Veuillez réessayer.";
+      setToast({ message: errMsg, type: "error" });
       setIsSubmitting(false);
     }
   };

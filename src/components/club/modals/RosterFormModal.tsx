@@ -25,6 +25,8 @@ export function RosterFormModal({
   onSuccess,
 }: RosterFormModalProps) {
   const [nom, setNom] = useState("");
+  const [adversaire, setAdversaire] = useState("");
+  const [isCustomNom, setIsCustomNom] = useState(false);
   const [dateMatch, setDateMatch] = useState("");
   const [periode, setPeriode] = useState("");
   const [categorie, setCategorie] = useState(categories[0] || "");
@@ -36,11 +38,23 @@ export function RosterFormModal({
 
   const [savedPlans, setSavedPlans] = useState<SavedTacticalPlan[]>([]);
 
+  const extractAdversaire = (title: string) => {
+    if (!title) return "";
+    const match = title.match(/(?:vs\.?|contre)\s*(.*)/i);
+    if (match && match[1]?.trim()) {
+      return match[1].trim();
+    }
+    return title.replace(/^FC Toro\s*[-–—]?\s*/i, "").trim();
+  };
+
   useEffect(() => {
     if (isOpen) {
       setSavedPlans(getSavedPlans());
       if (initialData) {
         setNom(initialData.nom);
+        const parsedAdv = extractAdversaire(initialData.nom);
+        setAdversaire(parsedAdv);
+        setIsCustomNom(!initialData.nom.toLowerCase().startsWith("fc toro vs"));
         setDateMatch(initialData.date_match);
         setPeriode(initialData.periode);
         setCategorie(initialData.categorie);
@@ -48,6 +62,8 @@ export function RosterFormModal({
         setSelectedPlayers(new Set(initialData.joueurs));
       } else {
         setNom("");
+        setAdversaire("");
+        setIsCustomNom(false);
         setDateMatch("");
         setPeriode("");
         setCategorie(categories[0] || "");
@@ -135,16 +151,76 @@ export function RosterFormModal({
         )}
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            Nom du match / Événement *
-          </label>
-          <input
-            type="text"
-            value={nom}
-            onChange={(e) => setNom(e.target.value)}
-            placeholder="ex: FC Toro vs Shana"
-            className="w-full rounded-lg border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 p-2 text-sm"
-          />
+          <div className="flex items-center justify-between mb-1">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+              Adversaire (Club opposé) *
+            </label>
+            <button
+              type="button"
+              onClick={() => setIsCustomNom(!isCustomNom)}
+              className="text-xs text-brand-600 dark:text-brand-400 hover:underline"
+            >
+              {isCustomNom ? "Mode standard (FC Toro vs ...)" : "Personnaliser le titre complet"}
+            </button>
+          </div>
+
+          <div className="space-y-2">
+            <div className="relative">
+              <input
+                type="text"
+                list="opponents-list"
+                value={adversaire}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setAdversaire(val);
+                  if (!isCustomNom) {
+                    setNom(val ? `FC Toro vs ${val}` : "");
+                  }
+                }}
+                placeholder="ex: Champion, Violette AC, Shana..."
+                className="w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 p-2.5 text-sm font-semibold text-gray-900 dark:text-white placeholder:font-normal focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+              />
+              <datalist id="opponents-list">
+                <option value="Champion" />
+                <option value="Shana" />
+                <option value="Violette AC" />
+                <option value="Don Bosco FC" />
+                <option value="Real Hope FA" />
+                <option value="Tempête FC" />
+                <option value="Cavaly AS" />
+                <option value="Baltimore SC" />
+                <option value="FICA" />
+                <option value="Racing Club Haïtien" />
+                <option value="AS Capoise" />
+                <option value="Ouanaminthe FC" />
+                <option value="Juventus des Cayes" />
+                <option value="Triomphe Liancourt" />
+                <option value="America des Cayes" />
+              </datalist>
+            </div>
+
+            {isCustomNom ? (
+              <div>
+                <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                  Titre du match enregistré :
+                </label>
+                <input
+                  type="text"
+                  value={nom}
+                  onChange={(e) => setNom(e.target.value)}
+                  placeholder="ex: Tournoi U18 - Match 1"
+                  className="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 p-2 text-xs text-gray-700 dark:text-gray-300"
+                />
+              </div>
+            ) : (
+              <p className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1.5">
+                <span>🏆 Titre généré :</span>
+                <span className="font-semibold text-brand-600 dark:text-brand-400">
+                  {nom || "FC Toro vs [Adversaire]"}
+                </span>
+              </p>
+            )}
+          </div>
         </div>
 
         <div className="grid grid-cols-2 gap-4">

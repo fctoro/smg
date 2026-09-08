@@ -10,6 +10,7 @@ export interface TacticalFormation {
   label: string;
   family: string;
   style: string;
+  size: number;
   lines: TacticalLine[];
 }
 
@@ -19,11 +20,13 @@ const createFormation = (
   family: string,
   style: string,
   lines: TacticalLine[],
+  size: number = 11
 ): TacticalFormation => ({
   id,
   label,
   family,
   style,
+  size,
   lines,
 });
 
@@ -367,6 +370,38 @@ export const fifaFormations: TacticalFormation[] = [
       { role: "ATT", count: 1 },
     ],
   ),
+  
+  // --- FOOT À 9 (Size: 9) ---
+  createFormation("332", "3-3-2", "Foot à 9", "Équilibre parfait pour le jeu à 9.", 
+    [{ role: "DEF", count: 3 }, { role: "MID", count: 3 }, { role: "ATT", count: 2 }], 9),
+  createFormation("341", "3-4-1", "Foot à 9", "Milieu renforcé et pressing haut.", 
+    [{ role: "DEF", count: 3 }, { role: "MID", count: 4 }, { role: "ATT", count: 1 }], 9),
+  createFormation("242", "2-4-2", "Foot à 9", "Offensif avec occupation de la largeur.", 
+    [{ role: "DEF", count: 2 }, { role: "MID", count: 4 }, { role: "ATT", count: 2 }], 9),
+  createFormation("323", "3-2-3", "Foot à 9", "Jeu direct très offensif.", 
+    [{ role: "DEF", count: 3 }, { role: "MID", count: 2 }, { role: "ATT", count: 3 }], 9),
+  createFormation("431", "4-3-1", "Foot à 9", "Défense solide et contre-attaque.", 
+    [{ role: "DEF", count: 4 }, { role: "MID", count: 3 }, { role: "ATT", count: 1 }], 9),
+
+  // --- FOOT À 8 (Size: 8) ---
+  createFormation("331", "3-3-1", "Foot à 8", "Stabilité défensive et contrôle.", 
+    [{ role: "DEF", count: 3 }, { role: "MID", count: 3 }, { role: "ATT", count: 1 }], 8),
+  createFormation("232", "2-3-2", "Foot à 8", "Jeu porté vers l'avant.", 
+    [{ role: "DEF", count: 2 }, { role: "MID", count: 3 }, { role: "ATT", count: 2 }], 8),
+  createFormation("241", "2-4-1", "Foot à 8", "Densité au milieu de terrain.", 
+    [{ role: "DEF", count: 2 }, { role: "MID", count: 4 }, { role: "ATT", count: 1 }], 8),
+  createFormation("322", "3-2-2", "Foot à 8", "Bloc solide et duo d'attaque.", 
+    [{ role: "DEF", count: 3 }, { role: "MID", count: 2 }, { role: "ATT", count: 2 }], 8),
+
+  // --- FOOT À 5 (Size: 5) ---
+  createFormation("22", "2-2", "Foot à 5", "La formation classique du foot à 5 en carré.", 
+    [{ role: "DEF", count: 2 }, { role: "ATT", count: 2 }], 5),
+  createFormation("121", "1-2-1", "Foot à 5", "Le losange, idéal pour la possession.", 
+    [{ role: "DEF", count: 1 }, { role: "MID", count: 2 }, { role: "ATT", count: 1 }], 5),
+  createFormation("211", "2-1-1", "Foot à 5", "Défense resserrée, jeu de contre le 'Y'.", 
+    [{ role: "DEF", count: 2 }, { role: "MID", count: 1 }, { role: "ATT", count: 1 }], 5),
+  createFormation("112", "1-1-2", "Foot à 5", "Formation ultra-offensive en 'Y inversé'.", 
+    [{ role: "DEF", count: 1 }, { role: "MID", count: 1 }, { role: "ATT", count: 2 }], 5),
 ];
 
 export const defaultFifaFormationId = fifaFormations[0]?.id ?? "";

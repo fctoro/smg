@@ -8,6 +8,7 @@ import { getPlayerFullName } from "@/lib/club/metrics";
 import { getSavedPlans, SavedTacticalPlan, deletePlan } from "@/lib/club/tactics";
 import Link from "next/link";
 import { GroupIcon } from "@/icons";
+import Pagination from "@/components/tables/Pagination";
 
 import { CardSkeleton } from "@/components/ui/skeleton/Skeleton";
 
@@ -15,6 +16,8 @@ export default function CoachDashboardPage() {
   const { players: allPlayers, hydrated } = useClubData();
   const { userCategories } = useUserRole();
   const [savedPlans, setSavedPlans] = React.useState<SavedTacticalPlan[]>([]);
+  const [unavailablePage, setUnavailablePage] = React.useState(1);
+  const [unavailablePageSize, setUnavailablePageSize] = React.useState(10);
 
   React.useEffect(() => {
     setSavedPlans(getSavedPlans());
@@ -180,7 +183,7 @@ export default function CoachDashboardPage() {
                     src="/images/positions/gardien.png"
                     alt="Gardien"
                     fill
-                    className="object-contain"
+                    className="object-contain dark:invert"
                     unoptimized
                   />
                 </div>
@@ -206,7 +209,7 @@ export default function CoachDashboardPage() {
                     src="/images/positions/defenseur.png"
                     alt="Défenseur"
                     fill
-                    className="object-contain"
+                    className="object-contain dark:invert"
                     unoptimized
                   />
                 </div>
@@ -232,7 +235,7 @@ export default function CoachDashboardPage() {
                     src="/images/positions/milieu.png"
                     alt="Milieu"
                     fill
-                    className="object-contain"
+                    className="object-contain dark:invert"
                     unoptimized
                   />
                 </div>
@@ -258,7 +261,7 @@ export default function CoachDashboardPage() {
                     src="/images/positions/attaquant.png"
                     alt="Attaquant"
                     fill
-                    className="object-contain"
+                    className="object-contain dark:invert"
                     unoptimized
                   />
                 </div>
@@ -276,9 +279,11 @@ export default function CoachDashboardPage() {
             Blessés ou suspendus, ces joueurs ne peuvent pas participer au prochain match.
           </p>
 
-          <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+          <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar mb-4">
             {unavailablePlayers.length > 0 ? (
-              unavailablePlayers.map((player) => (
+              unavailablePlayers
+                .slice((unavailablePage - 1) * unavailablePageSize, unavailablePage * unavailablePageSize)
+                .map((player) => (
                 <div
                   key={player.id}
                   className="flex items-center justify-between rounded-xl border border-gray-100 bg-gray-50/50 p-4 dark:border-gray-800 dark:bg-gray-800/30"
@@ -330,6 +335,22 @@ export default function CoachDashboardPage() {
               </div>
             )}
           </div>
+          
+          {unavailablePlayers.length > 0 && (
+            <div className="pt-2 border-t border-gray-100 dark:border-gray-800 flex justify-end">
+              <Pagination
+                currentPage={unavailablePage}
+                totalPages={Math.ceil(unavailablePlayers.length / unavailablePageSize)}
+                onPageChange={setUnavailablePage}
+                pageSize={unavailablePageSize}
+                onPageSizeChange={(size) => {
+                  setUnavailablePageSize(size);
+                  setUnavailablePage(1);
+                }}
+                pageSizeOptions={[5, 10, 20]}
+              />
+            </div>
+          )}
         </div>
 
         {/* Saved Plans Table */}

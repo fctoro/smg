@@ -49,6 +49,11 @@ export interface Effectif {
   tactique_id?: string;
   coach_email: string;
   created_at?: string;
+  score_toro?: number | null;
+  score_adversaire?: number | null;
+  match_events?: any; // JSONB storing goals and assists
+  coach_notes_strengths?: string;
+  coach_notes_weaknesses?: string;
 }
 
 export interface ProgrammeMatch {

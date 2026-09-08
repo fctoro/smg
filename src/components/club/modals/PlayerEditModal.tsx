@@ -64,6 +64,7 @@ export const PlayerEditModal: React.FC<PlayerEditModalProps> = ({
           const updated = {
             ...p,
             ...normalized,
+            playerIds: pIds,
             ...(updatedDocs?.photoUrl ? { photoUrl: updatedDocs.photoUrl } : {}),
             ...(updatedDocs?.photoIdentiteUrl ? { photoIdentiteUrl: updatedDocs.photoIdentiteUrl } : {}),
             ...(updatedDocs?.acteNaissanceUrl ? { acteNaissanceUrl: updatedDocs.acteNaissanceUrl } : {}),

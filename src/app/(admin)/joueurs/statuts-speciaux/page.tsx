@@ -216,10 +216,12 @@ export default function StatutsSpeciauxPage() {
 
     setIsSaving(true);
     try {
-      await updatePlayerInSupabase(finalPlayerId, { statutJoueur: finalStatus });
+      const target = players.find((p) => p.id === finalPlayerId);
+      const pIds = target?.playerIds || [finalPlayerId];
+      await updatePlayerInSupabase(finalPlayerId, { statutJoueur: finalStatus, playerIds: pIds });
 
       setPlayers((prev) =>
-        prev.map((p) => (p.id === finalPlayerId ? { ...p, statutJoueur: finalStatus } : p))
+        prev.map((p) => (p.id === finalPlayerId ? { ...p, statutJoueur: finalStatus, playerIds: pIds } : p))
       );
 
       handleCloseModal();

@@ -70,6 +70,7 @@ export interface ProgrammeMatch {
 
 export interface Player {
   id: string;
+  playerIds?: (string | number)[];
   matricule?: string;
   nom: string;
   prenom: string;
@@ -294,6 +295,7 @@ export interface PlayerFormValues {
   saison?: string;
   statutJoueur?: string;
   sourceDetection?: boolean;
+  playerIds?: (string | number)[];
 }
 
 export interface ParentFormValues {

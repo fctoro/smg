@@ -413,47 +413,71 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
             const isDetection = group.some(g => (g.Info1 && String(g.Info1).includes("DETECTION")) || String(g.sourceDetection) === "true");
             const matricule = generatePlayerMatricule(primaryRecord.EtudiantID, entrySeason, isDetection);
 
+            // Priorité aux données non-vides les plus récentes du groupe
+            const sortedByRecent = [...group].sort((a, b) => {
+              const dateA = a.DtCreation ? new Date(a.DtCreation).getTime() : 0;
+              const dateB = b.DtCreation ? new Date(b.DtCreation).getTime() : 0;
+              if (dateA !== dateB && !isNaN(dateA) && !isNaN(dateB)) return dateB - dateA;
+              return (Number(b.EtudiantID) || 0) - (Number(a.EtudiantID) || 0);
+            });
+
+            const findVal = (getter: (g: any) => any) => {
+              for (const g of sortedByRecent) {
+                const v = getter(g);
+                if (v !== undefined && v !== null && String(v).trim() !== "" && String(v).trim() !== "Choisir") {
+                  return v;
+                }
+              }
+              return undefined;
+            };
+
             // Fusion des champs d'information
-            const photoUrl = group.find(g => g.PhotoUrl && !g.PhotoUrl.includes("silhouette"))?.PhotoUrl || primaryRecord.PhotoUrl || "/images/user/silhouette.svg";
-            const poste = group.find(g => g.Poste || g.poste)?.Poste || group.find(g => g.poste)?.poste || "Joueur";
-            const sexe = group.find(g => g.Sexe === "F") ? "Féminin" : "Masculin";
-            const telephone = group.find(g => g.Telephone)?.Telephone || "";
-            const email = group.find(g => g.Email)?.Email || "";
-            const dateNaissance = group.find(g => g.DateNaissance)?.DateNaissance || "";
-            const adresse = group.find(g => g.Adresse)?.Adresse || "";
+            const photoUrl = findVal(g => g.PhotoUrl && !g.PhotoUrl.includes("silhouette") ? g.PhotoUrl : undefined) 
+              || findVal(g => g.PhotoIdentiteUrl && !g.PhotoIdentiteUrl.includes("silhouette") ? g.PhotoIdentiteUrl : undefined) 
+              || primaryRecord.PhotoUrl 
+              || "/images/user/silhouette.svg";
+            const poste = findVal(g => g.Poste || g.poste) || "Joueur";
+            const sexe = (findVal(g => g.Sexe) === "F") ? "Féminin" : "Masculin";
+            const telephone = findVal(g => g.Telephone) || "";
+            const email = findVal(g => g.Email) || "";
+            const dateNaissance = findVal(g => g.DateNaissance) || "";
+            const adresse = findVal(g => g.Adresse) || "";
 
             // Informations parents du joueur
-            const parentNomRec = group.find(g => g.NomParent)?.NomParent || primaryRecord.NomParent || "";
-            const parentPrenomRec = group.find(g => g.PrenomParent)?.PrenomParent || primaryRecord.PrenomParent || "";
+            const parentNomRec = findVal(g => g.NomParent) || primaryRecord.NomParent || "";
+            const parentPrenomRec = findVal(g => g.PrenomParent) || primaryRecord.PrenomParent || "";
             let parentNomPrenom = (parentNomRec || parentPrenomRec)
               ? `${parentNomRec} ${parentPrenomRec}`.trim()
               : (primaryRecord.NomParent || "");
               
             // Fallback si NomParent et PrenomParent sont vides
             if (!parentNomPrenom) {
-              parentNomPrenom = primaryRecord.EngagementFinancierNom 
+              parentNomPrenom = findVal(g => g.EngagementFinancierNom || g.UrgenceNomPrenom || g.NomContact) 
+                || primaryRecord.EngagementFinancierNom 
                 || primaryRecord.UrgenceNomPrenom 
                 || primaryRecord.NomContact 
                 || "";
             }
-            const parentTelephone = group.find(g => g.TelephoneParent)?.TelephoneParent || primaryRecord.TelephoneParent || telephone;
-            const parentEmail = group.find(g => g.EmailParent)?.EmailParent || primaryRecord.EmailParent || email;
-            const parentAdresse = group.find(g => g.AdresseParent)?.AdresseParent || primaryRecord.AdresseParent || adresse;
+            const parentTelephone = findVal(g => g.TelephoneParent) || primaryRecord.TelephoneParent || telephone;
+            const parentEmail = findVal(g => g.EmailParent) || primaryRecord.EmailParent || email;
+            const parentAdresse = findVal(g => g.AdresseParent) || primaryRecord.AdresseParent || adresse;
+            const parentLien = findVal(g => g.LienParente) || "";
 
-            const photoIdentiteUrl = group.find(g => g.PhotoIdentiteUrl)?.PhotoIdentiteUrl || primaryRecord.PhotoIdentiteUrl || "";
-            const acteNaissanceUrl = group.find(g => g.ActeNaissanceUrl)?.ActeNaissanceUrl || primaryRecord.ActeNaissanceUrl || "";
-            const carteIdentiteParentUrl = group.find(g => g.CarteIdentiteParentUrl)?.CarteIdentiteParentUrl || primaryRecord.CarteIdentiteParentUrl || "";
-            const fiche9eUrl = group.find(g => g.Info2)?.Info2 || primaryRecord.Info2 || "";
-            const carnetVaccinationUrl = group.find(g => g.Info3)?.Info3 || primaryRecord.Info3 || "";
+            const photoIdentiteUrl = findVal(g => g.PhotoIdentiteUrl) || primaryRecord.PhotoIdentiteUrl || "";
+            const acteNaissanceUrl = findVal(g => g.ActeNaissanceUrl) || primaryRecord.ActeNaissanceUrl || "";
+            const carteIdentiteParentUrl = findVal(g => g.CarteIdentiteParentUrl) || primaryRecord.CarteIdentiteParentUrl || "";
+            const fiche9eUrl = findVal(g => g.Info2) || primaryRecord.Info2 || "";
+            const carnetVaccinationUrl = findVal(g => g.Info3) || primaryRecord.Info3 || "";
 
             // Saison d'affichage réelle du joueur : Inscription récente -> Saison enregistrée -> Saison de création -> Saison actuelle
-            let currentDisplaySeason = latestSeasonStr || primaryRecord.Saison || entrySeason || getCurrentSeason();
+            const explicitSaison = findVal(g => g.Saison) ? String(findVal(g => g.Saison)).replace(/^saison\s*/i, "").trim() : "";
+            let currentDisplaySeason = latestSeasonStr || explicitSaison || primaryRecord.Saison || entrySeason || getCurrentSeason();
             if (typeof currentDisplaySeason === 'string') {
               currentDisplaySeason = currentDisplaySeason.replace(/^saison\s*/i, "").trim();
             }
 
             // Détermination du statut réel du joueur
-            const savedPlayerStatus = String(primaryRecord.StatutJoueur || "").trim().toLowerCase();
+            const savedPlayerStatus = String(findVal(g => g.StatutJoueur) || primaryRecord.StatutJoueur || "").trim().toLowerCase();
             let playerStatus: PlayerStatus = "inactif";
 
             const isAlumni = group.some(g => g.EstAlumni === true || g.EstAlumni === 1 || String(g.EstAlumni).toLowerCase() === "true" || String(g.StatutJoueur).toLowerCase() === "alumni");
@@ -462,7 +486,12 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
             const isBlesse = group.some(g => String(g.StatutJoueur).toLowerCase().includes("bless"));
             const isSuspendu = group.some(g => String(g.StatutJoueur).toLowerCase().includes("suspend"));
 
-            const explicitSaison = primaryRecord.Saison ? String(primaryRecord.Saison).replace(/^saison\s*/i, "").trim() : "";
+            const hasExplicitActif = group.some(g => {
+              const s = String(g.StatutJoueur || "").trim().toLowerCase();
+              return s === "actif" || s === "normal";
+            });
+            const hasExplicitInactif = group.some(g => String(g.StatutJoueur || "").trim().toLowerCase() === "inactif");
+
             let isCreatedIn2026 = false;
             if (primaryRecord.DtCreation) {
               const dt = new Date(primaryRecord.DtCreation);
@@ -479,15 +508,15 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
               playerStatus = "blesse";
             } else if (isSuspendu) {
               playerStatus = "suspendu";
-            } else if (isExplicitInactive || savedPlayerStatus === "inactif") {
+            } else if (hasExplicitInactif || isExplicitInactive || savedPlayerStatus === "inactif") {
               playerStatus = "inactif";
-            } else if (savedPlayerStatus === "actif" || savedPlayerStatus === "normal" || explicitSaison === getCurrentSeason() || isCreatedIn2026 || studentInscriptions.length > 0) {
+            } else if (hasExplicitActif || savedPlayerStatus === "actif" || savedPlayerStatus === "normal" || explicitSaison === getCurrentSeason() || isCreatedIn2026 || studentInscriptions.length > 0) {
               playerStatus = "actif";
             } else {
               playerStatus = "inactif";
             }
 
-            let finalStatutJoueur = (primaryRecord.StatutJoueur && !["inactif", "actif", "normal", "aucun", "standard"].includes(savedPlayerStatus)) ? primaryRecord.StatutJoueur : undefined;
+            let finalStatutJoueur = (savedPlayerStatus && !["inactif", "actif", "normal", "aucun", "standard"].includes(savedPlayerStatus)) ? (findVal(g => g.StatutJoueur) || primaryRecord.StatutJoueur) : undefined;
             
             // Override explicite provenant de la table player_status (priorité absolue admin)
             for (const id of allGroupIds) {
@@ -501,6 +530,7 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
                   finalStatutJoueur = undefined;
                 } else {
                   finalStatutJoueur = st;
+                  playerStatus = "actif";
                 }
               }
             }
@@ -516,11 +546,11 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
               }
             }
 
-            // Contact d'urgence (recherche robuste sur toutes les colonnes et entrées du groupe)
+            // Contact d'urgence (recherche robuste sur toutes les colonnes et entrées du groupe par ordre récent)
             const findInGroup = (keys: string[]) => {
-              for (const g of group) {
+              for (const g of sortedByRecent) {
                 for (const k of keys) {
-                  if (g[k] !== undefined && g[k] !== null && String(g[k]).trim() !== "") {
+                  if (g[k] !== undefined && g[k] !== null && String(g[k]).trim() !== "" && String(g[k]).trim() !== "Choisir") {
                     return String(g[k]).trim();
                   }
                 }
@@ -542,9 +572,10 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
 
             fetchedPlayers.push({
               id: primaryId,
+              playerIds: allGroupIds,
               matricule: matricule,
-              nom: primaryRecord.Nom || "",
-              prenom: primaryRecord.Prenom || "",
+              nom: findVal(g => g.Nom) || primaryRecord.Nom || "",
+              prenom: findVal(g => g.Prenom) || primaryRecord.Prenom || "",
               photoUrl,
               photoIdentiteUrl,
               acteNaissanceUrl,
@@ -597,52 +628,52 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
               cotisationMontant: totalPaid,
               cotisationStatut: totalPaid > 0 ? "paid" : "pending",
               dernierPaiement: dernierPaiementDate,
-              saison: playerStatus === "actif" ? getCurrentSeason() : currentDisplaySeason,
-              entrySeason: entrySeason || primaryRecord.Saison || getCurrentSeason(),
+              saison: (explicitSaison && explicitSaison.length > 3) ? explicitSaison : (playerStatus === "actif" ? getCurrentSeason() : currentDisplaySeason),
+              entrySeason: entrySeason || explicitSaison || primaryRecord.Saison || getCurrentSeason(),
               parentNomPrenom,
               parentTelephone,
               parentEmail,
               parentAdresse,
-              parentLien: "",
+              parentLien: parentLien || "",
               urgenceNomPrenom,
               urgenceLien,
               urgenceTelephone,
               urgenceEmail,
               urgenceAdresse,
-              tailleHaut: group.find(g => g.TailleHaut || g.TailleMaillot)?.TailleHaut || group.find(g => g.TailleMaillot)?.TailleMaillot || primaryRecord.TailleHaut || primaryRecord.TailleMaillot || "Choisir",
-              tailleShort: group.find(g => g.TailleShort)?.TailleShort || primaryRecord.TailleShort || "Choisir",
-              numerosPreferes: group.find(g => g.NumerosPreferes)?.NumerosPreferes || primaryRecord.NumerosPreferes || "",
-              ecole: group.find(g => g.Ecole)?.Ecole || primaryRecord.Ecole || "",
-              experienceSoccer: group.find(g => g.ExperienceFoot || g.Experience)?.ExperienceFoot || group.find(g => g.Experience)?.Experience || primaryRecord.ExperienceFoot || primaryRecord.Experience || "",
-              planPaiement: group.find(g => g.PlanPaiement || g.PaymentPlan)?.PlanPaiement || group.find(g => g.PaymentPlan)?.PaymentPlan || primaryRecord.PlanPaiement || primaryRecord.PaymentPlan || "",
-              modePaiementChoisi: group.find(g => g.MethodePaiement)?.MethodePaiement || primaryRecord.MethodePaiement || "",
-              programme: group.find(g => g.Programme)?.Programme || primaryRecord.Programme || (
-                (group.find(g => g.Categorie || g.categorie)?.Categorie || primaryRecord.Categorie || "").toLowerCase().includes("ti toro")
+              tailleHaut: findVal(g => g.TailleHaut || g.TailleMaillot) || primaryRecord.TailleHaut || primaryRecord.TailleMaillot || "Choisir",
+              tailleShort: findVal(g => g.TailleShort) || primaryRecord.TailleShort || "Choisir",
+              numerosPreferes: findVal(g => g.NumerosPreferes) || primaryRecord.NumerosPreferes || "",
+              ecole: findVal(g => g.Ecole) || primaryRecord.Ecole || "",
+              experienceSoccer: findVal(g => g.ExperienceFoot || g.Experience) || primaryRecord.ExperienceFoot || primaryRecord.Experience || "",
+              planPaiement: findVal(g => g.PlanPaiement || g.PaymentPlan) || primaryRecord.PlanPaiement || primaryRecord.PaymentPlan || "",
+              modePaiementChoisi: findVal(g => g.MethodePaiement) || primaryRecord.MethodePaiement || "",
+              programme: findVal(g => g.Programme) || primaryRecord.Programme || (
+                (findVal(g => g.Categorie || g.categorie) || primaryRecord.Categorie || "").toLowerCase().includes("ti toro")
                   ? "Ti Toro"
                   : "FC Toro"
               ),
               commentIdentifie: (() => {
-                const info1 = group.find(g => g.Info1)?.Info1 || "";
+                const info1 = findVal(g => g.Info1) || "";
                 const match = String(info1).match(/IDENTIFIE:([^|]+)/);
                 return match ? match[1].trim() : "";
               })(),
               piedDominant: (() => {
-                const info1 = group.find(g => g.Info1)?.Info1 || "";
+                const info1 = findVal(g => g.Info1) || "";
                 const match = String(info1).match(/PIED:([^|]+)/);
                 return match ? match[1].trim() : "";
               })(),
               clubActuel: (() => {
-                const info1 = group.find(g => g.Info1)?.Info1 || "";
+                const info1 = findVal(g => g.Info1) || "";
                 const match = String(info1).match(/CLUB:([^|]+)/);
                 return match ? match[1].trim() : "";
               })(),
               postePrincipal: (() => {
-                const info1 = group.find(g => g.Info1)?.Info1 || "";
+                const info1 = findVal(g => g.Info1) || "";
                 const match = String(info1).match(/POSTE_P:([^|]+)/);
                 return match ? match[1].trim() : "";
               })(),
               posteSecondaire: (() => {
-                const info1 = group.find(g => g.Info1)?.Info1 || "";
+                const info1 = findVal(g => g.Info1) || "";
                 const match = String(info1).match(/POSTE_S:([^|]+)/);
                 return match ? match[1].trim() : "";
               })(),
@@ -680,6 +711,8 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
 
           setPlayers(fetchedPlayers);
           setParents(groupParentsByFamily(fetchedParents));
+          safeSetItem(STORAGE_KEYS.players, fetchedPlayers);
+          safeSetItem(STORAGE_KEYS.parents, groupParentsByFamily(fetchedParents));
 
           // Charger les paiements depuis tblPaiements dans l'état payments
           if (paiementsData && paiementsData.length > 0) {

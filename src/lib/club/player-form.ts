@@ -58,6 +58,8 @@ export const normalizePlayerFormValues = (
   saison: String(values.saison || "").replace(/saison\s+/i, "").trim() || getCurrentSeason(),
   statutJoueur: values.statutJoueur || "",
   sourceDetection: values.sourceDetection || false,
+  programmesAssignesIds: values.programmesAssignesIds,
+  playerIds: (values as any).playerIds,
 });
 
 export const toPlayerFormValues = (player: Player): PlayerFormValues => ({
@@ -113,6 +115,7 @@ export const toPlayerFormValues = (player: Player): PlayerFormValues => ({
     saison: player.saison,
     statutJoueur: player.statutJoueur || "",
     sourceDetection: (player as any).sourceDetection || false,
+    playerIds: player.playerIds || (player.id ? [player.id] : []),
   }),
 });
 

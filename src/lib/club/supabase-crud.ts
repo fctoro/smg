@@ -35,16 +35,46 @@ const isMissingPrelevementColumnError = (error: any) => {
 export const updatePlayerInSupabase = async (playerId: string, data: Partial<Player & { photoIdentiteUrl?: string; acteNaissanceUrl?: string; carteIdentiteParentUrl?: string }>) => {
   const updatePayload: any = {};
   
-  const targetIds = (data as any).playerIds && Array.isArray((data as any).playerIds) && (data as any).playerIds.length > 0
+  let targetIds = (data as any).playerIds && Array.isArray((data as any).playerIds) && (data as any).playerIds.length > 0
     ? (data as any).playerIds
     : [resolveEtudiantId(playerId)];
+
+  // Si un seul ID est présent, rechercher d'éventuels doublons d'anciens joueurs pour tout synchroniser
+  if (targetIds.length <= 1) {
+    try {
+      const primaryId = Number(targetIds[0]);
+      if (!isNaN(primaryId) && primaryId > 0) {
+        const { data: currentStudent } = await supabase
+          .from("tblEtudiants")
+          .select("Nom, Prenom")
+          .eq("EtudiantID", primaryId)
+          .maybeSingle();
+
+        if (currentStudent?.Nom && currentStudent?.Prenom) {
+          const { data: duplicates } = await supabase
+            .from("tblEtudiants")
+            .select("EtudiantID")
+            .ilike("Nom", currentStudent.Nom.trim())
+            .ilike("Prenom", currentStudent.Prenom.trim());
+
+          if (duplicates && duplicates.length > 0) {
+            targetIds = Array.from(new Set([...targetIds, ...duplicates.map((d: any) => d.EtudiantID)]));
+          }
+        }
+      }
+    } catch (e) {
+      console.warn("Erreur recherche doublons pour mise à jour:", e);
+    }
+  }
 
   if (data.nom !== undefined) updatePayload.Nom = data.nom;
   if (data.prenom !== undefined) updatePayload.Prenom = data.prenom;
   if (data.sexe !== undefined) updatePayload.Sexe = data.sexe === "Féminin" ? "F" : "M";
   if (data.categorie !== undefined) updatePayload.Categorie = data.categorie;
-  // Sauvegarder le statut dans la table séparée player_status
-  const statusToUpdate = data.statutJoueur !== undefined ? data.statutJoueur : data.statut;
+
+  // Sauvegarder le statut dans player_status et tblEtudiants
+  const hasSpecialStatus = Boolean(data.statutJoueur && data.statutJoueur !== "Normal" && data.statutJoueur.trim() !== "");
+  const statusToUpdate = hasSpecialStatus ? data.statutJoueur! : (data.statut || "actif");
   if (statusToUpdate !== undefined) {
     try {
       const { upsertPlayerStatusAdmin } = await import("@/app/actions/club");
@@ -59,22 +89,30 @@ export const updatePlayerInSupabase = async (playerId: string, data: Partial<Pla
   if (data.dateNaissance !== undefined) updatePayload.DateNaissance = data.dateNaissance;
   if (data.photoUrl !== undefined && data.photoUrl !== "/images/user/silhouette.svg") updatePayload.PhotoIdentiteUrl = data.photoUrl;
   if (data.saison !== undefined) updatePayload.Saison = data.saison;
-  if (data.statutJoueur !== undefined) updatePayload.StatutJoueur = data.statutJoueur;
+  updatePayload.StatutJoueur = statusToUpdate;
 
   if (data.urgenceNomPrenom !== undefined) updatePayload.UrgenceNomPrenom = data.urgenceNomPrenom;
   if (data.urgenceLien !== undefined) updatePayload.UrgenceLien = data.urgenceLien;
   if (data.urgenceTelephone !== undefined) updatePayload.UrgenceTelephone = data.urgenceTelephone;
   if (data.urgenceEmail !== undefined) updatePayload.UrgenceEmail = data.urgenceEmail;
   if (data.urgenceAdresse !== undefined) updatePayload.UrgenceAdresse = data.urgenceAdresse;
-  if (data.tailleHaut !== undefined) updatePayload.TailleHaut = data.tailleHaut;
+  if (data.tailleHaut !== undefined) {
+    updatePayload.TailleHaut = data.tailleHaut;
+    updatePayload.TailleMaillot = data.tailleHaut;
+  }
   if (data.tailleShort !== undefined) updatePayload.TailleShort = data.tailleShort;
   if (data.poste !== undefined) updatePayload.Poste = data.poste;
-  if ((data as any).experienceSoccer !== undefined) updatePayload.Experience = (data as any).experienceSoccer;
-  if (data.planPaiement !== undefined) updatePayload.PlanPaiement = data.planPaiement;
+  if ((data as any).experienceSoccer !== undefined) {
+    updatePayload.Experience = (data as any).experienceSoccer;
+    updatePayload.ExperienceFoot = (data as any).experienceSoccer;
+  }
+  if (data.planPaiement !== undefined) {
+    updatePayload.PlanPaiement = data.planPaiement;
+    updatePayload.PaymentPlan = data.planPaiement;
+  }
   if (data.modePaiementChoisi !== undefined) updatePayload.MethodePaiement = data.modePaiementChoisi;
   if ((data as any).numerosPreferes !== undefined) updatePayload.NumerosPreferes = (data as any).numerosPreferes;
   if ((data as any).ecole !== undefined) updatePayload.Ecole = (data as any).ecole;
-  if ((data as any).programme !== undefined) updatePayload.Programme = (data as any).programme;
 
   if ((data as any).commentIdentifie !== undefined || (data as any).piedDominant !== undefined || (data as any).postePrincipal !== undefined || (data as any).posteSecondaire !== undefined || (data as any).clubActuel !== undefined) {
     const existingInfo1 = (data as any).sourceDetection ? "SOURCE:DETECTION" : "";
@@ -194,7 +232,16 @@ export const updatePlayerInSupabase = async (playerId: string, data: Partial<Pla
     }
   }
 
-  // Ensure NO base64 Data URLs remain in updatePayload before sending to server action
+  // Strip non-table properties and ensure NO base64 Data URLs remain in updatePayload before sending to server action
+  delete updatePayload.Programme;
+  delete updatePayload.photoUrl;
+  delete updatePayload.photoIdentiteUrl;
+  delete updatePayload.carteIdentiteParentUrl;
+  delete updatePayload.acteNaissanceUrl;
+  delete updatePayload.fiche9eUrl;
+  delete updatePayload.carnetVaccinationUrl;
+  delete updatePayload.playerIds;
+
   Object.keys(updatePayload).forEach((key) => {
     if (typeof updatePayload[key] === "string" && updatePayload[key].startsWith("data:")) {
       delete updatePayload[key];
@@ -202,21 +249,7 @@ export const updatePlayerInSupabase = async (playerId: string, data: Partial<Pla
   });
 
   const { updatePlayerAdmin } = await import("@/app/actions/club");
-  let result = await updatePlayerAdmin(targetIds, updatePayload);
-
-  if (!result.success && (result.error?.includes("PGRST204") || result.error?.toLowerCase().includes("column"))) {
-    delete updatePayload.UrgenceNomPrenom;
-    delete updatePayload.UrgenceLien;
-    delete updatePayload.UrgenceTelephone;
-    delete updatePayload.UrgenceEmail;
-    delete updatePayload.UrgenceAdresse;
-    delete updatePayload.TailleHaut;
-    delete updatePayload.TailleShort;
-    delete updatePayload.Saison;
-    delete updatePayload.PhotoUrl;
-    delete updatePayload.Programme;
-    result = await updatePlayerAdmin(targetIds, updatePayload);
-  }
+  const result = await updatePlayerAdmin(targetIds, updatePayload);
 
   if (!result.success) {
     console.warn("Mise à jour Supabase :", result.error);

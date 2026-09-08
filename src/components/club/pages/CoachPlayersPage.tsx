@@ -14,6 +14,7 @@ import { fetchEffectifsByCoach, deleteEffectif } from "@/lib/club/effectifs";
 import { convertRostersToCSV, downloadCSV } from "@/lib/club/rosterExport";
 import { useConfirm } from "@/hooks/useConfirm";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 
 import { TableSkeleton, CardSkeleton } from "@/components/ui/skeleton/Skeleton";
 import Pagination from "@/components/tables/Pagination";
@@ -23,16 +24,33 @@ import Badge from "@/components/ui/badge/Badge";
 import { colorFromPlayerStatus, playerStatusLabel } from "@/lib/club/status";
 import { generatePlayerMatricule } from "@/lib/club/season";
 
-export default function CoachPlayersPage() {
+interface CoachPlayersPageProps {
+  initialTab?: "liste" | "effectifs";
+}
+
+export default function CoachPlayersPage({ initialTab }: CoachPlayersPageProps = {}) {
   const { players: allPlayers, setPlayers, hydrated } = useClubData();
   const { userCategories, userEmail } = useUserRole();
+  const searchParams = useSearchParams();
+  const queryTab = searchParams?.get("tab") || searchParams?.get("subtab");
+  const defaultTab = initialTab || (queryTab === "effectifs" ? "effectifs" : "liste");
+
   const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
   const [selectedViewPlayer, setSelectedViewPlayer] = useState<Player | null>(null);
   const [selectedEvalPlayer, setSelectedEvalPlayer] = useState<Player | null>(null);
   
   // Tabs
-  const [activeTab, setActiveTab] = useState<"liste" | "effectifs">("liste");
+  const [activeTab, setActiveTab] = useState<"liste" | "effectifs">(defaultTab);
   const [selectedCategory, setSelectedCategory] = useState<string>("");
+
+  useEffect(() => {
+    const qTab = searchParams?.get("tab") || searchParams?.get("subtab");
+    if (qTab === "effectifs" || initialTab === "effectifs") {
+      setActiveTab("effectifs");
+    } else if (qTab === "effectif" || qTab === "liste") {
+      setActiveTab("liste");
+    }
+  }, [searchParams, initialTab]);
 
   // Rosters State
   const [rosters, setRosters] = useState<Effectif[]>([]);

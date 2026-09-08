@@ -2,6 +2,7 @@
 
 import React from "react";
 import { AquaSpaceMember } from "@/types/club";
+import { WavesIcon } from "@/components/club/icons/AquaSpaceIcons";
 
 interface AquaSpaceRegistrationPrintProps {
   member: AquaSpaceMember | null;
@@ -98,8 +99,9 @@ export const AquaSpaceRegistrationPrint: React.FC<AquaSpaceRegistrationPrintProp
                 <tr>
                   <td className="bg-gray-50 p-2 font-semibold text-gray-600">Discipline choisie :</td>
                   <td className="p-2">
-                    <span className="inline-block px-2.5 py-0.5 rounded font-bold text-xs bg-cyan-100 text-cyan-900 border border-cyan-300">
-                      🏊 {member.niveau}
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded font-bold text-xs bg-cyan-100 text-cyan-900 border border-cyan-300">
+                      <WavesIcon className="w-3.5 h-3.5" />
+                      <span>{member.niveau}</span>
                     </span>
                   </td>
                 </tr>

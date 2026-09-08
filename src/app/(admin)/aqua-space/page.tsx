@@ -22,6 +22,18 @@ import { AquaSpaceMemberDetailsModal } from "@/components/club/modals/AquaSpaceM
 import { AquaSpaceRegistrationPrint } from "@/components/club/print/AquaSpaceRegistrationPrint";
 import { ToastNotification } from "@/components/ui/toast/ToastNotification";
 import { useConfirm } from "@/hooks/useConfirm";
+import {
+  WavesIcon,
+  UserPlusIcon,
+  CreditCardIcon,
+  UsersIcon,
+  ClubShieldIcon,
+  WalletIcon,
+  DollarCircleIcon,
+  PhoneIcon,
+  MedicalAlertIcon,
+  MedicalCheckIcon,
+} from "@/components/club/icons/AquaSpaceIcons";
 
 export default function AquaSpacePage() {
   const { confirm, ConfirmComponent } = useConfirm();
@@ -352,7 +364,8 @@ export default function AquaSpacePage() {
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="space-y-2">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/20 text-xs font-black tracking-wide uppercase backdrop-blur-md">
-              <span>🏊 Section Natation FC TORO</span>
+              <WavesIcon className="w-3.5 h-3.5 text-cyan-200" />
+              <span>Section Natation FC TORO</span>
             </div>
             <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white">
               Aqua Space
@@ -373,9 +386,7 @@ export default function AquaSpacePage() {
               }}
               className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white text-cyan-900 font-bold text-sm shadow-md hover:bg-cyan-50 transition transform active:scale-95"
             >
-              <svg className="w-5 h-5 text-cyan-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-              </svg>
+              <UserPlusIcon className="w-4 h-4 text-cyan-700" />
               <span>Nouveau Nageur</span>
             </button>
 
@@ -384,9 +395,7 @@ export default function AquaSpacePage() {
               onClick={() => handleOpenAddPayment()}
               className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-sm shadow-md transition transform active:scale-95"
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
-              </svg>
+              <CreditCardIcon className="w-4 h-4 text-white" />
               <span>Encaisser Paiement</span>
             </button>
           </div>
@@ -405,9 +414,7 @@ export default function AquaSpacePage() {
               </h3>
             </div>
             <div className="w-12 h-12 rounded-xl bg-cyan-100 dark:bg-cyan-900/30 flex items-center justify-center text-cyan-600 dark:text-cyan-300">
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-              </svg>
+              <UsersIcon className="w-6 h-6" />
             </div>
           </div>
           <div className="mt-3 flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
@@ -427,7 +434,7 @@ export default function AquaSpacePage() {
               </h3>
             </div>
             <div className="w-12 h-12 rounded-xl bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center text-amber-600 dark:text-amber-400">
-              <span className="text-xl">⚽</span>
+              <ClubShieldIcon className="w-6 h-6" />
             </div>
           </div>
           <div className="mt-3 text-xs text-gray-500 dark:text-gray-400">
@@ -444,8 +451,8 @@ export default function AquaSpacePage() {
                 {stats.totalHTG.toLocaleString()} <span className="text-sm font-bold text-gray-500">G</span>
               </h3>
             </div>
-            <div className="w-12 h-12 rounded-xl bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center text-emerald-600 dark:text-emerald-400 font-black">
-              G
+            <div className="w-12 h-12 rounded-xl bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
+              <WalletIcon className="w-6 h-6" />
             </div>
           </div>
           <div className="mt-3 text-xs text-gray-500 dark:text-gray-400">
@@ -462,8 +469,8 @@ export default function AquaSpacePage() {
                 {stats.totalUSD.toLocaleString()} <span className="text-sm font-bold text-gray-500">$</span>
               </h3>
             </div>
-            <div className="w-12 h-12 rounded-xl bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-blue-600 dark:text-blue-400 font-black">
-              $
+            <div className="w-12 h-12 rounded-xl bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-blue-600 dark:text-blue-400">
+              <DollarCircleIcon className="w-6 h-6" />
             </div>
           </div>
           <div className="mt-3 flex items-center gap-2 text-xs">
@@ -486,7 +493,8 @@ export default function AquaSpacePage() {
                 : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700"
             }`}
           >
-            <span>🏊 Nageurs & Inscriptions</span>
+            <WavesIcon className="w-4 h-4" />
+            <span>Nageurs & Inscriptions</span>
             <span className="px-2 py-0.5 rounded-full text-xs bg-cyan-100 dark:bg-cyan-900/40 text-cyan-700 dark:text-cyan-300 font-extrabold">
               {members.length}
             </span>
@@ -501,7 +509,8 @@ export default function AquaSpacePage() {
                 : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700"
             }`}
           >
-            <span>💳 Paiements & Cotisations</span>
+            <CreditCardIcon className="w-4 h-4" />
+            <span>Paiements & Cotisations</span>
             <span className="px-2 py-0.5 rounded-full text-xs bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 font-extrabold">
               {payments.length}
             </span>
@@ -606,8 +615,8 @@ export default function AquaSpacePage() {
               </div>
             ) : filteredMembers.length === 0 ? (
               <div className="p-12 text-center text-sm text-gray-500">
-                <div className="w-16 h-16 rounded-full bg-cyan-50 dark:bg-cyan-950/40 text-cyan-600 flex items-center justify-center mx-auto mb-3 text-2xl">
-                  🏊
+                <div className="w-16 h-16 rounded-2xl bg-cyan-50 dark:bg-cyan-950/40 text-cyan-600 dark:text-cyan-400 flex items-center justify-center mx-auto mb-3 shadow-sm border border-cyan-100 dark:border-cyan-900/50">
+                  <WavesIcon className="w-8 h-8" />
                 </div>
                 <h4 className="font-bold text-gray-800 dark:text-white text-base">Aucun membre trouvé</h4>
                 <p className="text-xs text-gray-400 mt-1 max-w-sm mx-auto">
@@ -622,9 +631,10 @@ export default function AquaSpacePage() {
                       setEditingMember(null);
                       setIsMemberModalOpen(true);
                     }}
-                    className="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-cyan-600 text-white text-xs font-bold shadow-md hover:bg-cyan-700"
+                    className="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-cyan-600 text-white text-xs font-bold shadow-md hover:bg-cyan-700 transition active:scale-95"
                   >
-                    + Inscrire un nageur
+                    <UserPlusIcon className="w-4 h-4" />
+                    <span>Inscrire un nageur</span>
                   </button>
                 )}
               </div>
@@ -684,8 +694,9 @@ export default function AquaSpacePage() {
                               {member.matricule}
                             </span>
                             {member.etudiantId ? (
-                              <span className="mt-1 block text-[10px] font-bold text-amber-700 dark:text-amber-400">
-                                ⭐ Joueur Club FC Toro
+                              <span className="mt-1 inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 dark:text-amber-400">
+                                <ClubShieldIcon className="w-3 h-3 text-amber-600 dark:text-amber-400" />
+                                <span>Joueur Club FC Toro</span>
                               </span>
                             ) : (
                               <span className="mt-1 block text-[10px] text-gray-400">
@@ -697,7 +708,8 @@ export default function AquaSpacePage() {
                           {/* Niveau */}
                           <td className="px-4 py-3.5">
                             <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-sky-50 dark:bg-sky-900/30 text-sky-700 dark:text-sky-300 border border-sky-200 dark:border-sky-800">
-                              🏊 {member.niveau}
+                              <WavesIcon className="w-3 h-3 text-sky-600 dark:text-sky-400" />
+                              <span>{member.niveau}</span>
                             </span>
                           </td>
 
@@ -728,8 +740,9 @@ export default function AquaSpacePage() {
                             <div className="font-semibold text-gray-800 dark:text-gray-200">
                               {member.parentPrenom} {member.parentNom}
                             </div>
-                            <div className="text-[11px] text-gray-500 dark:text-gray-400">
-                              📞 {member.parentTelephone || "Non renseigné"}
+                            <div className="text-[11px] text-gray-500 dark:text-gray-400 flex items-center gap-1.5">
+                              <PhoneIcon className="w-3 h-3 text-gray-400 shrink-0" />
+                              <span>{member.parentTelephone || "Non renseigné"}</span>
                             </div>
                           </td>
 
@@ -738,14 +751,16 @@ export default function AquaSpacePage() {
                             {hasMedicalAlert ? (
                               <span
                                 onClick={() => setDetailsMember(member)}
-                                className="cursor-pointer inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 text-[11px] font-bold border border-red-200 dark:border-red-800"
+                                className="cursor-pointer inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 text-[11px] font-bold border border-red-200 dark:border-red-800 hover:bg-red-100 transition"
                                 title="Voir les détails médicaux"
                               >
-                                ⚠️ Signalement
+                                <MedicalAlertIcon className="w-3.5 h-3.5 text-red-600 dark:text-red-400 shrink-0" />
+                                <span>Signalement</span>
                               </span>
                             ) : (
-                              <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium">
-                                ✅ RAS
+                              <span className="inline-flex items-center gap-1 text-[11px] text-emerald-600 dark:text-emerald-400 font-medium">
+                                <MedicalCheckIcon className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                                <span>RAS</span>
                               </span>
                             )}
                           </td>
@@ -760,7 +775,8 @@ export default function AquaSpacePage() {
                                 className="px-2.5 py-1 rounded-md bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 font-bold text-[11px] hover:bg-emerald-100 dark:hover:bg-emerald-900/50 transition flex items-center gap-1"
                                 title="Encaisser un paiement pour ce nageur"
                               >
-                                💳 Encaisser
+                                <CreditCardIcon className="w-3 h-3 shrink-0" />
+                                <span>Encaisser</span>
                               </button>
 
                               {/* View Details */}
@@ -880,8 +896,8 @@ export default function AquaSpacePage() {
           <div className="rounded-2xl border border-gray-200 bg-white shadow-xs dark:border-gray-800 dark:bg-gray-800 overflow-hidden">
             {filteredPayments.length === 0 ? (
               <div className="p-12 text-center text-sm text-gray-500">
-                <div className="w-16 h-16 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 flex items-center justify-center mx-auto mb-3 text-2xl">
-                  💳
+                <div className="w-16 h-16 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mx-auto mb-3 shadow-sm border border-emerald-100 dark:border-emerald-900/50">
+                  <CreditCardIcon className="w-8 h-8" />
                 </div>
                 <h4 className="font-bold text-gray-800 dark:text-white text-base">Aucun paiement trouvé</h4>
                 <p className="text-xs text-gray-400 mt-1 max-w-sm mx-auto">
@@ -890,9 +906,10 @@ export default function AquaSpacePage() {
                 <button
                   type="button"
                   onClick={() => handleOpenAddPayment()}
-                  className="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 text-white text-xs font-bold shadow-md hover:bg-emerald-700"
+                  className="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 text-white text-xs font-bold shadow-md hover:bg-emerald-700 transition active:scale-95"
                 >
-                  + Enregistrer un paiement
+                  <CreditCardIcon className="w-4 h-4" />
+                  <span>Enregistrer un paiement</span>
                 </button>
               </div>
             ) : (

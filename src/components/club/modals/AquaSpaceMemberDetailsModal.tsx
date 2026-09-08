@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import { Modal } from "@/components/ui/modal";
 import { AquaSpaceMember, AquaSpacePayment } from "@/types/club";
+import { WavesIcon, ClubShieldIcon } from "@/components/club/icons/AquaSpaceIcons";
 
 interface AquaSpaceMemberDetailsModalProps {
   isOpen: boolean;
@@ -84,8 +85,9 @@ export const AquaSpaceMemberDetailsModal: React.FC<AquaSpaceMemberDetailsModalPr
                     {member.prenom} {member.nom.toUpperCase()}
                   </h2>
                   {member.etudiantId && (
-                    <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-400 text-amber-950 shadow-xs">
-                      ⭐ Joueur Club FC Toro
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-400 text-amber-950 shadow-xs">
+                      <ClubShieldIcon className="w-3.5 h-3.5" />
+                      <span>Joueur Club FC Toro</span>
                     </span>
                   )}
                 </div>
@@ -95,8 +97,9 @@ export const AquaSpaceMemberDetailsModal: React.FC<AquaSpaceMemberDetailsModalPr
                     Matricule: <strong>{member.matricule}</strong>
                   </span>
                   <span>•</span>
-                  <span className="px-2.5 py-1 rounded-md bg-cyan-500/40 font-semibold text-white">
-                    🏊 {member.niveau}
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-cyan-500/40 font-semibold text-white">
+                    <WavesIcon className="w-3.5 h-3.5 text-cyan-200" />
+                    <span>{member.niveau}</span>
                   </span>
                   {age !== null && (
                     <>
@@ -273,8 +276,9 @@ export const AquaSpaceMemberDetailsModal: React.FC<AquaSpaceMemberDetailsModalPr
                   </div>
                   <div className="col-span-2">
                     <span className="text-gray-500 dark:text-gray-400 block">Discipline / Niveau:</span>
-                    <span className="inline-block mt-1 px-3 py-1 rounded-md font-bold text-xs bg-cyan-50 dark:bg-cyan-900/30 text-cyan-700 dark:text-cyan-300 border border-cyan-200 dark:border-cyan-800">
-                      🏊 {member.niveau}
+                    <span className="inline-flex items-center gap-1.5 mt-1 px-3 py-1 rounded-md font-bold text-xs bg-cyan-50 dark:bg-cyan-900/30 text-cyan-700 dark:text-cyan-300 border border-cyan-200 dark:border-cyan-800">
+                      <WavesIcon className="w-3.5 h-3.5 text-cyan-600 dark:text-cyan-400" />
+                      <span>{member.niveau}</span>
                     </span>
                   </div>
                   <div>
@@ -286,7 +290,7 @@ export const AquaSpaceMemberDetailsModal: React.FC<AquaSpaceMemberDetailsModalPr
                   <div>
                     <span className="text-gray-500 dark:text-gray-400 block">Photos autorisées:</span>
                     <span className={`font-semibold ${member.autorisationPhotos ? "text-emerald-600" : "text-amber-600"}`}>
-                      {member.autorisationPhotos ? "✅ Oui" : "❌ Non"}
+                      {member.autorisationPhotos ? "Oui" : "Non"}
                     </span>
                   </div>
                 </div>

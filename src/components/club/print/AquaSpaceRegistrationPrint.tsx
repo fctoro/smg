@@ -98,8 +98,8 @@ export const AquaSpaceRegistrationPrint: React.FC<AquaSpaceRegistrationPrintProp
                 <tr>
                   <td className="bg-gray-50 p-2 font-semibold text-gray-600">Discipline choisie :</td>
                   <td className="p-2">
-                    <span className="inline-block px-2.5 py-0.5 rounded font-bold text-xs bg-cyan-100 text-cyan-900 border border-cyan-300">
-                      🏊 {member.niveau}
+                    <span className="inline-block px-2.5 py-0.5 rounded font-bold text-xs bg-slate-100 text-slate-900 border border-slate-300">
+                      {member.niveau}
                     </span>
                   </td>
                 </tr>

@@ -163,12 +163,6 @@ const baseOthersItems: NavItem[] = [
     path: "/parametres/acces",
     sections: ["Paramètres"],
   },
-  {
-    icon: <DocsIcon />,
-    name: "Sauvegarde Système",
-    path: "/parametres/sauvegarde",
-    sections: ["Paramètres"],
-  },
 ];
 
 const AppSidebar: React.FC = () => {
@@ -235,7 +229,7 @@ const AppSidebar: React.FC = () => {
     if (!userSections.includes("Paramètres")) {
       return [];
     }
-    return baseOthersItems.filter((item) => item.path !== "/parametres/acces" && item.path !== "/parametres/sauvegarde");
+    return baseOthersItems.filter((item) => item.path !== "/parametres/acces");
   }, [isSuperAdmin, userSections]);
 
   const displayMainItems = mounted ? filteredMainItems : adminNavItems;

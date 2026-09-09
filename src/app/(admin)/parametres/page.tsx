@@ -57,22 +57,16 @@ export default function SettingsPage() {
                 🛡️ Espace Super Administrateur
               </span>
               <h3 className="text-base font-bold text-gray-900 dark:text-white mt-0.5">
-                Sauvegarde et Gestion de la Base de Données
+                Gestion des Accès et Utilisateurs
               </h3>
               <p className="text-xs text-gray-600 dark:text-gray-400 mt-0.5">
-                Téléchargez une sauvegarde intégrale du système sur votre Bureau ou gérez les comptes d'accès.
+                Gérez les permissions, les rôles et les comptes d'accès au système.
               </p>
             </div>
             <div className="flex flex-wrap gap-2.5">
               <Link
-                href="/parametres/sauvegarde"
-                className="inline-flex items-center gap-2 rounded-xl bg-brand-600 px-4 py-2.5 text-xs font-bold text-white shadow-sm hover:bg-brand-700 transition-colors"
-              >
-                💾 Sauvegarde Système
-              </Link>
-              <Link
                 href="/parametres/acces"
-                className="inline-flex items-center gap-2 rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-white/5 transition-colors"
+                className="inline-flex items-center gap-2 rounded-xl bg-brand-600 px-4 py-2.5 text-xs font-bold text-white shadow-sm hover:bg-brand-700 transition-colors"
               >
                 🔒 Gestion des accès
               </Link>

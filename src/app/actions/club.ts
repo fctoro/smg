@@ -82,6 +82,27 @@ export async function updatePlayerAdmin(etudiantId: number | string | (number | 
   if (!supabaseAdmin) return { success: false, error: "Service role Supabase indisponible." };
 
   let payload = { ...updatePayload };
+  delete payload.Programme;
+  delete payload.photoUrl;
+  delete payload.photoIdentiteUrl;
+  delete payload.carteIdentiteParentUrl;
+  delete payload.acteNaissanceUrl;
+  delete payload.fiche9eUrl;
+  delete payload.carnetVaccinationUrl;
+  delete payload.playerIds;
+
+  // Prévention des incompatibilités de types PostgreSQL
+  if (typeof payload.PaymentPlan === "string") {
+    const num = payload.PaymentPlan.match(/\d+/)?.[0];
+    payload.PaymentPlan = num ? parseInt(num, 10) : null;
+  }
+  if (typeof payload.DateNaissance === "string" && payload.DateNaissance.trim().length < 8) {
+    payload.DateNaissance = null;
+  }
+  if ("EstAlumni" in payload && typeof payload.EstAlumni === "number") {
+    payload.EstAlumni = payload.EstAlumni === 1;
+  }
+
   const idList = Array.isArray(etudiantId) ? etudiantId : [etudiantId];
   const targetIds: number[] = [];
   const strIds: string[] = [];
@@ -97,57 +118,61 @@ export async function updatePlayerAdmin(etudiantId: number | string | (number | 
     return { success: false, error: "Identifiant étudiant invalide" };
   }
 
+  const runUpdate = async (p: any) => {
+    let q = supabaseAdmin.from("tblEtudiants").update(p);
+    if (targetIds.length > 0) {
+      q = q.in("EtudiantID", targetIds);
+    } else {
+      q = q.in("EtudiantID", strIds);
+    }
+    return await q;
+  };
+
   // Attempt 1: Full payload
-  let query = supabaseAdmin.from("tblEtudiants").update(payload);
-  if (targetIds.length > 0) {
-    query = query.in("EtudiantID", targetIds);
-  } else {
-    query = query.in("EtudiantID", strIds);
-  }
-  let { data, error } = await query;
+  let { data, error } = await runUpdate(payload);
   if (!error) return { success: true, data };
 
-  // Attempt 2: Toggle EstAlumni boolean/number representation
+  // Attempt 2: Toggle EstAlumni representation if present
   if ("EstAlumni" in payload) {
     payload.EstAlumni = typeof payload.EstAlumni === "boolean" 
       ? (payload.EstAlumni ? 1 : 0) 
       : (payload.EstAlumni === 1);
+    const res2 = await runUpdate(payload);
+    if (!res2.error) return { success: true, data: res2.data };
+    error = res2.error;
   }
 
-  let query2 = supabaseAdmin.from("tblEtudiants").update(payload);
-  if (targetIds.length > 0) query2 = query2.in("EtudiantID", targetIds);
-  else query2 = query2.in("EtudiantID", strIds);
-  let res2 = await query2;
-  if (!res2.error) return { success: true, data: res2.data };
-
-  // Attempt 3: Strip non-standard columns
-  const optionalCols = [
-    "StatutJoueur", "photoUrl", "photoIdentiteUrl", "carteIdentiteParentUrl",
-    "acteNaissanceUrl", "fiche9eUrl", "carnetVaccinationUrl", "UrgenceNomPrenom",
-    "UrgenceLien", "UrgenceTelephone", "UrgenceEmail", "UrgenceAdresse",
-    "TailleHaut", "TailleShort", "Poste", "Experience", "PlanPaiement",
-    "MethodePaiement", "NumerosPreferes", "Ecole", "Programme", "Info1", "Info2", "Info3"
-  ];
-  for (const col of optionalCols) {
-    delete payload[col];
+  // Attempt 3: Gestion des erreurs de syntaxe PostgreSQL (22P02, 22007)
+  if (error && (error.code === "22P02" || error.message?.includes("integer") || error.message?.includes("PaymentPlan"))) {
+    delete payload.PaymentPlan;
+    const resType = await runUpdate(payload);
+    if (!resType.error) return { success: true, data: resType.data };
+    error = resType.error;
   }
 
-  let query3 = supabaseAdmin.from("tblEtudiants").update(payload);
-  if (targetIds.length > 0) query3 = query3.in("EtudiantID", targetIds);
-  else query3 = query3.in("EtudiantID", strIds);
-  let res3 = await query3;
-  if (!res3.error) return { success: true, data: res3.data };
+  if (error && (error.code === "22007" || error.message?.includes("date") || error.message?.includes("timestamp"))) {
+    delete payload.DateNaissance;
+    const resDate = await runUpdate(payload);
+    if (!resDate.error) return { success: true, data: resDate.data };
+    error = resDate.error;
+  }
 
-  // Attempt 4: Strip EstAlumni if causing column error
-  delete payload.EstAlumni;
+  // Attempt 4: If a specific column is missing from schema cache, strip only that column and retry
+  let retries = 0;
+  while (error && retries < 5 && (error.code === "PGRST204" || error.message?.includes("Could not find the") || error.message?.includes("column"))) {
+    retries++;
+    const colMatch = error.message?.match(/Could not find the '([^']+)' column/i);
+    if (colMatch && colMatch[1] && colMatch[1] in payload) {
+      delete payload[colMatch[1]];
+      const retryRes = await runUpdate(payload);
+      if (!retryRes.error) return { success: true, data: retryRes.data };
+      error = retryRes.error;
+    } else {
+      break;
+    }
+  }
 
-  let query4 = supabaseAdmin.from("tblEtudiants").update(payload);
-  if (targetIds.length > 0) query4 = query4.in("EtudiantID", targetIds);
-  else query4 = query4.in("EtudiantID", strIds);
-  let res4 = await query4;
-  if (!res4.error) return { success: true, data: res4.data };
-
-  return { success: false, error: res4.error?.message || "Erreur de mise à jour" };
+  return { success: false, error: error?.message || "Erreur de mise à jour" };
 }
 
 export async function upsertPlayerStatusAdmin(etudiantId: number | string | (number | string)[], status: string) {

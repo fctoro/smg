@@ -50,14 +50,16 @@ export default function EditPlayerPage() {
     
     setIsSubmitting(true);
     try {
-      const updatedDocs = await updatePlayerInSupabase(playerId, normalized);
+      const pIds = targetPlayer.playerIds || [playerId];
+      const updatedDocs = await updatePlayerInSupabase(playerId, { ...normalized, playerIds: pIds } as any);
       
-      setPlayers((prevPlayers) =>
-        prevPlayers.map((player) => {
+      setPlayers((prevPlayers) => {
+        const nextPlayers = prevPlayers.map((player) => {
           if (player.id !== playerId) return player;
           const updated = {
             ...player,
             ...normalized,
+            playerIds: pIds,
             ...(updatedDocs?.photoUrl ? { photoUrl: updatedDocs.photoUrl } : {}),
             ...(updatedDocs?.photoIdentiteUrl ? { photoIdentiteUrl: updatedDocs.photoIdentiteUrl } : {}),
             ...(updatedDocs?.acteNaissanceUrl ? { acteNaissanceUrl: updatedDocs.acteNaissanceUrl } : {}),
@@ -75,17 +77,24 @@ export default function EditPlayerPage() {
           if (updated.fiche9eUrl?.startsWith("data:")) delete (updated as any).fiche9eUrl;
           if (updated.carnetVaccinationUrl?.startsWith("data:")) delete (updated as any).carnetVaccinationUrl;
           return updated;
-        }),
-      );
+        });
+
+        if (typeof window !== "undefined") {
+          window.localStorage.setItem("club-data-players-v1", JSON.stringify(nextPlayers));
+        }
+
+        return nextPlayers;
+      });
       
       if (values.programmesAssignesIds) {
         syncPlayerProgrammes(playerId, values.programmesAssignesIds).catch(console.error);
       }
 
       router.push("/joueurs?updated=true");
-    } catch (error) {
-      console.error(error);
-      setToast({ message: "Erreur lors de la modification. Veuillez réessayer.", type: "error" });
+    } catch (error: any) {
+      console.error("Erreur handleSubmit:", error);
+      const errMsg = error?.message || "Erreur lors de la modification. Veuillez réessayer.";
+      setToast({ message: errMsg, type: "error" });
       setIsSubmitting(false);
     }
   };

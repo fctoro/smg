@@ -74,13 +74,37 @@ export function CoachPlayerStatusModal({
       const normalizedStatus = normalizeStatutValue(status) as any;
       const normalizedPoste = normalizePosteValue(poste);
       const pIds = (player as any).playerIds || [player.id];
-      // Update the status and poste fields in the database
-      await updatePlayerInSupabase(player.id, { statut: normalizedStatus, poste: normalizedPoste, playerIds: pIds } as any);
-      onSuccess({ ...player, statut: normalizedStatus, poste: normalizedPoste });
-      onClose();
-    } catch (error) {
+      let updateSuccessful = false;
+      try {
+        await updatePlayerInSupabase(player.id, { statut: normalizedStatus, poste: normalizedPoste, playerIds: pIds } as any);
+        updateSuccessful = true;
+      } catch (err: any) {
+        console.warn("Erreur updatePlayerInSupabase, tentative directe...", err);
+        // Fallback direct update via supabase client
+        try {
+          const { supabase } = await import("@/lib/supabaseClient");
+          if (supabase) {
+            const numIds = pIds.map((id: any) => Number(String(id).replace(/\D/g, ""))).filter((id: number) => !isNaN(id) && id > 0);
+            if (numIds.length > 0) {
+              await supabase.from("tblEtudiants").update({ Poste: normalizedPoste, StatutJoueur: normalizedStatus }).in("EtudiantID", numIds);
+              await supabase.from("player_status").upsert(numIds.map((id: number) => ({ player_id: id, status: normalizedStatus, updated_at: new Date().toISOString() })), { onConflict: "player_id" });
+              updateSuccessful = true;
+            }
+          }
+        } catch (directErr) {
+          console.error("Direct update fallback failed:", directErr);
+        }
+      }
+
+      if (updateSuccessful) {
+        onSuccess({ ...player, statut: normalizedStatus, poste: normalizedPoste });
+        onClose();
+      } else {
+        alert("Erreur lors de la mise à jour du joueur. Veuillez réessayer.");
+      }
+    } catch (error: any) {
       console.error("Error updating player status and poste:", error);
-      alert("Erreur lors de la mise à jour du joueur. Veuillez réessayer.");
+      alert(`Erreur lors de la mise à jour : ${error?.message || "Veuillez réessayer."}`);
     } finally {
       setIsSubmitting(false);
     }

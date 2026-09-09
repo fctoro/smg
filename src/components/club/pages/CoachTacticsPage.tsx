@@ -30,6 +30,21 @@ type FormationSlot = {
   y: number;
 };
 
+const getCategoryTeamSize = (categoryName: string): number => {
+  if (!categoryName || categoryName === "all") return 11;
+  const cat = categoryName.toLowerCase().trim();
+  if (cat.includes("u8") || cat.includes("u-8") || cat.includes("ti toro") || cat.includes("u7") || cat.includes("u9")) {
+    return 5;
+  }
+  if (cat.includes("u10") || cat.includes("u-10") || cat.includes("u11")) {
+    return 8;
+  }
+  if (cat.includes("u12") || cat.includes("u-12")) {
+    return 9;
+  }
+  return 11;
+};
+
 const fallbackFormation = fifaFormations[0];
 
 if (!fallbackFormation) {
@@ -288,6 +303,12 @@ export default function CoachTacticsPage({ planId, effectifId }: { planId?: stri
     slotId: string;
     benchPlayerId: string;
   } | null>(null);
+  
+  // Custom manual positioning state
+  const [customPositions, setCustomPositions] = useState<Record<string, {x: number, y: number}>>({});
+  const [draggingSlotId, setDraggingSlotId] = useState<string | null>(null);
+  const pitchRef = useRef<HTMLDivElement>(null);
+  const dragState = useRef({ id: null as string | null, hasMoved: false, startX: 0, startY: 0 });
 
   // Effectif state
   const [effectif, setEffectif] = useState<Effectif | null>(null);
@@ -422,12 +443,28 @@ export default function CoachTacticsPage({ planId, effectifId }: { planId?: stri
     [players, effectif],
   );
 
+  const availableFormations = useMemo(() => {
+    const targetSize = getCategoryTeamSize(selectedCategory);
+    const filtered = fifaFormations.filter(f => f.size === targetSize);
+    return filtered.length > 0 ? filtered : fifaFormations.filter(f => f.size === 11);
+  }, [selectedCategory]);
+
   const selectedFormation = useMemo(
     () =>
-      fifaFormations.find((formation) => formation.id === formationId) ??
+      availableFormations.find((formation) => formation.id === formationId) ??
+      availableFormations[0] ??
       fallbackFormation,
-    [formationId],
+    [formationId, availableFormations],
   );
+
+  // Auto-switch formation if the selected one is no longer available in this category
+  useEffect(() => {
+    if (availableFormations.length > 0 && !availableFormations.some(f => f.id === formationId)) {
+      setFormationId(availableFormations[0].id);
+      setAssignments({}); // Clear assignments since they don't match the new formation
+      setCustomPositions({}); // Reset custom positions
+    }
+  }, [availableFormations, formationId]);
 
   const slots = useMemo(
     () => createFormationSlots(selectedFormation),
@@ -1228,7 +1265,7 @@ export default function CoachTacticsPage({ planId, effectifId }: { planId?: stri
                     }}
                     className="h-11 min-w-[200px] rounded-lg border border-gray-300 bg-white px-3 text-sm font-semibold text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
                   >
-                    {fifaFormations.map((formation) => (
+                    {availableFormations.map((formation) => (
                       <option key={formation.id} value={formation.id}>
                         {formation.label} - {formation.family}
                       </option>
@@ -1288,7 +1325,10 @@ export default function CoachTacticsPage({ planId, effectifId }: { planId?: stri
             </p>
 
             <div className="mt-5">
-              <div className="relative mr-auto aspect-[3/4] w-full overflow-hidden rounded-3xl border-2 border-emerald-300/80 shadow-2xl dark:border-emerald-500/40">
+              <div 
+                ref={pitchRef}
+                className="relative mr-auto aspect-[3/4] w-full overflow-hidden rounded-3xl border-2 border-emerald-300/80 shadow-2xl dark:border-emerald-500/40 touch-none"
+              >
                 <div className="absolute inset-0 bg-gradient-to-b from-emerald-500 via-emerald-600 to-emerald-800" />
                 <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.22),transparent_58%)]" />
                 <div className="absolute inset-0 bg-[repeating-linear-gradient(to_bottom,transparent,transparent_54px,rgba(255,255,255,0.12)_55px,transparent_56px)]" />
@@ -1300,19 +1340,62 @@ export default function CoachTacticsPage({ planId, effectifId }: { planId?: stri
                 <div className="absolute left-1/2 bottom-0 h-20 w-44 -translate-x-1/2 border-x border-t border-white/70" />
                 <div className="absolute left-1/2 bottom-0 h-9 w-20 -translate-x-1/2 border-x border-t border-white/70" />
 
-                {starters.map(({ slot, player }) => (
+                {starters.map(({ slot, player }) => {
+                  const pos = customPositions[slot.id] || { x: slot.x, y: slot.y };
+                  const isDraggingThis = draggingSlotId === slot.id;
+                  
+                  return (
                   <div
                     key={slot.id}
-                    className="absolute -translate-x-1/2 -translate-y-1/2"
-                    style={{ left: `${slot.x}%`, top: `${slot.y}%` }}
+                    className={`absolute -translate-x-1/2 -translate-y-1/2 ${isDraggingThis ? "z-50 drop-shadow-2xl" : "z-10"}`}
+                    style={{ left: `${pos.x}%`, top: `${pos.y}%` }}
+                    onPointerDown={(e) => {
+                      // Only allow left click / touch
+                      if (e.button !== 0 && e.pointerType === 'mouse') return;
+                      e.stopPropagation();
+                      e.currentTarget.setPointerCapture(e.pointerId);
+                      dragState.current = { id: slot.id, hasMoved: false, startX: e.clientX, startY: e.clientY };
+                    }}
+                    onPointerMove={(e) => {
+                      if (dragState.current.id === slot.id && pitchRef.current) {
+                        const dist = Math.hypot(e.clientX - dragState.current.startX, e.clientY - dragState.current.startY);
+                        if (dist > 5) {
+                          dragState.current.hasMoved = true;
+                          if (draggingSlotId !== slot.id) {
+                            setDraggingSlotId(slot.id);
+                          }
+                        }
+                        if (dragState.current.hasMoved) {
+                          const rect = pitchRef.current.getBoundingClientRect();
+                          const x = ((e.clientX - rect.left) / rect.width) * 100;
+                          const y = ((e.clientY - rect.top) / rect.height) * 100;
+                          setCustomPositions(prev => ({
+                            ...prev,
+                            [slot.id]: { x: Math.max(0, Math.min(100, x)), y: Math.max(0, Math.min(100, y)) }
+                          }));
+                        }
+                      }
+                    }}
+                    onPointerUp={(e) => {
+                      if (dragState.current.id === slot.id) {
+                        if (!dragState.current.hasMoved) {
+                          requestSwapWithStarter(slot);
+                        } else {
+                          setHasUnsavedChanges(true);
+                          if (effectif) setIsEffectifModified(true);
+                        }
+                      }
+                      try { e.currentTarget.releasePointerCapture(e.pointerId); } catch(err) {}
+                      dragState.current = { id: null, hasMoved: false, startX: 0, startY: 0 };
+                      setDraggingSlotId(null);
+                    }}
                   >
                     <button
                       type="button"
-                      onClick={() => requestSwapWithStarter(slot)}
                       className={`mx-auto flex h-12 w-12 items-center justify-center overflow-hidden rounded-full border-2 text-[10px] font-semibold text-white shadow-lg transition ${markerStyles[slot.role]} ${
-                        selectedStarterSlotId === slot.id
-                          ? "ring-2 ring-white ring-offset-2 ring-offset-emerald-700"
-                          : ""
+                        selectedStarterSlotId === slot.id || isDraggingThis
+                          ? "ring-2 ring-white ring-offset-2 ring-offset-emerald-700 scale-110"
+                          : "hover:scale-105"
                       }`}
                       title={`${slot.label} - ${player ? getPlayerFullName(player) : "Libre"}`}
                     >
@@ -1329,14 +1412,14 @@ export default function CoachTacticsPage({ planId, effectifId }: { planId?: stri
                         <span>{slot.label}</span>
                       )}
                     </button>
-                    <p className="mt-1 text-center text-[10px] font-semibold uppercase tracking-wide text-white">
+                    <p className={`mt-1 text-center text-[10px] font-semibold uppercase tracking-wide text-white ${isDraggingThis ? "drop-shadow-md" : ""}`}>
                       {slot.label}
                     </p>
-                    <p className="max-w-[84px] truncate text-center text-[10px] text-white/90">
+                    <p className={`max-w-[84px] truncate text-center text-[10px] text-white/90 ${isDraggingThis ? "drop-shadow-md" : ""}`}>
                       {player ? player.prenom : "Libre"}
                     </p>
                   </div>
-                ))}
+                )})}
               </div>
 
               {/* BOUTON DE PARTAGE EN DESSOUS DU TERRAIN */}

@@ -2,6 +2,7 @@
 
 import React from "react";
 import { AquaSpaceMember } from "@/types/club";
+import { WavesIcon } from "@/components/club/icons/AquaSpaceIcons";
 
 interface AquaSpaceRegistrationPrintProps {
   member: AquaSpaceMember | null;

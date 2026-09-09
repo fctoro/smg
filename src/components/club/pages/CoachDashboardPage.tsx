@@ -5,25 +5,45 @@ import Image from "next/image";
 import { useClubData } from "@/context/ClubDataContext";
 import { useUserRole } from "@/context/UserRoleContext";
 import { getPlayerFullName } from "@/lib/club/metrics";
-import { getSavedPlans, SavedTacticalPlan, deletePlan } from "@/lib/club/tactics";
+import { Effectif } from "@/types/club";
+import { fetchEffectifsByCoach, deleteEffectif } from "@/lib/club/effectifs";
 import Link from "next/link";
 import { GroupIcon } from "@/icons";
+import Pagination from "@/components/tables/Pagination";
 
 import { CardSkeleton } from "@/components/ui/skeleton/Skeleton";
 
 export default function CoachDashboardPage() {
   const { players: allPlayers, hydrated } = useClubData();
-  const { userCategories } = useUserRole();
-  const [savedPlans, setSavedPlans] = React.useState<SavedTacticalPlan[]>([]);
+  const { userCategories, userEmail } = useUserRole();
+  const coachEmail = userEmail || "";
+  const [recentMatches, setRecentMatches] = React.useState<Effectif[]>([]);
+  const [loadingMatches, setLoadingMatches] = React.useState(true);
+  const [unavailablePage, setUnavailablePage] = React.useState(1);
+  const [unavailablePageSize, setUnavailablePageSize] = React.useState(10);
+
+  const loadRecentMatches = React.useCallback(async () => {
+    if (!coachEmail) return;
+    setLoadingMatches(true);
+    const data = await fetchEffectifsByCoach(coachEmail);
+    // Sort by date_match descending and slice the top 5
+    const sorted = [...data].sort((a, b) => {
+      const dateA = new Date(a.date_match || a.created_at || 0).getTime();
+      const dateB = new Date(b.date_match || b.created_at || 0).getTime();
+      return dateB - dateA;
+    });
+    setRecentMatches(sorted.slice(0, 5));
+    setLoadingMatches(false);
+  }, [coachEmail]);
 
   React.useEffect(() => {
-    setSavedPlans(getSavedPlans());
-  }, []);
+    loadRecentMatches();
+  }, [loadRecentMatches]);
 
-  const handleDeletePlan = (id: string) => {
-    if (window.confirm("Êtes-vous sûr de vouloir supprimer ce plan tactique ?")) {
-      deletePlan(id);
-      setSavedPlans(getSavedPlans());
+  const handleDeleteMatch = async (id: string) => {
+    if (window.confirm("Êtes-vous sûr de vouloir supprimer cet effectif de match ?")) {
+      await deleteEffectif(id);
+      loadRecentMatches();
     }
   };
 
@@ -180,7 +200,7 @@ export default function CoachDashboardPage() {
                     src="/images/positions/gardien.png"
                     alt="Gardien"
                     fill
-                    className="object-contain"
+                    className="object-contain dark:invert"
                     unoptimized
                   />
                 </div>
@@ -206,7 +226,7 @@ export default function CoachDashboardPage() {
                     src="/images/positions/defenseur.png"
                     alt="Défenseur"
                     fill
-                    className="object-contain"
+                    className="object-contain dark:invert"
                     unoptimized
                   />
                 </div>
@@ -232,7 +252,7 @@ export default function CoachDashboardPage() {
                     src="/images/positions/milieu.png"
                     alt="Milieu"
                     fill
-                    className="object-contain"
+                    className="object-contain dark:invert"
                     unoptimized
                   />
                 </div>
@@ -258,7 +278,7 @@ export default function CoachDashboardPage() {
                     src="/images/positions/attaquant.png"
                     alt="Attaquant"
                     fill
-                    className="object-contain"
+                    className="object-contain dark:invert"
                     unoptimized
                   />
                 </div>
@@ -276,9 +296,11 @@ export default function CoachDashboardPage() {
             Blessés ou suspendus, ces joueurs ne peuvent pas participer au prochain match.
           </p>
 
-          <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+          <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar mb-4">
             {unavailablePlayers.length > 0 ? (
-              unavailablePlayers.map((player) => (
+              unavailablePlayers
+                .slice((unavailablePage - 1) * unavailablePageSize, unavailablePage * unavailablePageSize)
+                .map((player) => (
                 <div
                   key={player.id}
                   className="flex items-center justify-between rounded-xl border border-gray-100 bg-gray-50/50 p-4 dark:border-gray-800 dark:bg-gray-800/30"
@@ -330,50 +352,129 @@ export default function CoachDashboardPage() {
               </div>
             )}
           </div>
+          
+          {unavailablePlayers.length > 0 && (
+            <div className="pt-2 border-t border-gray-100 dark:border-gray-800 flex justify-end">
+              <Pagination
+                currentPage={unavailablePage}
+                totalPages={Math.ceil(unavailablePlayers.length / unavailablePageSize)}
+                onPageChange={setUnavailablePage}
+                pageSize={unavailablePageSize}
+                onPageSizeChange={(size) => {
+                  setUnavailablePageSize(size);
+                  setUnavailablePage(1);
+                }}
+                pageSizeOptions={[5, 10, 20]}
+              />
+            </div>
+          )}
         </div>
 
-        {/* Saved Plans Table */}
+        {/* Recent 5 Matches Table */}
         <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-900 md:col-span-2">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">
-            Historique des Plans Tactiques
-          </h3>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-            Aperçu de vos tactiques sous forme de tableau.
-          </p>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">
+                Historique des 5 Derniers Matchs
+              </h3>
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                Aperçu de vos 5 dernières rencontres selon la date du match.
+              </p>
+            </div>
+            <Link
+              href="/coach?tab=effectifs"
+              className="text-xs font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 hover:underline"
+            >
+              Voir tous les effectifs →
+            </Link>
+          </div>
 
           <div className="overflow-x-auto rounded-xl border border-gray-200 dark:border-gray-800">
             <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-800">
               <thead className="bg-gray-50 dark:bg-gray-800/50">
                 <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Nom du plan</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Formation</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Date</th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Actions</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider dark:text-gray-400">Match</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider dark:text-gray-400">Résultat</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider dark:text-gray-400">Date</th>
+                  <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider dark:text-gray-400">Actions</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200 dark:bg-gray-900 dark:divide-gray-800">
-                {savedPlans.length > 0 ? (
-                  savedPlans.map((plan) => (
-                    <tr key={plan.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
-                      <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">{plan.name}</td>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{plan.formationId}</td>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                        {new Date(plan.createdAt).toLocaleDateString("fr-FR", { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                      </td>
-                      <td className="px-4 py-3 whitespace-nowrap text-right text-sm font-medium">
-                        <Link href={`/coach?tab=tactiques&planId=${plan.id}`} className="text-brand-600 hover:text-brand-900 dark:text-brand-400 dark:hover:text-brand-300 mr-4">
-                          Ouvrir
-                        </Link>
-                        <button onClick={() => handleDeletePlan(plan.id)} className="text-error-600 hover:text-error-900 dark:text-error-400 dark:hover:text-error-300">
-                          Supprimer
-                        </button>
-                      </td>
-                    </tr>
-                  ))
+                {loadingMatches ? (
+                  <tr>
+                    <td colSpan={4} className="px-4 py-8 text-center text-sm text-gray-500">
+                      Chargement des matchs...
+                    </td>
+                  </tr>
+                ) : recentMatches.length > 0 ? (
+                  recentMatches.map((match) => {
+                    const hasScore = match.score_toro !== null && match.score_toro !== undefined;
+                    const scoreToro = match.score_toro ?? 0;
+                    const scoreAdv = match.score_adversaire ?? 0;
+                    const isWin = scoreToro > scoreAdv;
+                    const isDraw = scoreToro === scoreAdv;
+
+                    // Format date
+                    const formattedDate = match.date_match 
+                      ? new Date(match.date_match).toLocaleDateString("fr-FR", { day: 'numeric', month: 'short', year: 'numeric' })
+                      : "-";
+
+                    return (
+                      <tr key={match.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <div className="text-sm font-semibold text-gray-900 dark:text-white">
+                            {match.nom}
+                          </div>
+                          <div className="text-xs text-gray-500 dark:text-gray-400">
+                            {match.categorie} • {(match.joueurs || []).length} joueurs
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          {hasScore ? (
+                            <div className="flex items-center gap-1.5">
+                              <span className={`inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-black border ${
+                                isWin
+                                  ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30"
+                                  : isDraw
+                                  ? "bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600"
+                                  : "bg-rose-500/15 text-rose-600 dark:text-rose-400 border-rose-500/30"
+                              }`}>
+                                {isWin ? "V" : isDraw ? "N" : "D"}
+                              </span>
+                              <span className="font-bold text-xs text-gray-900 dark:text-white">
+                                {scoreToro} - {scoreAdv}
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-medium bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400">
+                              Non saisi
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-xs text-gray-500 dark:text-gray-400">
+                          {formattedDate}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-right text-xs font-semibold">
+                          <Link 
+                            href={`/coach?tab=tactiques&effectifId=${match.id}${match.tactique_id ? `&planId=${match.tactique_id}` : ''}`} 
+                            className="text-brand-600 hover:text-brand-900 dark:text-brand-400 dark:hover:text-brand-300 mr-3"
+                          >
+                            Tactique
+                          </Link>
+                          <button 
+                            onClick={() => handleDeleteMatch(match.id)} 
+                            className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
+                          >
+                            Supprimer
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })
                 ) : (
                   <tr>
                     <td colSpan={4} className="px-4 py-8 text-center text-sm text-gray-500">
-                      Aucun plan sauvegardé
+                      Aucun match trouvé dans l'historique
                     </td>
                   </tr>
                 )}

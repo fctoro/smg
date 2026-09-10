@@ -214,7 +214,7 @@ function PaymentsPageContent() {
     const remarkLower = (payment.remarque || "").toLowerCase();
     let rawPlan = planLabel.toLowerCase();
     if (rawPlan === "aucun") {
-      if (remarkLower.includes("boursier") || remarkLower.includes("bourse")) rawPlan = "boursier";
+      if ((remarkLower.includes("boursier") || remarkLower.includes("bourse")) && !remarkLower.includes("demi")) rawPlan = "boursier";
       else if (remarkLower.includes("semestriel")) rawPlan = "semestriel";
       else if (remarkLower.includes("mensuel")) rawPlan = "mensuel";
       else rawPlan = "annuel";

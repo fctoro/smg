@@ -63,7 +63,13 @@ export default function ModifyPaymentPage({ params }: { params: Promise<{ id: st
 
   const searchContainerRef = { current: null as HTMLDivElement | null };
 
+  const currentPayment = payments.find((p) => p.id === resolvedParams.id);
   const selectedPlayer = players.find((p) => p.id === playerId) ?? null;
+  const isDemiBoursier = !!(
+    (selectedPlayer && (selectedPlayer.statutJoueur || "").toLowerCase().includes("demi")) ||
+    (currentPayment?.remarque || "").toLowerCase().includes("[reduction:half]") ||
+    (currentPayment?.remarque || "").toLowerCase().includes("demi")
+  );
 
   const filteredPlayers = players.filter((player) => {
     const query = playerSearch.trim().toLowerCase();
@@ -115,7 +121,7 @@ export default function ModifyPaymentPage({ params }: { params: Promise<{ id: st
           adhesionCalculated = Math.round(baseAdhesionUSD * (1 - effectiveRabais / 100) * 100) / 100;
         }
       } else if (plan === "mensuel") {
-        const monthlyRate = isTi ? 115 : 155;
+        const monthlyRate = (isTi ? 115 : 155) * (isDemiBoursier ? 0.5 : 1);
         baseAdhesionUSD = monthlyRate * (mois || 1);
         if (rType === "amount" && rVal > 0) {
           adhesionCalculated = Math.max(0, baseAdhesionUSD - rVal);
@@ -207,7 +213,7 @@ export default function ModifyPaymentPage({ params }: { params: Promise<{ id: st
         initialPlan = planMatch[1].toLowerCase();
       } else {
         const remarkLower = rawRemarque.toLowerCase();
-        if (remarkLower.includes("boursier") || remarkLower.includes("bourse")) initialPlan = "boursier";
+        if ((remarkLower.includes("boursier") || remarkLower.includes("bourse")) && !remarkLower.includes("demi")) initialPlan = "boursier";
         else if (remarkLower.includes("semestriel")) initialPlan = "semestriel";
         else if (remarkLower.includes("mensuel")) initialPlan = "mensuel";
       }
@@ -524,8 +530,10 @@ export default function ModifyPaymentPage({ params }: { params: Promise<{ id: st
       const planPart = `[PLAN:${planPaiement.toUpperCase()}] `;
       const moisPart = planPaiement === "mensuel" ? `[MOIS_PAYES:${nombreDeMois}] ` : "";
       const statutPart = `[STATUT:${statut.toUpperCase()}] `;
-      const rabaisPart = rabaisValue > 0 ? `[RABAIS:${rabaisType === "percent" ? `${rabaisValue}%` : `$${rabaisValue}`}] ` : "";
-      const tauxPart = (devise === "HTG" && taux > 0) ? `[TAUX:${taux}] ` : "";
+      const rabaisPart = isDemiBoursier
+        ? "[REDUCTION:HALF] "
+        : (rabaisValue > 0 ? `[RABAIS:${rabaisType === "percent" ? `${rabaisValue}%` : `$${rabaisValue}`}] ` : "");
+      const tauxPart = ((devise === "HTG" || isDemiBoursier) && taux > 0) ? `[TAUX:${taux}] ` : "";
       const totalDuePart = typeof totalDue === "number" ? `[TOTAL_DUE:${totalDue}] ` : "";
       const rubriquesPart = selectedPricing.length > 0 ? `[RUBRIQUES:${selectedPricing.join(",")}] ` : "";
       const rubricsTextPart = selectedRubricsLabel ? ` | Rubriques: ${selectedRubricsLabel}` : "";
@@ -867,19 +875,25 @@ export default function ModifyPaymentPage({ params }: { params: Promise<{ id: st
               <option value="HTG">Gourde HTG</option>
             </select>
           </div>
-          {devise === "HTG" ? (
+          {(devise === "HTG" || isDemiBoursier) ? (
             <div>
               <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
-                Taux
+                Taux de change (HTG / 1$)
               </label>
               <input
                 type="number"
                 min={0}
-                step="0.01"
+                step="any"
                 value={taux || ""}
-                onChange={(event) => handleTauxChange(Number(event.target.value))}
+                onChange={(event) => handleTauxChange(event.target.value === "" ? 0 : parseFloat(event.target.value) || 0)}
+                placeholder="Ex: 132"
                 className={inputClassName}
               />
+              {taux > 0 && planPaiement === "mensuel" && (
+                <p className="mt-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+                  Équivalent mensuel : {((isDemiBoursier ? (adhesionInfo?.code === "TI_TORO" ? 57.5 : 77.5) : (adhesionInfo?.code === "TI_TORO" ? 115 : 155)) * taux).toLocaleString('fr-FR', { maximumFractionDigits: 2 })} HTG / mois
+                </p>
+              )}
             </div>
           ) : null}
           <div className="md:col-span-2 xl:col-span-3">

@@ -161,7 +161,8 @@ const applyAutoAdhesionForPlayer = (
   currentPricing: string[],
   options: PricingItem[]
 ): string[] => {
-  const isBoursier = (player.statutJoueur || "").toLowerCase().includes("bourse");
+  const isBoursier = (player.statutJoueur || "").toLowerCase().includes("bourse") && !(player.statutJoueur || "").toLowerCase().includes("demi");
+  const isDemiBoursier = (player.statutJoueur || "").toLowerCase().includes("demi");
   if (isBoursier) return currentPricing;
 
   const targetAdhesionId = getAdhesionIdForPlayer(player, options);
@@ -356,21 +357,23 @@ export default function NewPaymentPage() {
       
       // Only transactions explicitly marked as paid affect the balance.
       const paymentStatus: PaymentStatus = statut;
-
       const planRemark = selectedPlan ? `Plan: ${paymentPlans.find(p => p.id === selectedPlan)?.plan}` : "";
       const selectedAdhesionItem = selectedPricingItems.find((item) => item.estAdhesion || item.id === "adhesion-fc" || item.id === "adhesion-ti");
       const isTiToro = selectedAdhesionItem ? selectedAdhesionItem.rubrique.toLowerCase().includes("ti toro") : false;
       const adhesionRemark = isTiToro ? "Adhésion: TI TORO" : "Adhésion: FC TORO";
       const adhesionCode = isTiToro ? "TI_TORO" : "FC_TORO";
-      const planCode = selectedPlan.toUpperCase();
-      const statusCode = paymentStatus.toUpperCase();
+      const isDemiBoursier = !!(selectedPlayer && (selectedPlayer.statutJoueur || "").toLowerCase().includes("demi"));
+      const planCode = selectedPlan ? selectedPlan.toUpperCase() : "AUCUN";
+      const statusCode = isDemiBoursier ? "DEMI-BOURSE" : paymentStatus.toUpperCase();
       // Le montant total dû est basé sur le total des rubriques sélectionnées
       const montantAvecPlan = totalRubriques;
       const totalDueInUSD = devise === "HTG" ? (taux > 0 ? montantAvecPlan / taux : montantAvecPlan) : montantAvecPlan;
       const planRabaisPct = selectedPlan === "annuel" ? 10 : selectedPlan === "semestriel" ? 5 : 0;
-      const rabaisTag = planRabaisPct > 0 ? ` [RABAIS:${planRabaisPct}%]` : "";
-      const paymentMarkers = `[ADHESION:${adhesionCode}] [PLAN:${planCode}]${rabaisTag} [STATUT:${statusCode}] [TOTAL_DUE:${totalDueInUSD}]`;
-      const finalRemarque = `${paymentMarkers} ${description.trim()} ${adhesionRemark} ${planRemark}`.trim();
+      const rabaisTag = isDemiBoursier ? " [REDUCTION:HALF]" : (planRabaisPct > 0 ? ` [RABAIS:${planRabaisPct}%]` : "");
+      const tauxTag = (devise === "HTG" && taux > 0) ? ` [TAUX:${taux}]` : (isDemiBoursier && taux > 0 ? ` [TAUX:${taux}]` : "");
+      const demiLabel = isDemiBoursier ? " (Demi-bourse 50%)" : "";
+      const paymentMarkers = `[ADHESION:${adhesionCode}] [PLAN:${planCode}]${rabaisTag}${tauxTag} [STATUT:${statusCode}] [TOTAL_DUE:${totalDueInUSD}]`;
+      const finalRemarque = `${paymentMarkers} ${description.trim()} ${adhesionRemark}${demiLabel} ${planRemark}`.trim();
       const uploadPromise = paymentPhotos.length > 0 ? uploadPaymentPhotosToSupabase(paymentPhotos) : Promise.resolve([]);
 
       // Create invoice first
@@ -494,8 +497,14 @@ export default function NewPaymentPage() {
 
     const hasAdhesion = selectedPricingItems.some((item) => item.estAdhesion || item.id === "adhesion-fc" || item.id === "adhesion-ti");
 
+    const isDemiBoursier = !!(selectedPlayer && (selectedPlayer.statutJoueur || "").toLowerCase().includes("demi"));
+
     let adhesionAmount = 0;
-    if (selectedAdhesionItem) {
+    if (selectedPlan === "mensuel" && isDemiBoursier) {
+      // 50% du montant mensuel sur 9 mois
+      const monthlyRate = (isTiToro ? 115 : 155) * 0.5;
+      adhesionAmount = monthlyRate * 9;
+    } else if (selectedAdhesionItem) {
       adhesionAmount = selectedAdhesionItem.montant;
     } else if (hasAdhesion || selectedPlan) {
       adhesionAmount = isTiToro ? 1000 : 1350;
@@ -509,14 +518,16 @@ export default function NewPaymentPage() {
     }
 
     const rabaisDecimal = effectiveRabaisPct / 100;
-    const adhesionAfterRabais = Math.max(0, adhesionAmount * (1 - rabaisDecimal));
+    const adhesionAfterRabais = (selectedPlan === "mensuel" && isDemiBoursier)
+      ? adhesionAmount
+      : Math.max(0, adhesionAmount * (1 - rabaisDecimal));
 
     const totalUSD = adhesionAfterRabais + nonAdhesionSum;
     if (devise === "HTG" && taux > 0) {
       return totalUSD * taux;
     }
     return totalUSD;
-  }, [selectedPricingItems, selectedPlan, devise, taux]);
+  }, [selectedPricingItems, selectedPlan, selectedPlayer, devise, taux]);
 
   const planInstallmentAmount = useMemo(() => {
     if (!selectedPlan) return 0;
@@ -525,13 +536,17 @@ export default function NewPaymentPage() {
 
     const selectedAdhesionItem = selectedPricingItems.find((item) => item.estAdhesion || item.id === "adhesion-fc" || item.id === "adhesion-ti");
     const isTiToro = selectedAdhesionItem ? selectedAdhesionItem.rubrique.toLowerCase().includes("ti toro") : false;
+    const isDemiBoursier = !!(selectedPlayer && (selectedPlayer.statutJoueur || "").toLowerCase().includes("demi"));
 
-    const installmentUSD = isTiToro ? plan.montantTIToro : plan.montantFCToro;
+    let installmentUSD = isTiToro ? plan.montantTIToro : plan.montantFCToro;
+    if (selectedPlan === "mensuel" && isDemiBoursier) {
+      installmentUSD = installmentUSD * 0.5;
+    }
     if (devise === "HTG" && taux > 0) {
       return installmentUSD * taux;
     }
     return installmentUSD;
-  }, [selectedPlan, selectedPricingItems, devise, taux]);
+  }, [selectedPlan, selectedPricingItems, selectedPlayer, devise, taux]);
 
   const montantRestant = useMemo(() => {
     return Math.max(0, totalRubriques - montantDonne);
@@ -569,16 +584,16 @@ export default function NewPaymentPage() {
     }
 
     const statut = status.toLowerCase();
-    if (statut.includes("bourse") || statut.includes("boursier")) {
-      return {
-        label: "Bourse (100%)",
-        className: `${baseClassName} border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-400`,
-      };
-    }
     if (statut.includes("demi")) {
       return {
         label: "Demi-bourse (50%)",
         className: `${baseClassName} border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-500/20 dark:bg-blue-500/10 dark:text-blue-400`,
+      };
+    }
+    if (statut.includes("bourse") || statut.includes("boursier")) {
+      return {
+        label: "Bourse (100%)",
+        className: `${baseClassName} border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-400`,
       };
     }
     if (statut === "inactif" || statut === "normal" || statut === "aucun") {
@@ -767,19 +782,25 @@ export default function NewPaymentPage() {
               <option value="HTG">Gourde HTG</option>
             </select>
           </div>
-          {devise === "HTG" ? (
+          {(devise === "HTG" || (selectedPlayer && (selectedPlayer.statutJoueur || "").toLowerCase().includes("demi"))) ? (
             <div>
               <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
-                Taux
+                Taux de change (HTG / 1$)
               </label>
               <input
                 type="number"
                 min={0}
-                step="0.01"
+                step="any"
                 value={taux || ""}
-                onChange={(event) => setTaux(Number(event.target.value))}
+                onChange={(event) => setTaux(event.target.value === "" ? 0 : parseFloat(event.target.value) || 0)}
+                placeholder="Ex: 132"
                 className={inputClassName}
               />
+              {taux > 0 && selectedPlan === "mensuel" && (
+                <p className="mt-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+                  Équivalent mensuel : {((devise === "HTG" ? planInstallmentAmount : planInstallmentAmount * taux)).toLocaleString('fr-FR', { maximumFractionDigits: 2 })} HTG / mois
+                </p>
+              )}
             </div>
           ) : null}
 

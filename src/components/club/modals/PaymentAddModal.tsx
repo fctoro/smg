@@ -169,8 +169,9 @@ const applyAutoAdhesionForPlayer = (
   currentPricing: string[],
   options: PricingItem[]
 ): string[] => {
-  const isBoursier = (player.statutJoueur || "").toLowerCase().includes("bourse");
-  if (isBoursier) return currentPricing;
+  const isBoursier = (player.statutJoueur || "").toLowerCase().includes("bourse") && !(player.statutJoueur || "").toLowerCase().includes("demi");
+  const isDemiBoursier = (player.statutJoueur || "").toLowerCase().includes("demi");
+  if (isBoursier || isDemiBoursier) return currentPricing;
 
   const targetAdhesionId = getAdhesionIdForPlayer(player, options);
   const otherAdhesionIds = options
@@ -305,7 +306,9 @@ export function PaymentAddModal({ isOpen, onClose, initialPlayerId }: PaymentAdd
   };
 
   const handleSubmit = async () => {
-    const isBoursierPlayer = !!(selectedPlayer && (selectedPlayer.statutJoueur || "").toLowerCase().includes("bourse"));
+    const playerStatusLower = (selectedPlayer?.statutJoueur || "").toLowerCase();
+    const isBoursierPlayer = !!(selectedPlayer && playerStatusLower.includes("bourse") && !playerStatusLower.includes("demi"));
+    const isDemiBoursierPlayer = !!(selectedPlayer && playerStatusLower.includes("demi"));
 
     if (!playerId || !periode) {
       setToast({ message: "Veuillez remplir le joueur et la période.", type: "error" });
@@ -313,12 +316,12 @@ export function PaymentAddModal({ isOpen, onClose, initialPlayerId }: PaymentAdd
     }
 
     if (!isBoursierPlayer) {
-      // Validations uniquement pour les joueurs non-boursiers
+      // Validations uniquement pour les joueurs non-boursiers (100%)
       if (montantDonne === "" || montantDonne <= 0 || (devise === "HTG" && taux <= 0)) {
         setToast({ message: "Veuillez remplir le montant payé et le taux de change.", type: "error" });
         return;
       }
-      if (selectedPricingItems.length === 0 && !selectedPlan) {
+      if (!isDemiBoursierPlayer && selectedPricingItems.length === 0 && !selectedPlan) {
         setToast({ message: "Veuillez sélectionner au moins une rubrique ou un plan de paiement.", type: "error" });
         return;
       }
@@ -326,20 +329,24 @@ export function PaymentAddModal({ isOpen, onClose, initialPlayerId }: PaymentAdd
 
     setIsSubmitting(true);
     try {
-      const plan = isBoursierPlayer ? null : paymentPlans.find((item) => item.id === selectedPlan);
       const selectedAdhesionItem = selectedPricingItems.find((item) => item.estAdhesion || item.id === "adhesion-fc" || item.id === "adhesion-ti");
-      const isTiToro = selectedAdhesionItem ? (selectedAdhesionItem.rubrique.toLowerCase().includes("ti toro") || selectedAdhesionItem.id === "adhesion-ti") : false;
+      const isTiToro = selectedAdhesionItem ? (selectedAdhesionItem.rubrique.toLowerCase().includes("ti toro") || selectedAdhesionItem.id === "adhesion-ti") : isPlayerTiToro(selectedPlayer);
+      const plan = isBoursierPlayer
+        ? null
+        : isDemiBoursierPlayer
+          ? { id: "mensuel", plan: "Mensuel", modalites: "Demi-bourse (50%)", montantFCToro: 77.5, montantTIToro: 57.5, avantage: "Demi-bourse (50%)", nombreVersements: 9 }
+          : paymentPlans.find((item) => item.id === selectedPlan);
       const nonAdhesionSum = selectedPricingItems
         .filter((item) => !item.estAdhesion && item.id !== "adhesion-fc" && item.id !== "adhesion-ti")
         .reduce((sum, item) => sum + item.montant, 0);
+      const demiMonthlyUSD = isTiToro ? 57.5 : 77.5;
       const planBaseAmount = plan ? (isTiToro ? plan.montantTIToro : plan.montantFCToro) : 0;
-      const finalPlanAmount = (plan && selectedPlan === "mensuel") ? planBaseAmount * nombreDeMois : planBaseAmount;
-      // Le total dû est basé sur les rubriques sélectionnées, pas sur le montant du plan
+      const finalPlanAmount = (plan && (selectedPlan === "mensuel" || isDemiBoursierPlayer)) ? planBaseAmount * nombreDeMois : planBaseAmount;
+      // Le total dû
       const totalDue = isBoursierPlayer
         ? nombreDeMois * 2500
         : baseTotalDue;
       
-      // Pour les boursiers: montant toujours en HTG, pas de taux
       const mDuManuelNum = Number(montantDuManuel) || 0;
       const mDonneNum = Number(montantDonne) || 0;
       
@@ -348,27 +355,35 @@ export function PaymentAddModal({ isOpen, onClose, initialPlayerId }: PaymentAdd
       const actualDevise = isBoursierPlayer ? "HTG" : devise;
       const montantUS = isBoursierPlayer ? 0 : (actualDevise === "US" ? paymentAmount : (taux > 0 ? paymentAmount / taux : 0));
       const montantHTG = isBoursierPlayer ? paymentAmount : (actualDevise === "HTG" ? paymentAmount : 0);
-      const adhesionCode = isBoursierPlayer ? "BOURSE" : (selectedAdhesionItem ? (isTiToro ? "TI_TORO" : "FC_TORO") : "");
+      const adhesionCode = isBoursierPlayer ? "BOURSE" : (selectedAdhesionItem ? (isTiToro ? "TI_TORO" : "FC_TORO") : (isDemiBoursierPlayer ? (isTiToro ? "TI_TORO" : "FC_TORO") : ""));
       const selectedRubricsLabel = selectedPricingItems
         .filter((item) => !item.estAdhesion && item.id !== "adhesion-fc" && item.id !== "adhesion-ti")
         .map((item) => item.rubrique)
         .filter(Boolean).join(", ");
       // TOTAL_DUE doit refléter montantDuManuel (source de vérité), converti en USD si HTG
-      const totalDueInUSD = (actualDevise === "HTG" && taux > 0)
-        ? mDuManuelNum / taux
-        : actualDevise === "HTG"
-          ? baseTotalDue          // fallback si pas de taux
-          : mDuManuelNum;      // USD : déjà en USD
-      const rabaisMarker = (!isBoursierPlayer && rabaisPercent > 0) ? ` [RABAIS:${rabaisPercent}%]` : "";
-      const tauxMarker = (!isBoursierPlayer && actualDevise === "HTG" && taux > 0) ? ` [TAUX:${taux}]` : "";
-      const moisMarker = selectedPlan === "mensuel" ? ` [MOIS_PAYES:${nombreDeMois}]` : "";
+      const totalDueInUSD = isBoursierPlayer
+        ? 0
+        : (actualDevise === "HTG" && taux > 0)
+          ? mDuManuelNum / taux
+          : actualDevise === "HTG"
+            ? baseTotalDue          // fallback si pas de taux
+            : mDuManuelNum;      // USD : déjà en USD
+      const rabaisMarker = isDemiBoursierPlayer
+        ? " [REDUCTION:HALF]"
+        : (!isBoursierPlayer && rabaisPercent > 0) ? ` [RABAIS:${rabaisPercent}%]` : "";
+      const tauxMarker = (actualDevise === "HTG" && taux > 0) ? ` [TAUX:${taux}]` : (isDemiBoursierPlayer && taux > 0 ? ` [TAUX:${taux}]` : "");
+      const moisMarker = (selectedPlan === "mensuel" || isDemiBoursierPlayer) ? ` [MOIS_PAYES:${nombreDeMois}]` : "";
       const paymentMarkers = isBoursierPlayer
         ? `[ADHESION:${adhesionCode}] [PLAN:BOURSIER] [STATUT:${statut.toUpperCase()}] [TOTAL_DUE:${totalDue}]`
-        : `${adhesionCode ? `[ADHESION:${adhesionCode}] ` : ""}[PLAN:${selectedPlan ? selectedPlan.toUpperCase() : "AUCUN"}]${moisMarker} [STATUT:${statut.toUpperCase()}]${rabaisMarker}${tauxMarker} [TOTAL_DUE:${totalDueInUSD}]`;
+        : isDemiBoursierPlayer
+          ? `${adhesionCode ? `[ADHESION:${adhesionCode}] ` : ""}[PLAN:MENSUEL]${moisMarker} [STATUT:DEMI-BOURSE]${rabaisMarker}${tauxMarker} [TOTAL_DUE:${totalDueInUSD}]`
+          : `${adhesionCode ? `[ADHESION:${adhesionCode}] ` : ""}[PLAN:${selectedPlan ? selectedPlan.toUpperCase() : "AUCUN"}]${moisMarker} [STATUT:${statut.toUpperCase()}]${rabaisMarker}${tauxMarker} [TOTAL_DUE:${totalDueInUSD}]`;
       const adhesionLabel = isBoursierPlayer
         ? `Boursier: ${nombreDeMois} mois × 2,500 HTG`
-        : (selectedAdhesionItem ? (isTiToro ? "Adhésion: TI TORO" : "Adhésion: FC TORO") : "");
-      const finalRemarque = `${paymentMarkers} ${description.trim()} ${adhesionLabel}${selectedRubricsLabel ? ` | Rubriques: ${selectedRubricsLabel}` : ""}${plan ? ` Plan: ${plan.plan}` : ""}`.trim();
+        : isDemiBoursierPlayer
+          ? `Demi-bourse: ${nombreDeMois} mois × $${demiMonthlyUSD.toFixed(2)} (50%)${taux > 0 ? ` • ${Math.round(demiMonthlyUSD * taux).toLocaleString()} HTG/mois` : ""}`
+          : (selectedAdhesionItem ? (isTiToro ? "Adhésion: TI TORO" : "Adhésion: FC TORO") : "");
+      const finalRemarque = `${paymentMarkers} ${description.trim()} ${adhesionLabel}${selectedRubricsLabel ? ` | Rubriques: ${selectedRubricsLabel}` : ""}${plan && !isDemiBoursierPlayer ? ` Plan: ${plan.plan}` : ""}`.trim();
       
       const actualDatePaiement = datePaiement || new Date().toISOString().split("T")[0];
       const uploadPromise = paymentPhotos.length > 0 ? uploadPaymentPhotosToSupabase(paymentPhotos) : Promise.resolve([]);
@@ -576,6 +591,16 @@ export function PaymentAddModal({ isOpen, onClose, initialPlayerId }: PaymentAdd
   const isTiToro = selectedAdhesionItem ? (selectedAdhesionItem.rubrique.toLowerCase().includes("ti toro") || selectedAdhesionItem.id === "adhesion-ti") : false;
 
   const baseTotalDue = useMemo(() => {
+    const isDemi = (selectedPlayer?.statutJoueur || "").toLowerCase().includes("demi");
+    if (isDemi) {
+      const isTi = isPlayerTiToro(selectedPlayer);
+      const demiMonthlyUSD = isTi ? 57.50 : 77.50;
+      const nonAdhesionSum = selectedPricingItems
+        .filter((item) => !item.estAdhesion && item.id !== "adhesion-fc" && item.id !== "adhesion-ti")
+        .reduce((sum, item) => sum + item.montant, 0);
+      return (demiMonthlyUSD * (nombreDeMois || 1)) + nonAdhesionSum;
+    }
+
     if (selectedPricingItems.length === 0 && !selectedPlan) {
       return 0;
     }
@@ -606,7 +631,7 @@ export function PaymentAddModal({ isOpen, onClose, initialPlayerId }: PaymentAdd
     const adhesionAfterExtraRabais = Math.max(0, adhesionBase - extraRabaisAmount);
 
     return adhesionAfterExtraRabais + nonAdhesionSum;
-  }, [selectedPricingItems, selectedPlan, selectedPlanData, selectedPlayer, isTiToro, selectedAdhesionItem, rabaisPercent]);
+  }, [selectedPlayer, nombreDeMois, selectedPricingItems, selectedPlan, selectedPlanData, isTiToro, selectedAdhesionItem, rabaisPercent]);
 
   // Filter past payments for selected player
   const playerPastPayments = useMemo(() => {
@@ -665,10 +690,16 @@ export function PaymentAddModal({ isOpen, onClose, initialPlayerId }: PaymentAdd
   const discountedDue = baseTotalDue; // rétrocompatibilité interne
 
   const isBoursier = useMemo(() => {
-    return !!(selectedPlayer && (selectedPlayer.statutJoueur || "").toLowerCase().includes("bourse"));
+    const s = (selectedPlayer?.statutJoueur || "").toLowerCase();
+    return s.includes("bourse") && !s.includes("demi");
   }, [selectedPlayer]);
 
-  const hasPricingItems = selectedPricingItems.length > 0 || !!selectedPlan;
+  const isDemiBoursier = useMemo(() => {
+    const s = (selectedPlayer?.statutJoueur || "").toLowerCase();
+    return s.includes("demi");
+  }, [selectedPlayer]);
+
+  const hasPricingItems = selectedPricingItems.length > 0 || !!selectedPlan || isDemiBoursier;
 
   // Réinitialiser le verrou si la devise, le taux, ou le solde change
   useEffect(() => {
@@ -1195,7 +1226,7 @@ export function PaymentAddModal({ isOpen, onClose, initialPlayerId }: PaymentAdd
               </select>
             </div>
 
-            {/* Tarif Boursier Spécial OU Plan de paiement standard */}
+            {/* Tarif Boursier Spécial OU Demi-bourse (50%) OU Plan standard */}
             {isBoursier ? (
               <div className="md:col-span-2 rounded-xl border border-emerald-300 bg-emerald-50/80 p-4 shadow-sm dark:border-emerald-500/30 dark:bg-emerald-950/30">
                 <div className="flex items-center gap-2 mb-3">
@@ -1240,6 +1271,102 @@ export function PaymentAddModal({ isOpen, onClose, initialPlayerId }: PaymentAdd
                       {(nombreDeMois * 2500).toLocaleString()} HTG
                     </span>
                   </p>
+                </div>
+              </div>
+            ) : isDemiBoursier ? (
+              <div className="md:col-span-2 rounded-xl border border-blue-300 bg-blue-50/80 p-4 shadow-sm dark:border-blue-500/30 dark:bg-blue-950/30">
+                <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                  <div className="flex items-center gap-2">
+                    <span className="flex h-3 w-3 rounded-full bg-blue-500"></span>
+                    <h4 className="text-sm font-bold text-blue-950 dark:text-blue-200 uppercase tracking-wide">
+                      Tarif Demi-bourse (50% du montant mensuel)
+                    </h4>
+                  </div>
+                  <span className="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-semibold text-blue-800 dark:bg-blue-900/60 dark:text-blue-200 border border-blue-200 dark:border-blue-700">
+                    {isTiToro ? "Ti Toro" : "FC Toro"} • 50% de {isTiToro ? "$115" : "$155"}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                  {/* Mensualité USD */}
+                  <div>
+                    <label className="mb-1.5 block text-xs font-semibold text-blue-900 dark:text-blue-300">
+                      Mensualité USD (50%)
+                    </label>
+                    <input
+                      type="text"
+                      readOnly
+                      value={`$${(isTiToro ? 57.5 : 77.5).toFixed(2)} USD / mois`}
+                      className="h-10 w-full rounded-lg border border-blue-300 bg-white px-3 text-sm font-bold text-blue-950 shadow-sm dark:border-blue-700 dark:bg-gray-800 dark:text-blue-200"
+                    />
+                  </div>
+
+                  {/* Champ Taux de change */}
+                  <div>
+                    <label className="mb-1.5 block text-xs font-semibold text-blue-900 dark:text-blue-300">
+                      Taux de change (HTG / 1$)
+                    </label>
+                    <input
+                      type="number"
+                      min={0}
+                      step="any"
+                      value={taux || ""}
+                      onChange={(e) => setTaux(e.target.value === "" ? 0 : parseFloat(e.target.value) || 0)}
+                      placeholder="Ex: 132"
+                      className="h-10 w-full rounded-lg border border-blue-300 bg-white px-3 text-sm font-bold text-blue-950 shadow-sm dark:border-blue-700 dark:bg-gray-800 dark:text-blue-200 focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+
+                  {/* Valeur calculée en Gourdes */}
+                  <div>
+                    <label className="mb-1.5 block text-xs font-semibold text-blue-900 dark:text-blue-300">
+                      Mensualité en Gourdes (HTG)
+                    </label>
+                    <div className="h-10 w-full rounded-lg border border-blue-300 bg-blue-100/70 px-3 flex items-center text-sm font-bold text-blue-950 dark:border-blue-700 dark:bg-blue-900/40 dark:text-blue-100">
+                      {taux > 0
+                        ? `${((isTiToro ? 57.5 : 77.5) * taux).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} HTG / mois`
+                        : "Saisissez un taux"}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Nombre de mois payés */}
+                <div className="mt-3">
+                  <label className="mb-1.5 block text-xs font-semibold text-blue-900 dark:text-blue-300">
+                    Nombre de mois payés
+                  </label>
+                  <select
+                    value={nombreDeMois}
+                    onChange={(e) => setNombreDeMois(Number(e.target.value))}
+                    className="h-10 w-full rounded-lg border border-blue-300 bg-white px-3 text-sm font-bold text-blue-950 shadow-sm dark:border-blue-700 dark:bg-gray-800 dark:text-blue-200 focus:ring-2 focus:ring-blue-500"
+                  >
+                    {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((m) => {
+                      const mUSD = m * (isTiToro ? 57.5 : 77.5);
+                      const mHTG = taux > 0 ? mUSD * taux : 0;
+                      return (
+                        <option key={m} value={m}>
+                          {m} mois (${mUSD.toFixed(2)} USD{taux > 0 ? ` • ${mHTG.toLocaleString('fr-FR', { maximumFractionDigits: 2 })} HTG` : ""})
+                        </option>
+                      );
+                    })}
+                  </select>
+                </div>
+
+                {/* Bilan récapitulatif */}
+                <div className="mt-3 rounded-lg bg-blue-100/70 p-3 dark:bg-blue-900/40 flex flex-wrap items-center justify-between gap-2">
+                  <div className="text-xs font-semibold text-blue-950 dark:text-blue-200">
+                    💡 Total Demi-bourse ({nombreDeMois} {nombreDeMois === 1 ? "mois" : "mois"}) :
+                  </div>
+                  <div className="flex items-center gap-2 sm:gap-3">
+                    <span className="text-sm font-bold text-blue-950 dark:text-blue-100">
+                      ${(nombreDeMois * (isTiToro ? 57.5 : 77.5)).toFixed(2)} USD
+                    </span>
+                    {taux > 0 && (
+                      <span className="text-sm font-bold text-emerald-700 dark:text-emerald-300">
+                        • {((nombreDeMois * (isTiToro ? 57.5 : 77.5)) * taux).toLocaleString('fr-FR', { maximumFractionDigits: 2 })} HTG
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
             ) : (

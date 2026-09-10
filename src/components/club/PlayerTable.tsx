@@ -488,7 +488,9 @@ export default function PlayerTable({
 
                 const pidStr = String(player.id);
                 const finData = playerFinMap.get(pidStr);
-                const isBoursier = ((player as any).statutJoueur || "").toLowerCase().includes("bourse");
+                const playerStatusLower = ((player as any).statutJoueur || "").toLowerCase();
+                const isBoursier = playerStatusLower.includes("bourse") && !playerStatusLower.includes("demi");
+                const isDemiBoursier = playerStatusLower.includes("demi");
 
                 const displayMontant = finData ? finData.totalPaid : player.cotisationMontant;
                 const displayDevise = finData ? finData.devise : (player.cotisationDevise || "US");
@@ -497,6 +499,8 @@ export default function PlayerTable({
 
                 const statusLabel = isBoursier
                   ? "Boursier"
+                  : isDemiBoursier
+                  ? (isPaidInFull ? "Demi-bourse (Payé)" : hasBalance ? "Demi-bourse (Solde)" : "Demi-bourse")
                   : isPaidInFull
                   ? "Payé"
                   : hasBalance
@@ -505,6 +509,8 @@ export default function PlayerTable({
 
                 const badgeBgClass = isBoursier
                   ? "bg-purple-50 text-purple-700 dark:bg-purple-500/15 dark:text-purple-400"
+                  : isDemiBoursier
+                  ? "bg-blue-50 text-blue-700 dark:bg-blue-500/15 dark:text-blue-400"
                   : isPaidInFull
                   ? "bg-success-50 text-success-700 dark:bg-success-500/15 dark:text-success-500"
                   : hasBalance

@@ -88,7 +88,7 @@ export default function EtatDeCompteJoueursPage() {
 
       // 1. Check if Boursier
       const playerStatusStr = String((player as any).statutJoueur || player.statut || "").toLowerCase();
-      const isBoursier = playerStatusStr.includes("bourse") || playerPayments.some(p => String(p.remarque || "").toLowerCase().includes("[plan:boursier]"));
+      const isBoursier = (playerStatusStr.includes("bourse") && !playerStatusStr.includes("demi")) || playerPayments.some(p => String(p.remarque || "").toLowerCase().includes("[plan:boursier]"));
 
       // 2. Extract Total Due & Plan from Payment Tags ([TOTAL_DUE:XXXX])
       let totalDueFromPaymentsUSD = 0;

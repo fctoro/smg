@@ -139,8 +139,8 @@ const isPlayerTiToro = (player: Player | null | undefined): boolean => {
   if (!player) return false;
   const prog = (player.programme || "").toLowerCase().trim();
   const cat = (player.categorie || "").toLowerCase().trim();
-  if (prog.includes("ti toro") || prog.includes("ti") || prog === "titoro") return true;
-  if (cat.includes("ti toro") || cat.includes("ti") || cat === "titoro") return true;
+  if (prog.includes("ti toro") || prog === "ti" || prog === "ti-toro" || prog === "titoro") return true;
+  if (cat.includes("ti toro") || cat === "ti" || cat === "ti-toro" || cat === "titoro") return true;
   if (["u6", "u7", "u8"].includes(cat)) return true;
   return false;
 };
@@ -588,7 +588,9 @@ export function PaymentAddModal({ isOpen, onClose, initialPlayerId }: PaymentAdd
   };
 
   const selectedPlanData = paymentPlans.find((plan) => plan.id === selectedPlan);
-  const isTiToro = selectedAdhesionItem ? (selectedAdhesionItem.rubrique.toLowerCase().includes("ti toro") || selectedAdhesionItem.id === "adhesion-ti") : false;
+  const isTiToro = selectedAdhesionItem
+    ? (selectedAdhesionItem.rubrique.toLowerCase().includes("ti toro") || selectedAdhesionItem.id === "adhesion-ti")
+    : isPlayerTiToro(selectedPlayer);
 
   const baseTotalDue = useMemo(() => {
     const isDemi = (selectedPlayer?.statutJoueur || "").toLowerCase().includes("demi");

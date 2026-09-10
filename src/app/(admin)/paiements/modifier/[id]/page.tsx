@@ -528,7 +528,10 @@ export default function ModifyPaymentPage({ params }: { params: Promise<{ id: st
 
       const adhesionPart = adhesionCode ? `[ADHESION:${adhesionCode}] ` : "";
       const planPart = `[PLAN:${planPaiement.toUpperCase()}] `;
-      const moisPart = planPaiement === "mensuel" ? `[MOIS_PAYES:${nombreDeMois}] ` : "";
+      const remainingMonthsSeason = Math.max(0, 12 - (nombreDeMois || 1));
+      const moisPart = (planPaiement === "boursier" || isDemiBoursier || planPaiement === "mensuel")
+        ? `[MOIS_PAYES:${nombreDeMois}] [MOIS_RESTANTS:${remainingMonthsSeason}] `
+        : "";
       const statutPart = `[STATUT:${statut.toUpperCase()}] `;
       const rabaisPart = isDemiBoursier
         ? "[REDUCTION:HALF] "

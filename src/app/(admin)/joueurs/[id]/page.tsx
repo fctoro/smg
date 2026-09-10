@@ -21,13 +21,60 @@ const getSafeAvatarSrc = (photoUrl?: string): string => {
 };
 
 /** Calcule le solde restant pour un paiement individuel (même logique que la page paiements) */
-const computePaymentBalance = (p: any): { balance: number; devise: "US" | "HTG" } => {
+const computePaymentBalance = (p: any, player?: any): { balance: number; devise: "US" | "HTG"; moisRestants?: number; isSpecial?: boolean } => {
   const paymentDevise = (p.devise || "US") as "US" | "HTG";
   const zero = { balance: 0, devise: paymentDevise };
 
   const remarkLower = (p.remarque || "").toLowerCase();
-  // Ignorer les boursiers
-  if (remarkLower.includes("[plan:boursier]")) return zero;
+  const playerStatus = ((player as any)?.statutJoueur || "").toLowerCase().trim();
+  const isBoursier = (playerStatus === "bourse" || playerStatus === "boursier" || remarkLower.includes("[plan:boursier]")) && !playerStatus.includes("demi") && !remarkLower.includes("demi");
+  const isDemiBoursier = playerStatus.includes("demi") || remarkLower.includes("demi-bourse") || remarkLower.includes("demi bourse") || remarkLower.includes("[reduction:half]") || (remarkLower.includes("demi") && !remarkLower.includes("pandemie"));
+
+  if (isBoursier) {
+    const restantsMatch = (p.remarque || "").match(/\[MOIS_RESTANTS:\s*(\d+)\s*\]/i);
+    let moisRestants = restantsMatch ? parseInt(restantsMatch[1], 10) : undefined;
+    if (moisRestants === undefined) {
+      const payesMatch = (p.remarque || "").match(/\[MOIS_PAYES:\s*(\d+)\s*\]/i) || (p.remarque || "").match(/(\d+)\s*mois/i);
+      if (payesMatch) {
+        moisRestants = Math.max(0, 12 - parseInt(payesMatch[1], 10));
+      }
+    }
+    if (moisRestants !== undefined) {
+      return { balance: moisRestants * 2500, devise: "HTG", moisRestants, isSpecial: true };
+    }
+    return zero;
+  }
+
+  if (isDemiBoursier) {
+    const restantsMatch = (p.remarque || "").match(/\[MOIS_RESTANTS:\s*(\d+)\s*\]/i);
+    let moisRestants = restantsMatch ? parseInt(restantsMatch[1], 10) : undefined;
+    if (moisRestants === undefined) {
+      const payesMatch = (p.remarque || "").match(/\[MOIS_PAYES:\s*(\d+)\s*\]/i) || (p.remarque || "").match(/(\d+)\s*mois/i);
+      if (payesMatch) {
+        moisRestants = Math.max(0, 12 - parseInt(payesMatch[1], 10));
+      }
+    }
+    if (moisRestants !== undefined) {
+      const cat = ((player as any)?.categorie || "").toLowerCase().replace(/[\s-_]/g, "");
+      const isTi = cat.includes("titoro") || cat.includes("ti-toro") || cat.includes("ti_toro");
+      const demiMonthlyUSD = isTi ? 57.5 : 77.5;
+      const remainingUSD = moisRestants * demiMonthlyUSD;
+
+      let taux = p.taux || 0;
+      if (taux <= 1) {
+        const tauxMatch = (p.remarque || "").match(/\[TAUX:\s*([\d.]+)\s*\]/i);
+        if (tauxMatch && tauxMatch[1]) {
+          taux = parseFloat(tauxMatch[1]);
+        }
+      }
+      if (paymentDevise === "HTG" && taux > 1) {
+        return { balance: Math.round(remainingUSD * taux), devise: "HTG", moisRestants, isSpecial: true };
+      } else {
+        return { balance: Number(remainingUSD.toFixed(2)), devise: "US", moisRestants, isSpecial: true };
+      }
+    }
+  }
+
   // Paiements kit-only sans adhésion : pas de dette
   const isKitOnly = !remarkLower.includes("adhésion") && !remarkLower.includes("adhesion");
 
@@ -68,8 +115,11 @@ export default function PlayerDetailsPage() {
     if (!player) return null;
 
     const playerStatus = ((player as any).statutJoueur || "").toLowerCase().trim();
-    const isBoursier = playerStatus === "bourse" || playerStatus === "boursier"
-      || playerPayments.some(p => (p.remarque || "").toLowerCase().includes("[plan:boursier]"));
+    const isBoursier = (playerStatus === "bourse" || playerStatus === "boursier"
+      || playerPayments.some(p => (p.remarque || "").toLowerCase().includes("[plan:boursier]")))
+      && !playerStatus.includes("demi");
+    const isDemiBoursier = playerStatus.includes("demi")
+      || playerPayments.some(p => (p.remarque || "").toLowerCase().includes("demi"));
 
     // Dédupliquer les paiements identiques
     const uniquePayments: any[] = [];
@@ -83,7 +133,7 @@ export default function PlayerDetailsPage() {
     });
 
     const hasHTG = uniquePayments.some(p => p.devise === "HTG" || (p.montantHTG && p.montantHTG > 0));
-    const mainDevise: "US" | "HTG" = hasHTG ? "HTG" : "US";
+    const mainDevise: "US" | "HTG" = (isBoursier || hasHTG) ? "HTG" : "US";
 
     let totalPaid = 0;
     if (mainDevise === "HTG") {
@@ -104,7 +154,33 @@ export default function PlayerDetailsPage() {
       }, 0);
     }
 
-    if (isBoursier) return { isBoursier: true, totalPaid, balance: 0, devise: mainDevise, isPaidInFull: true };
+    if (isBoursier) {
+      const latestPayment = uniquePayments[0];
+      const bal = latestPayment ? computePaymentBalance(latestPayment, player) : { balance: 0, devise: "HTG" as const, moisRestants: 0 };
+      return {
+        isBoursier: true,
+        isDemiBoursier: false,
+        totalPaidUSD: totalPaid,
+        balance: bal.balance,
+        moisRestants: bal.moisRestants,
+        devise: "HTG" as const,
+        isPaidInFull: bal.balance <= 0,
+      };
+    }
+
+    if (isDemiBoursier) {
+      const latestPayment = uniquePayments[0];
+      const bal = latestPayment ? computePaymentBalance(latestPayment, player) : { balance: 0, devise: mainDevise, moisRestants: 0 };
+      return {
+        isBoursier: false,
+        isDemiBoursier: true,
+        totalPaidUSD: totalPaid,
+        balance: bal.balance,
+        moisRestants: bal.moisRestants,
+        devise: bal.devise,
+        isPaidInFull: bal.balance <= 0,
+      };
+    }
 
     let dossierTotalDueUSD = 0;
     uniquePayments.forEach((p) => {
@@ -139,6 +215,7 @@ export default function PlayerDetailsPage() {
 
     return {
       isBoursier: false,
+      isDemiBoursier: false,
       totalPaidUSD: totalPaid,
       balance: Math.round(balance * 100) / 100,
       devise: mainDevise,
@@ -249,9 +326,43 @@ export default function PlayerDetailsPage() {
             {finSummary ? (
               <>
                 {finSummary.isBoursier ? (
-                  <p className="mt-2 text-sm font-semibold text-purple-600 dark:text-purple-400">
-                    🎓 Boursier (Exonéré)
-                  </p>
+                  <>
+                    <p className="mt-2 text-sm font-semibold text-purple-600 dark:text-purple-400">
+                      🎓 Boursier (2,500 HTG / mois)
+                    </p>
+                    <p className="mt-1 text-sm text-gray-700 dark:text-gray-300">
+                      Total versé : <span className="font-semibold text-gray-900 dark:text-white">{formatClubCurrency(finSummary.totalPaidUSD, "HTG")}</span>
+                    </p>
+                    {finSummary.balance > 0 ? (
+                      <p className="mt-1 text-sm font-semibold text-red-600 dark:text-red-400">
+                        Solde dû : {formatClubCurrency(finSummary.balance, "HTG")}
+                        {finSummary.moisRestants !== undefined && ` (${finSummary.moisRestants} mois restants)`}
+                      </p>
+                    ) : (
+                      <p className="mt-1 text-sm font-semibold text-emerald-600 dark:text-emerald-400">
+                        ✓ À jour (Soldé pour la saison)
+                      </p>
+                    )}
+                  </>
+                ) : finSummary.isDemiBoursier ? (
+                  <>
+                    <p className="mt-2 text-sm font-semibold text-blue-600 dark:text-blue-400">
+                      🎓 Demi-bourse (50%)
+                    </p>
+                    <p className="mt-1 text-sm text-gray-700 dark:text-gray-300">
+                      Total versé : <span className="font-semibold text-gray-900 dark:text-white">{formatClubCurrency(finSummary.totalPaidUSD, finSummary.devise)}</span>
+                    </p>
+                    {finSummary.balance > 0 ? (
+                      <p className="mt-1 text-sm font-semibold text-red-600 dark:text-red-400">
+                        Solde dû : {formatClubCurrency(finSummary.balance, finSummary.devise)}
+                        {finSummary.moisRestants !== undefined && ` (${finSummary.moisRestants} mois restants)`}
+                      </p>
+                    ) : (
+                      <p className="mt-1 text-sm font-semibold text-emerald-600 dark:text-emerald-400">
+                        ✓ À jour (Soldé pour la saison)
+                      </p>
+                    )}
+                  </>
                 ) : (
                   <>
                     <p className="mt-2 text-sm text-gray-700 dark:text-gray-300">
@@ -304,7 +415,7 @@ export default function PlayerDetailsPage() {
                     </tr>
                   ) : (
                     pagedPayments.map((p) => {
-                      const bal = computePaymentBalance(p);
+                      const bal = computePaymentBalance(p, player);
                       return (
                         <tr key={p.id} className="hover:bg-gray-50 dark:hover:bg-white/[0.02]">
                           <td className="px-4 py-3">{formatClubDate(p.datePaiement ?? "")}</td>
@@ -313,9 +424,18 @@ export default function PlayerDetailsPage() {
                           </td>
                           <td className="px-4 py-3">
                             {bal.balance > 0 ? (
-                              <span className="font-medium text-red-600 dark:text-red-400">
-                                {formatClubCurrency(bal.balance, bal.devise)}
-                              </span>
+                              <div className="flex flex-col">
+                                <span className="font-medium text-red-600 dark:text-red-400">
+                                  {formatClubCurrency(bal.balance, bal.devise)}
+                                </span>
+                                {bal.moisRestants !== undefined && bal.moisRestants > 0 && (
+                                  <span className="text-[11px] font-semibold text-amber-600 dark:text-amber-400">
+                                    ({bal.moisRestants} mois restant{bal.moisRestants > 1 ? "s" : ""})
+                                  </span>
+                                )}
+                              </div>
+                            ) : bal.moisRestants !== undefined && bal.moisRestants === 0 ? (
+                              <span className="font-medium text-emerald-600 dark:text-emerald-400">Soldé (12/12 mois)</span>
                             ) : (
                               <span className="font-medium text-emerald-600 dark:text-emerald-400">À jour</span>
                             )}

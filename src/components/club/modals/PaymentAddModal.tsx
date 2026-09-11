@@ -586,7 +586,6 @@ export function PaymentAddModal({ isOpen, onClose, initialPlayerId }: PaymentAdd
 
     const plan = paymentPlans.find((p) => p.id === planId);
     if (plan && selectedPlayer) {
-      setDevise("US");
       setSelectedPricing((current) => applyAutoAdhesionForPlayer(selectedPlayer, current, rubricOptions));
     }
   };

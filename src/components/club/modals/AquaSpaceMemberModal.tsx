@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Modal } from '@/components/ui/modal';
 import { AquaSpaceMember, AquaSpaceNiveau, Player } from '@/types/club';
 import { useClubData } from '@/context/ClubDataContext';
 import { generateNextAquaMatricule } from '@/lib/club/aqua-space';
@@ -40,6 +41,14 @@ export const AquaSpaceMemberModal: React.FC<AquaSpaceMemberModalProps> = ({
   const [activeTab, setActiveTab] = useState<'profil' | 'parent' | 'medical' | 'reglement'>('profil');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const scrollContentRef = useRef<HTMLDivElement>(null);
+
+  // Scroll to top of form body when changing tabs
+  useEffect(() => {
+    if (scrollContentRef.current) {
+      scrollContentRef.current.scrollTop = 0;
+    }
+  }, [activeTab]);
 
   // Search existing club player
   const [playerSearchQuery, setPlayerSearchQuery] = useState('');
@@ -227,16 +236,18 @@ export const AquaSpaceMemberModal: React.FC<AquaSpaceMemberModalProps> = ({
     { value: 'Aqua gym', label: 'Aqua gym', desc: 'Gymnastique aquatique, renforcement et tonicité', color: 'bg-purple-50 text-purple-800 border-purple-300 dark:bg-purple-950/30 dark:text-purple-300 dark:border-purple-800' },
   ];
 
-  if (!isOpen) return null;
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 backdrop-blur-sm p-4 overflow-y-auto">
-      <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl max-w-3xl w-full max-h-[92vh] flex flex-col border border-gray-200 dark:border-gray-800 animate-in fade-in zoom-in duration-150">
-        
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      showCloseButton={false}
+      className="max-w-3xl w-full p-0 overflow-hidden rounded-2xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 shadow-2xl"
+    >
+      <form onSubmit={handleSubmit} className="flex flex-col h-[85vh] max-h-[85vh] overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4.5 border-b border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 rounded-t-2xl">
+        <div className="shrink-0 flex items-center justify-between px-6 py-4.5 border-b border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900">
           <div className="flex items-center gap-3.5">
-            <div className="w-11 h-11 rounded-xl bg-brand-50 text-brand-500 border border-brand-100 dark:bg-brand-500/10 dark:text-brand-400 dark:border-brand-500/20 flex items-center justify-center">
+            <div className="w-11 h-11 rounded-xl bg-brand-50 text-brand-500 border border-brand-100 dark:bg-brand-500/10 dark:text-brand-400 dark:border-brand-500/20 flex items-center justify-center shrink-0">
               <Waves className="w-5 h-5 text-brand-500" />
             </div>
             <div>
@@ -249,19 +260,20 @@ export const AquaSpaceMemberModal: React.FC<AquaSpaceMemberModalProps> = ({
             </div>
           </div>
           <button
+            type="button"
             onClick={onClose}
-            className="p-1.5 text-gray-400 hover:text-gray-700 dark:hover:text-white rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition"
+            className="p-1.5 text-gray-400 hover:text-gray-700 dark:hover:text-white rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Tab Navigation */}
-        <div className="flex border-b border-gray-200 dark:border-gray-800 px-6 bg-gray-50/60 dark:bg-gray-800/40 text-xs font-semibold text-gray-600 dark:text-gray-300 overflow-x-auto">
+        <div className="shrink-0 flex border-b border-gray-200 dark:border-gray-800 px-6 bg-gray-50/60 dark:bg-gray-800/40 text-xs font-semibold text-gray-600 dark:text-gray-300 overflow-x-auto">
           <button
             type="button"
             onClick={() => setActiveTab('profil')}
-            className={`py-3 px-4 border-b-2 font-bold transition-all flex items-center gap-2 ${
+            className={`py-3 px-4 border-b-2 font-bold transition-all flex items-center gap-2 cursor-pointer ${
               activeTab === 'profil'
                 ? 'border-brand-500 text-brand-600 dark:border-brand-400 dark:text-brand-400'
                 : 'border-transparent hover:text-gray-900 dark:hover:text-white'
@@ -273,7 +285,7 @@ export const AquaSpaceMemberModal: React.FC<AquaSpaceMemberModalProps> = ({
           <button
             type="button"
             onClick={() => setActiveTab('parent')}
-            className={`py-3 px-4 border-b-2 font-bold transition-all flex items-center gap-2 ${
+            className={`py-3 px-4 border-b-2 font-bold transition-all flex items-center gap-2 cursor-pointer ${
               activeTab === 'parent'
                 ? 'border-brand-500 text-brand-600 dark:border-brand-400 dark:text-brand-400'
                 : 'border-transparent hover:text-gray-900 dark:hover:text-white'
@@ -285,7 +297,7 @@ export const AquaSpaceMemberModal: React.FC<AquaSpaceMemberModalProps> = ({
           <button
             type="button"
             onClick={() => setActiveTab('medical')}
-            className={`py-3 px-4 border-b-2 font-bold transition-all flex items-center gap-2 ${
+            className={`py-3 px-4 border-b-2 font-bold transition-all flex items-center gap-2 cursor-pointer ${
               activeTab === 'medical'
                 ? 'border-brand-500 text-brand-600 dark:border-brand-400 dark:text-brand-400'
                 : 'border-transparent hover:text-gray-900 dark:hover:text-white'
@@ -300,7 +312,7 @@ export const AquaSpaceMemberModal: React.FC<AquaSpaceMemberModalProps> = ({
           <button
             type="button"
             onClick={() => setActiveTab('reglement')}
-            className={`py-3 px-4 border-b-2 font-bold transition-all flex items-center gap-2 ${
+            className={`py-3 px-4 border-b-2 font-bold transition-all flex items-center gap-2 cursor-pointer ${
               activeTab === 'reglement'
                 ? 'border-brand-500 text-brand-600 dark:border-brand-400 dark:text-brand-400'
                 : 'border-transparent hover:text-gray-900 dark:hover:text-white'
@@ -313,19 +325,19 @@ export const AquaSpaceMemberModal: React.FC<AquaSpaceMemberModalProps> = ({
 
         {/* Error notification banner */}
         {errorMsg && (
-          <div className="mx-6 mt-4 p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 text-rose-700 dark:text-rose-300 text-xs font-semibold flex items-center justify-between">
+          <div className="shrink-0 mx-6 mt-4 p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 text-rose-700 dark:text-rose-300 text-xs font-semibold flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 text-rose-600" />
+              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
               <span>{errorMsg}</span>
             </div>
-            <button onClick={() => setErrorMsg('')} className="text-rose-500 hover:text-rose-700">
+            <button type="button" onClick={() => setErrorMsg('')} className="text-rose-500 hover:text-rose-700 cursor-pointer">
               <X className="w-4 h-4" />
             </button>
           </div>
         )}
 
         {/* Form Body */}
-        <form onSubmit={handleSubmit} className="p-6 overflow-y-auto flex-1 space-y-5 custom-scrollbar">
+        <div ref={scrollContentRef} className="p-6 overflow-y-auto flex-1 min-h-0 space-y-5 sidebar-scrollbar">
           
           {/* TAB 1: PROFIL NAGEUR */}
           {activeTab === 'profil' && (
@@ -900,72 +912,72 @@ export const AquaSpaceMemberModal: React.FC<AquaSpaceMemberModalProps> = ({
               </div>
             </div>
           )}
+        </div>
 
-          {/* Footer Actions */}
-          <div className="flex items-center justify-between pt-4 border-t border-gray-100 dark:border-gray-800">
-            <div className="flex items-center gap-2">
-              {activeTab !== 'profil' && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (activeTab === 'reglement') setActiveTab('medical');
-                    else if (activeTab === 'medical') setActiveTab('parent');
-                    else if (activeTab === 'parent') setActiveTab('profil');
-                  }}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 rounded-xl hover:bg-gray-200 dark:hover:bg-gray-700 transition"
-                >
-                  <ArrowLeft className="w-3.5 h-3.5" />
-                  <span>Précédent</span>
-                </button>
-              )}
-            </div>
-
-            <div className="flex items-center gap-2.5">
+        {/* Pinned Footer Actions */}
+        <div className="shrink-0 px-6 py-4 border-t border-gray-200 dark:border-gray-800 bg-gray-50/90 dark:bg-gray-900/90 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            {activeTab !== 'profil' && (
               <button
                 type="button"
-                onClick={onClose}
-                disabled={isSubmitting}
-                className="px-4 py-2 text-xs font-semibold text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition"
+                onClick={() => {
+                  if (activeTab === 'reglement') setActiveTab('medical');
+                  else if (activeTab === 'medical') setActiveTab('parent');
+                  else if (activeTab === 'parent') setActiveTab('profil');
+                }}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-gray-600 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition shadow-2xs cursor-pointer"
               >
-                Annuler
+                <ArrowLeft className="w-3.5 h-3.5" />
+                <span>Précédent</span>
               </button>
-
-              {activeTab !== 'reglement' ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (activeTab === 'profil') setActiveTab('parent');
-                    else if (activeTab === 'parent') setActiveTab('medical');
-                    else if (activeTab === 'medical') setActiveTab('reglement');
-                  }}
-                  className="inline-flex items-center gap-1.5 px-5 py-2 text-xs font-medium rounded-xl bg-brand-500 text-white hover:bg-brand-600 shadow-theme-xs transition"
-                >
-                  <span>Suivant</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </button>
-              ) : (
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="inline-flex items-center gap-2 px-6 py-2 text-xs font-medium rounded-xl bg-brand-500 text-white hover:bg-brand-600 shadow-theme-xs transition disabled:opacity-50"
-                >
-                  {isSubmitting ? (
-                    <>
-                      <div className="h-3.5 w-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                      <span>Enregistrement...</span>
-                    </>
-                  ) : (
-                    <>
-                      <CheckCircle2 className="w-4 h-4" />
-                      <span>{initialData ? 'Enregistrer les modifications' : 'Confirmer l’inscription'}</span>
-                    </>
-                  )}
-                </button>
-              )}
-            </div>
+            )}
           </div>
-        </form>
-      </div>
-    </div>
+
+          <div className="flex items-center gap-2.5">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={isSubmitting}
+              className="px-4 py-2 text-xs font-semibold text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition cursor-pointer"
+            >
+              Annuler
+            </button>
+
+            {activeTab !== 'reglement' ? (
+              <button
+                type="button"
+                onClick={() => {
+                  if (activeTab === 'profil') setActiveTab('parent');
+                  else if (activeTab === 'parent') setActiveTab('medical');
+                  else if (activeTab === 'medical') setActiveTab('reglement');
+                }}
+                className="inline-flex items-center gap-1.5 px-5 py-2 text-xs font-medium rounded-xl bg-brand-500 text-white hover:bg-brand-600 shadow-theme-xs transition cursor-pointer"
+              >
+                <span>Suivant</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            ) : (
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="inline-flex items-center gap-2 px-6 py-2 text-xs font-medium rounded-xl bg-brand-500 text-white hover:bg-brand-600 shadow-theme-xs transition disabled:opacity-50 cursor-pointer"
+              >
+                {isSubmitting ? (
+                  <>
+                    <div className="h-3.5 w-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                    <span>Enregistrement...</span>
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="w-4 h-4" />
+                    <span>{initialData ? 'Enregistrer les modifications' : 'Confirmer l’inscription'}</span>
+                  </>
+                )}
+              </button>
+            )}
+          </div>
+        </div>
+      </form>
+    </Modal>
   );
 };

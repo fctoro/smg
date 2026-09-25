@@ -180,8 +180,17 @@ export default function PlayerForm({
     }
   }, [formValues, draftKey]);
 
+  const prevDobRef = useRef(formValues.dateNaissance);
+
   useEffect(() => {
+    // Ne pas recalculer automatiquement si c'est un joueur existant en modification et que la date n'a pas été modifiée par l'utilisateur
+    if (playerId && prevDobRef.current === formValues.dateNaissance) {
+      return;
+    }
+
     if (!formValues.dateNaissance) return;
+    prevDobRef.current = formValues.dateNaissance;
+
     const dob = new Date(formValues.dateNaissance);
     if (isNaN(dob.getTime())) return;
     
@@ -220,7 +229,7 @@ export default function PlayerForm({
         }
       }
     }
-  }, [formValues.dateNaissance, categories]);
+  }, [formValues.dateNaissance, categories, playerId]);
 
   const getInputClass = (fieldName: string) => {
     if (highlightFields.includes(fieldName)) {

@@ -33,6 +33,12 @@ const DEFAULT_STATUS_OPTIONS = [
   "Joueur spécial",
 ];
 
+const getSafeAvatarSrc = (photoUrl?: string): string => {
+  const trimmed = (photoUrl || "").trim();
+  if (trimmed.length > 0 && !trimmed.includes("user-01")) return trimmed;
+  return "/images/user/silhouette.svg";
+};
+
 export default function StatutsSpeciauxPage() {
   const { players, setPlayers } = useClubData();
   const [searchQuery, setSearchQuery] = useState("");
@@ -479,11 +485,12 @@ export default function StatutsSpeciauxPage() {
                     <td className="px-4 py-3 font-medium text-gray-900 dark:text-white">
                       <div className="flex items-center gap-3">
                         <Image
-                          src={player.photoUrl || "/images/user/silhouette.svg"}
+                          src={getSafeAvatarSrc(player.photoIdentiteUrl || player.photoUrl)}
                           alt={getPlayerFullName(player)}
                           width={36}
                           height={36}
-                          className="h-9 w-9 rounded-full object-cover border border-gray-200 dark:border-gray-700"
+                          className="h-9 w-9 rounded-full object-cover border border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800"
+                          unoptimized
                         />
                         <div>
                           <p className="font-semibold text-gray-900 dark:text-white">

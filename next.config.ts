@@ -53,6 +53,14 @@ const nextConfig: NextConfig = {
         protocol: "https",
         hostname: "www.ixpap.com",
       },
+      {
+        protocol: "https",
+        hostname: "*.supabase.co",
+      },
+      {
+        protocol: "https",
+        hostname: "efyjemzzapcrluqydwzj.supabase.co",
+      },
     ],
   },
   typescript: {

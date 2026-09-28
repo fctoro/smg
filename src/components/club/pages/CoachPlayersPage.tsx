@@ -162,14 +162,14 @@ export default function CoachPlayersPage({ initialTab }: CoachPlayersPageProps =
       ? playersByCategory[selectedCategory] 
       : coachPlayers;
       
-    const headers = ["Nom", "Poste", "Statut", "Sexe", "Catégorie", "Date de naissance"];
+    const headers = ["Nom et Prénoms", "Date de Naissance", "Poste", "Statut", "Sexe", "Catégorie"];
     const rows = playersToExport.map(p => [
       getPlayerFullName(p),
+      p.dateNaissance || "",
       p.poste || "",
       p.statut || "",
       p.sexe || "",
-      p.categorie || "",
-      p.dateNaissance || ""
+      p.categorie || ""
     ]);
     const csvContent = [
       headers.join(","),

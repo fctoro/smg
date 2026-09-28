@@ -1,6 +1,7 @@
 "use client";
 
 import { getSeasonCode, generatePlayerMatricule, getCurrentSeason } from "@/lib/club/season";
+import { getCategoryFromBirthDate } from "@/lib/club/metrics";
 
 import React, { createContext, useContext, useEffect, useState, useMemo, useCallback } from "react";
 import {
@@ -585,10 +586,17 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
               poste,
               sexe,
               categorie: (() => {
+                // 1. Calcul dynamique prioritaire basé sur l'année de naissance selon le barème officiel du club
+                if (dateNaissance) {
+                  const calculatedCat = getCategoryFromBirthDate(dateNaissance);
+                  if (calculatedCat) return calculatedCat;
+                }
+
+                // 2. Fallback sur la catégorie enregistrée en base si pas de date de naissance
                 const rawCat = (group.find(g => g.Categorie || g.categorie || g.Category || g.category)?.Categorie || primaryRecord.Categorie || "").toString().trim();
                 const lowerCat = rawCat.toLowerCase();
 
-                if (rawCat && lowerCat !== "ti toro" && lowerCat !== "titoro" && lowerCat !== "default") {
+                if (rawCat && lowerCat !== "default") {
                   if (/^u-?\d+$/i.test(lowerCat)) {
                     const num = lowerCat.replace(/[^\d]/g, "");
                     return `U${num}`;
@@ -596,25 +604,7 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
                   return rawCat;
                 }
 
-                if (dateNaissance) {
-                  const dt = new Date(dateNaissance);
-                  if (!isNaN(dt.getTime())) {
-                    const birthYear = dt.getFullYear();
-                    const currentYear = new Date().getFullYear();
-                    const age = currentYear - birthYear;
-
-                    if (age <= 5) return "ti toro";
-                    if (age < 8) return "U8";
-                    if (age < 10) return "U10";
-                    if (age < 12) return "U12";
-                    if (age < 14) return "U14";
-                    if (age < 16) return "U16";
-                    if (age < 18) return "U18";
-                    return "Senior";
-                  }
-                }
-
-                return rawCat || "Senior";
+                return "Senior";
               })(),
                statut: playerStatus,
               statutJoueur: finalStatutJoueur,

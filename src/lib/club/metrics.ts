@@ -119,3 +119,32 @@ export const getMonthlyPaymentsSeries = (payments: Payment[], year: number | "al
     dataHTG: totalsHTG
   };
 };
+
+/**
+ * Détermine la catégorie officielle du joueur en fonction de son année de naissance
+ * Ti Toro (2021-2022-2023)
+ * U8 (2019-2020)
+ * U10 (2017-2018)
+ * U12 (2015-2016)
+ * U14 (2013-2014)
+ * U16 (2011-2012)
+ * U18 (2009-2010)
+ */
+export const getCategoryFromBirthDate = (dateNaissance: string | Date | null | undefined): string | null => {
+  if (!dateNaissance) return null;
+  const dt = typeof dateNaissance === "string" ? new Date(dateNaissance) : dateNaissance;
+  if (isNaN(dt.getTime())) return null;
+
+  const birthYear = dt.getFullYear();
+  if (birthYear >= 2021) return "ti toro";
+  if (birthYear === 2019 || birthYear === 2020) return "U8";
+  if (birthYear === 2017 || birthYear === 2018) return "U10";
+  if (birthYear === 2015 || birthYear === 2016) return "U12";
+  if (birthYear === 2013 || birthYear === 2014) return "U14";
+  if (birthYear === 2011 || birthYear === 2012) return "U16";
+  if (birthYear === 2009 || birthYear === 2010) return "U18";
+  if (birthYear === 2008) return "U19";
+  if (birthYear === 2007) return "U20";
+  return "Senior";
+};
+

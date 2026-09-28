@@ -5,6 +5,7 @@ import { PaymentStatus, PlayerFormValues, PlayerStatus, ProgrammeMatch } from "@
 import { normalizePlayerFormValues } from "@/lib/club/player-form";
 import { fetchProgrammes } from "@/lib/club/programmes";
 import { getCurrentSeason, getDynamicSeasonOptions } from "@/lib/club/season";
+import { getCategoryFromBirthDate } from "@/lib/club/metrics";
 
 interface PlayerFormProps {
   initialValues?: Partial<PlayerFormValues>;
@@ -194,23 +195,7 @@ export default function PlayerForm({
     const dob = new Date(formValues.dateNaissance);
     if (isNaN(dob.getTime())) return;
     
-    const today = new Date();
-    let age = today.getFullYear() - dob.getFullYear();
-    const m = today.getMonth() - dob.getMonth();
-    if (m < 0 || (m === 0 && today.getDate() < dob.getDate())) {
-      age--;
-    }
-
-    let autoCategory = "";
-    if (age <= 5) autoCategory = "ti toro";
-    else if (age < 8) autoCategory = "U8";
-    else if (age < 10) autoCategory = "U10";
-    else if (age < 12) autoCategory = "U12";
-    else if (age < 14) autoCategory = "U14";
-    else if (age < 16) autoCategory = "U16";
-    else if (age < 18) autoCategory = "U18";
-    else if (age === 18) autoCategory = "U19";
-    else if (age >= 19) autoCategory = "U20";
+    let autoCategory = getCategoryFromBirthDate(dob) || "";
 
     if (autoCategory && autoCategory !== formValues.categorie) {
       // Only set if the category exists in the available options or if it's one of the standard ones
@@ -219,8 +204,8 @@ export default function PlayerForm({
         const exactCat = categories.find((c) => c.toLowerCase() === autoCategory.toLowerCase()) || autoCategory;
         updateField("categorie", exactCat);
         
-        // Also auto-assign program (ti toro vs FC toro) based on age
-        const isTiToro = age <= 5;
+        // Also auto-assign program (ti toro vs FC toro) based on category
+        const isTiToro = exactCat.toLowerCase() === "ti toro" || exactCat.toLowerCase() === "titoro";
         const currentProgramme = formValues.programme || "";
         if (isTiToro && !currentProgramme.includes("Ti Toro")) {
            updateField("programme", "Ti Toro");

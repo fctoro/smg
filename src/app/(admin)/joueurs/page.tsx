@@ -327,7 +327,7 @@ function PlayersPageContent() {
       title: "Exporter la liste",
       message: "Voulez-vous vraiment exporter la liste des joueurs au format Excel ?",
       onConfirm: () => {
-        const headers = ["Matricule", "Nom", "Prénom", "Poste", "Sexe", "Catégorie", "Statut", "Saison", "Téléphone", "Email", "Date Inscription"];
+        const headers = ["Matricule", "Nom", "Prénom", "Date de Naissance", "Poste", "Sexe", "Catégorie", "Statut", "Saison", "Téléphone", "Email", "Date Inscription"];
         const thead = headers.map((h) => `<th>${h}</th>`).join("");
         const tbody = exportData
           .map((p) => {
@@ -335,6 +335,7 @@ function PlayersPageContent() {
               p.matricule || "-",
               p.nom || "-",
               p.prenom || "-",
+              p.dateNaissance || "-",
               p.poste || "-",
               p.sexe || "-",
               p.categorie || "-",
@@ -386,11 +387,11 @@ function PlayersPageContent() {
       title: "Exporter la liste",
       message: "Voulez-vous vraiment exporter la liste des joueurs au format CSV ?",
       onConfirm: () => {
-        const headers = ["Matricule", "Nom", "Prénom", "Poste", "Sexe", "Catégorie", "Statut", "Saison", "Téléphone", "Email", "Date Inscription"];
+        const headers = ["Matricule", "Nom", "Prénom", "Date de Naissance", "Poste", "Sexe", "Catégorie", "Statut", "Saison", "Téléphone", "Email", "Date Inscription"];
         let csvContent = "\uFEFF" + headers.join(",") + "\n";
         
         exportData.forEach(p => {
-          const row = [p.matricule, p.nom, p.prenom, p.poste, p.sexe, p.categorie, p.statut, p.saison, p.telephone, p.email, p.dateInscription];
+          const row = [p.matricule, p.nom, p.prenom, p.dateNaissance, p.poste, p.sexe, p.categorie, p.statut, p.saison, p.telephone, p.email, p.dateInscription];
           const csvRow = row.map(field => `"${(field || "").toString().replace(/"/g, '""')}"`);
           csvContent += csvRow.join(",") + "\n";
         });

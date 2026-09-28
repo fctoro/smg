@@ -258,7 +258,7 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
                   {fullName}
                 </h3>
                 {player.matricule && (
-                  <span className="px-2.5 py-0.5 rounded-full text-xs font-mono font-bold bg-brand-50 text-brand-700 dark:bg-brand-500/10 dark:text-brand-400">
+                  <span className="text-xs font-mono font-bold text-brand-700 dark:text-brand-400">
                     {player.matricule}
                   </span>
                 )}
@@ -276,11 +276,11 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
                   {playerStatusLabel[player.statut as keyof typeof playerStatusLabel] || player.statut}
                 </span>
                 {!isConfidential && (
-                  <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-                    finSummary.isBoursier ? "bg-purple-100 text-purple-700 dark:bg-purple-500/15 dark:text-purple-400" :
-                    finSummary.hasNoPayments ? "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300" :
-                    finSummary.isPaidInFull ? "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-400" :
-                    "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400"
+                  <span className={`inline-flex items-center text-xs font-semibold ${
+                    finSummary.isBoursier ? "text-purple-700 dark:text-purple-400" :
+                    finSummary.hasNoPayments ? "text-gray-500 dark:text-gray-400" :
+                    finSummary.isPaidInFull ? "text-green-700 dark:text-green-400" :
+                    "text-red-600 dark:text-red-400"
                   }`}>
                     {finSummary.isBoursier ? "🎓 Boursier (Exonéré)" :
                      finSummary.hasNoPayments ? "⚪ Aucun versement" :
@@ -289,7 +289,7 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
                   </span>
                 )}
                 <span className="text-xs text-gray-400">
-                  Inscrit le {formatClubDate(player.dateInscription)}
+                  • Inscrit le {formatClubDate(player.dateInscription)}
                 </span>
               </div>
             </div>
@@ -310,7 +310,7 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
                 Effectuer un paiement
               </button>
             )}
-            <span className="px-4 py-2 rounded-xl bg-brand-50 dark:bg-brand-900/20 border border-brand-200 dark:border-brand-800 text-xs font-bold text-brand-700 dark:text-brand-300">
+            <span className="text-xs font-bold text-brand-700 dark:text-brand-300">
               {programme}
             </span>
           </div>

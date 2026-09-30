@@ -547,6 +547,39 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
               }
             }
 
+            // Collecte complète et sans perte de toutes les saisons / tournois du joueur
+            const allPlayerSeasonsSet = new Set<string>();
+
+            const addSeasonWithYearExtraction = (str: string | null | undefined) => {
+              if (!str) return;
+              const trimmed = String(str).trim();
+              if (!trimmed) return;
+              const clean = trimmed.replace(/^saison\s*/i, "").trim();
+              if (clean) allPlayerSeasonsSet.add(clean);
+              allPlayerSeasonsSet.add(trimmed);
+
+              // Extraction automatique du format AAAA-AAAA (ex: "2019-2020" dans "TI TORO 2019-2020")
+              const match = trimmed.match(/\b\d{4}-\d{4}\b/);
+              if (match) {
+                allPlayerSeasonsSet.add(match[0]);
+              }
+            };
+
+            studentInscriptions.forEach((i: any) => {
+              const sess = sessionsMap.get(i.SessionId);
+              if (sess) addSeasonWithYearExtraction(sess);
+            });
+            group.forEach((g: any) => {
+              if (g.Saison) addSeasonWithYearExtraction(g.Saison);
+            });
+            if (entrySeason) addSeasonWithYearExtraction(entrySeason);
+            if (explicitSaison) addSeasonWithYearExtraction(explicitSaison);
+            if (currentDisplaySeason) addSeasonWithYearExtraction(currentDisplaySeason);
+            if (playerStatus === "actif") {
+              addSeasonWithYearExtraction(getCurrentSeason());
+            }
+            const allPlayerSeasons = Array.from(allPlayerSeasonsSet);
+
             // Contact d'urgence (recherche robuste sur toutes les colonnes et entrées du groupe par ordre récent)
             const findInGroup = (keys: string[]) => {
               for (const g of sortedByRecent) {
@@ -619,6 +652,7 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
               cotisationStatut: totalPaid > 0 ? "paid" : "pending",
               dernierPaiement: dernierPaiementDate,
               saison: (explicitSaison && explicitSaison.length > 3) ? explicitSaison : (playerStatus === "actif" ? getCurrentSeason() : currentDisplaySeason),
+              saisons: allPlayerSeasons,
               entrySeason: entrySeason || explicitSaison || primaryRecord.Saison || getCurrentSeason(),
               parentNomPrenom,
               parentTelephone,

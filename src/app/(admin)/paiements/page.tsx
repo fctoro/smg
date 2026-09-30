@@ -125,13 +125,16 @@ function PaymentsPageContent() {
     [parents],
   );
 
-  const seasons = useMemo(
-    () =>
-      [...new Set(players.map((player) => player.saison).filter(Boolean))].sort(
-        (a, b) => (b || "").localeCompare(a || ""),
-      ),
-    [players],
-  );
+  const seasons = useMemo(() => {
+    const list: string[] = [];
+    players.forEach((player) => {
+      if (player.saison) list.push(player.saison);
+      if (player.saisons && Array.isArray(player.saisons)) {
+        list.push(...player.saisons);
+      }
+    });
+    return [...new Set(list.filter(Boolean))].sort((a, b) => (b || "").localeCompare(a || ""));
+  }, [players]);
 
   // Calcule la balance (y compris boursiers et demi-bourse avec mois restants)
   const calculateBalance = (currentPayment: (typeof payments)[number]): { balance: number; devise: "US" | "HTG"; moisRestants?: number; isSpecial?: boolean; dbg?: string } => {
@@ -670,7 +673,15 @@ function PaymentsPageContent() {
         if (deviseFilter !== "all" && payment.devise !== deviseFilter) return false;
         const player = playerMap.get(payment.playerId);
         if (!player) return false;
-        if (selectedSeason !== "all" && player.saison !== selectedSeason) return false;
+        if (selectedSeason !== "all") {
+          const normalizeSeason = (s: string) => String(s || "").replace(/^saison\s*/i, "").trim().toLowerCase();
+          const targetSeasonNorm = normalizeSeason(selectedSeason);
+          const seasonMatches =
+            player.saison === selectedSeason ||
+            (player.saison && normalizeSeason(player.saison) === targetSeasonNorm) ||
+            (player.saisons && player.saisons.some(s => s === selectedSeason || normalizeSeason(s) === targetSeasonNorm));
+          if (!seasonMatches) return false;
+        }
         const playerName = getPlayerFullName(player).toLowerCase();
         return !query || playerName.includes(query);
       })

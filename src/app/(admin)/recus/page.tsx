@@ -58,13 +58,16 @@ export default function EtatDeCompteJoueursPage() {
     [activePlayers],
   );
 
-  const seasons = useMemo(
-    () =>
-      [...new Set(activePlayers.map((player) => player.saison).filter(Boolean))].sort(
-        (a, b) => (b || "").localeCompare(a || ""),
-      ),
-    [activePlayers],
-  );
+  const seasons = useMemo(() => {
+    const list: string[] = [];
+    activePlayers.forEach((player) => {
+      if (player.saison) list.push(player.saison);
+      if (player.saisons && Array.isArray(player.saisons)) {
+        list.push(...player.saisons);
+      }
+    });
+    return [...new Set(list.filter(Boolean))].sort((a, b) => (b || "").localeCompare(a || ""));
+  }, [activePlayers]);
 
   // 2. Transformer les données des Joueurs Actifs avec leur État de Compte et Solde
   const uniquePlayersData = useMemo(() => {
@@ -239,8 +242,14 @@ export default function EtatDeCompteJoueursPage() {
       }
 
       // Filtre par saison
-      if (selectedSeason !== "all" && p.saison !== selectedSeason) {
-        return false;
+      if (selectedSeason !== "all") {
+        const normalizeSeason = (s: string) => String(s || "").replace(/^saison\s*/i, "").trim().toLowerCase();
+        const targetSeasonNorm = normalizeSeason(selectedSeason);
+        const seasonMatches =
+          p.saison === selectedSeason ||
+          (p.saison && normalizeSeason(p.saison) === targetSeasonNorm) ||
+          (p.player?.saisons && p.player.saisons.some(s => s === selectedSeason || normalizeSeason(s) === targetSeasonNorm));
+        if (!seasonMatches) return false;
       }
 
       return true;

@@ -61,10 +61,13 @@ export const PlayerEditModal: React.FC<PlayerEditModalProps> = ({
       setPlayers((prevPlayers) => {
         const newPlayers = prevPlayers.map((p) => {
           if (p.id !== player.id) return p;
+          const existingSaisons = Array.isArray(p.saisons) ? p.saisons : ([p.saison].filter(Boolean) as string[]);
+          const updatedSaisons = [...new Set([...existingSaisons, normalized.saison].filter(Boolean))] as string[];
           const updated = {
             ...p,
             ...normalized,
             playerIds: pIds,
+            saisons: updatedSaisons,
             ...(updatedDocs?.photoUrl ? { photoUrl: updatedDocs.photoUrl } : {}),
             ...(updatedDocs?.photoIdentiteUrl ? { photoIdentiteUrl: updatedDocs.photoIdentiteUrl } : {}),
             ...(updatedDocs?.acteNaissanceUrl ? { acteNaissanceUrl: updatedDocs.acteNaissanceUrl } : {}),

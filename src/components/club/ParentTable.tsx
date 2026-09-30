@@ -55,16 +55,22 @@ export default function ParentTable({
     [players],
   );
 
-  const seasons = useMemo(
-    () =>
-      [...new Set(players.map((player) => player.saison).filter(Boolean))].sort(
-        (a, b) => (b || "").localeCompare(a || ""),
-      ),
-    [players],
-  );
+  const seasons = useMemo(() => {
+    const list: string[] = [];
+    players.forEach((player) => {
+      if (player.saison) list.push(player.saison);
+      if (player.saisons && Array.isArray(player.saisons)) {
+        list.push(...player.saisons);
+      }
+    });
+    return [...new Set(list.filter(Boolean))].sort((a, b) => (b || "").localeCompare(a || ""));
+  }, [players]);
 
   const filteredParents = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
+    const normalizeSeason = (s: string) => String(s || "").replace(/^saison\s*/i, "").trim().toLowerCase();
+    const targetSeasonNorm = normalizeSeason(selectedSeason);
+
     return parents.filter((parent) => {
       const linkedPlayerIds = getParentLinkedPlayerIds(parent);
       const count = linkedPlayerIds.length;
@@ -79,7 +85,12 @@ export default function ParentTable({
       if (selectedSeason !== "all") {
         seasonMatch = linkedPlayerIds.some((playerId) => {
           const player = playerMap.get(playerId);
-          return player && player.saison === selectedSeason;
+          if (!player) return false;
+          return (
+            player.saison === selectedSeason ||
+            (player.saison && normalizeSeason(player.saison) === targetSeasonNorm) ||
+            (player.saisons && player.saisons.some(s => s === selectedSeason || normalizeSeason(s) === targetSeasonNorm))
+          );
         });
       }
       if (!seasonMatch) return false;

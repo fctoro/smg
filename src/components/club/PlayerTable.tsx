@@ -202,7 +202,13 @@ export default function PlayerTable({
   }, [players, availableCategories]);
 
   const seasons = useMemo(() => {
-    const customSeasons = players.map((player) => player.saison).filter(Boolean) as string[];
+    const customSeasons: string[] = [];
+    players.forEach((player) => {
+      if (player.saison) customSeasons.push(player.saison);
+      if (player.saisons && Array.isArray(player.saisons)) {
+        customSeasons.push(...player.saisons);
+      }
+    });
     const allOptions = Array.from(new Set([...getDynamicSeasonOptions(), ...customSeasons]));
     return allOptions.sort((a, b) => b.localeCompare(a));
   }, [players]);
@@ -215,6 +221,9 @@ export default function PlayerTable({
 
   const filteredPlayers = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
+    const normalizeSeason = (s: string) => String(s || "").replace(/^saison\s*/i, "").trim().toLowerCase();
+    const targetSeasonNorm = normalizeSeason(selectedSeason);
+
     return players
       .filter((player) => {
         const fullName = getPlayerFullName(player).toLowerCase();
@@ -226,7 +235,10 @@ export default function PlayerTable({
           selectedCategory === "all" ||
           (player.categorie || "").trim().toLowerCase() === selectedCategory.trim().toLowerCase();
         const seasonMatches =
-          selectedSeason === "all" || player.saison === selectedSeason;
+          selectedSeason === "all" ||
+          player.saison === selectedSeason ||
+          (player.saison && normalizeSeason(player.saison) === targetSeasonNorm) ||
+          (player.saisons && player.saisons.some(s => s === selectedSeason || normalizeSeason(s) === targetSeasonNorm));
         const programmeMatches =
           selectedProgramme === "all" || player.programme === selectedProgramme;
         const statusMatches =

@@ -339,12 +339,27 @@ export default function PayrollPage() {
       csvContent += formattedRow.join(delimiter) + "\n";
     });
 
-    // Summary totals
-    const totalNetHTG = filteredRecords.filter((r) => r.devise === "HTG").reduce((sum, r) => sum + (r.netAPayer || 0), 0);
-    const totalNetUSD = filteredRecords.filter((r) => r.devise !== "HTG").reduce((sum, r) => sum + (r.netAPayer || 0), 0);
+    // Summary totals HTG
+    const recsHTG = filteredRecords.filter((r) => r.devise === "HTG");
+    const totalBaseHTG = recsHTG.reduce((sum, r) => sum + Number(r.salaireBase || 0), 0);
+    const totalBonusHTG = recsHTG.reduce((sum, r) => sum + Number(r.bonus || 0), 0);
+    const totalVacHTG = recsHTG.reduce((sum, r) => sum + Number(r.vacancesPayees || 0), 0);
+    const totalSnowizzHTG = recsHTG.reduce((sum, r) => sum + Number(r.prelevementSnowizz || 0), 0);
+    const totalOtherDedHTG = recsHTG.reduce((sum, r) => sum + Math.max(0, Number(r.deductions || 0) - Number(r.prelevementSnowizz || 0)), 0);
+    const totalNetHTG = recsHTG.reduce((sum, r) => sum + Number(r.netAPayer || 0), 0);
 
-    csvContent += `\nTOTAL${delimiter}${delimiter}${delimiter}TOTAL NET HTG ENCAISSE${delimiter}${delimiter}${delimiter}${delimiter}${delimiter}${delimiter}${totalNetHTG.toFixed(2)} HTG\n`;
-    csvContent += `TOTAL${delimiter}${delimiter}${delimiter}TOTAL NET USD ENCAISSE${delimiter}${delimiter}${delimiter}${delimiter}${delimiter}${delimiter}${totalNetUSD.toFixed(2)} USD\n`;
+    // Summary totals USD
+    const recsUSD = filteredRecords.filter((r) => r.devise !== "HTG");
+    const totalBaseUSD = recsUSD.reduce((sum, r) => sum + Number(r.salaireBase || 0), 0);
+    const totalBonusUSD = recsUSD.reduce((sum, r) => sum + Number(r.bonus || 0), 0);
+    const totalVacUSD = recsUSD.reduce((sum, r) => sum + Number(r.vacancesPayees || 0), 0);
+    const totalSnowizzUSD = recsUSD.reduce((sum, r) => sum + Number(r.prelevementSnowizz || 0), 0);
+    const totalOtherDedUSD = recsUSD.reduce((sum, r) => sum + Math.max(0, Number(r.deductions || 0) - Number(r.prelevementSnowizz || 0)), 0);
+    const totalNetUSD = recsUSD.reduce((sum, r) => sum + Number(r.netAPayer || 0), 0);
+
+    const empty4 = Array(4).fill(`""`).join(delimiter);
+    csvContent += `\n${empty4}${delimiter}"TOTAL HTG :"${delimiter}"${totalBaseHTG.toFixed(2)}"${delimiter}"${totalBonusHTG.toFixed(2)}"${delimiter}"${totalVacHTG.toFixed(2)}"${delimiter}"${totalSnowizzHTG.toFixed(2)}"${delimiter}"${totalOtherDedHTG.toFixed(2)}"${delimiter}"${totalNetHTG.toFixed(2)}"${delimiter}"HTG"\n`;
+    csvContent += `${empty4}${delimiter}"TOTAL USD :"${delimiter}"${totalBaseUSD.toFixed(2)}"${delimiter}"${totalBonusUSD.toFixed(2)}"${delimiter}"${totalVacUSD.toFixed(2)}"${delimiter}"${totalSnowizzUSD.toFixed(2)}"${delimiter}"${totalOtherDedUSD.toFixed(2)}"${delimiter}"${totalNetUSD.toFixed(2)}"${delimiter}"USD"\n`;
 
     return csvContent;
   };
@@ -369,58 +384,82 @@ export default function PayrollPage() {
       "Remarques / Notes",
     ];
 
-    const totalNetHTG = filteredRecords
-      .filter((r) => r.devise === "HTG")
-      .reduce((sum, r) => sum + (r.netAPayer || 0), 0);
-    const totalNetUSD = filteredRecords
-      .filter((r) => r.devise !== "HTG")
-      .reduce((sum, r) => sum + (r.netAPayer || 0), 0);
+    const recsHTG = filteredRecords.filter((r) => r.devise === "HTG");
+    const totalBaseHTG = recsHTG.reduce((sum, r) => sum + Number(r.salaireBase || 0), 0);
+    const totalBonusHTG = recsHTG.reduce((sum, r) => sum + Number(r.bonus || 0), 0);
+    const totalVacHTG = recsHTG.reduce((sum, r) => sum + Number(r.vacancesPayees || 0), 0);
+    const totalSnowizzHTG = recsHTG.reduce((sum, r) => sum + Number(r.prelevementSnowizz || 0), 0);
+    const totalOtherDedHTG = recsHTG.reduce((sum, r) => sum + Math.max(0, Number(r.deductions || 0) - Number(r.prelevementSnowizz || 0)), 0);
+    const totalNetHTG = recsHTG.reduce((sum, r) => sum + Number(r.netAPayer || 0), 0);
+
+    const recsUSD = filteredRecords.filter((r) => r.devise !== "HTG");
+    const totalBaseUSD = recsUSD.reduce((sum, r) => sum + Number(r.salaireBase || 0), 0);
+    const totalBonusUSD = recsUSD.reduce((sum, r) => sum + Number(r.bonus || 0), 0);
+    const totalVacUSD = recsUSD.reduce((sum, r) => sum + Number(r.vacancesPayees || 0), 0);
+    const totalSnowizzUSD = recsUSD.reduce((sum, r) => sum + Number(r.prelevementSnowizz || 0), 0);
+    const totalOtherDedUSD = recsUSD.reduce((sum, r) => sum + Math.max(0, Number(r.deductions || 0) - Number(r.prelevementSnowizz || 0)), 0);
+    const totalNetUSD = recsUSD.reduce((sum, r) => sum + Number(r.netAPayer || 0), 0);
 
     const thead = headers.map((h) => `<th>${h}</th>`).join("");
+
+    const escapeHtml = (str: string) =>
+      String(str || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+
     const tbody = filteredRecords
       .map((r) => {
         const empInfo = getEmployeeDisplayInfo(r);
         const nomComplet = empInfo.fullName;
         const snowizzAmt = Number(r.prelevementSnowizz || 0);
         const otherDeductions = Math.max(0, Number(r.deductions || 0) - snowizzAmt);
-        const row = [
-          nomComplet,
-          empInfo.fonction || "-",
-          formatMonthYearDisplay(r.mois),
-          r.typeSalaire === "variable" ? "Variable / Séance" : "Fixe",
-          Number(r.salaireBase || 0).toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
-          Number(r.bonus || 0).toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
-          Number(r.vacancesPayees || 0).toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
-          snowizzAmt.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
-          otherDeductions.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
-          Number(r.netAPayer || 0).toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
-          r.devise || "HTG",
-          r.statut === "paye" ? "Payé" : "En attente",
-          r.datePaiement ? formatClubDate(r.datePaiement) : "-",
-          r.modePaiement || "-",
-          r.notes || "-",
-        ];
-        return `<tr>${row
-          .map(
-            (field) =>
-              `<td>${String(field || "")
-                .replace(/</g, "&lt;")
-                .replace(/>/g, "&gt;")}</td>`,
-          )
-          .join("")}</tr>`;
+        const salBase = Number(r.salaireBase || 0);
+        const bonus = Number(r.bonus || 0);
+        const vac = Number(r.vacancesPayees || 0);
+        const net = Number(r.netAPayer || 0);
+
+        return `<tr>
+          <td>${escapeHtml(nomComplet)}</td>
+          <td>${escapeHtml(empInfo.fonction || "-")}</td>
+          <td>${escapeHtml(formatMonthYearDisplay(r.mois))}</td>
+          <td>${r.typeSalaire === "variable" ? "Variable / Séance" : "Fixe"}</td>
+          <td class="num" x:num="${salBase}">${salBase.toFixed(2)}</td>
+          <td class="num" x:num="${bonus}">${bonus.toFixed(2)}</td>
+          <td class="num" x:num="${vac}">${vac.toFixed(2)}</td>
+          <td class="num" x:num="${snowizzAmt}">${snowizzAmt.toFixed(2)}</td>
+          <td class="num" x:num="${otherDeductions}">${otherDeductions.toFixed(2)}</td>
+          <td class="num" x:num="${net}">${net.toFixed(2)}</td>
+          <td>${escapeHtml(r.devise || "HTG")}</td>
+          <td>${r.statut === "paye" ? "Payé" : "En attente"}</td>
+          <td>${escapeHtml(r.datePaiement ? formatClubDate(r.datePaiement) : "-")}</td>
+          <td>${escapeHtml(r.modePaiement || "-")}</td>
+          <td>${escapeHtml(r.notes || "-")}</td>
+        </tr>`;
       })
       .join("");
 
     const summaryRows = `
       <tr style="background-color: #f8fafc; font-weight: bold;">
-        <td colspan="8" style="text-align: right;">TOTAL NET HTG :</td>
-        <td>${totalNetHTG.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+        <td colspan="4" style="text-align: right;">TOTAL HTG :</td>
+        <td class="num" x:num="${totalBaseHTG}">${totalBaseHTG.toFixed(2)}</td>
+        <td class="num" x:num="${totalBonusHTG}">${totalBonusHTG.toFixed(2)}</td>
+        <td class="num" x:num="${totalVacHTG}">${totalVacHTG.toFixed(2)}</td>
+        <td class="num" x:num="${totalSnowizzHTG}">${totalSnowizzHTG.toFixed(2)}</td>
+        <td class="num" x:num="${totalOtherDedHTG}">${totalOtherDedHTG.toFixed(2)}</td>
+        <td class="num" x:num="${totalNetHTG}">${totalNetHTG.toFixed(2)}</td>
         <td>HTG</td>
         <td colspan="4"></td>
       </tr>
       <tr style="background-color: #f8fafc; font-weight: bold;">
-        <td colspan="8" style="text-align: right;">TOTAL NET USD :</td>
-        <td>${totalNetUSD.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+        <td colspan="4" style="text-align: right;">TOTAL USD :</td>
+        <td class="num" x:num="${totalBaseUSD}">${totalBaseUSD.toFixed(2)}</td>
+        <td class="num" x:num="${totalBonusUSD}">${totalBonusUSD.toFixed(2)}</td>
+        <td class="num" x:num="${totalVacUSD}">${totalVacUSD.toFixed(2)}</td>
+        <td class="num" x:num="${totalSnowizzUSD}">${totalSnowizzUSD.toFixed(2)}</td>
+        <td class="num" x:num="${totalOtherDedUSD}">${totalOtherDedUSD.toFixed(2)}</td>
+        <td class="num" x:num="${totalNetUSD}">${totalNetUSD.toFixed(2)}</td>
         <td>USD</td>
         <td colspan="4"></td>
       </tr>
@@ -434,6 +473,8 @@ export default function PayrollPage() {
           table { border-collapse: collapse; width: 100%; font-family: Arial, sans-serif; font-size: 13px; }
           td, th { border: 1px solid #cccccc; padding: 6px 10px; text-align: left; }
           th { background-color: #107C41; color: white; font-weight: bold; }
+          .num { mso-number-format: "\\#\\,\\#\\#0\\.00"; text-align: right; }
+          .text { mso-number-format: "\\@"; }
         </style>
       </head>
       <body>

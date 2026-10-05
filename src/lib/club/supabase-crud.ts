@@ -1124,6 +1124,11 @@ export const updatePayrollInSupabase = async (id: string, data: Partial<import("
   const notesWithMeta = buildPayrollNotesWithMeta(data.notes, data);
 
   const updatePayload: any = {};
+  if (data.mois !== undefined) updatePayload.Mois = data.mois;
+  if (data.employeId !== undefined) updatePayload.EmployeId = parseInt(String(data.employeId), 10);
+  if (data.employeNom !== undefined) updatePayload.EmployeNom = data.employeNom;
+  if (data.employePrenom !== undefined) updatePayload.EmployePrenom = data.employePrenom;
+  if (data.fonction !== undefined) updatePayload.Fonction = data.fonction;
   if (data.statut !== undefined) updatePayload.Statut = data.statut;
   if (data.datePaiement !== undefined) updatePayload.DatePaiement = data.datePaiement;
   if (data.modePaiement !== undefined) updatePayload.ModePaiement = data.modePaiement;

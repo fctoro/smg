@@ -1151,6 +1151,7 @@ export const updatePayrollInSupabase = async (id: string, data: Partial<import("
   if (data.congeSansSolde !== undefined) updatePayload.CongeSansSolde = data.congeSansSolde;
   if (data.cumulPaiements !== undefined) updatePayload.CumulPaiements = data.cumulPaiements;
   if (data.netAPayer !== undefined) updatePayload.NetAPayer = data.netAPayer;
+  if (data.devise !== undefined) updatePayload.Devise = data.devise;
   updatePayload.Notes = notesWithMeta;
   if (pieceJointeUrl !== undefined) updatePayload.PieceJointe = pieceJointeUrl;
 

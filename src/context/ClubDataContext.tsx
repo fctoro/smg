@@ -1001,7 +1001,21 @@ export const ClubDataProvider = ({ children }: { children: React.ReactNode }) =>
               congeSansSolde: p.CongeSansSolde || p.congesanssolde || p.conge_sans_solde || 0,
               cumulPaiements: p.CumulPaiements || p.cumulpaiements || p.cumul_paiements || fallbackNet,
               netAPayer: p.NetAPayer || p.netapayer || p.net_a_payer || fallbackNet,
-              devise: (p.Devise || p.devise || (emp?.Devise || emp?.devise) || (baseSalary >= 1000 ? "HTG" : "US")) as "US" | "HTG",
+              devise: (() => {
+                const rawD = p.Devise || p.devise;
+                if (rawD) {
+                  const dUpper = String(rawD).toUpperCase().trim();
+                  if (dUpper === "US" || dUpper === "USD" || dUpper === "$") return "US";
+                  if (dUpper === "HTG" || dUpper === "GDES" || dUpper === "GOURDES") return "HTG";
+                }
+                const empD = emp?.Devise || emp?.devise;
+                if (empD) {
+                  const eUpper = String(empD).toUpperCase().trim();
+                  if (eUpper === "US" || eUpper === "USD" || eUpper === "$") return "US";
+                  if (eUpper === "HTG" || eUpper === "GDES" || eUpper === "GOURDES") return "HTG";
+                }
+                return baseSalary >= 1000 ? "HTG" : "US";
+              })() as "US" | "HTG",
               statut: p.Statut || p.statut || "en_attente",
               datePaiement: p.DatePaiement || p.datepaiement || p.date_paiement ? (p.DatePaiement || p.datepaiement || p.date_paiement).split("T")[0] : undefined,
               modePaiement: p.ModePaiement || p.modepaiement || p.mode_paiement || "especes",

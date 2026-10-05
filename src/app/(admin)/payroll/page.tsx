@@ -829,7 +829,7 @@ export default function PayrollPage() {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 print:hidden">
         <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-xs dark:border-gray-800 dark:bg-gray-900">
           <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-50 border border-brand-100 dark:border-brand-900/50 dark:bg-brand-500/10">
+            <div className="flex h-12 w-12 items-center justify-center shrink-0">
               <Icons.Wallet />
             </div>
             <div>
@@ -848,7 +848,7 @@ export default function PayrollPage() {
 
         <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-xs dark:border-gray-800 dark:bg-gray-900">
           <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-50 border border-emerald-100 dark:border-emerald-900/50 dark:bg-emerald-500/10">
+            <div className="flex h-12 w-12 items-center justify-center shrink-0">
               <Icons.CheckBadge />
             </div>
             <div>
@@ -864,7 +864,7 @@ export default function PayrollPage() {
 
         <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-xs dark:border-gray-800 dark:bg-gray-900">
           <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-50 border border-amber-100 dark:border-amber-900/50 dark:bg-amber-500/10">
+            <div className="flex h-12 w-12 items-center justify-center shrink-0">
               <Icons.ClockPending />
             </div>
             <div>
@@ -878,7 +878,7 @@ export default function PayrollPage() {
 
         <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-xs dark:border-gray-800 dark:bg-gray-900">
           <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 border border-blue-100 dark:border-blue-900/50 dark:bg-blue-500/10">
+            <div className="flex h-12 w-12 items-center justify-center shrink-0">
               <Icons.ChartTrend />
             </div>
             <div>

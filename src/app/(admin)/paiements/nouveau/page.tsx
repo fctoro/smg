@@ -585,6 +585,12 @@ export default function NewPaymentPage() {
 
     const statut = status.toLowerCase();
     if (statut.includes("demi")) {
+      if (statut.includes("2500") || statut.includes("2 500")) {
+        return {
+          label: "Demi-bourse (2 500 HTG)",
+          className: `${baseClassName} border-cyan-200 bg-cyan-50 text-cyan-700 dark:border-cyan-500/20 dark:bg-cyan-500/10 dark:text-cyan-400`,
+        };
+      }
       return {
         label: "Demi-bourse (50%)",
         className: `${baseClassName} border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-500/20 dark:bg-blue-500/10 dark:text-blue-400`,

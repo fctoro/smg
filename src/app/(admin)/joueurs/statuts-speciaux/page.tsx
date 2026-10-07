@@ -52,6 +52,7 @@ export default function StatutsSpeciauxPage() {
   const [showPlayerDropdown, setShowPlayerDropdown] = useState(false);
   const [targetPlayerId, setTargetPlayerId] = useState("");
   const [selectedStatusValue, setSelectedStatusValue] = useState("");
+  const [demiBourseType, setDemiBourseType] = useState<"percent" | "fixed_2500">("percent");
   const [customStatusInput, setCustomStatusInput] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [playerPendingRemoval, setPlayerPendingRemoval] = useState<Player | null>(null);
@@ -182,8 +183,26 @@ export default function StatutsSpeciauxPage() {
       setTargetPlayerId(playerToEdit.id);
       setPlayerSearchInput(getPlayerFullName(playerToEdit));
       const currentSt = playerToEdit.statutJoueur || "";
-      if (DEFAULT_STATUS_OPTIONS.includes(currentSt)) {
-        setSelectedStatusValue(currentSt);
+      const currentLower = currentSt.toLowerCase();
+
+      if (currentLower.includes("demi")) {
+        setSelectedStatusValue("Demi-bourse");
+        if (currentLower.includes("2500") || currentLower.includes("2 500")) {
+          setDemiBourseType("fixed_2500");
+        } else {
+          setDemiBourseType("percent");
+        }
+        setCustomStatusInput("");
+      } else if (currentLower.includes("bourse") || currentLower.includes("boursier")) {
+        setSelectedStatusValue("Bourse");
+        setCustomStatusInput("");
+      } else if (
+        currentLower === "joueur spécial" ||
+        currentLower === "joueur special" ||
+        currentLower === "spécial" ||
+        currentLower === "special"
+      ) {
+        setSelectedStatusValue("Joueur spécial");
         setCustomStatusInput("");
       } else {
         setSelectedStatusValue("custom");
@@ -194,6 +213,7 @@ export default function StatutsSpeciauxPage() {
       setTargetPlayerId("");
       setPlayerSearchInput("");
       setSelectedStatusValue("Bourse");
+      setDemiBourseType("percent");
       setCustomStatusInput("");
     }
     setIsModalOpen(true);
@@ -205,6 +225,7 @@ export default function StatutsSpeciauxPage() {
     setTargetPlayerId("");
     setPlayerSearchInput("");
     setSelectedStatusValue("");
+    setDemiBourseType("percent");
     setCustomStatusInput("");
   };
 
@@ -215,10 +236,14 @@ export default function StatutsSpeciauxPage() {
       return;
     }
 
-    const finalStatus =
-      selectedStatusValue === "custom"
-        ? customStatusInput.trim()
-        : selectedStatusValue.trim();
+    let finalStatus = "";
+    if (selectedStatusValue === "custom") {
+      finalStatus = customStatusInput.trim();
+    } else if (selectedStatusValue === "Demi-bourse") {
+      finalStatus = demiBourseType === "fixed_2500" ? "Demi-bourse (2500 HTG)" : "Demi-bourse (50%)";
+    } else {
+      finalStatus = selectedStatusValue.trim();
+    }
 
     setIsSaving(true);
     try {
@@ -274,6 +299,13 @@ export default function StatutsSpeciauxPage() {
     }
 
     if (stLower.includes("demi")) {
+      if (stLower.includes("2500") || stLower.includes("2 500")) {
+        return (
+          <span className="inline-flex items-center rounded-full bg-cyan-50 px-3 py-1 text-xs font-semibold text-cyan-700 dark:bg-cyan-500/10 dark:text-cyan-400 border border-cyan-200 dark:border-cyan-500/20">
+            Demi-bourse (2 500 HTG)
+          </span>
+        );
+      }
       const hasPercent = status.includes("%");
       return (
         <span className="inline-flex items-center rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700 dark:bg-blue-500/10 dark:text-blue-400 border border-blue-200 dark:border-blue-500/20">
@@ -664,11 +696,44 @@ export default function StatutsSpeciauxPage() {
               className={selectClassName}
             >
               <option value="Bourse">Bourse (100%)</option>
-              <option value="Demi-bourse">Demi-bourse (50%)</option>
+              <option value="Demi-bourse">Demi-bourse</option>
               <option value="Joueur spécial">Joueur spécial</option>
               <option value="custom">Autre (Personnalisé)</option>
             </select>
           </div>
+
+          {/* Sub-options for Demi-bourse (Radio Buttons) */}
+          {selectedStatusValue === "Demi-bourse" && (
+            <div className="rounded-xl border border-blue-200 bg-blue-50/50 p-4 dark:border-blue-900/50 dark:bg-blue-950/20 space-y-3">
+              <label className="block text-xs font-semibold uppercase tracking-wider text-blue-900 dark:text-blue-300">
+                Type de demi-bourse :
+              </label>
+              <div className="space-y-2.5">
+                <label className="flex items-center gap-3 cursor-pointer text-sm font-medium text-gray-800 dark:text-gray-200">
+                  <input
+                    type="radio"
+                    name="demiBourseType"
+                    value="percent"
+                    checked={demiBourseType === "percent"}
+                    onChange={() => setDemiBourseType("percent")}
+                    className="h-4 w-4 text-brand-500 focus:ring-brand-400 cursor-pointer"
+                  />
+                  <span><strong>50%</strong> (Réduction de 50% sur la cotisation)</span>
+                </label>
+                <label className="flex items-center gap-3 cursor-pointer text-sm font-medium text-gray-800 dark:text-gray-200">
+                  <input
+                    type="radio"
+                    name="demiBourseType"
+                    value="fixed_2500"
+                    checked={demiBourseType === "fixed_2500"}
+                    onChange={() => setDemiBourseType("fixed_2500")}
+                    className="h-4 w-4 text-brand-500 focus:ring-brand-400 cursor-pointer"
+                  />
+                  <span><strong>2 500 HTG / mois</strong> (Montant fixe mensuel)</span>
+                </label>
+              </div>
+            </div>
+          )}
 
           {/* Custom status input */}
           {selectedStatusValue === "custom" && (

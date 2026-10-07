@@ -363,6 +363,20 @@ export async function generateReceiptPDFBase64(
       return sum + (totalSeasonMonths * 2500);
     }, 0);
     totalDueValue = (taux > 0) ? totalDueHTG / taux : totalDueHTG / 130;
+  } else if (isDemiBoursierReceipt) {
+    const cat = (player.categorie || "").toLowerCase().replace(/[\s-_]/g, "");
+    const isTi = cat.includes("titoro") || cat.includes("ti-toro") || cat.includes("ti_toro");
+    const demiMonthlyUSD = isTi ? 57.5 : 77.5;
+
+    totalDueValue = payments.reduce((sum, p) => {
+      const payesMatch = (p.remarque || "").match(/\[MOIS_PAYES:\s*(\d+)\s*\]/i) || (p.remarque || "").match(/(\d+)\s*mois/i);
+      const restantsMatch = (p.remarque || "").match(/\[MOIS_RESTANTS:\s*(\d+)\s*\]/i);
+      const moisPayes = payesMatch ? parseInt(payesMatch[1], 10) : 1;
+      const moisRestants = restantsMatch ? parseInt(restantsMatch[1], 10) : Math.max(0, 12 - moisPayes);
+      const totalSeasonMonths = Math.max(12, moisPayes + moisRestants);
+      return sum + (totalSeasonMonths * demiMonthlyUSD);
+    }, 0);
+    totalDueHTG = (isHTG && taux > 0) ? Math.round(totalDueValue * taux) : 0;
   } else {
     payments.forEach((p: any) => {
       const dueMatch = p.remarque?.match(/\[TOTAL_DUE:\s*([\d.]+)\s*\]/i);

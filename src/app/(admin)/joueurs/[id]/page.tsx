@@ -46,6 +46,7 @@ const computePaymentBalance = (p: any, player?: any): { balance: number; devise:
   }
 
   if (isDemiBoursier) {
+    const isDemi2500 = playerStatus.includes("2500") || playerStatus.includes("2 500") || remarkLower.includes("demi-bourse-2500") || remarkLower.includes("2 500 htg") || remarkLower.includes("2,500 htg") || remarkLower.includes("2500 htg");
     const restantsMatch = (p.remarque || "").match(/\[MOIS_RESTANTS:\s*(\d+)\s*\]/i);
     let moisRestants = restantsMatch ? parseInt(restantsMatch[1], 10) : undefined;
     if (moisRestants === undefined) {
@@ -55,6 +56,9 @@ const computePaymentBalance = (p: any, player?: any): { balance: number; devise:
       }
     }
     if (moisRestants !== undefined) {
+      if (isDemi2500) {
+        return { balance: moisRestants * 2500, devise: "HTG", moisRestants, isSpecial: true };
+      }
       const cat = ((player as any)?.categorie || "").toLowerCase().replace(/[\s-_]/g, "");
       const isTi = cat.includes("titoro") || cat.includes("ti-toro") || cat.includes("ti_toro");
       const demiMonthlyUSD = isTi ? 57.5 : 77.5;

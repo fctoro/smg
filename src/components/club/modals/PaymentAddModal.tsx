@@ -557,6 +557,11 @@ export function PaymentAddModal({ isOpen, onClose, initialPlayerId }: PaymentAdd
     setPlayerSearch("");
     setShowPlayerDropdown(false);
 
+    const s = (player.statutJoueur || "").toLowerCase();
+    if (s.includes("2500") || s.includes("2 500") || (s.includes("bourse") && !s.includes("demi"))) {
+      setDevise("HTG");
+    }
+
     // Auto-select adhesion based on player category/programme
     setSelectedPricing((current) => applyAutoAdhesionForPlayer(player, current, rubricOptions));
   };
@@ -1324,41 +1329,38 @@ export function PaymentAddModal({ isOpen, onClose, initialPlayerId }: PaymentAdd
               </select>
             </div>
 
-            {/* Tarif Boursier Spécial OU Demi-bourse (50%) OU Plan standard */}
+            {/* Tarif Boursier Spécial OU Demi-bourse OU Plan standard */}
             {isBoursier ? (
-              <div className="md:col-span-2 rounded-xl border border-emerald-300 bg-emerald-50/80 p-4 shadow-sm dark:border-emerald-500/30 dark:bg-emerald-950/30">
+              <div className="md:col-span-2 rounded-xl border-2 border-slate-300/90 bg-slate-100/90 p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/60">
                 <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-                  <div className="flex items-center gap-2">
-                    <span className="flex h-3 w-3 rounded-full bg-emerald-500"></span>
-                    <h4 className="text-sm font-bold text-emerald-950 dark:text-emerald-200 uppercase tracking-wide">
-                      Tarif Boursier (2,500 HTG / mois)
-                    </h4>
-                  </div>
-                  <span className="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-200 border border-emerald-200 dark:border-emerald-700">
+                  <h4 className="text-sm font-extrabold text-slate-900 dark:text-white uppercase tracking-wide">
+                    Tarif Boursier (2,500 HTG / mois)
+                  </h4>
+                  <span className="inline-flex items-center rounded-full bg-slate-200 text-slate-800 border border-slate-300 px-2.5 py-0.5 text-xs font-semibold dark:bg-slate-800 dark:text-slate-200 dark:border-slate-600">
                     Saison sur 12 mois • {pastMonthsPaid > 0 ? `${pastMonthsPaid}/12 déjà payés` : "Nouveau départ"}
                   </span>
                 </div>
 
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <div>
-                    <label className="mb-1.5 block text-xs font-semibold text-emerald-800 dark:text-emerald-300">
+                    <label className="mb-1.5 block text-xs font-bold text-slate-800 dark:text-slate-200">
                       Mensualité Boursier
                     </label>
                     <input
                       type="text"
                       readOnly
                       value="2,500 HTG / mois"
-                      className="h-10 w-full rounded-lg border border-emerald-300 bg-white px-3 text-sm font-bold text-emerald-950 shadow-sm dark:border-emerald-700 dark:bg-gray-800 dark:text-emerald-200"
+                      className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-900 shadow-sm dark:border-slate-700 dark:bg-gray-800 dark:text-slate-100"
                     />
                   </div>
                   <div>
-                    <label className="mb-1.5 block text-xs font-semibold text-emerald-800 dark:text-emerald-300">
+                    <label className="mb-1.5 block text-xs font-bold text-slate-800 dark:text-slate-200">
                       Nombre de mois payés aujourd'hui
                     </label>
                     <select
                       value={nombreDeMois}
                       onChange={(e) => setNombreDeMois(Number(e.target.value))}
-                      className="h-10 w-full rounded-lg border border-emerald-300 bg-white px-3 text-sm font-bold text-emerald-950 shadow-sm dark:border-emerald-700 dark:bg-gray-800 dark:text-emerald-200 focus:ring-2 focus:ring-emerald-500"
+                      className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-900 shadow-sm dark:border-slate-700 dark:bg-gray-800 dark:text-slate-100 focus:ring-2 focus:ring-brand-500"
                     >
                       {Array.from({ length: Math.max(1, 12 - pastMonthsPaid) }, (_, i) => i + 1).map((m) => (
                         <option key={m} value={m}>
@@ -1371,13 +1373,13 @@ export function PaymentAddModal({ isOpen, onClose, initialPlayerId }: PaymentAdd
 
                 {/* Rubriques ou articles supplémentaires optionnels */}
                 {extraRubricOptions.length > 0 && (
-                  <div className="mt-3 rounded-lg border border-dashed border-emerald-300 bg-white/70 p-3 dark:border-emerald-700 dark:bg-gray-800/60">
+                  <div className="mt-3 rounded-lg border border-dashed border-slate-300 bg-white/95 p-3 dark:border-slate-700 dark:bg-gray-800/80">
                     <div className="flex items-center justify-between mb-2">
-                      <label className="text-xs font-semibold text-emerald-900 dark:text-emerald-200 flex items-center gap-1.5">
-                        <span>👕</span> Articles & Rubriques supplémentaires (Optionnel)
+                      <label className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                        Articles & Rubriques supplémentaires (Optionnel)
                       </label>
                       {extraRubricsSumUSD > 0 && (
-                        <span className="text-[11px] font-bold text-emerald-700 dark:text-emerald-300">
+                        <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300">
                           +${extraRubricsSumUSD} USD {taux > 0 ? `(+${Math.round(extraRubricsSumUSD * taux).toLocaleString()} HTG)` : ""}
                         </span>
                       )}
@@ -1388,8 +1390,8 @@ export function PaymentAddModal({ isOpen, onClose, initialPlayerId }: PaymentAdd
                           key={item.id}
                           className={`flex items-center justify-between p-2 rounded-md border text-xs cursor-pointer transition-colors ${
                             selectedPricing.includes(item.id)
-                              ? "border-emerald-500 bg-emerald-100/60 dark:bg-emerald-950/40 text-emerald-950 dark:text-emerald-200 font-semibold"
-                              : "border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 text-gray-700 dark:text-gray-300"
+                              ? "border-slate-500 bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-white font-semibold"
+                              : "border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/50 text-slate-700 dark:text-slate-300"
                           }`}
                         >
                           <div className="flex items-center gap-2 truncate">
@@ -1397,7 +1399,7 @@ export function PaymentAddModal({ isOpen, onClose, initialPlayerId }: PaymentAdd
                               type="checkbox"
                               checked={selectedPricing.includes(item.id)}
                               onChange={() => handlePricingChange(item.id)}
-                              className="h-3.5 w-3.5 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                              className="h-3.5 w-3.5 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
                             />
                             <span className="truncate">{item.rubrique}</span>
                           </div>
@@ -1409,39 +1411,36 @@ export function PaymentAddModal({ isOpen, onClose, initialPlayerId }: PaymentAdd
                 )}
 
                 {/* Bilan récapitulatif Boursier */}
-                <div className="mt-3 rounded-lg bg-emerald-100/70 p-3 dark:bg-emerald-900/40 space-y-2 text-xs">
+                <div className="mt-3 rounded-lg bg-slate-200/90 p-3 space-y-2 text-xs border border-slate-300/90 dark:bg-slate-800 dark:border-slate-700">
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <span className="font-semibold text-emerald-950 dark:text-emerald-200">
-                      💡 Total dû pour ce paiement :
+                    <span className="font-bold text-slate-800 dark:text-slate-200">
+                      Total dû pour ce paiement :
                     </span>
-                    <span className="text-sm font-bold text-emerald-950 dark:text-emerald-100">
+                    <span className="text-sm font-extrabold text-slate-900 dark:text-white">
                       {boursierCurrentTotalHTG.toLocaleString()} HTG
                     </span>
                   </div>
-                  <div className="pt-2 border-t border-emerald-200 dark:border-emerald-800/50 flex flex-wrap items-center justify-between gap-2 text-emerald-900 dark:text-emerald-200">
+                  <div className="pt-2 border-t border-slate-300 dark:border-slate-700 flex flex-wrap items-center justify-between gap-2 text-slate-700 dark:text-slate-300">
                     <span>
-                      📊 Mois réglés sur l'année : <strong>{totalMonthsPaidAfterCurrent} / 12 mois</strong>
+                      Mois réglés sur l'année : <strong>{totalMonthsPaidAfterCurrent} / 12 mois</strong>
                     </span>
                     <span>
-                      ⏳ Reste à payer : <strong className={remainingMonthsSeason > 0 ? "text-amber-700 dark:text-amber-300" : "text-emerald-700 dark:text-emerald-300"}>{remainingMonthsSeason} mois</strong> ({boursierRemainingSeasonBalanceHTG.toLocaleString()} HTG)
+                      Reste à payer : <strong className={remainingMonthsSeason > 0 ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400"}>{remainingMonthsSeason} mois</strong> ({boursierRemainingSeasonBalanceHTG.toLocaleString()} HTG)
                     </span>
                   </div>
                 </div>
               </div>
             ) : isDemiBoursier ? (
-              <div className={`md:col-span-2 rounded-xl border p-4 shadow-sm ${isDemiBoursier2500 ? "border-cyan-300 bg-cyan-50/80 dark:border-cyan-500/30 dark:bg-cyan-950/30" : "border-blue-300 bg-blue-50/80 dark:border-blue-500/30 dark:bg-blue-950/30"}`}>
+              <div className="md:col-span-2 rounded-xl border-2 border-slate-300/90 bg-slate-100/90 p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/60">
                 <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-                  <div className="flex items-center gap-2">
-                    <span className={`flex h-3 w-3 rounded-full ${isDemiBoursier2500 ? "bg-cyan-500" : "bg-blue-500"}`}></span>
-                    <h4 className={`text-sm font-bold uppercase tracking-wide ${isDemiBoursier2500 ? "text-cyan-950 dark:text-cyan-200" : "text-blue-950 dark:text-blue-200"}`}>
-                      {isDemiBoursier2500 ? "Tarif Demi-bourse (2 500 HTG / mois)" : "Tarif Demi-bourse (50% du montant mensuel)"}
-                    </h4>
-                  </div>
+                  <h4 className="text-sm font-extrabold uppercase tracking-wide text-slate-900 dark:text-white">
+                    {isDemiBoursier2500 ? "Tarif Demi-bourse (2 500 HTG / mois)" : "Tarif Demi-bourse (50% du montant mensuel)"}
+                  </h4>
                   <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-                    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold border ${isDemiBoursier2500 ? "bg-cyan-100 text-cyan-800 dark:bg-cyan-900/60 dark:text-cyan-200 border-cyan-200 dark:border-cyan-700" : "bg-blue-100 text-blue-800 dark:bg-blue-900/60 dark:text-blue-200 border-blue-200 dark:border-blue-700"}`}>
+                    <span className="inline-flex items-center rounded-full bg-slate-200 text-slate-800 border border-slate-300 px-2.5 py-0.5 text-xs font-semibold dark:bg-slate-800 dark:text-slate-200 dark:border-slate-600">
                       {isDemiBoursier2500 ? "Montant fixe 2 500 HTG/mois" : `${isTiToro ? "Ti Toro" : "FC Toro"} • 50% de ${isTiToro ? "$115" : "$155"}`}
                     </span>
-                    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold border ${isDemiBoursier2500 ? "bg-cyan-100 text-cyan-800 dark:bg-cyan-900/60 dark:text-cyan-200 border-cyan-200 dark:border-cyan-700" : "bg-blue-100 text-blue-800 dark:bg-blue-900/60 dark:text-blue-200 border-blue-200 dark:border-blue-700"}`}>
+                    <span className="inline-flex items-center rounded-full bg-slate-200 text-slate-800 border border-slate-300 px-2.5 py-0.5 text-xs font-semibold dark:bg-slate-800 dark:text-slate-200 dark:border-slate-600">
                       Saison sur 12 mois • {pastMonthsPaid > 0 ? `${pastMonthsPaid}/12 déjà payés` : "Nouveau départ"}
                     </span>
                   </div>
@@ -1450,20 +1449,20 @@ export function PaymentAddModal({ isOpen, onClose, initialPlayerId }: PaymentAdd
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                   {/* Mensualité */}
                   <div>
-                    <label className={`mb-1.5 block text-xs font-semibold ${isDemiBoursier2500 ? "text-cyan-950 dark:text-cyan-300" : "text-blue-900 dark:text-blue-300"}`}>
+                    <label className="mb-1.5 block text-xs font-bold text-slate-800 dark:text-slate-200">
                       {isDemiBoursier2500 ? "Mensualité Fixe HTG" : "Mensualité USD (50%)"}
                     </label>
                     <input
                       type="text"
                       readOnly
                       value={isDemiBoursier2500 ? "2,500.00 HTG / mois" : `$${(isTiToro ? 57.5 : 77.5).toFixed(2)} USD / mois`}
-                      className={`h-10 w-full rounded-lg border bg-white px-3 text-sm font-bold shadow-sm dark:bg-gray-800 ${isDemiBoursier2500 ? "border-cyan-300 text-cyan-950 dark:border-cyan-700 dark:text-cyan-200" : "border-blue-300 text-blue-950 dark:border-blue-700 dark:text-blue-200"}`}
+                      className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-900 shadow-sm dark:border-slate-700 dark:bg-gray-800 dark:text-slate-100"
                     />
                   </div>
 
                   {/* Champ Taux de change */}
                   <div>
-                    <label className={`mb-1.5 block text-xs font-semibold ${isDemiBoursier2500 ? "text-cyan-950 dark:text-cyan-300" : "text-blue-900 dark:text-blue-300"}`}>
+                    <label className="mb-1.5 block text-xs font-bold text-slate-800 dark:text-slate-200">
                       Taux de change (HTG / 1$)
                     </label>
                     <input
@@ -1473,16 +1472,16 @@ export function PaymentAddModal({ isOpen, onClose, initialPlayerId }: PaymentAdd
                       value={taux || ""}
                       onChange={(e) => setTaux(e.target.value === "" ? 0 : parseFloat(e.target.value) || 0)}
                       placeholder="Ex: 132"
-                      className={`h-10 w-full rounded-lg border bg-white px-3 text-sm font-bold shadow-sm dark:bg-gray-800 ${isDemiBoursier2500 ? "border-cyan-300 text-cyan-950 dark:border-cyan-700 dark:text-cyan-200 focus:ring-2 focus:ring-cyan-500" : "border-blue-300 text-blue-950 dark:border-blue-700 dark:text-blue-200 focus:ring-2 focus:ring-blue-500"}`}
+                      className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-900 shadow-sm dark:border-slate-700 dark:bg-gray-800 dark:text-slate-100 focus:ring-2 focus:ring-brand-500"
                     />
                   </div>
 
                   {/* Valeur calculée dans l'autre devise */}
                   <div>
-                    <label className={`mb-1.5 block text-xs font-semibold ${isDemiBoursier2500 ? "text-cyan-950 dark:text-cyan-300" : "text-blue-900 dark:text-blue-300"}`}>
+                    <label className="mb-1.5 block text-xs font-bold text-slate-800 dark:text-slate-200">
                       {isDemiBoursier2500 ? "Équivalent USD (estimé)" : "Mensualité en Gourdes (HTG)"}
                     </label>
-                    <div className={`h-10 w-full rounded-lg border px-3 flex items-center text-sm font-bold ${isDemiBoursier2500 ? "border-cyan-300 bg-cyan-100/70 text-cyan-950 dark:border-cyan-700 dark:bg-cyan-900/40 dark:text-cyan-100" : "border-blue-300 bg-blue-100/70 text-blue-950 dark:border-blue-700 dark:bg-blue-900/40 dark:text-blue-100"}`}>
+                    <div className="h-10 w-full rounded-lg border border-slate-300 bg-slate-50 px-3 flex items-center text-sm font-semibold text-slate-800 dark:border-slate-700 dark:bg-gray-800 dark:text-slate-200">
                       {isDemiBoursier2500
                         ? (taux > 0 ? `$${(2500 / taux).toFixed(2)} USD / mois` : "Saisissez un taux")
                         : (taux > 0 ? `${((isTiToro ? 57.5 : 77.5) * taux).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} HTG / mois` : "Saisissez un taux")}
@@ -1492,13 +1491,13 @@ export function PaymentAddModal({ isOpen, onClose, initialPlayerId }: PaymentAdd
 
                 {/* Nombre de mois payés */}
                 <div className="mt-3">
-                  <label className={`mb-1.5 block text-xs font-semibold ${isDemiBoursier2500 ? "text-cyan-950 dark:text-cyan-300" : "text-blue-900 dark:text-blue-300"}`}>
+                  <label className="mb-1.5 block text-xs font-bold text-slate-800 dark:text-slate-200">
                     Nombre de mois payés aujourd'hui
                   </label>
                   <select
                     value={nombreDeMois}
                     onChange={(e) => setNombreDeMois(Number(e.target.value))}
-                    className={`h-10 w-full rounded-lg border bg-white px-3 text-sm font-bold shadow-sm dark:bg-gray-800 ${isDemiBoursier2500 ? "border-cyan-300 text-cyan-950 dark:border-cyan-700 dark:text-cyan-200 focus:ring-2 focus:ring-cyan-500" : "border-blue-300 text-blue-950 dark:border-blue-700 dark:text-blue-200 focus:ring-2 focus:ring-blue-500"}`}
+                    className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-900 shadow-sm dark:border-slate-700 dark:bg-gray-800 dark:text-slate-100 focus:ring-2 focus:ring-brand-500"
                   >
                     {Array.from({ length: Math.max(1, 12 - pastMonthsPaid) }, (_, i) => i + 1).map((m) => {
                       if (isDemiBoursier2500) {
@@ -1523,13 +1522,13 @@ export function PaymentAddModal({ isOpen, onClose, initialPlayerId }: PaymentAdd
 
                 {/* Rubriques ou articles supplémentaires optionnels */}
                 {extraRubricOptions.length > 0 && (
-                  <div className={`mt-3 rounded-lg border border-dashed p-3 ${isDemiBoursier2500 ? "border-cyan-300 bg-white/70 dark:border-cyan-700 dark:bg-gray-800/60" : "border-blue-300 bg-white/70 dark:border-blue-700 dark:bg-gray-800/60"}`}>
+                  <div className="mt-3 rounded-lg border border-dashed border-slate-300 bg-white/95 p-3 dark:border-slate-700 dark:bg-gray-800/80">
                     <div className="flex items-center justify-between mb-2">
-                      <label className={`text-xs font-semibold flex items-center gap-1.5 ${isDemiBoursier2500 ? "text-cyan-950 dark:text-cyan-200" : "text-blue-900 dark:text-blue-200"}`}>
-                        <span>👕</span> Articles & Rubriques supplémentaires (Optionnel)
+                      <label className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                        Articles & Rubriques supplémentaires (Optionnel)
                       </label>
                       {extraRubricsSumUSD > 0 && (
-                        <span className={`text-[11px] font-bold ${isDemiBoursier2500 ? "text-cyan-700 dark:text-cyan-300" : "text-blue-700 dark:text-blue-300"}`}>
+                        <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300">
                           +${extraRubricsSumUSD} USD {taux > 0 ? `(+${Math.round(extraRubricsSumUSD * taux).toLocaleString()} HTG)` : ""}
                         </span>
                       )}
@@ -1540,8 +1539,8 @@ export function PaymentAddModal({ isOpen, onClose, initialPlayerId }: PaymentAdd
                           key={item.id}
                           className={`flex items-center justify-between p-2 rounded-md border text-xs cursor-pointer transition-colors ${
                             selectedPricing.includes(item.id)
-                              ? (isDemiBoursier2500 ? "border-cyan-500 bg-cyan-100/60 dark:bg-cyan-950/40 text-cyan-950 dark:text-cyan-200 font-semibold" : "border-blue-500 bg-blue-100/60 dark:bg-blue-950/40 text-blue-950 dark:text-blue-200 font-semibold")
-                              : "border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 text-gray-700 dark:text-gray-300"
+                              ? "border-slate-500 bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-white font-semibold"
+                              : "border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/50 text-slate-700 dark:text-slate-300"
                           }`}
                         >
                           <div className="flex items-center gap-2 truncate">
@@ -1549,7 +1548,7 @@ export function PaymentAddModal({ isOpen, onClose, initialPlayerId }: PaymentAdd
                               type="checkbox"
                               checked={selectedPricing.includes(item.id)}
                               onChange={() => handlePricingChange(item.id)}
-                              className={`h-3.5 w-3.5 rounded border-gray-300 ${isDemiBoursier2500 ? "text-cyan-600 focus:ring-cyan-500" : "text-blue-600 focus:ring-blue-500"}`}
+                              className="h-3.5 w-3.5 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
                             />
                             <span className="truncate">{item.rubrique}</span>
                           </div>
@@ -1561,30 +1560,30 @@ export function PaymentAddModal({ isOpen, onClose, initialPlayerId }: PaymentAdd
                 )}
 
                 {/* Bilan récapitulatif Demi-bourse */}
-                <div className={`mt-3 rounded-lg p-3 space-y-2 text-xs ${isDemiBoursier2500 ? "bg-cyan-100/70 dark:bg-cyan-900/40" : "bg-blue-100/70 dark:bg-blue-900/40"}`}>
+                <div className="mt-3 rounded-lg bg-slate-200/90 p-3 space-y-2 text-xs border border-slate-300/90 dark:bg-slate-800 dark:border-slate-700">
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <span className={`font-semibold ${isDemiBoursier2500 ? "text-cyan-950 dark:text-cyan-200" : "text-blue-950 dark:text-blue-200"}`}>
-                      💡 Total dû pour ce paiement :
+                    <span className="font-bold text-slate-800 dark:text-slate-200">
+                      Total dû pour ce paiement :
                     </span>
                     <div className="flex items-center gap-2 sm:gap-3">
                       {isDemiBoursier2500 ? (
                         <>
-                          <span className="text-sm font-bold text-cyan-950 dark:text-cyan-100">
+                          <span className="text-sm font-extrabold text-slate-900 dark:text-white">
                             {demiCurrentTotalHTG.toLocaleString('fr-FR', { maximumFractionDigits: 2 })} HTG
                           </span>
                           {taux > 0 && (
-                            <span className="text-sm font-bold text-emerald-700 dark:text-emerald-300">
+                            <span className="text-sm font-semibold text-slate-600 dark:text-slate-400">
                               • ${demiCurrentTotalUSD.toFixed(2)} USD
                             </span>
                           )}
                         </>
                       ) : (
                         <>
-                          <span className="text-sm font-bold text-blue-950 dark:text-blue-100">
+                          <span className="text-sm font-extrabold text-slate-900 dark:text-white">
                             ${demiCurrentTotalUSD.toFixed(2)} USD
                           </span>
                           {taux > 0 && (
-                            <span className="text-sm font-bold text-emerald-700 dark:text-emerald-300">
+                            <span className="text-sm font-semibold text-slate-600 dark:text-slate-400">
                               • {demiCurrentTotalHTG.toLocaleString('fr-FR', { maximumFractionDigits: 2 })} HTG
                             </span>
                           )}
@@ -1592,46 +1591,55 @@ export function PaymentAddModal({ isOpen, onClose, initialPlayerId }: PaymentAdd
                       )}
                     </div>
                   </div>
-                  <div className={`pt-2 border-t flex flex-wrap items-center justify-between gap-2 ${isDemiBoursier2500 ? "border-cyan-200 dark:border-cyan-800/50 text-cyan-900 dark:text-cyan-200" : "border-blue-200 dark:border-blue-800/50 text-blue-900 dark:text-blue-200"}`}>
+                  <div className="pt-2 border-t border-slate-300 dark:border-slate-700 flex flex-wrap items-center justify-between gap-2 text-slate-700 dark:text-slate-300">
                     <span>
-                      📊 Mois réglés sur l'année : <strong>{totalMonthsPaidAfterCurrent} / 12 mois</strong>
+                      Mois réglés sur l'année : <strong>{totalMonthsPaidAfterCurrent} / 12 mois</strong>
                     </span>
                     <span>
-                      ⏳ Reste à payer : <strong className={remainingMonthsSeason > 0 ? "text-amber-700 dark:text-amber-300" : "text-emerald-700 dark:text-emerald-300"}>{remainingMonthsSeason} mois</strong> ({isDemiBoursier2500 ? `${demiRemainingSeasonBalanceHTG.toLocaleString('fr-FR', { maximumFractionDigits: 2 })} HTG` : `$${demiRemainingSeasonBalanceUSD.toFixed(2)} USD${taux > 0 ? ` • ${demiRemainingSeasonBalanceHTG.toLocaleString('fr-FR', { maximumFractionDigits: 2 })} HTG` : ""}`})
+                      Reste à payer : <strong className={remainingMonthsSeason > 0 ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400"}>{remainingMonthsSeason} mois</strong> ({isDemiBoursier2500 ? `${demiRemainingSeasonBalanceHTG.toLocaleString('fr-FR', { maximumFractionDigits: 2 })} HTG` : `$${demiRemainingSeasonBalanceUSD.toFixed(2)} USD${taux > 0 ? ` • ${demiRemainingSeasonBalanceHTG.toLocaleString('fr-FR', { maximumFractionDigits: 2 })} HTG` : ""}`})
                     </span>
                   </div>
                 </div>
 
                 {/* Devise et montant versé pour demi-bourse */}
-                <div className="mt-3 pt-3 border-t border-blue-200 dark:border-blue-800/50 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="mt-3 pt-3 border-t border-slate-300 dark:border-slate-700 grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="mb-1 block text-xs font-semibold text-blue-900 dark:text-blue-300">
+                    <label className="mb-1 block text-xs font-bold text-slate-800 dark:text-slate-200">
                       Devise du versement
                     </label>
-                    <select
-                      value={devise}
-                      onChange={(e) => setDevise(e.target.value as "US" | "HTG")}
-                      className="h-10 w-full rounded-lg border border-blue-300 bg-white px-3 text-sm font-bold text-blue-950 shadow-sm dark:border-blue-700 dark:bg-gray-800 dark:text-blue-200"
-                    >
-                      <option value="US">Dollar US ($)</option>
-                      <option value="HTG">Gourde HTG (Gdes)</option>
-                    </select>
+                    {isDemiBoursier2500 ? (
+                      <input
+                        type="text"
+                        readOnly
+                        value="Gourde HTG (Gdes)"
+                        className="h-10 w-full rounded-lg border border-slate-300 bg-slate-200/80 px-3 text-sm font-semibold text-slate-900 shadow-sm dark:border-slate-700 dark:bg-gray-800 dark:text-slate-100 cursor-not-allowed"
+                      />
+                    ) : (
+                      <select
+                        value={devise}
+                        onChange={(e) => setDevise(e.target.value as "US" | "HTG")}
+                        className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-900 shadow-sm dark:border-slate-700 dark:bg-gray-800 dark:text-slate-100"
+                      >
+                        <option value="US">Dollar US ($)</option>
+                        <option value="HTG">Gourde HTG (Gdes)</option>
+                      </select>
+                    )}
                   </div>
                   <div>
                     <div className="flex items-center justify-between mb-1">
-                      <label className="block text-xs font-semibold text-blue-900 dark:text-blue-300">
-                        Montant versé aujourd'hui ({devise === "HTG" ? "Gdes" : "$ USD"})
+                      <label className="block text-xs font-bold text-slate-800 dark:text-slate-200">
+                        Montant versé aujourd'hui ({isDemiBoursier2500 || devise === "HTG" ? "Gdes" : "$ USD"})
                       </label>
                       <button
                         type="button"
                         onClick={() => {
-                          const fullAmt = devise === "HTG" ? (taux > 0 ? demiCurrentTotalHTG : 0) : demiCurrentTotalUSD;
+                          const fullAmt = (isDemiBoursier2500 || devise === "HTG") ? demiCurrentTotalHTG : demiCurrentTotalUSD;
                           setMontantDonne(fullAmt);
                           setIsUserEditedMontantDonne(true);
                         }}
-                        className="text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:underline"
+                        className="text-[11px] font-semibold text-brand-600 dark:text-brand-400 hover:underline"
                       >
-                        Régler totalité ({devise === "HTG" && taux > 0 ? `${demiCurrentTotalHTG.toLocaleString()} HTG` : `$${demiCurrentTotalUSD.toFixed(2)}`})
+                        Régler totalité ({isDemiBoursier2500 || devise === "HTG" ? `${demiCurrentTotalHTG.toLocaleString()} HTG` : `$${demiCurrentTotalUSD.toFixed(2)}`})
                       </button>
                     </div>
                     <input
@@ -1643,8 +1651,8 @@ export function PaymentAddModal({ isOpen, onClose, initialPlayerId }: PaymentAdd
                         setMontantDonne(e.target.value === "" ? "" : Number(e.target.value));
                         setIsUserEditedMontantDonne(true);
                       }}
-                      placeholder={devise === "HTG" ? (taux > 0 ? `${demiCurrentTotalHTG}` : "0") : `${demiCurrentTotalUSD.toFixed(2)}`}
-                      className="h-10 w-full rounded-lg border border-blue-300 bg-white px-3 text-sm font-bold text-blue-950 shadow-sm dark:border-blue-700 dark:bg-gray-800 dark:text-blue-200 focus:ring-2 focus:ring-blue-500"
+                      placeholder={(isDemiBoursier2500 || devise === "HTG") ? `${demiCurrentTotalHTG}` : `${demiCurrentTotalUSD.toFixed(2)}`}
+                      className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-900 shadow-sm dark:border-slate-700 dark:bg-gray-800 dark:text-slate-100 focus:ring-2 focus:ring-brand-500"
                     />
                   </div>
                 </div>

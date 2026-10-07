@@ -171,8 +171,9 @@ function PaymentsPageContent() {
       return { ...zero, dbg: `boursier_status_(${playerStatus})` };
     }
 
-    // 2. Cas Demi-Bourse (50% du tarif mensuel: 77.50$ FC Toro / 57.50$ Ti Toro)
+    // 2. Cas Demi-Bourse (Soit Fixe 2 500 HTG/mois, soit 50% du tarif mensuel: 77.50$ FC Toro / 57.50$ Ti Toro)
     if (isDemiBoursier) {
+      const isDemi2500 = playerStatus.includes("2500") || playerStatus.includes("2 500") || remarkLower.includes("demi-bourse-2500") || remarkLower.includes("2 500 htg") || remarkLower.includes("2,500 htg") || remarkLower.includes("2500 htg");
       const restantsMatch = currentPayment.remarque?.match(/\[MOIS_RESTANTS:\s*(\d+)\s*\]/i);
       let moisRestants: number | undefined = restantsMatch ? parseInt(restantsMatch[1], 10) : undefined;
       if (moisRestants === undefined) {
@@ -183,6 +184,17 @@ function PaymentsPageContent() {
       }
 
       if (moisRestants !== undefined) {
+        if (isDemi2500) {
+          const balanceHTG = moisRestants * 2500;
+          return {
+            balance: balanceHTG,
+            devise: "HTG",
+            moisRestants,
+            isSpecial: true,
+            dbg: `demi_boursier_2500_${moisRestants}_mois_restants_htg`,
+          };
+        }
+
         const cat = (player.categorie || "").toLowerCase().replace(/[\s-_]/g, "");
         const isTi = cat.includes("titoro") || cat.includes("ti-toro") || cat.includes("ti_toro");
         const demiMonthlyUSD = isTi ? 57.5 : 77.5;

@@ -320,10 +320,16 @@ export default function ModifyPaymentPage({ params }: { params: Promise<{ id: st
       // Strip tags & auto labels from description
       rawRemarque = rawRemarque.replace(/\[ADHESION:\s*[A-Z_]+\s*\]/gi, "");
       rawRemarque = rawRemarque.replace(/\[PLAN:\s*[A-Z_]+\s*\]/gi, "");
-      rawRemarque = rawRemarque.replace(/\[STATUT:\s*[A-Z]+\s*\]/gi, "");
+      rawRemarque = rawRemarque.replace(/\[STATUT:\s*[A-Z0-9_-]+\s*\]/gi, "");
+      rawRemarque = rawRemarque.replace(/\[REDUCTION:\s*[A-Z0-9_-]+\s*\]/gi, "");
       rawRemarque = rawRemarque.replace(/\[TAUX:\s*[\d.]+\s*\]/gi, "");
+      rawRemarque = rawRemarque.replace(/\[MOIS_PAYES:\s*\d+\s*\]/gi, "");
+      rawRemarque = rawRemarque.replace(/\[MOIS_RESTANTS:\s*\d+\s*\]/gi, "");
+      rawRemarque = rawRemarque.replace(/Rabais accordé\s*:\s*50%\s*\(Demi-bourse\)/gi, "");
+      rawRemarque = rawRemarque.replace(/Rabais accordé\s*:\s*50%/gi, "");
       rawRemarque = rawRemarque.replace(/Adhésion:\s*(?:FC|TI)\s*TORO/gi, "");
       rawRemarque = rawRemarque.replace(/Boursier:\s*\d+\s*mois\s*×\s*[\d,]+\s*HTG/gi, "");
+      rawRemarque = rawRemarque.replace(/Demi-bourse:\s*\d+\s*mois\s*×\s*[\d,]+\s*HTG/gi, "");
       rawRemarque = rawRemarque.replace(/Plan:\s*\w+/gi, "");
 
       setDescription(rawRemarque.replace(/\s+/g, " ").trim());
@@ -533,8 +539,9 @@ export default function ModifyPaymentPage({ params }: { params: Promise<{ id: st
         ? `[MOIS_PAYES:${nombreDeMois}] [MOIS_RESTANTS:${remainingMonthsSeason}] `
         : "";
       const statutPart = `[STATUT:${statut.toUpperCase()}] `;
+      const isDemiBoursier2500 = isDemiBoursier && (devise === "HTG" || (selectedPlayer?.statutJoueur || "").toLowerCase().includes("2500") || (selectedPlayer?.statutJoueur || "").toLowerCase().includes("2 500"));
       const rabaisPart = isDemiBoursier
-        ? "[REDUCTION:HALF] "
+        ? (isDemiBoursier2500 ? "[REDUCTION:FIXED_2500_HTG] " : "[REDUCTION:HALF] ")
         : (rabaisValue > 0 ? `[RABAIS:${rabaisType === "percent" ? `${rabaisValue}%` : `$${rabaisValue}`}] ` : "");
       const tauxPart = ((devise === "HTG" || isDemiBoursier) && taux > 0) ? `[TAUX:${taux}] ` : "";
       const totalDuePart = typeof totalDue === "number" ? `[TOTAL_DUE:${totalDue}] ` : "";

@@ -30,39 +30,47 @@ const computePaymentBalance = (p: any, player?: any): { balance: number; devise:
   const isBoursier = (playerStatus === "bourse" || playerStatus === "boursier" || remarkLower.includes("[plan:boursier]")) && !playerStatus.includes("demi") && !remarkLower.includes("demi");
   const isDemiBoursier = playerStatus.includes("demi") || remarkLower.includes("demi-bourse") || remarkLower.includes("demi bourse") || remarkLower.includes("[reduction:half]") || (remarkLower.includes("demi") && !remarkLower.includes("pandemie"));
 
+  const amountPaid = Number(p.montant) || 0;
+
   if (isBoursier) {
+    const payesMatch = (p.remarque || "").match(/\[MOIS_PAYES:\s*(\d+)\s*\]/i) || (p.remarque || "").match(/(\d+)\s*mois/i);
+    const moisPayes = payesMatch ? parseInt(payesMatch[1], 10) : 1;
     const restantsMatch = (p.remarque || "").match(/\[MOIS_RESTANTS:\s*(\d+)\s*\]/i);
-    let moisRestants = restantsMatch ? parseInt(restantsMatch[1], 10) : undefined;
+    let moisRestants: number | undefined = restantsMatch ? parseInt(restantsMatch[1], 10) : undefined;
     if (moisRestants === undefined) {
-      const payesMatch = (p.remarque || "").match(/\[MOIS_PAYES:\s*(\d+)\s*\]/i) || (p.remarque || "").match(/(\d+)\s*mois/i);
-      if (payesMatch) {
-        moisRestants = Math.max(0, 12 - parseInt(payesMatch[1], 10));
-      }
+      moisRestants = Math.max(0, 12 - moisPayes);
     }
     if (moisRestants !== undefined) {
-      return { balance: moisRestants * 2500, devise: "HTG", moisRestants, isSpecial: true };
+      const totalSeasonMonths = moisPayes + moisRestants;
+      const totalSeasonDueHTG = totalSeasonMonths * 2500;
+      const balanceHTG = Math.max(0, totalSeasonDueHTG - amountPaid);
+      const effectiveMoisRestants = Math.max(0, Math.ceil(balanceHTG / 2500));
+      return { balance: balanceHTG, devise: "HTG", moisRestants: effectiveMoisRestants, isSpecial: true };
     }
     return zero;
   }
 
   if (isDemiBoursier) {
     const isDemi2500 = playerStatus.includes("2500") || playerStatus.includes("2 500") || remarkLower.includes("demi-bourse-2500") || remarkLower.includes("2 500 htg") || remarkLower.includes("2,500 htg") || remarkLower.includes("2500 htg");
+    const payesMatch = (p.remarque || "").match(/\[MOIS_PAYES:\s*(\d+)\s*\]/i) || (p.remarque || "").match(/(\d+)\s*mois/i);
+    const moisPayes = payesMatch ? parseInt(payesMatch[1], 10) : 1;
     const restantsMatch = (p.remarque || "").match(/\[MOIS_RESTANTS:\s*(\d+)\s*\]/i);
-    let moisRestants = restantsMatch ? parseInt(restantsMatch[1], 10) : undefined;
+    let moisRestants: number | undefined = restantsMatch ? parseInt(restantsMatch[1], 10) : undefined;
     if (moisRestants === undefined) {
-      const payesMatch = (p.remarque || "").match(/\[MOIS_PAYES:\s*(\d+)\s*\]/i) || (p.remarque || "").match(/(\d+)\s*mois/i);
-      if (payesMatch) {
-        moisRestants = Math.max(0, 12 - parseInt(payesMatch[1], 10));
-      }
+      moisRestants = Math.max(0, 12 - moisPayes);
     }
     if (moisRestants !== undefined) {
+      const totalSeasonMonths = moisPayes + moisRestants;
+
       if (isDemi2500) {
-        return { balance: moisRestants * 2500, devise: "HTG", moisRestants, isSpecial: true };
+        const totalSeasonDueHTG = totalSeasonMonths * 2500;
+        const balanceHTG = Math.max(0, totalSeasonDueHTG - amountPaid);
+        const effectiveMoisRestants = Math.max(0, Math.ceil(balanceHTG / 2500));
+        return { balance: balanceHTG, devise: "HTG", moisRestants: effectiveMoisRestants, isSpecial: true };
       }
       const cat = ((player as any)?.categorie || "").toLowerCase().replace(/[\s-_]/g, "");
       const isTi = cat.includes("titoro") || cat.includes("ti-toro") || cat.includes("ti_toro");
       const demiMonthlyUSD = isTi ? 57.5 : 77.5;
-      const remainingUSD = moisRestants * demiMonthlyUSD;
 
       let taux = p.taux || 0;
       if (taux <= 1) {
@@ -71,10 +79,16 @@ const computePaymentBalance = (p: any, player?: any): { balance: number; devise:
           taux = parseFloat(tauxMatch[1]);
         }
       }
+
+      const totalSeasonDueUSD = totalSeasonMonths * demiMonthlyUSD;
+      const amountPaidInUSD = paymentDevise === "HTG" ? (taux > 0 ? amountPaid / taux : 0) : amountPaid;
+      const balanceUSD = Math.max(0, totalSeasonDueUSD - amountPaidInUSD);
+      const effectiveMoisRestants = Math.max(0, Math.ceil(balanceUSD / demiMonthlyUSD));
+
       if (paymentDevise === "HTG" && taux > 1) {
-        return { balance: Math.round(remainingUSD * taux), devise: "HTG", moisRestants, isSpecial: true };
+        return { balance: Math.round(balanceUSD * taux), devise: "HTG", moisRestants: effectiveMoisRestants, isSpecial: true };
       } else {
-        return { balance: Number(remainingUSD.toFixed(2)), devise: "US", moisRestants, isSpecial: true };
+        return { balance: Number(balanceUSD.toFixed(2)), devise: "US", moisRestants: effectiveMoisRestants, isSpecial: true };
       }
     }
   }

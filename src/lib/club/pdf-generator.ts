@@ -192,7 +192,12 @@ export async function generateReceiptPDFBase64(
 
     // 3. Bourses / Demi-bourses
     if (/\[REDUCTION:\s*FULL\s*\]/i.test(remark)) return "100% (Bourse)";
-    if (/\[REDUCTION:\s*HALF\s*\]/i.test(remark)) return "50% (Demi-bourse)";
+    if (/\[REDUCTION:\s*HALF\s*\]/i.test(remark) || /\[REDUCTION:\s*FIXED_2500_HTG\s*\]/i.test(remark)) {
+      const remLower = remark.toLowerCase();
+      const isDemi2500 = remLower.includes("2 500") || remLower.includes("2,500") || remLower.includes("2500") || isHTG;
+      if (isDemi2500) return null; // La demi-bourse 2 500 HTG est un tarif forfaitaire en Gourdes, pas un rabais de 50%
+      return "50% (Demi-bourse)";
+    }
     const customRedMatch = remark.match(/\[REDUCTION_PERCENT:\s*([\d.]+)\s*\]/i);
     if (customRedMatch && customRedMatch[1]) {
       const val = parseFloat(customRedMatch[1]);
@@ -211,6 +216,10 @@ export async function generateReceiptPDFBase64(
     
     // Remplacer les séparateurs par des sauts de ligne
     cleaned = cleaned.replace(/\s*\|\s*/g, '\n');
+    
+    // Nettoyer d'anciennes mentions textuelles injectées dans la description
+    cleaned = cleaned.replace(/Rabais accordé\s*:\s*50%\s*\(Demi-bourse\)/gi, '').trim();
+    cleaned = cleaned.replace(/Rabais accordé\s*:\s*50%/gi, '').trim();
     
     // Si c'est un paiement sans adhésion, on supprime la mention "Plan: XXX" ajoutée par erreur
     const isKitOnly = !remark.toLowerCase().includes("adhésion") && !remark.toLowerCase().includes("adhesion");
@@ -233,11 +242,14 @@ export async function generateReceiptPDFBase64(
       cleaned = `${cleaned}\nRabais accordé : ${rabaisLabel}`;
     }
 
-    return cleaned.trim() || "Paiement de cotisation";
+    // Supprimer les sauts de lignes consécutifs
+    cleaned = cleaned.replace(/\n\s*\n+/g, '\n').trim();
+
+    return cleaned || "Paiement de cotisation";
   };
 
   const mainPayment = payments[0] || {};
-  const isHTG = mainPayment.devise === "HTG";
+  const isHTG = mainPayment.devise === "HTG" || payments.some((p: any) => p.devise === "HTG" || Number(p.montantHTG) > 0 || Number(p.MntPayeGd) > 0);
   // Lire taux depuis la colonne DB, sinon depuis le marqueur [TAUX:XXX] dans la remarque
   let taux = mainPayment.taux || 0;
   if (isHTG && taux <= 1) {
@@ -257,15 +269,12 @@ export async function generateReceiptPDFBase64(
     let valUS = 0;
     let valHTG = 0;
 
-    if (p.devise === "US" || p.montantUS || p.MntPayeUS) {
-      valUS = Number(p.montantUS || p.MntPayeUS || p.montant || 0);
-      valHTG = pTaux > 0 ? valUS * pTaux : (taux > 0 ? valUS * taux : 0);
-    } else if (p.devise === "HTG" || p.montantHTG || p.MntPayeGd) {
-      valHTG = Number(p.montantHTG || p.MntPayeGd || p.montant || 0);
+    if (p.devise === "HTG" || (!p.devise && (p.montantHTG || p.MntPayeGd)) || (Number(p.montant) >= 2000 && !p.montantUS)) {
+      valHTG = Number(p.montantHTG || p.montant || p.MntPayeGd || 0);
       valUS = pTaux > 0 ? valHTG / pTaux : (taux > 0 ? valHTG / taux : 0);
     } else {
-      valUS = Number(p.montant || 0);
-      valHTG = valUS * (taux > 0 ? taux : 130);
+      valUS = Number(p.montantUS || p.montant || p.MntPayeUS || 0);
+      valHTG = pTaux > 0 ? valUS * pTaux : (taux > 0 ? valUS * taux : 0);
     }
 
     totalUSD += valUS;
@@ -328,15 +337,32 @@ export async function generateReceiptPDFBase64(
   const playerStatus = (player.statutJoueur || "").toLowerCase().trim();
   const isBoursierReceipt = playerStatus === "bourse" || playerStatus === "boursier" ||
     payments.some((p: any) => (p.remarque || "").toLowerCase().includes("[plan:boursier]"));
-
-  let totalDueValue = 0; // toujours en USD
-
-  if (isBoursierReceipt) {
-    // Boursiers : total dû = montant versé → solde = 0
-    payments.forEach((p: any) => {
-      const pTaux = p.taux || 0;
-      totalDueValue += (p.devise === "HTG" && pTaux > 0) ? p.montant / pTaux : p.montant;
+  const isDemiBoursierReceipt = playerStatus.includes("demi") ||
+    payments.some((p: any) => {
+      const rem = (p.remarque || "").toLowerCase();
+      return rem.includes("demi-bourse") || rem.includes("demi bourse") || rem.includes("[reduction:half]") || rem.includes("[statut:demi-bourse]");
     });
+  const isDemiBoursier2500Receipt = isDemiBoursierReceipt && (
+    isHTG || playerStatus.includes("2500") || playerStatus.includes("2 500") ||
+    payments.some((p: any) => {
+      const rem = (p.remarque || "").toLowerCase();
+      return rem.includes("2500") || rem.includes("2 500") || p.devise === "HTG";
+    })
+  );
+
+  let totalDueValue = 0; // en USD ou unité standard
+  let totalDueHTG = 0;
+
+  if (isBoursierReceipt || isDemiBoursier2500Receipt) {
+    totalDueHTG = payments.reduce((sum, p) => {
+      const payesMatch = (p.remarque || "").match(/\[MOIS_PAYES:\s*(\d+)\s*\]/i) || (p.remarque || "").match(/(\d+)\s*mois/i);
+      const restantsMatch = (p.remarque || "").match(/\[MOIS_RESTANTS:\s*(\d+)\s*\]/i);
+      const moisPayes = payesMatch ? parseInt(payesMatch[1], 10) : 1;
+      const moisRestants = restantsMatch ? parseInt(restantsMatch[1], 10) : Math.max(0, 12 - moisPayes);
+      const totalSeasonMonths = Math.max(12, moisPayes + moisRestants);
+      return sum + (totalSeasonMonths * 2500);
+    }, 0);
+    totalDueValue = (taux > 0) ? totalDueHTG / taux : totalDueHTG / 130;
   } else {
     payments.forEach((p: any) => {
       const dueMatch = p.remarque?.match(/\[TOTAL_DUE:\s*([\d.]+)\s*\]/i);
@@ -355,15 +381,15 @@ export async function generateReceiptPDFBase64(
       if (isValidDue) {
         totalDueValue += parsedDue;
       } else {
-        // Fallback : utiliser le montant payé (pas de solde possible)
+        // Fallback : utiliser le montant payé
         const pTaux = p.taux || 0;
         totalDueValue += (p.devise === "HTG" && pTaux > 0) ? p.montant / pTaux : p.montant;
       }
     });
+    totalDueHTG = (isHTG && taux > 0) ? Math.round(totalDueValue * taux) : 0;
   }
 
   // Calcul des totaux et soldes selon la devise
-  const totalDueHTG = (isHTG && taux > 0) ? Math.round(totalDueValue * taux) : 0;
   const balanceHTG = Math.max(0, totalDueHTG - totalHTG);
   const balanceUSD = Math.max(0, totalDueValue - totalUSD);
 
@@ -376,10 +402,10 @@ export async function generateReceiptPDFBase64(
 
   // Libellé du montant total dû — strictly dans la devise du reçu
   const totalDueLabel = (() => {
-    if (totalDueValue <= 0) return totalPayeLabel;
-    if (isHTG && taux > 0) {
+    if (isHTG) {
       return formatClubCurrency(totalDueHTG, "HTG");
     }
+    if (totalDueValue <= 0) return totalPayeLabel;
     return formatClubCurrency(totalDueValue, "US");
   })();
 

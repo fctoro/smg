@@ -1496,7 +1496,20 @@ export function PaymentAddModal({ isOpen, onClose, initialPlayerId }: PaymentAdd
                   </label>
                   <select
                     value={nombreDeMois}
-                    onChange={(e) => setNombreDeMois(Number(e.target.value))}
+                    onChange={(e) => {
+                      const m = Number(e.target.value);
+                      setNombreDeMois(m);
+                      if (isDemiBoursier2500) {
+                        setMontantDonne(m * 2500);
+                        setIsUserEditedMontantDonne(true);
+                      } else if (devise === "HTG" && taux > 0) {
+                        setMontantDonne(Math.round(m * (isTiToro ? 57.5 : 77.5) * taux));
+                        setIsUserEditedMontantDonne(true);
+                      } else if (devise === "US") {
+                        setMontantDonne(Number((m * (isTiToro ? 57.5 : 77.5)).toFixed(2)));
+                        setIsUserEditedMontantDonne(true);
+                      }
+                    }}
                     className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-900 shadow-sm dark:border-slate-700 dark:bg-gray-800 dark:text-slate-100 focus:ring-2 focus:ring-brand-500"
                   >
                     {Array.from({ length: Math.max(1, 12 - pastMonthsPaid) }, (_, i) => i + 1).map((m) => {

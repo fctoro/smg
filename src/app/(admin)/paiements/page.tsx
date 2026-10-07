@@ -148,24 +148,28 @@ function PaymentsPageContent() {
     const isBoursier = (playerStatus === "bourse" || playerStatus === "boursier" || remarkLower.includes("[plan:boursier]")) && !playerStatus.includes("demi") && !remarkLower.includes("demi");
     const isDemiBoursier = playerStatus.includes("demi") || remarkLower.includes("demi-bourse") || remarkLower.includes("demi bourse") || remarkLower.includes("[reduction:half]") || (remarkLower.includes("demi") && !remarkLower.includes("pandemie"));
 
+    const amountPaid = Number(currentPayment.montant) || 0;
+
     // 1. Cas Boursier (2,500 HTG / mois pour 12 mois de saison)
     if (isBoursier) {
+      const payesMatch = currentPayment.remarque?.match(/\[MOIS_PAYES:\s*(\d+)\s*\]/i) || currentPayment.remarque?.match(/(\d+)\s*mois/i);
+      const moisPayes = payesMatch ? parseInt(payesMatch[1], 10) : 1;
       const restantsMatch = currentPayment.remarque?.match(/\[MOIS_RESTANTS:\s*(\d+)\s*\]/i);
       let moisRestants: number | undefined = restantsMatch ? parseInt(restantsMatch[1], 10) : undefined;
       if (moisRestants === undefined) {
-        const payesMatch = currentPayment.remarque?.match(/\[MOIS_PAYES:\s*(\d+)\s*\]/i) || currentPayment.remarque?.match(/(\d+)\s*mois/i);
-        if (payesMatch) {
-          moisRestants = Math.max(0, 12 - parseInt(payesMatch[1], 10));
-        }
+        moisRestants = Math.max(0, 12 - moisPayes);
       }
       if (moisRestants !== undefined) {
-        const balanceHTG = moisRestants * 2500;
+        const totalSeasonMonths = moisPayes + moisRestants;
+        const totalSeasonDueHTG = totalSeasonMonths * 2500;
+        const balanceHTG = Math.max(0, totalSeasonDueHTG - amountPaid);
+        const effectiveMoisRestants = Math.max(0, Math.ceil(balanceHTG / 2500));
         return {
           balance: balanceHTG,
           devise: "HTG",
-          moisRestants,
+          moisRestants: effectiveMoisRestants,
           isSpecial: true,
-          dbg: `boursier_${moisRestants}_mois_restants`,
+          dbg: `boursier_${effectiveMoisRestants}_mois_restants`,
         };
       }
       return { ...zero, dbg: `boursier_status_(${playerStatus})` };
@@ -174,31 +178,33 @@ function PaymentsPageContent() {
     // 2. Cas Demi-Bourse (Soit Fixe 2 500 HTG/mois, soit 50% du tarif mensuel: 77.50$ FC Toro / 57.50$ Ti Toro)
     if (isDemiBoursier) {
       const isDemi2500 = playerStatus.includes("2500") || playerStatus.includes("2 500") || remarkLower.includes("demi-bourse-2500") || remarkLower.includes("2 500 htg") || remarkLower.includes("2,500 htg") || remarkLower.includes("2500 htg");
+      const payesMatch = currentPayment.remarque?.match(/\[MOIS_PAYES:\s*(\d+)\s*\]/i) || currentPayment.remarque?.match(/(\d+)\s*mois/i);
+      const moisPayes = payesMatch ? parseInt(payesMatch[1], 10) : 1;
       const restantsMatch = currentPayment.remarque?.match(/\[MOIS_RESTANTS:\s*(\d+)\s*\]/i);
       let moisRestants: number | undefined = restantsMatch ? parseInt(restantsMatch[1], 10) : undefined;
       if (moisRestants === undefined) {
-        const payesMatch = currentPayment.remarque?.match(/\[MOIS_PAYES:\s*(\d+)\s*\]/i) || currentPayment.remarque?.match(/(\d+)\s*mois/i);
-        if (payesMatch) {
-          moisRestants = Math.max(0, 12 - parseInt(payesMatch[1], 10));
-        }
+        moisRestants = Math.max(0, 12 - moisPayes);
       }
 
       if (moisRestants !== undefined) {
+        const totalSeasonMonths = moisPayes + moisRestants;
+
         if (isDemi2500) {
-          const balanceHTG = moisRestants * 2500;
+          const totalSeasonDueHTG = totalSeasonMonths * 2500;
+          const balanceHTG = Math.max(0, totalSeasonDueHTG - amountPaid);
+          const effectiveMoisRestants = Math.max(0, Math.ceil(balanceHTG / 2500));
           return {
             balance: balanceHTG,
             devise: "HTG",
-            moisRestants,
+            moisRestants: effectiveMoisRestants,
             isSpecial: true,
-            dbg: `demi_boursier_2500_${moisRestants}_mois_restants_htg`,
+            dbg: `demi_boursier_2500_${effectiveMoisRestants}_mois_restants_htg`,
           };
         }
 
         const cat = (player.categorie || "").toLowerCase().replace(/[\s-_]/g, "");
         const isTi = cat.includes("titoro") || cat.includes("ti-toro") || cat.includes("ti_toro");
         const demiMonthlyUSD = isTi ? 57.5 : 77.5;
-        const remainingUSD = moisRestants * demiMonthlyUSD;
 
         let taux = currentPayment.taux || 0;
         if (taux <= 1) {
@@ -208,22 +214,27 @@ function PaymentsPageContent() {
           }
         }
 
+        const totalSeasonDueUSD = totalSeasonMonths * demiMonthlyUSD;
+        const amountPaidInUSD = paymentDevise === "HTG" ? (taux > 0 ? amountPaid / taux : 0) : amountPaid;
+        const balanceUSD = Math.max(0, totalSeasonDueUSD - amountPaidInUSD);
+        const effectiveMoisRestants = Math.max(0, Math.ceil(balanceUSD / demiMonthlyUSD));
+
         if (paymentDevise === "HTG" && taux > 1) {
-          const remainingHTG = Math.round(remainingUSD * taux);
+          const remainingHTG = Math.round(balanceUSD * taux);
           return {
             balance: remainingHTG,
             devise: "HTG",
-            moisRestants,
+            moisRestants: effectiveMoisRestants,
             isSpecial: true,
-            dbg: `demi_boursier_${moisRestants}_mois_restants_htg`,
+            dbg: `demi_boursier_${effectiveMoisRestants}_mois_restants_htg`,
           };
         } else {
           return {
-            balance: Number(remainingUSD.toFixed(2)),
+            balance: Number(balanceUSD.toFixed(2)),
             devise: "US",
-            moisRestants,
+            moisRestants: effectiveMoisRestants,
             isSpecial: true,
-            dbg: `demi_boursier_${moisRestants}_mois_restants_usd`,
+            dbg: `demi_boursier_${effectiveMoisRestants}_mois_restants_usd`,
           };
         }
       }

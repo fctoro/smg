@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useRef, use } from "react";
-import { useRouter } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import { useClubData } from "@/context/ClubDataContext";
 import { PaymentMethod, PaymentStatus, PricingItem } from "@/types/club";
@@ -16,8 +16,9 @@ const inputClassName =
 const selectClassName =
   "h-11 w-full rounded-lg border border-gray-300 bg-transparent px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90";
 
-export default function ModifyPaymentPage({ params }: { params: Promise<{ id: string }> }) {
-  const resolvedParams = use(params);
+export default function ModifyPaymentPage({ params }: { params?: Promise<{ id: string }> }) {
+  const routeParams = useParams<{ id: string }>();
+  const paymentId = routeParams?.id || (params ? use(params).id : "");
   const router = useRouter();
   const { payments, players, setPayments, rubriques, refreshRubriques } = useClubData();
   const [playerId, setPlayerId] = useState("");
@@ -63,7 +64,7 @@ export default function ModifyPaymentPage({ params }: { params: Promise<{ id: st
 
   const searchContainerRef = { current: null as HTMLDivElement | null };
 
-  const currentPayment = payments.find((p) => p.id === resolvedParams.id);
+  const currentPayment = payments.find((p) => p.id === paymentId);
   const selectedPlayer = players.find((p) => p.id === playerId) ?? null;
   const isDemiBoursier = !!(
     (selectedPlayer && (selectedPlayer.statutJoueur || "").toLowerCase().includes("demi")) ||
@@ -95,62 +96,39 @@ export default function ModifyPaymentPage({ params }: { params: Promise<{ id: st
       .filter((item) => !item.estAdhesion && item.id !== "adhesion-fc" && item.id !== "adhesion-ti")
       .reduce((sum, item) => sum + item.montant, 0);
 
-    let adhesionCalculated = 0;
     let baseAdhesionUSD = 0;
-
     if (adhesionItem) {
       const isTi =
         adhesionItem.id === "adhesion-ti" ||
         adhesionItem.rubrique.toLowerCase().includes("ti toro") ||
         adhesionItem.categorie?.toLowerCase().includes("ti");
 
-      baseAdhesionUSD = isTi ? 1000 : 1350;
-
-      if (plan === "annuel") {
-        const effectiveRabais = rVal > 0 && rType === "percent" ? rVal : 10;
-        if (rType === "amount" && rVal > 0) {
-          adhesionCalculated = Math.max(0, baseAdhesionUSD - rVal);
-        } else {
-          adhesionCalculated = Math.round(baseAdhesionUSD * (1 - effectiveRabais / 100) * 100) / 100;
-        }
-      } else if (plan === "semestriel") {
-        const effectiveRabais = rVal > 0 && rType === "percent" ? rVal : 5;
-        if (rType === "amount" && rVal > 0) {
-          adhesionCalculated = Math.max(0, baseAdhesionUSD - rVal);
-        } else {
-          adhesionCalculated = Math.round(baseAdhesionUSD * (1 - effectiveRabais / 100) * 100) / 100;
-        }
-      } else if (plan === "mensuel") {
-        const monthlyRate = (isTi ? 115 : 155) * (isDemiBoursier ? 0.5 : 1);
-        baseAdhesionUSD = monthlyRate * (mois || 1);
-        if (rType === "amount" && rVal > 0) {
-          adhesionCalculated = Math.max(0, baseAdhesionUSD - rVal);
-        } else if (rVal > 0) {
-          adhesionCalculated = Math.round(baseAdhesionUSD * (1 - rVal / 100) * 100) / 100;
-        } else {
-          adhesionCalculated = baseAdhesionUSD;
-        }
-      } else if (plan === "boursier") {
+      if (plan === "boursier") {
         baseAdhesionUSD = 0;
-        adhesionCalculated = 0;
+      } else if (isDemiBoursier) {
+        baseAdhesionUSD = (isTi ? 1000 : 1350) * 0.5;
       } else {
-        if (rType === "amount" && rVal > 0) {
-          adhesionCalculated = Math.max(0, baseAdhesionUSD - rVal);
-        } else if (rVal > 0) {
-          adhesionCalculated = Math.round(baseAdhesionUSD * (1 - rVal / 100) * 100) / 100;
-        } else {
-          adhesionCalculated = baseAdhesionUSD;
-        }
+        baseAdhesionUSD = isTi ? 1000 : 1350;
       }
     }
 
-    const totalUSD = Math.round((adhesionCalculated + nonAdhesionSumUSD) * 100) / 100;
-    return { totalUSD, baseAdhesionUSD, nonAdhesionSumUSD };
+    const baseTotalUSD = baseAdhesionUSD + nonAdhesionSumUSD;
+
+    let totalUSD = baseTotalUSD;
+    if (rType === "amount" && rVal > 0) {
+      totalUSD = Math.max(0, Math.round((baseTotalUSD - rVal) * 100) / 100);
+    } else if (rType === "percent" && rVal > 0) {
+      totalUSD = Math.round(baseTotalUSD * (1 - rVal / 100) * 100) / 100;
+    } else if (rVal === 0) {
+      totalUSD = baseTotalUSD;
+    }
+
+    return { totalUSD, baseTotalUSD, baseAdhesionUSD, nonAdhesionSumUSD };
   };
 
   useEffect(() => {
     // Load existing payment data
-    const payment = payments.find((p) => p.id === resolvedParams.id);
+    const payment = payments.find((p) => p.id === paymentId);
     if (payment && !hasInitializedRef.current) {
       hasInitializedRef.current = true;
       setPlayerId(payment.playerId);
@@ -339,7 +317,7 @@ export default function ModifyPaymentPage({ params }: { params: Promise<{ id: st
       setDatePaiement(payment.datePaiement || "");
     }
     setLoading(false);
-  }, [resolvedParams.id, payments, rubricOptions]);
+  }, [paymentId, payments, rubricOptions]);
 
   const handlePricingChange = (itemId: string) => {
     let newPricing: string[];
@@ -359,10 +337,10 @@ export default function ModifyPaymentPage({ params }: { params: Promise<{ id: st
     }
     setSelectedPricing(newPricing);
 
-    // Recalculate total due only - preserve amount already paid
+    // Recalculate total due and base when rubriques are explicitly modified
     const calc = calculateTotalDue(newPricing, rubricOptions, planPaiement, nombreDeMois, rabaisType, rabaisValue);
     setTotalDue(calc.totalUSD);
-    setBaseTotalDueForRabais(calc.baseAdhesionUSD + calc.nonAdhesionSumUSD);
+    setBaseTotalDueForRabais(calc.baseTotalUSD);
   };
 
   const handlePlanChange = (newPlan: string) => {
@@ -379,39 +357,49 @@ export default function ModifyPaymentPage({ params }: { params: Promise<{ id: st
     setRabaisValue(newRabaisVal);
     setRabaisType(newRabaisType);
 
-    const calc = calculateTotalDue(selectedPricing, rubricOptions, newPlan, nombreDeMois, newRabaisType, newRabaisVal);
-    setTotalDue(calc.totalUSD);
-    setBaseTotalDueForRabais(calc.baseAdhesionUSD + calc.nonAdhesionSumUSD);
+    const base = baseTotalDueForRabais > 0
+      ? baseTotalDueForRabais
+      : (selectedPricing.length > 0
+          ? calculateTotalDue(selectedPricing, rubricOptions, newPlan, nombreDeMois, "percent", 0).baseTotalUSD
+          : 0);
+    if (base > 0) {
+      setBaseTotalDueForRabais(base);
+      if (newRabaisType === "percent") {
+        setTotalDue(Math.round(base * (1 - newRabaisVal / 100) * 100) / 100);
+      } else {
+        setTotalDue(Math.max(0, Math.round((base - newRabaisVal) * 100) / 100));
+      }
+    }
   };
 
   const handleMoisChange = (mois: number) => {
     const safeMois = Math.max(1, mois);
     setNombreDeMois(safeMois);
-    const calc = calculateTotalDue(selectedPricing, rubricOptions, planPaiement, safeMois, rabaisType, rabaisValue);
-    setTotalDue(calc.totalUSD);
-    setBaseTotalDueForRabais(calc.baseAdhesionUSD + calc.nonAdhesionSumUSD);
   };
 
   const handleRabaisChange = (val: number, type: "percent" | "amount") => {
-    const safeVal = isNaN(val) ? 0 : val;
+    const safeVal = isNaN(val) ? 0 : Math.max(0, val);
     setRabaisValue(safeVal);
     setRabaisType(type);
 
-    if (selectedPricing.length > 0) {
-      const calc = calculateTotalDue(selectedPricing, rubricOptions, planPaiement, nombreDeMois, type, safeVal);
-      setTotalDue(calc.totalUSD);
-      setBaseTotalDueForRabais(calc.baseAdhesionUSD + calc.nonAdhesionSumUSD);
-    } else {
-      const base = baseTotalDueForRabais > 0 ? baseTotalDueForRabais : typeof totalDue === "number" ? totalDue : 0;
-      if (base > 0) {
-        setBaseTotalDueForRabais(base);
-        if (type === "percent") {
-          const newTotal = Math.round((base * (1 - safeVal / 100)) * 100) / 100;
-          setTotalDue(newTotal);
-        } else {
-          const newTotal = Math.max(0, Math.round((base - safeVal) * 100) / 100);
-          setTotalDue(newTotal);
-        }
+    let base = baseTotalDueForRabais;
+    if (!base || base <= 0) {
+      if (typeof totalDue === "number" && totalDue > 0) {
+        base = totalDue;
+      } else if (selectedPricing.length > 0) {
+        const calc = calculateTotalDue(selectedPricing, rubricOptions, planPaiement, nombreDeMois, type, 0);
+        base = calc.baseTotalUSD;
+      }
+    }
+
+    if (base > 0) {
+      setBaseTotalDueForRabais(base);
+      if (type === "percent") {
+        const newTotal = Math.round((base * (1 - safeVal / 100)) * 100) / 100;
+        setTotalDue(newTotal);
+      } else {
+        const newTotal = Math.max(0, Math.round((base - safeVal) * 100) / 100);
+        setTotalDue(newTotal);
       }
     }
   };
@@ -570,11 +558,11 @@ export default function ModifyPaymentPage({ params }: { params: Promise<{ id: st
         datePaiement: datePaiement || undefined,
       };
 
-      await updatePaymentInSupabase(resolvedParams.id, paymentData);
+      await updatePaymentInSupabase(paymentId, paymentData);
 
       setPayments((prevPayments) =>
         prevPayments.map((payment) =>
-          payment.id === resolvedParams.id ? { ...payment, ...paymentData } : payment,
+          payment.id === paymentId ? { ...payment, ...paymentData } : payment,
         ),
       );
 

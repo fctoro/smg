@@ -33,19 +33,24 @@ const computePaymentBalance = (p: any, player?: any): { balance: number; devise:
   const amountPaid = Number(p.montant) || 0;
 
   if (isBoursier) {
-    const payesMatch = (p.remarque || "").match(/\[MOIS_PAYES:\s*(\d+)\s*\]/i) || (p.remarque || "").match(/(\d+)\s*mois/i);
-    const moisPayes = payesMatch ? parseInt(payesMatch[1], 10) : 1;
-    const restantsMatch = (p.remarque || "").match(/\[MOIS_RESTANTS:\s*(\d+)\s*\]/i);
-    let moisRestants: number | undefined = restantsMatch ? parseInt(restantsMatch[1], 10) : undefined;
-    if (moisRestants === undefined) {
-      moisRestants = Math.max(0, 12 - moisPayes);
-    }
-    if (moisRestants !== undefined) {
-      const totalSeasonMonths = moisPayes + moisRestants;
-      const totalSeasonDueHTG = totalSeasonMonths * 2500;
-      const balanceHTG = Math.max(0, totalSeasonDueHTG - amountPaid);
-      const effectiveMoisRestants = Math.max(0, Math.ceil(balanceHTG / 2500));
-      return { balance: balanceHTG, devise: "HTG", moisRestants: effectiveMoisRestants, isSpecial: true };
+    const totalDueMarker = (p.remarque || "").match(/\[TOTAL_DUE:\s*([\d.]+)\s*\]/i);
+    if (totalDueMarker && totalDueMarker[1]) {
+      const totalDueVal = parseFloat(totalDueMarker[1]);
+      if (!isNaN(totalDueVal) && totalDueVal > 0) {
+        if (paymentDevise === "HTG") {
+          let taux = p.taux || 0;
+          if (taux <= 1) {
+            const tauxMatch = (p.remarque || "").match(/\[TAUX:\s*([\d.]+)\s*\]/i);
+            taux = tauxMatch ? parseFloat(tauxMatch[1]) : 130;
+          }
+          const totalDueHTG = Math.round(totalDueVal * taux);
+          const balanceHTG = Math.max(0, totalDueHTG - amountPaid);
+          return { balance: balanceHTG, devise: "HTG", isSpecial: true };
+        } else {
+          const balanceUSD = Math.max(0, totalDueVal - amountPaid);
+          return { balance: Number(balanceUSD.toFixed(2)), devise: "US", isSpecial: true };
+        }
+      }
     }
     return zero;
   }

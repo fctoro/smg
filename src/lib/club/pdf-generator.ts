@@ -353,7 +353,14 @@ export async function generateReceiptPDFBase64(
   let totalDueValue = 0; // en USD ou unité standard
   let totalDueHTG = 0;
 
-  if (isBoursierReceipt || isDemiBoursier2500Receipt) {
+  if (isBoursierReceipt) {
+    totalDueValue = payments.reduce((sum, p) => {
+      const match = (p.remarque || "").match(/\[TOTAL_DUE:\s*([\d.]+)\s*\]/i);
+      if (match && match[1]) return sum + parseFloat(match[1]);
+      return sum + (p.devise === "HTG" && taux > 0 ? (p.montant || 0) / taux : (p.montant || 0));
+    }, 0);
+    totalDueHTG = Math.round(totalDueValue * (taux > 0 ? taux : 130));
+  } else if (isDemiBoursier2500Receipt) {
     totalDueHTG = payments.reduce((sum, p) => {
       const payesMatch = (p.remarque || "").match(/\[MOIS_PAYES:\s*(\d+)\s*\]/i) || (p.remarque || "").match(/(\d+)\s*mois/i);
       const restantsMatch = (p.remarque || "").match(/\[MOIS_RESTANTS:\s*(\d+)\s*\]/i);

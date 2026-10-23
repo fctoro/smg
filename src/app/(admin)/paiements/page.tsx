@@ -114,6 +114,7 @@ function PaymentsPageContent() {
   const [modalPlayerId, setModalPlayerId] = useState<string | undefined>(undefined);
   const [editDevise, setEditDevise] = useState<"US" | "HTG">("US");
   const [editTaux, setEditTaux] = useState<number>(0);
+  const [historyPlayerId, setHistoryPlayerId] = useState<string | null>(null);
 
   const playerMap = useMemo(
     () => new Map(players.map((player) => [player.id, player])),
@@ -150,29 +151,38 @@ function PaymentsPageContent() {
 
     const amountPaid = Number(currentPayment.montant) || 0;
 
-    // 1. Cas Boursier (2,500 HTG / mois pour 12 mois de saison)
+    // 1. Cas Boursier : paie seulement un montant à définir (pas de formule mensuelle comme demi-bourse)
     if (isBoursier) {
-      const payesMatch = currentPayment.remarque?.match(/\[MOIS_PAYES:\s*(\d+)\s*\]/i) || currentPayment.remarque?.match(/(\d+)\s*mois/i);
-      const moisPayes = payesMatch ? parseInt(payesMatch[1], 10) : 1;
-      const restantsMatch = currentPayment.remarque?.match(/\[MOIS_RESTANTS:\s*(\d+)\s*\]/i);
-      let moisRestants: number | undefined = restantsMatch ? parseInt(restantsMatch[1], 10) : undefined;
-      if (moisRestants === undefined) {
-        moisRestants = Math.max(0, 12 - moisPayes);
+      const totalDueMarker = currentPayment.remarque?.match(/\[TOTAL_DUE:\s*([\d.]+)\s*\]/i);
+      if (totalDueMarker && totalDueMarker[1]) {
+        const totalDueVal = parseFloat(totalDueMarker[1]);
+        if (!isNaN(totalDueVal) && totalDueVal > 0) {
+          if (paymentDevise === "HTG") {
+            let taux = currentPayment.taux || 0;
+            if (taux <= 1) {
+              const tauxMatch = currentPayment.remarque?.match(/\[TAUX:\s*([\d.]+)\s*\]/i);
+              taux = tauxMatch ? parseFloat(tauxMatch[1]) : 130;
+            }
+            const totalDueHTG = Math.round(totalDueVal * taux);
+            const balanceHTG = Math.max(0, totalDueHTG - amountPaid);
+            return {
+              balance: balanceHTG,
+              devise: "HTG",
+              isSpecial: true,
+              dbg: `boursier_defined_htg`,
+            };
+          } else {
+            const balanceUSD = Math.max(0, totalDueVal - amountPaid);
+            return {
+              balance: Number(balanceUSD.toFixed(2)),
+              devise: "US",
+              isSpecial: true,
+              dbg: `boursier_defined_usd`,
+            };
+          }
+        }
       }
-      if (moisRestants !== undefined) {
-        const totalSeasonMonths = moisPayes + moisRestants;
-        const totalSeasonDueHTG = totalSeasonMonths * 2500;
-        const balanceHTG = Math.max(0, totalSeasonDueHTG - amountPaid);
-        const effectiveMoisRestants = Math.max(0, Math.ceil(balanceHTG / 2500));
-        return {
-          balance: balanceHTG,
-          devise: "HTG",
-          moisRestants: effectiveMoisRestants,
-          isSpecial: true,
-          dbg: `boursier_${effectiveMoisRestants}_mois_restants`,
-        };
-      }
-      return { ...zero, dbg: `boursier_status_(${playerStatus})` };
+      return { ...zero, dbg: "boursier_defined_solde" };
     }
 
     // 2. Cas Demi-Bourse (Soit Fixe 2 500 HTG/mois, soit 50% du tarif mensuel: 77.50$ FC Toro / 57.50$ Ti Toro)
@@ -822,6 +832,77 @@ function PaymentsPageContent() {
     });
   };
 
+  const historyPlayer = useMemo(() => {
+    return historyPlayerId ? playerMap.get(historyPlayerId) : null;
+  }, [historyPlayerId, playerMap]);
+
+  const historyPlayerPayments = useMemo(() => {
+    if (!historyPlayerId) return [];
+    return payments
+      .filter((p) => p.playerId === historyPlayerId)
+      .sort((a, b) => {
+        const dateA = new Date(a.datePaiement || 0).getTime();
+        const dateB = new Date(b.datePaiement || 0).getTime();
+        if (dateB !== dateA) return dateB - dateA;
+        const idA = parseInt(String(a.id).replace(/\D/g, ""), 10) || 0;
+        const idB = parseInt(String(b.id).replace(/\D/g, ""), 10) || 0;
+        return idB - idA;
+      });
+  }, [historyPlayerId, payments]);
+
+  const historyMetrics = useMemo(() => {
+    if (!historyPlayerPayments.length) {
+      return {
+        totalUSD: 0,
+        totalHTG: 0,
+        count: 0,
+        totalDue: "-",
+        balance: "0",
+        balanceNum: 0,
+      };
+    }
+
+    let totalUSD = 0;
+    let totalHTG = 0;
+    historyPlayerPayments.forEach((p) => {
+      const amt = Number(p.montant) || 0;
+      if (p.devise === "HTG") {
+        totalHTG += amt;
+      } else {
+        totalUSD += amt;
+      }
+    });
+
+    const latestPayment = historyPlayerPayments[0];
+    const b = calculateBalance(latestPayment);
+    const totalDueMarker = latestPayment.remarque?.match(/\[TOTAL_DUE:\s*([\d.]+)\s*\]/i)?.[1];
+
+    let totalDueStr = "-";
+    if (totalDueMarker) {
+      totalDueStr = formatClubCurrency(parseFloat(totalDueMarker), "US");
+    } else if (b.isSpecial && b.balance > 0) {
+      totalDueStr = formatClubCurrency(b.balance + (latestPayment.montant || 0), b.devise);
+    }
+
+    let balanceStr = "À jour (0)";
+    if (b.balance > 0) {
+      balanceStr = `${formatClubCurrency(b.balance, b.devise)}${b.moisRestants !== undefined ? ` (${b.moisRestants} mois restants)` : ""}`;
+    } else if (b.balance < 0) {
+      balanceStr = `Trop-perçu: ${formatClubCurrency(Math.abs(b.balance), b.devise)}`;
+    } else if (b.moisRestants === 0) {
+      balanceStr = "Soldé (12/12 mois)";
+    }
+
+    return {
+      totalUSD,
+      totalHTG,
+      count: historyPlayerPayments.length,
+      totalDue: totalDueStr,
+      balance: balanceStr,
+      balanceNum: b.balance,
+    };
+  }, [historyPlayerPayments]);
+
   const getPaymentPlanLabel = (remark?: string) => {
     const remarkLower = (remark || "").toLowerCase();
     const moisMatch = remark?.match(/\[MOIS_PAYES:\s*(\d+)\s*\]/i) || remark?.match(/(\d+)\s*mois/i);
@@ -833,7 +914,7 @@ function PaymentsPageContent() {
     }
 
     if (remarkLower.includes("boursier") || remarkLower.includes("[plan:boursier]")) {
-      return mois ? `Boursier (${mois}/12 mois)` : "Boursier";
+      return "Bourse (Montant défini)";
     }
 
     const isKitOnly = !remarkLower.includes("adhésion") && !remarkLower.includes("adhesion");
@@ -872,35 +953,32 @@ function PaymentsPageContent() {
       const playerName = player ? getPlayerFullName(player) : "Joueur Inconnu";
       const playerMatricule = player?.matricule || "-";
       const playerCategory = player?.categorie || "-";
-      const playerPoste = player?.poste || "-";
-      const playerDob = player?.dateNaissance ? formatClubDate(player.dateNaissance) : "-";
-      const playerStatusPlan = (player as any)?.statutJoueur || player?.planPaiement || "Standard";
-
-      const parentId = (player as any)?.parentId || (player as any)?.tuteur_id;
-      const parent = parentId ? parentMap.get(String(parentId)) : undefined;
-      const parentName = parent ? `${parent.nom || ""} ${parent.prenom || ""}`.trim() : (player?.parentNomPrenom || "-");
-      const parentPhone = parent?.telephone || player?.parentTelephone || "-";
 
       const devise = (payment.devise || "US") as "US" | "HTG";
-      const montantPaid = payment.montant;
+      const deviseVersement = devise === "HTG" ? "HTG" : "USD";
+      const montantPaid = typeof payment.montant === "number" ? payment.montant : (parseFloat(payment.montant) || 0);
 
       const b = calculateBalance(payment);
       const totalDueUSD = payment.remarque?.match(/\[TOTAL_DUE:\s*([\d.]+)\s*\]/i)?.[1];
-      const totalDueFormatted = totalDueUSD
-        ? formatClubCurrency(parseFloat(totalDueUSD), "US")
-        : (b.isSpecial && b.balance > 0 ? formatClubCurrency(b.balance + (payment.montant || 0), b.devise) : "-");
-      const balanceFormatted = b.balance > 0
-        ? `${formatClubCurrency(b.balance, b.devise)}${b.moisRestants !== undefined ? ` (${b.moisRestants} mois restants)` : ""}`
-        : (b.balance < 0 ? `Trop-perçu: ${formatClubCurrency(Math.abs(b.balance), b.devise)}` : (b.moisRestants === 0 ? "Soldé (12/12 mois)" : "0"));
-      const statutReglement = b.balance > 0 ? `Solde dû (${formatClubCurrency(b.balance, b.devise)})` : "À jour";
+      
+      let totalDueNum: number | "" = "";
+      let totalDueDevise = deviseVersement;
+      if (totalDueUSD) {
+        totalDueNum = parseFloat(totalDueUSD);
+        totalDueDevise = "USD";
+      } else if (b.isSpecial && b.balance > 0) {
+        totalDueNum = Math.round((b.balance + (Number(payment.montant) || 0)) * 100) / 100;
+        totalDueDevise = b.devise === "HTG" ? "HTG" : "USD";
+      }
 
-      const remarkLower = (payment.remarque || "").toLowerCase();
+      const balanceNum = typeof b.balance === "number" ? Math.round(b.balance * 100) / 100 : 0;
+      const balanceDevise = b.devise === "HTG" ? "HTG" : "USD";
+      const moisRestantsNum = b.moisRestants !== undefined ? b.moisRestants : 0;
+      const statutReglement = b.balance > 0 ? "Solde dû" : (b.balance < 0 ? "Trop-perçu" : "À jour");
+
       const planLabel = getPaymentPlanLabel(payment.remarque);
       const moisMatch = payment.remarque?.match(/\[MOIS_PAYES:\s*(\d+)\s*\]/i) || payment.remarque?.match(/(\d+)\s*mois/i);
-      const restantsMatch = payment.remarque?.match(/\[MOIS_RESTANTS:\s*(\d+)\s*\]/i);
-      const moisPayes = moisMatch && moisMatch[1]
-        ? `${moisMatch[1]} mois${restantsMatch ? ` (${restantsMatch[1]} restants)` : ""}`
-        : (planLabel.includes("Mensuel") ? "1 mois" : "-");
+      const moisPayes = moisMatch && moisMatch[1] ? parseInt(moisMatch[1], 10) : (planLabel.includes("Mensuel") ? 1 : 0);
 
       let cleanRubriques = (payment.remarque || "")
         .replace(/\[.*?\]\s*/g, '')
@@ -919,6 +997,31 @@ function PaymentsPageContent() {
         return String(m || "Espèces");
       };
 
+      // Historique et cumul pour ce joueur
+      const playerAllPayments = payments
+        .filter((p) => p.playerId === payment.playerId)
+        .sort((a, b) => new Date(a.datePaiement || 0).getTime() - new Date(b.datePaiement || 0).getTime());
+
+      const playerCumulUSD = Math.round(
+        playerAllPayments
+          .filter((p) => (p.devise || "US") === "US")
+          .reduce((sum, p) => sum + (Number(p.montant) || 0), 0) * 100
+      ) / 100;
+
+      const playerCumulHTG = Math.round(
+        playerAllPayments
+          .filter((p) => p.devise === "HTG")
+          .reduce((sum, p) => sum + (Number(p.montant) || 0), 0) * 100
+      ) / 100;
+
+      const playerHistorySummary = playerAllPayments
+        .map((p) => {
+          const d = p.datePaiement ? formatClubDate(p.datePaiement) : "N/D";
+          const dev = (p.devise || "US") === "US" ? "USD" : "HTG";
+          return `[${d}: ${p.montant} ${dev} (${mapModeStr(p.methode)})]`;
+        })
+        .join(" | ");
+
       const photoMatches = extractPhotoUrlsFromRemark(payment.remarque);
       const justificatifs = photoMatches.length > 0 ? `Oui (${photoMatches.length} pièce(s))` : "Non";
 
@@ -928,15 +1031,23 @@ function PaymentsPageContent() {
         playerCategory,
         planLabel,
         cleanRubriques,
-        moisPayes,
-        `${montantPaid} ${devise}`,
-        devise,
-        payment.taux ? String(payment.taux) : "-",
-        totalDueFormatted,
-        balanceFormatted,
+        moisPayes > 0 ? `${moisPayes} mois` : "-",
+        montantPaid,
+        deviseVersement,
+        payment.taux ? Number(payment.taux) : "",
+        totalDueNum,
+        totalDueDevise,
+        balanceNum,
+        balanceDevise,
+        moisRestantsNum,
+        statutReglement,
         mapModeStr(payment.methode),
-        justificatifs,
         payment.datePaiement ? formatClubDate(payment.datePaiement) : "-",
+        playerCumulUSD,
+        playerCumulHTG,
+        playerAllPayments.length,
+        playerHistorySummary,
+        justificatifs,
       ];
     });
   };
@@ -949,13 +1060,21 @@ function PaymentsPageContent() {
     "Articles / Rubriques Payés (Reçu)",
     "Nbre Mois Payés",
     "Montant Versé",
-    "Devise",
+    "Devise Versement",
     "Taux de Change",
     "Montant Total Dû (Dossier)",
+    "Devise Total Dû",
     "Solde Restant Dû (Balance)",
+    "Devise Solde",
+    "Mois Restants",
+    "Statut Règlement",
     "Mode de Paiement",
-    "Justificatif Joint",
     "Date du Paiement",
+    "Cumul Payé Joueur (USD)",
+    "Cumul Payé Joueur (HTG)",
+    "Nbre Total de Versements",
+    "Historique des Versements Joueur",
+    "Justificatif Joint",
   ];
 
   const handleExportCSV = () => {
@@ -966,10 +1085,13 @@ function PaymentsPageContent() {
       confirmText: "Exporter",
       cancelText: "Annuler",
       onConfirm: () => {
-        let csvContent = exportHeaders.map(h => `"${h}"`).join(",") + "\n";
+        let csvContent = exportHeaders.map((h) => `"${h}"`).join(",") + "\n";
         const rows = getExportDataRows();
         rows.forEach((row) => {
-          const csvRow = row.map((field) => `"${(field || "").toString().replace(/"/g, '""')}"`);
+          const csvRow = row.map((field) => {
+            if (typeof field === "number") return String(field);
+            return `"${(field ?? "").toString().replace(/"/g, '""')}"`;
+          });
           csvContent += csvRow.join(",") + "\n";
         });
         const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
@@ -993,11 +1115,20 @@ function PaymentsPageContent() {
       cancelText: "Annuler",
       onConfirm: () => {
         const rows = getExportDataRows();
-        
-        const thead = exportHeaders.map(h => `<th>${h}</th>`).join("");
-        const tbody = rows.map(row => {
-          return `<tr>${row.map(field => `<td>${(field || "").toString().replace(/</g, "&lt;").replace(/>/g, "&gt;")}</td>`).join("")}</tr>`;
-        }).join("");
+
+        const thead = exportHeaders.map((h) => `<th>${h}</th>`).join("");
+        const tbody = rows
+          .map((row) => {
+            return `<tr>${row
+              .map((field) => {
+                if (typeof field === "number") {
+                  return `<td style="text-align: right;" align="right">${field}</td>`;
+                }
+                return `<td>${(field ?? "").toString().replace(/</g, "&lt;").replace(/>/g, "&gt;")}</td>`;
+              })
+              .join("")}</tr>`;
+          })
+          .join("");
 
         const htmlContent = `
           <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
@@ -1396,6 +1527,17 @@ function PaymentsPageContent() {
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
                             </svg>
                           </button>
+                          <button
+                            type="button"
+                            onClick={() => setHistoryPlayerId(payment.playerId)}
+                            className="inline-flex items-center justify-center text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 transition cursor-pointer"
+                            aria-label="Historique des paiements du joueur"
+                            title="Historique des paiements du joueur"
+                          >
+                            <svg className="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                          </button>
                           <Link
                             href={`/paiements/modifier/${payment.id}`}
                             className="inline-flex items-center justify-center text-gray-500 transition hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200 cursor-pointer"
@@ -1724,6 +1866,262 @@ function PaymentsPageContent() {
         cancelText="Annuler"
         isDestructive={true}
       />
+
+      {historyPlayerId && historyPlayer && (
+        <div
+          className="fixed inset-0 z-[999999] flex items-center justify-center bg-black/60 p-4 sm:p-6 overflow-y-auto"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="history-modal-title"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) setHistoryPlayerId(null);
+          }}
+        >
+          <div className="w-full max-w-4xl max-h-[90vh] flex flex-col rounded-2xl bg-white shadow-2xl dark:bg-gray-900 border border-gray-200 dark:border-gray-800 my-auto overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/40">
+              <div className="flex items-center gap-3">
+                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400">
+                  <svg className="size-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h2 id="history-modal-title" className="text-lg font-bold text-gray-900 dark:text-white">
+                      Historique des paiements
+                    </h2>
+                    {historyPlayer.matricule && (
+                      <span className="rounded-md bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-600 dark:bg-gray-800 dark:text-gray-300">
+                        {historyPlayer.matricule}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    Joueur : <span className="font-semibold text-gray-800 dark:text-gray-200">{getPlayerFullName(historyPlayer)}</span>
+                    {historyPlayer.categorie && ` • ${historyPlayer.categorie}`}
+                    {historyPlayer.statutJoueur && ` • ${historyPlayer.statutJoueur}`}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <Link
+                  href={`/joueurs/${historyPlayer.id}`}
+                  target="_blank"
+                  className="hidden sm:inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800 transition"
+                >
+                  <span>Fiche joueur</span>
+                  <svg className="size-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                  </svg>
+                </Link>
+                <button
+                  type="button"
+                  onClick={() => setHistoryPlayerId(null)}
+                  className="flex h-9 w-9 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-200 transition text-lg cursor-pointer"
+                  aria-label="Fermer"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+
+            {/* Metric Cards Summary */}
+            <div className="px-6 py-4 bg-gray-50 dark:bg-gray-800/20 border-b border-gray-100 dark:border-gray-800">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {/* Card 1: Total Versé */}
+                <div className="rounded-xl border border-gray-200/80 bg-white p-3 shadow-xs dark:border-gray-800 dark:bg-gray-800/80">
+                  <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Total déjà versé</span>
+                  <div className="mt-1 flex flex-col">
+                    {historyMetrics.totalUSD > 0 && (
+                      <span className="text-base font-bold text-emerald-600 dark:text-emerald-400">
+                        {formatClubCurrency(historyMetrics.totalUSD, "US")}
+                      </span>
+                    )}
+                    {historyMetrics.totalHTG > 0 && (
+                      <span className="text-base font-bold text-emerald-600 dark:text-emerald-400">
+                        {formatClubCurrency(historyMetrics.totalHTG, "HTG")}
+                      </span>
+                    )}
+                    {historyMetrics.totalUSD === 0 && historyMetrics.totalHTG === 0 && (
+                      <span className="text-base font-bold text-gray-600 dark:text-gray-300">$0.00</span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Card 2: Total Dû */}
+                <div className="rounded-xl border border-gray-200/80 bg-white p-3 shadow-xs dark:border-gray-800 dark:bg-gray-800/80">
+                  <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Total Dû (Dossier)</span>
+                  <div className="mt-1">
+                    <span className="text-base font-bold text-gray-900 dark:text-white">
+                      {historyMetrics.totalDue}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Card 3: Solde Restant */}
+                <div className="rounded-xl border border-gray-200/80 bg-white p-3 shadow-xs dark:border-gray-800 dark:bg-gray-800/80">
+                  <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Solde Restant Dû</span>
+                  <div className="mt-1">
+                    <span className={`text-base font-bold ${(historyMetrics.balanceNum || 0) > 0 ? "text-error-500" : "text-emerald-600 dark:text-emerald-400"}`}>
+                      {historyMetrics.balance}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Card 4: Versements */}
+                <div className="rounded-xl border border-gray-200/80 bg-white p-3 shadow-xs dark:border-gray-800 dark:bg-gray-800/80">
+                  <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Versements</span>
+                  <div className="mt-1">
+                    <span className="text-base font-bold text-blue-600 dark:text-blue-400">
+                      {historyMetrics.count} versement{historyMetrics.count > 1 ? "s" : ""}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Payments Table */}
+            <div className="flex-1 overflow-y-auto px-6 py-4 custom-scrollbar">
+              {historyPlayerPayments.length === 0 ? (
+                <div className="py-12 text-center text-sm text-gray-500 dark:text-gray-400">
+                  Aucun paiement enregistré pour ce joueur.
+                </div>
+              ) : (
+                <div className="overflow-x-auto rounded-xl border border-gray-100 dark:border-gray-800">
+                  <table className="w-full text-left text-sm">
+                    <thead className="bg-gray-50 text-xs font-semibold uppercase text-gray-500 dark:bg-gray-800 dark:text-gray-400 border-b border-gray-100 dark:border-gray-800">
+                      <tr>
+                        <th className="px-4 py-3">Date</th>
+                        <th className="px-4 py-3">Montant Versé</th>
+                        <th className="px-4 py-3">Mode</th>
+                        <th className="px-4 py-3">Rubriques / Détails</th>
+                        <th className="px-4 py-3">Justificatif</th>
+                        <th className="px-4 py-3 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+                      {historyPlayerPayments.map((p) => {
+                        const proofUrls = extractPhotoUrlsFromRemark(p.remarque);
+                        const cleanRub = (p.remarque || "")
+                          .replace(/\[.*?\]\s*/g, "")
+                          .replace(/\s*\|\s*/g, " - ")
+                          .replace(/Rubriques\s*:\s*/gi, "")
+                          .trim() || (p as any).description || "Cotisation";
+
+                        return (
+                          <tr key={p.id} className="hover:bg-gray-50/60 dark:hover:bg-gray-800/40 transition">
+                            <td className="px-4 py-3 font-medium text-gray-800 dark:text-gray-200 whitespace-nowrap">
+                              {p.datePaiement ? formatClubDate(p.datePaiement) : "N/D"}
+                            </td>
+                            <td className="px-4 py-3 font-bold text-gray-900 dark:text-white whitespace-nowrap">
+                              {formatClubCurrency(p.montant, (p.devise || "US") as "US" | "HTG")}
+                              {p.taux && p.taux > 1 && (
+                                <span className="block text-[11px] font-normal text-gray-400">
+                                  Taux : {p.taux}
+                                </span>
+                              )}
+                            </td>
+                            <td className="px-4 py-3 text-gray-700 dark:text-gray-300 whitespace-nowrap">
+                              <span className="inline-flex items-center rounded-md bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-800 dark:bg-gray-800 dark:text-gray-200">
+                                {p.methode === "especes" || p.methode === "1"
+                                  ? "Espèces"
+                                  : p.methode === "virement" || p.methode === "2"
+                                  ? "Virement"
+                                  : p.methode === "cheque" || p.methode === "3"
+                                  ? "Chèque"
+                                  : p.methode === "carte" || p.methode === "4"
+                                  ? "Carte"
+                                  : p.methode === "mobile" || p.methode === "5"
+                                  ? "Dépôt"
+                                  : String(p.methode || "Autre")}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-xs text-gray-600 dark:text-gray-300 max-w-xs truncate" title={cleanRub}>
+                              {cleanRub}
+                            </td>
+                            <td className="px-4 py-3">
+                              {proofUrls.length > 0 ? (
+                                <div className="flex items-center gap-1.5">
+                                  {proofUrls.map((url, idx) => (
+                                    <button
+                                      key={idx}
+                                      type="button"
+                                      onClick={() => {
+                                        setSelectedPaymentImage(url);
+                                        setIsImageModalOpen(true);
+                                      }}
+                                      className="h-8 w-8 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 hover:opacity-80 transition shrink-0 cursor-pointer"
+                                      title={`Voir justificatif ${idx + 1}`}
+                                    >
+                                      {isPdfProof(url) ? (
+                                        <div className="flex h-full w-full items-center justify-center bg-red-100 text-[10px] font-bold text-red-700 dark:bg-red-950 dark:text-red-300">
+                                          PDF
+                                        </div>
+                                      ) : (
+                                        <img src={url} alt={`Preuve ${idx + 1}`} className="h-full w-full object-cover" />
+                                      )}
+                                    </button>
+                                  ))}
+                                </div>
+                              ) : (
+                                <span className="text-xs text-gray-400">-</span>
+                              )}
+                            </td>
+                            <td className="px-4 py-3 text-right whitespace-nowrap">
+                              <div className="flex items-center justify-end gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => handlePrintSinglePaymentPDF(p)}
+                                  className="inline-flex items-center justify-center p-1.5 text-brand-500 hover:text-brand-600 hover:bg-brand-50 rounded-lg dark:hover:bg-brand-950/30 transition cursor-pointer"
+                                  title="Imprimer le reçu"
+                                >
+                                  <svg className="size-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                                  </svg>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDownloadSinglePaymentPDF(p)}
+                                  className="inline-flex items-center justify-center p-1.5 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg dark:text-gray-400 dark:hover:text-white dark:hover:bg-gray-800 transition cursor-pointer"
+                                  title="Télécharger le reçu (PDF)"
+                                >
+                                  <svg className="size-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                  </svg>
+                                </button>
+                                <Link
+                                  href={`/paiements/modifier/${p.id}`}
+                                  className="inline-flex items-center justify-center p-1.5 text-gray-500 hover:text-gray-800 hover:bg-gray-100 rounded-lg dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-800 transition cursor-pointer"
+                                  title="Modifier ce paiement"
+                                >
+                                  <PencilIcon className="size-4" />
+                                </Link>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="flex items-center justify-end px-6 py-3 border-t border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/40">
+              <button
+                type="button"
+                onClick={() => setHistoryPlayerId(null)}
+                className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700/50 transition cursor-pointer"
+              >
+                Fermer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <ConfirmComponent />
     </div>

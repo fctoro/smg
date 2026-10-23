@@ -322,8 +322,8 @@ export function PaymentAddModal({ isOpen, onClose, initialPlayerId }: PaymentAdd
         setToast({ message: "Veuillez remplir le montant payé et le taux de change.", type: "error" });
         return;
       }
-      if (!isDemiBoursierPlayer && selectedPricingItems.length === 0 && !selectedPlan) {
-        setToast({ message: "Veuillez sélectionner au moins une rubrique ou un plan de paiement.", type: "error" });
+      if (!isDemiBoursierPlayer && !selectedPlan) {
+        setToast({ message: "Veuillez obligatoirement sélectionner un plan de paiement.", type: "error" });
         return;
       }
     }
@@ -344,47 +344,46 @@ export function PaymentAddModal({ isOpen, onClose, initialPlayerId }: PaymentAdd
       const planBaseAmount = plan ? (isTiToro ? plan.montantTIToro : plan.montantFCToro) : 0;
       const finalPlanAmount = (plan && (selectedPlan === "mensuel" || isDemiBoursierPlayer)) ? planBaseAmount * nombreDeMois : planBaseAmount;
       // Le total dû
+      const boursierDefinedDue = Number(montantDuManuel) || Number(montantDonne) || 0;
       const totalDue = isBoursierPlayer
-        ? boursierCurrentTotalHTG
+        ? boursierDefinedDue
         : isDemiBoursierPlayer
           ? (devise === "HTG" ? demiCurrentTotalHTG : (taux > 0 ? demiCurrentTotalUSD : demiCurrentTotalUSD))
           : baseTotalDue;
       
-      const mDuManuelNum = Number(montantDuManuel) || totalDue;
-      const mDonneNum = Number(montantDonne) || (isBoursierPlayer ? totalDue : 0);
+      const mDuManuelNum = isBoursierPlayer ? boursierDefinedDue : (Number(montantDuManuel) || totalDue);
+      const mDonneNum = Number(montantDonne) || (isBoursierPlayer ? boursierDefinedDue : 0);
       
-      const finalMontantAPayer = isBoursierPlayer ? totalDue : mDuManuelNum;
-      const paymentAmount = isBoursierPlayer ? totalDue : mDonneNum;
-      const actualDevise = isBoursierPlayer ? "HTG" : (isDemiBoursier2500Player && !devise ? "HTG" : devise);
-      const montantUS = isBoursierPlayer ? 0 : (actualDevise === "US" ? paymentAmount : (taux > 0 ? paymentAmount / taux : 0));
-      const montantHTG = isBoursierPlayer ? paymentAmount : (actualDevise === "HTG" ? paymentAmount : 0);
+      const finalMontantAPayer = isBoursierPlayer ? boursierDefinedDue : mDuManuelNum;
+      const paymentAmount = isBoursierPlayer ? mDonneNum : mDonneNum;
+      const actualDevise = isBoursierPlayer ? (devise || "HTG") : (isDemiBoursier2500Player && !devise ? "HTG" : devise);
+      const montantUS = actualDevise === "US" ? paymentAmount : (taux > 0 ? paymentAmount / taux : 0);
+      const montantHTG = actualDevise === "HTG" ? paymentAmount : 0;
       const adhesionCode = isBoursierPlayer ? "BOURSE" : (selectedAdhesionItem ? (isTiToro ? "TI_TORO" : "FC_TORO") : (isDemiBoursierPlayer ? (isTiToro ? "TI_TORO" : "FC_TORO") : ""));
       const selectedRubricsLabel = selectedPricingItems
         .filter((item) => !item.estAdhesion && item.id !== "adhesion-fc" && item.id !== "adhesion-ti")
         .map((item) => item.rubrique)
         .filter(Boolean).join(", ");
       // TOTAL_DUE doit refléter montantDuManuel (source de vérité), converti en USD si HTG
-      const totalDueInUSD = isBoursierPlayer
-        ? 0
-        : (actualDevise === "HTG" && taux > 0)
-          ? mDuManuelNum / taux
-          : actualDevise === "HTG"
-            ? baseTotalDue          // fallback si pas de taux
-            : mDuManuelNum;      // USD : déjà en USD
+      const totalDueInUSD = (actualDevise === "HTG" && taux > 0)
+        ? mDuManuelNum / taux
+        : actualDevise === "HTG"
+          ? mDuManuelNum / 130
+          : mDuManuelNum;
       const rabaisMarker = isDemiBoursierPlayer
         ? (isDemiBoursier2500Player ? " [REDUCTION:FIXED_2500_HTG]" : " [REDUCTION:HALF]")
         : (!isBoursierPlayer && rabaisPercent > 0) ? ` [RABAIS:${rabaisPercent}%]` : "";
       const tauxMarker = (actualDevise === "HTG" && taux > 0) ? ` [TAUX:${taux}]` : (isDemiBoursierPlayer && taux > 0 ? ` [TAUX:${taux}]` : "");
-      const moisMarker = (isBoursierPlayer || isDemiBoursierPlayer || selectedPlan === "mensuel")
+      const moisMarker = (isDemiBoursierPlayer || selectedPlan === "mensuel")
         ? ` [MOIS_PAYES:${nombreDeMois}] [MOIS_RESTANTS:${remainingMonthsSeason}]`
         : "";
       const paymentMarkers = isBoursierPlayer
-        ? `[ADHESION:${adhesionCode}] [PLAN:BOURSIER]${moisMarker} [STATUT:${statut.toUpperCase()}] [TOTAL_DUE:${totalDue}]`
+        ? `[ADHESION:BOURSE] [PLAN:BOURSIER]${tauxMarker} [STATUT:${statut.toUpperCase()}] [TOTAL_DUE:${Number(totalDueInUSD).toFixed(2)}]`
         : isDemiBoursierPlayer
-          ? `${adhesionCode ? `[ADHESION:${adhesionCode}] ` : ""}[PLAN:MENSUEL]${moisMarker} [STATUT:${isDemiBoursier2500Player ? "DEMI-BOURSE-2500" : "DEMI-BOURSE"}]${rabaisMarker}${tauxMarker} [TOTAL_DUE:${totalDueInUSD}]`
-          : `${adhesionCode ? `[ADHESION:${adhesionCode}] ` : ""}[PLAN:${selectedPlan ? selectedPlan.toUpperCase() : "AUCUN"}]${(selectedPlan === "mensuel" ? ` [MOIS_PAYES:${nombreDeMois}]` : "")} [STATUT:${statut.toUpperCase()}]${rabaisMarker}${tauxMarker} [TOTAL_DUE:${totalDueInUSD}]`;
+          ? `${adhesionCode ? `[ADHESION:${adhesionCode}] ` : ""}[PLAN:MENSUEL]${moisMarker} [STATUT:${isDemiBoursier2500Player ? "DEMI-BOURSE-2500" : "DEMI-BOURSE"}]${rabaisMarker}${tauxMarker} [TOTAL_DUE:${Number(totalDueInUSD).toFixed(2)}]`
+          : `${adhesionCode ? `[ADHESION:${adhesionCode}] ` : ""}[PLAN:${selectedPlan ? selectedPlan.toUpperCase() : "AUCUN"}]${(selectedPlan === "mensuel" ? ` [MOIS_PAYES:${nombreDeMois}]` : "")} [STATUT:${statut.toUpperCase()}]${rabaisMarker}${tauxMarker} [TOTAL_DUE:${Number(totalDueInUSD).toFixed(2)}]`;
       const adhesionLabel = isBoursierPlayer
-        ? `Boursier: ${nombreDeMois} mois × 2,500 HTG (Reste: ${remainingMonthsSeason} mois)`
+        ? "Bourse (Montant défini)"
         : isDemiBoursierPlayer
           ? (isDemiBoursier2500Player
               ? `Demi-bourse: ${nombreDeMois} mois × 2,500 HTG (Reste: ${remainingMonthsSeason} mois)${taux > 0 ? ` • $${((nombreDeMois * 2500) / taux).toFixed(2)} USD` : ""}`
@@ -749,15 +748,6 @@ export function PaymentAddModal({ isOpen, onClose, initialPlayerId }: PaymentAdd
       .reduce((sum, item) => sum + item.montant, 0);
   }, [selectedPricingItems]);
 
-  // Calculs financiers Boursier
-  const boursierMensualiteHTG = 2500;
-  const boursierCurrentTotalHTG = useMemo(() => {
-    const baseHTG = currentTransactionMonths * boursierMensualiteHTG;
-    const extraHTG = taux > 0 ? extraRubricsSumUSD * taux : 0;
-    return Math.round(baseHTG + extraHTG);
-  }, [currentTransactionMonths, extraRubricsSumUSD, taux]);
-  const boursierRemainingSeasonBalanceHTG = remainingMonthsSeason * boursierMensualiteHTG;
-
   // Calculs financiers Demi-bourse
   const isDemiBoursier2500 = isDemiBoursier && ((selectedPlayer?.statutJoueur || "").toLowerCase().includes("2500") || (selectedPlayer?.statutJoueur || "").toLowerCase().includes("2 500"));
   const demiMonthlyUSD = isTiToro ? 57.50 : 77.50;
@@ -785,7 +775,7 @@ export function PaymentAddModal({ isOpen, onClose, initialPlayerId }: PaymentAdd
     ? remainingMonthsSeason * 2500
     : (taux > 0 ? Math.round(demiRemainingSeasonBalanceUSD * taux) : 0);
 
-  const hasPricingItems = selectedPricingItems.length > 0 || !!selectedPlan || isDemiBoursier;
+  const hasPricingItems = selectedPricingItems.length > 0 || !!selectedPlan || isDemiBoursier || isBoursier;
 
   // Réinitialiser le verrou si la devise, le taux, ou le solde change
   useEffect(() => {
@@ -794,7 +784,12 @@ export function PaymentAddModal({ isOpen, onClose, initialPlayerId }: PaymentAdd
 
   useEffect(() => {
     if (isBoursier) {
-      setMontantDuManuel(boursierCurrentTotalHTG);
+      if (!isUserEditedMontantDu) {
+        const extra = extraRubricsSumUSD > 0
+          ? (devise === "HTG" && taux > 0 ? Math.round(extraRubricsSumUSD * taux) : extraRubricsSumUSD)
+          : "";
+        setMontantDuManuel(extra);
+      }
       return;
     }
 
@@ -814,7 +809,7 @@ export function PaymentAddModal({ isOpen, onClose, initialPlayerId }: PaymentAdd
       if (!isUserEditedMontantDu) setMontantDuManuel("");
       if (!isUserEditedMontantDonne) setMontantDonne("");
     }
-  }, [isBoursier, isDemiBoursier, boursierCurrentTotalHTG, demiCurrentTotalUSD, demiCurrentTotalHTG, hasPricingItems, currentSoldeDueInSelectedDevise, devise, taux, isUserEditedMontantDonne, isUserEditedMontantDu]);
+  }, [isBoursier, isDemiBoursier, extraRubricsSumUSD, demiCurrentTotalUSD, demiCurrentTotalHTG, hasPricingItems, currentSoldeDueInSelectedDevise, devise, taux, isUserEditedMontantDonne, isUserEditedMontantDu]);
 
   const remainingAmount = Math.max(0, (Number(montantDuManuel) || 0) - (Number(montantDonne) || 0));
 
@@ -1331,42 +1326,45 @@ export function PaymentAddModal({ isOpen, onClose, initialPlayerId }: PaymentAdd
 
             {/* Tarif Boursier Spécial OU Demi-bourse OU Plan standard */}
             {isBoursier ? (
-              <div className="md:col-span-2 rounded-xl border-2 border-slate-300/90 bg-slate-100/90 p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/60">
+              <div className="md:col-span-2 rounded-xl border-2 border-emerald-300/90 bg-emerald-50/70 p-4 shadow-sm dark:border-emerald-700/60 dark:bg-emerald-950/20">
                 <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-                  <h4 className="text-sm font-extrabold text-slate-900 dark:text-white uppercase tracking-wide">
-                    Tarif Boursier (2,500 HTG / mois)
+                  <h4 className="text-sm font-extrabold text-emerald-900 dark:text-emerald-300 uppercase tracking-wide">
+                    Joueur Boursier (100%) — Montant à définir
                   </h4>
-                  <span className="inline-flex items-center rounded-full bg-slate-200 text-slate-800 border border-slate-300 px-2.5 py-0.5 text-xs font-semibold dark:bg-slate-800 dark:text-slate-200 dark:border-slate-600">
-                    Saison sur 12 mois • {pastMonthsPaid > 0 ? `${pastMonthsPaid}/12 déjà payés` : "Nouveau départ"}
+                  <span className="inline-flex items-center rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 px-2.5 py-0.5 text-xs font-semibold dark:bg-emerald-900/50 dark:text-emerald-200 dark:border-emerald-700">
+                    Bourse accordée • Montant fixé librement par l'administration
                   </span>
                 </div>
 
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <div>
                     <label className="mb-1.5 block text-xs font-bold text-slate-800 dark:text-slate-200">
-                      Mensualité Boursier
+                      Montant à régler (Défini pour ce joueur)
                     </label>
                     <input
-                      type="text"
-                      readOnly
-                      value="2,500 HTG / mois"
-                      className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-900 shadow-sm dark:border-slate-700 dark:bg-gray-800 dark:text-slate-100"
+                      type="number"
+                      min={0}
+                      step="any"
+                      value={montantDuManuel === "" ? "" : montantDuManuel}
+                      onChange={(e) => {
+                        setMontantDuManuel(e.target.value === "" ? "" : Number(e.target.value));
+                        setIsUserEditedMontantDu(true);
+                      }}
+                      placeholder="Ex: 5000"
+                      className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-900 shadow-sm dark:border-slate-700 dark:bg-gray-800 dark:text-slate-100 focus:ring-2 focus:ring-brand-500"
                     />
                   </div>
                   <div>
                     <label className="mb-1.5 block text-xs font-bold text-slate-800 dark:text-slate-200">
-                      Nombre de mois payés aujourd'hui
+                      Devise du montant
                     </label>
                     <select
-                      value={nombreDeMois}
-                      onChange={(e) => setNombreDeMois(Number(e.target.value))}
+                      value={devise}
+                      onChange={(e) => setDevise(e.target.value as "US" | "HTG")}
                       className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-900 shadow-sm dark:border-slate-700 dark:bg-gray-800 dark:text-slate-100 focus:ring-2 focus:ring-brand-500"
                     >
-                      {Array.from({ length: Math.max(1, 12 - pastMonthsPaid) }, (_, i) => i + 1).map((m) => (
-                        <option key={m} value={m}>
-                          {m} mois ({(m * 2500).toLocaleString()} HTG)
-                        </option>
-                      ))}
+                      <option value="HTG">Gourdes (HTG)</option>
+                      <option value="US">Dollars (USD)</option>
                     </select>
                   </div>
                 </div>
@@ -1409,26 +1407,6 @@ export function PaymentAddModal({ isOpen, onClose, initialPlayerId }: PaymentAdd
                     </div>
                   </div>
                 )}
-
-                {/* Bilan récapitulatif Boursier */}
-                <div className="mt-3 rounded-lg bg-slate-200/90 p-3 space-y-2 text-xs border border-slate-300/90 dark:bg-slate-800 dark:border-slate-700">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <span className="font-bold text-slate-800 dark:text-slate-200">
-                      Total dû pour ce paiement :
-                    </span>
-                    <span className="text-sm font-extrabold text-slate-900 dark:text-white">
-                      {boursierCurrentTotalHTG.toLocaleString()} HTG
-                    </span>
-                  </div>
-                  <div className="pt-2 border-t border-slate-300 dark:border-slate-700 flex flex-wrap items-center justify-between gap-2 text-slate-700 dark:text-slate-300">
-                    <span>
-                      Mois réglés sur l'année : <strong>{totalMonthsPaidAfterCurrent} / 12 mois</strong>
-                    </span>
-                    <span>
-                      Reste à payer : <strong className={remainingMonthsSeason > 0 ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400"}>{remainingMonthsSeason} mois</strong> ({boursierRemainingSeasonBalanceHTG.toLocaleString()} HTG)
-                    </span>
-                  </div>
-                </div>
               </div>
             ) : isDemiBoursier ? (
               <div className="md:col-span-2 rounded-xl border-2 border-slate-300/90 bg-slate-100/90 p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/60">
@@ -1672,15 +1650,16 @@ export function PaymentAddModal({ isOpen, onClose, initialPlayerId }: PaymentAdd
               </div>
             ) : (
               <div>
-                <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
-                  Plan de paiement
+                <label className="mb-1.5 flex items-center justify-between text-sm font-medium text-gray-700 dark:text-gray-400">
+                  <span>Plan de paiement <span className="text-red-500 font-bold">*</span></span>
+                  {!selectedPlan && <span className="text-xs text-red-500 font-medium">Obligatoire</span>}
                 </label>
                 <select
                   value={selectedPlan}
                   onChange={(event) => handlePlanChange(event.target.value)}
-                  className={selectClassName}
+                  className={`${selectClassName} ${!selectedPlan ? "border-amber-300 dark:border-amber-700" : ""}`}
                 >
-                  <option value="">Sélectionner un plan</option>
+                  <option value="">Sélectionner un plan (Obligatoire)</option>
                   {paymentPlans.map((plan) => (
                     <option key={plan.id} value={plan.id}>
                       {plan.plan} - {plan.avantage}

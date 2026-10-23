@@ -204,6 +204,8 @@ export default function NewPaymentPage() {
   const [isUserEditedMontantDonne, setIsUserEditedMontantDonne] = useState(false);
   const [montantDonne, setMontantDonne] = useState<number>(0);
   const [error, setError] = useState<string>("");
+  const [planError, setPlanError] = useState(false);
+  const planSelectRef = useRef<HTMLSelectElement>(null);
 
   const [paymentPhotos, setPaymentPhotos] = useState<File[]>([]);
   const [paymentPhotoPreviews, setPaymentPhotoPreviews] = useState<{ file: File; url: string; name: string; isPdf: boolean }[]>([]);
@@ -216,6 +218,10 @@ export default function NewPaymentPage() {
     () => players.find((p) => p.id === playerId) ?? null,
     [players, playerId]
   );
+  const isBoursierPlayer = useMemo(() => {
+    const s = (selectedPlayer?.statutJoueur || "").toLowerCase().trim();
+    return s.includes("bourse") && !s.includes("demi");
+  }, [selectedPlayer]);
 
   const filteredPlayers = useMemo(() => {
     const query = playerSearch.trim().toLowerCase();
@@ -313,18 +319,24 @@ export default function NewPaymentPage() {
       alert(msg);
       return;
     }
-    const hasAdhesion = selectedPricingItems.some((item) => item.estAdhesion || item.id === "adhesion-fc" || item.id === "adhesion-ti");
-    if (!hasAdhesion) {
-      const msg = "❌ Erreur: Veuillez sélectionner une adhésion FC TORO ou TI TORO.";
-      setError(msg);
-      alert(msg);
-      return;
-    }
-    if (!selectedPlan) {
-      const msg = "❌ Erreur: Veuillez sélectionner un plan de paiement.";
-      setError(msg);
-      alert(msg);
-      return;
+    if (!isBoursierPlayer) {
+      const hasAdhesion = selectedPricingItems.some((item) => item.estAdhesion || item.id === "adhesion-fc" || item.id === "adhesion-ti");
+      if (!hasAdhesion) {
+        const msg = "❌ Erreur: Veuillez sélectionner une adhésion FC TORO ou TI TORO.";
+        setError(msg);
+        alert(msg);
+        return;
+      }
+      if (!selectedPlan) {
+        const msg = "❌ Erreur: Veuillez obligatoirement sélectionner un plan de paiement (Annuel, Semestriel ou Mensuel) pour finaliser l'enregistrement.";
+        setError(msg);
+        setPlanError(true);
+        if (planSelectRef.current) {
+          planSelectRef.current.focus();
+          planSelectRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+        return;
+      }
     }
 
     // Si montantDonne est 0 mais qu'il y a un totalRubriques, utiliser totalRubriques
@@ -360,19 +372,19 @@ export default function NewPaymentPage() {
       const planRemark = selectedPlan ? `Plan: ${paymentPlans.find(p => p.id === selectedPlan)?.plan}` : "";
       const selectedAdhesionItem = selectedPricingItems.find((item) => item.estAdhesion || item.id === "adhesion-fc" || item.id === "adhesion-ti");
       const isTiToro = selectedAdhesionItem ? selectedAdhesionItem.rubrique.toLowerCase().includes("ti toro") : false;
-      const adhesionRemark = isTiToro ? "Adhésion: TI TORO" : "Adhésion: FC TORO";
-      const adhesionCode = isTiToro ? "TI_TORO" : "FC_TORO";
+      const adhesionRemark = isBoursierPlayer ? "Adhésion: BOURSE" : (isTiToro ? "Adhésion: TI TORO" : "Adhésion: FC TORO");
+      const adhesionCode = isBoursierPlayer ? "BOURSE" : (isTiToro ? "TI_TORO" : "FC_TORO");
       const isDemiBoursier = !!(selectedPlayer && (selectedPlayer.statutJoueur || "").toLowerCase().includes("demi"));
-      const planCode = selectedPlan ? selectedPlan.toUpperCase() : "AUCUN";
-      const statusCode = isDemiBoursier ? "DEMI-BOURSE" : paymentStatus.toUpperCase();
-      // Le montant total dû est basé sur le total des rubriques sélectionnées
-      const montantAvecPlan = totalRubriques;
-      const totalDueInUSD = devise === "HTG" ? (taux > 0 ? montantAvecPlan / taux : montantAvecPlan) : montantAvecPlan;
+      const planCode = isBoursierPlayer ? "BOURSIER" : (selectedPlan ? selectedPlan.toUpperCase() : "AUCUN");
+      const statusCode = isBoursierPlayer ? "BOURSIER" : (isDemiBoursier ? "DEMI-BOURSE" : paymentStatus.toUpperCase());
+      // Le montant total dû est basé sur le total des rubriques ou le montant défini
+      const montantAvecPlan = isBoursierPlayer ? paymentAmount : totalRubriques;
+      const totalDueInUSD = devise === "HTG" ? (taux > 0 ? montantAvecPlan / taux : montantAvecPlan / 130) : montantAvecPlan;
       const planRabaisPct = selectedPlan === "annuel" ? 10 : selectedPlan === "semestriel" ? 5 : 0;
-      const rabaisTag = isDemiBoursier ? " [REDUCTION:HALF]" : (planRabaisPct > 0 ? ` [RABAIS:${planRabaisPct}%]` : "");
-      const tauxTag = (devise === "HTG" && taux > 0) ? ` [TAUX:${taux}]` : (isDemiBoursier && taux > 0 ? ` [TAUX:${taux}]` : "");
-      const demiLabel = isDemiBoursier ? " (Demi-bourse 50%)" : "";
-      const paymentMarkers = `[ADHESION:${adhesionCode}] [PLAN:${planCode}]${rabaisTag}${tauxTag} [STATUT:${statusCode}] [TOTAL_DUE:${totalDueInUSD}]`;
+      const rabaisTag = (!isBoursierPlayer && isDemiBoursier) ? " [REDUCTION:HALF]" : (!isBoursierPlayer && planRabaisPct > 0 ? ` [RABAIS:${planRabaisPct}%]` : "");
+      const tauxTag = (devise === "HTG" && taux > 0) ? ` [TAUX:${taux}]` : "";
+      const demiLabel = isDemiBoursier ? " (Demi-bourse 50%)" : (isBoursierPlayer ? " (Boursier)" : "");
+      const paymentMarkers = `[ADHESION:${adhesionCode}] [PLAN:${planCode}]${rabaisTag}${tauxTag} [STATUT:${statusCode}] [TOTAL_DUE:${Number(totalDueInUSD).toFixed(2)}]`;
       const finalRemarque = `${paymentMarkers} ${description.trim()} ${adhesionRemark}${demiLabel} ${planRemark}`.trim();
       const uploadPromise = paymentPhotos.length > 0 ? uploadPaymentPhotosToSupabase(paymentPhotos) : Promise.resolve([]);
 
@@ -478,6 +490,10 @@ export default function NewPaymentPage() {
 
   const handlePlanChange = (planId: string) => {
     setSelectedPlan(planId);
+    if (planId) {
+      setPlanError(false);
+      setError("");
+    }
     if (planId && selectedPlayer) {
       setSelectedPricing((prev) => applyAutoAdhesionForPlayer(selectedPlayer, prev, pricingItems));
     }
@@ -877,23 +893,57 @@ export default function NewPaymentPage() {
               <option value="late">En retard</option>
             </select>
           </div>
-          <div>
-            <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
-              Plan de paiement
-            </label>
-            <select
-              value={selectedPlan}
-              onChange={(event) => handlePlanChange(event.target.value)}
-              className={selectClassName}
-            >
-              <option value="">Sélectionner un plan</option>
-              {paymentPlans.map((plan) => (
-                <option key={plan.id} value={plan.id}>
-                  {plan.plan} - {plan.avantage}
-                </option>
-              ))}
-            </select>
-          </div>
+          {!isBoursierPlayer ? (
+            <div className={`rounded-xl p-2.5 transition-all ${planError && !selectedPlan ? "bg-red-50/70 dark:bg-red-950/20 border border-error-400 dark:border-error-700 ring-2 ring-error-500/10" : ""}`}>
+              <label className="mb-1.5 flex items-center justify-between text-sm font-medium text-gray-700 dark:text-gray-300">
+                <span className="flex items-center gap-1">
+                  <span>Plan de paiement</span>
+                  <span className="text-error-500 font-bold">*</span>
+                </span>
+                <span className={`text-[11px] font-semibold px-2 py-0.5 rounded ${
+                  !selectedPlan
+                    ? "bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-300"
+                    : "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300"
+                }`}>
+                  {!selectedPlan ? "Obligatoire" : "Sélectionné"}
+                </span>
+              </label>
+              <select
+                ref={planSelectRef}
+                value={selectedPlan}
+                onChange={(event) => handlePlanChange(event.target.value)}
+                className={`${selectClassName} ${
+                  planError && !selectedPlan
+                    ? "!border-error-500 ring-2 ring-error-500/20 focus:!border-error-500"
+                    : ""
+                }`}
+              >
+                <option value="">Sélectionner un plan (Obligatoire)</option>
+                {paymentPlans.map((plan) => (
+                  <option key={plan.id} value={plan.id}>
+                    {plan.plan} - {plan.avantage}
+                  </option>
+                ))}
+              </select>
+              {planError && !selectedPlan && (
+                <p className="mt-1.5 text-xs text-error-600 dark:text-error-400 font-medium flex items-center gap-1">
+                  <svg className="size-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                  <span>Veuillez obligatoirement choisir un plan de paiement avant d&apos;enregistrer.</span>
+                </p>
+              )}
+            </div>
+          ) : (
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 p-3 dark:border-emerald-900/50 dark:bg-emerald-950/20 flex flex-col justify-center">
+              <span className="text-xs font-bold text-emerald-800 dark:text-emerald-300">
+                Joueur Boursier (100%)
+              </span>
+              <p className="mt-1 text-xs text-emerald-700 dark:text-emerald-400">
+                Montant libre à définir par l&apos;administration (aucun plan imposé).
+              </p>
+            </div>
+          )}
           <div>
             <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
               Methode

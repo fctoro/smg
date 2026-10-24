@@ -176,7 +176,7 @@ const applyAutoAdhesionForPlayer = (
 
 export default function NewPaymentPage() {
   const router = useRouter();
-  const { players, setPayments, rubriques, refreshRubriques } = useClubData();
+  const { players, payments, setPayments, rubriques, refreshRubriques } = useClubData();
 
   useEffect(() => {
     if (refreshRubriques) {
@@ -201,6 +201,7 @@ export default function NewPaymentPage() {
   const [datePaiement, setDatePaiement] = useState(() => new Date().toISOString().split("T")[0]);
   const [selectedPricing, setSelectedPricing] = useState<string[]>([]);
   const [selectedPlan, setSelectedPlan] = useState<string>("");
+  const [rabaisPercent, setRabaisPercent] = useState<number>(0);
   const [isUserEditedMontantDonne, setIsUserEditedMontantDonne] = useState(false);
   const [montantDonne, setMontantDonne] = useState<number>(0);
   const [error, setError] = useState<string>("");
@@ -222,6 +223,28 @@ export default function NewPaymentPage() {
     const s = (selectedPlayer?.statutJoueur || "").toLowerCase().trim();
     return s.includes("bourse") && !s.includes("demi");
   }, [selectedPlayer]);
+
+  const detectedPastRabais = useMemo(() => {
+    if (!playerId || !payments || payments.length === 0) return 0;
+    const pPayments = payments.filter(
+      (p: any) => String(p.playerId) === String(playerId) || String(p.etudiantId) === String(playerId) || String(p.etudiant_id) === String(playerId)
+    );
+    for (const p of pPayments) {
+      const remark = String(p.remarque || "");
+      const match = remark.match(/\[RABAIS:\s*(\d+)%?\]/i) || remark.match(/\[REDUCTION_PERCENT:\s*(\d+)\]/i);
+      if (match && match[1]) {
+        const val = parseInt(match[1], 10);
+        if (!isNaN(val) && val > 0) return val;
+      }
+    }
+    return 0;
+  }, [playerId, payments]);
+
+  useEffect(() => {
+    if (detectedPastRabais > 0) {
+      setRabaisPercent(detectedPastRabais);
+    }
+  }, [detectedPastRabais]);
 
   const filteredPlayers = useMemo(() => {
     const query = playerSearch.trim().toLowerCase();
@@ -381,7 +404,8 @@ export default function NewPaymentPage() {
       const montantAvecPlan = isBoursierPlayer ? paymentAmount : totalRubriques;
       const totalDueInUSD = devise === "HTG" ? (taux > 0 ? montantAvecPlan / taux : montantAvecPlan / 130) : montantAvecPlan;
       const planRabaisPct = selectedPlan === "annuel" ? 10 : selectedPlan === "semestriel" ? 5 : 0;
-      const rabaisTag = (!isBoursierPlayer && isDemiBoursier) ? " [REDUCTION:HALF]" : (!isBoursierPlayer && planRabaisPct > 0 ? ` [RABAIS:${planRabaisPct}%]` : "");
+      const finalRabaisPct = Math.max(planRabaisPct, rabaisPercent || 0);
+      const rabaisTag = (!isBoursierPlayer && isDemiBoursier) ? " [REDUCTION:HALF]" : (!isBoursierPlayer && finalRabaisPct > 0 ? ` [RABAIS:${finalRabaisPct}%]` : "");
       const tauxTag = (devise === "HTG" && taux > 0) ? ` [TAUX:${taux}]` : "";
       const demiLabel = isDemiBoursier ? " (Demi-bourse 50%)" : (isBoursierPlayer ? " (Boursier)" : "");
       const paymentMarkers = `[ADHESION:${adhesionCode}] [PLAN:${planCode}]${rabaisTag}${tauxTag} [STATUT:${statusCode}] [TOTAL_DUE:${Number(totalDueInUSD).toFixed(2)}]`;
@@ -526,11 +550,11 @@ export default function NewPaymentPage() {
       adhesionAmount = isTiToro ? 1000 : 1350;
     }
 
-    let effectiveRabaisPct = 0;
+    let effectiveRabaisPct = rabaisPercent || 0;
     if (selectedPlan === "annuel") {
-      effectiveRabaisPct = 10;
+      effectiveRabaisPct = Math.max(effectiveRabaisPct, 10);
     } else if (selectedPlan === "semestriel") {
-      effectiveRabaisPct = 5;
+      effectiveRabaisPct = Math.max(effectiveRabaisPct, 5);
     }
 
     const rabaisDecimal = effectiveRabaisPct / 100;
@@ -543,7 +567,7 @@ export default function NewPaymentPage() {
       return totalUSD * taux;
     }
     return totalUSD;
-  }, [selectedPricingItems, selectedPlan, selectedPlayer, devise, taux]);
+  }, [selectedPricingItems, selectedPlan, selectedPlayer, rabaisPercent, devise, taux]);
 
   const planInstallmentAmount = useMemo(() => {
     if (!selectedPlan) return 0;
@@ -746,6 +770,37 @@ export default function NewPaymentPage() {
               </div>
             )}
           </div>
+          {!isBoursierPlayer && (
+            <div>
+              <div className="flex flex-wrap items-center justify-between gap-1 mb-1.5">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-400">
+                  Rabais accordé (%)
+                </label>
+                {detectedPastRabais > 0 && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-800 border border-emerald-300 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-700">
+                    <svg className="w-3 h-3 text-emerald-600 dark:text-emerald-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                    </svg>
+                    {detectedPastRabais}% reconduit
+                  </span>
+                )}
+              </div>
+              <div className="relative">
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  value={rabaisPercent === 0 ? "" : rabaisPercent}
+                  onChange={(event) => setRabaisPercent(event.target.value === "" ? 0 : Number(event.target.value))}
+                  placeholder="Ex: 10"
+                  className={inputClassName}
+                />
+                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3">
+                  <span className="text-gray-500 font-medium sm:text-sm">%</span>
+                </div>
+              </div>
+            </div>
+          )}
           <div>
             <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
               Montant donné

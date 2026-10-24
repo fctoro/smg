@@ -141,21 +141,37 @@ export default function PlayerTable({
       }
 
       let balance = 0;
+      let balanceDevise: "US" | "HTG" = "US";
+
+      const totalPaidUSD = uniquePayments.reduce((acc, p) => {
+        if (p.devise === "US" || (p.montantUS && p.montantUS > 0)) {
+          return acc + (p.montantUS || p.montant || 0);
+        }
+        const pTaux = p.taux && p.taux > 1 ? p.taux : taux;
+        return acc + (pTaux > 0 ? (p.montantHTG || p.montant || 0) / pTaux : 0);
+      }, 0);
+
+      const plObj = (players || []).find((pl) => String(pl.id) === String(pid));
+      const plStatus = ((plObj?.statutJoueur || "") + " " + (plObj?.statut || "")).toLowerCase();
+      const isSpecial = plStatus.includes("bourse") || plStatus.includes("demi");
+
       if (dossierTotalDueUSD > 0) {
-        if (mainDevise === "HTG") {
+        if (isSpecial && mainDevise === "HTG") {
+          balanceDevise = "HTG";
           const dossierTotalDueHTG = dossierTotalDueUSD * taux;
           balance = Math.max(0, dossierTotalDueHTG - totalPaid);
         } else {
-          balance = Math.max(0, dossierTotalDueUSD - totalPaid);
+          balanceDevise = "US";
+          balance = Math.max(0, dossierTotalDueUSD - totalPaidUSD);
         }
       }
 
       const isPaidInFull = dossierTotalDueUSD > 0 ? balance <= 0.01 : false;
 
       map.set(pid, {
-        totalPaid: Math.round(totalPaid * 100) / 100,
+        totalPaid: Math.round((balanceDevise === "HTG" ? totalPaid : totalPaidUSD) * 100) / 100,
         balance: Math.round(balance * 100) / 100,
-        devise: mainDevise,
+        devise: balanceDevise,
         isPaidInFull,
         hasPayments: pList.length > 0,
       });

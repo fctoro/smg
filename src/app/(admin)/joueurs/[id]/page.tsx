@@ -113,10 +113,9 @@ const computePaymentBalance = (p: any, player?: any): { balance: number; devise:
       const tauxMatch = (p.remarque || "").match(/\[TAUX:\s*([\d.]+)\s*\]/i);
       taux = tauxMatch ? parseFloat(tauxMatch[1]) : 130;
     }
-    if (taux <= 1) return zero;
-    const totalDueHTG = totalDueUSD * taux;
-    const balanceHTG = totalDueHTG - p.montant;
-    return balanceHTG > 1 ? { balance: Math.round(balanceHTG), devise: "HTG" } : zero;
+    const paidInUSD = taux > 0 ? (p.montant / taux) : 0;
+    const balanceUSD = totalDueUSD - paidInUSD;
+    return balanceUSD > 0.01 ? { balance: Number(balanceUSD.toFixed(2)), devise: "US" } : zero;
   } else {
     const balanceUSD = totalDueUSD - p.montant;
     return balanceUSD > 0.01 ? { balance: Number(balanceUSD.toFixed(2)), devise: "US" } : zero;

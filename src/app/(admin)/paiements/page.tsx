@@ -27,6 +27,7 @@ import { ActiveBellIcon } from "@/icons/ActiveBellIcon";
 import { ConfirmModal } from "@/components/ui/modal/ConfirmModal";
 import { CustomReminderMessageModal } from "@/components/club/modals/CustomReminderMessageModal";
 import { generateReceiptPDFBase64 } from "@/lib/club/pdf-generator";
+import { generatePlayerMatricule } from "@/lib/club/season";
 import { useConfirm } from "@/hooks/useConfirm";
 
 interface PaymentPlan {
@@ -74,6 +75,9 @@ function PaymentsPageContent() {
   const [methodeFilter, setMethodeFilter] = useState(urlMethode);
   const [deviseFilter, setDeviseFilter] = useState("all");
   const [selectedSeason, setSelectedSeason] = useState("all");
+  const [codeUniqueFilter, setCodeUniqueFilter] = useState("");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
 
   useEffect(() => {
     const m = searchParams.get("methode");
@@ -259,24 +263,22 @@ function PaymentsPageContent() {
     const isHTG = paymentDevise === "HTG";
 
     if (isHTG) {
-      // Lire le taux depuis la colonne DB, sinon depuis le marqueur [TAUX:XXX] dans la remarque
+      // Pour les transactions en Gourdes, convertir en USD pour garder la balance toujours en Dollars US ($)
       let taux = currentPayment.taux || 0;
       if (taux <= 1) {
         const tauxMatch = currentPayment.remarque?.match(/\[TAUX:\s*([\d.]+)\s*\]/i);
         if (tauxMatch && tauxMatch[1]) {
             taux = parseFloat(tauxMatch[1]);
         } else {
-            taux = 130; // Fallback pour les anciens paiements corrompus (TauxChange=1 et pas de marqueur)
+            taux = 130; // Fallback
         }
       }
-      if (taux <= 1) return { ...zero, dbg: `taux_le_1_(${taux})` }; // Impossible de convertir sans taux
-      const totalDueHTG = totalDueUSD * taux;
-      const paidHTG = currentPayment.montant; // montant stocké en HTG
-      const balanceHTG = totalDueHTG - paidHTG;
-      if (balanceHTG > 1) {
-        return { balance: Math.round(balanceHTG), devise: "HTG", dbg: `HTG_PATH_balance_${balanceHTG}` };
+      const paidInUSD = taux > 0 ? (currentPayment.montant / taux) : 0;
+      const balanceUSD = totalDueUSD - paidInUSD;
+      if (balanceUSD > 0.01) {
+        return { balance: Number(balanceUSD.toFixed(2)), devise: "US", dbg: `HTG_PAID_BALANCE_USD_${balanceUSD}` };
       } else {
-        return { ...zero, dbg: `HTG_PATH_balanceHTG_less_than_1_(${balanceHTG})` };
+        return { balance: 0, devise: "US", dbg: `HTG_PAID_BALANCE_ZERO` };
       }
     } else {
       // Travailler entièrement en USD
@@ -696,6 +698,8 @@ function PaymentsPageContent() {
 
   const filteredPayments = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
+    const codeTarget = codeUniqueFilter.trim().toLowerCase();
+
     return payments
       .filter((payment) => {
         if (methodeFilter !== "all") {
@@ -704,8 +708,32 @@ function PaymentsPageContent() {
           if (m !== target) return false;
         }
         if (deviseFilter !== "all" && payment.devise !== deviseFilter) return false;
+
+        // Filtrage par période (datePaiement YYYY-MM-DD)
+        if (payment.datePaiement) {
+          const pDate = payment.datePaiement.split("T")[0];
+          if (startDate && pDate < startDate) return false;
+          if (endDate && pDate > endDate) return false;
+        } else if (startDate || endDate) {
+          return false;
+        }
+
         const player = playerMap.get(payment.playerId);
         if (!player) return false;
+
+        const safeMatricule = (player.matricule && !player.matricule.includes("XXXX")
+          ? player.matricule
+          : generatePlayerMatricule(player.id, player.saison, player.sourceDetection)).toLowerCase();
+
+        // Filtrage spécifique par code unique / matricule
+        if (codeTarget) {
+          const matchesCode =
+            safeMatricule.includes(codeTarget) ||
+            String(player.id).toLowerCase().includes(codeTarget) ||
+            String(payment.id).toLowerCase().includes(codeTarget);
+          if (!matchesCode) return false;
+        }
+
         if (selectedSeason !== "all") {
           const normalizeSeason = (s: string) => String(s || "").replace(/^saison\s*/i, "").trim().toLowerCase();
           const targetSeasonNorm = normalizeSeason(selectedSeason);
@@ -715,8 +743,10 @@ function PaymentsPageContent() {
             (player.saisons && player.saisons.some(s => s === selectedSeason || normalizeSeason(s) === targetSeasonNorm));
           if (!seasonMatches) return false;
         }
+
         const playerName = getPlayerFullName(player).toLowerCase();
-        return !query || playerName.includes(query);
+        // Recherche globale par nom, code unique / matricule ou ID
+        return !query || playerName.includes(query) || safeMatricule.includes(query) || String(player.id).toLowerCase().includes(query);
       })
       .sort((a, b) => {
         const dateA = new Date(a.datePaiement || 0).getTime();
@@ -726,7 +756,7 @@ function PaymentsPageContent() {
         const idB = parseInt(String(b.id).replace(/\D/g, ""), 10) || 0;
         return idB - idA;
       });
-  }, [payments, playerMap, searchQuery, methodeFilter, deviseFilter, selectedSeason]);
+  }, [payments, playerMap, searchQuery, codeUniqueFilter, startDate, endDate, methodeFilter, deviseFilter, selectedSeason]);
 
   // ----- Logique de Rappel en Masse -----
   const targetPlayers = useMemo(() => {
@@ -1025,11 +1055,27 @@ function PaymentsPageContent() {
       const photoMatches = extractPhotoUrlsFromRemark(payment.remarque);
       const justificatifs = photoMatches.length > 0 ? `Oui (${photoMatches.length} pièce(s))` : "Non";
 
+      // Extraction rabais
+      const rabaisMatch = payment.remarque?.match(/\[RABAIS:\s*(\d+)%?\]/i) || payment.remarque?.match(/\[REDUCTION_PERCENT:\s*(\d+)\]/i);
+      let rabaisPctNum = 0;
+      if (rabaisMatch && rabaisMatch[1]) {
+        rabaisPctNum = parseInt(rabaisMatch[1], 10);
+      } else if ((payment.remarque || "").toLowerCase().includes("[reduction:half]") || (payment.remarque || "").toLowerCase().includes("demi")) {
+        rabaisPctNum = 50;
+      } else if ((payment.remarque || "").toLowerCase().includes("[reduction:full]") || (payment.remarque || "").toLowerCase().includes("bourse")) {
+        rabaisPctNum = 100;
+      } else if (planLabel.toLowerCase().includes("annuel")) {
+        rabaisPctNum = 10;
+      } else if (planLabel.toLowerCase().includes("semestriel")) {
+        rabaisPctNum = 5;
+      }
+
       return [
         playerMatricule,
         playerName,
         playerCategory,
         planLabel,
+        rabaisPctNum,
         cleanRubriques,
         moisPayes > 0 ? `${moisPayes} mois` : "-",
         montantPaid,
@@ -1057,6 +1103,7 @@ function PaymentsPageContent() {
     "Joueur (Nom & Prénom)",
     "Catégorie",
     "Plan de Règlement",
+    "Rabais (%)",
     "Articles / Rubriques Payés (Reçu)",
     "Nbre Mois Payés",
     "Montant Versé",
@@ -1165,69 +1212,193 @@ function PaymentsPageContent() {
     <div className="space-y-4">
       <PageBreadcrumb pageTitle="Paiements" />
 
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <div className="grid flex-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
-          <input
-            value={searchQuery}
-            onChange={(event) => {
-              setSearchQuery(event.target.value);
-              setCurrentPage(1);
-            }}
-            placeholder="Rechercher un joueur"
-            className="h-11 w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs placeholder:text-gray-400 focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
-          />
-          <select
-            value={methodeFilter}
-            onChange={(event) => {
-              setMethodeFilter(event.target.value);
-              setCurrentPage(1);
-            }}
-            className="h-11 w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
-          >
-            <option value="all">Tous les modes de paiements</option>
-            <option value="especes">Cash / Espèces</option>
-            <option value="virement">Virement bancaire</option>
-            <option value="mobile">MonCash / Mobile</option>
-            <option value="cheque">Chèque</option>
-            <option value="carte">Carte bancaire</option>
-            <option value="depot">Dépôt bancaire</option>
-          </select>
-          <select
-            value={deviseFilter}
-            onChange={(event) => {
-              setDeviseFilter(event.target.value);
-              setCurrentPage(1);
-            }}
-            className="h-11 w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
-          >
-            <option value="all">Toutes devises</option>
-            <option value="US">USD</option>
-            <option value="HTG">HTG</option>
-          </select>
-          <select
-            value={selectedSeason}
-            onChange={(event) => {
-              setSelectedSeason(event.target.value);
-              setCurrentPage(1);
-            }}
-            className="h-11 w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
-          >
-            <option value="all">Toutes les saisons</option>
-            {seasons.map((season) => (
-              <option key={season} value={season}>
-                {String(season).toLowerCase().startsWith('saison') ? season : `Saison ${season}`}
-              </option>
-            ))}
-          </select>
+      <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-white/[0.03] space-y-3">
+        {/* Ligne 1: Recherche globale, Code Unique, Méthode, Devise, Saison */}
+        <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
+          <div>
+            <label className="mb-1 block text-xs font-semibold text-gray-600 dark:text-gray-400">
+              Rechercher un joueur
+            </label>
+            <input
+              value={searchQuery}
+              onChange={(event) => {
+                setSearchQuery(event.target.value);
+                setCurrentPage(1);
+              }}
+              placeholder="Nom du joueur..."
+              className="h-10 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-800 shadow-theme-xs placeholder:text-gray-400 focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
+            />
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs font-semibold text-gray-600 dark:text-gray-400">
+              Code Unique / Matricule
+            </label>
+            <div className="relative">
+              <input
+                value={codeUniqueFilter}
+                onChange={(event) => {
+                  setCodeUniqueFilter(event.target.value);
+                  setCurrentPage(1);
+                }}
+                placeholder="Ex: FCT-2627-..."
+                className="h-10 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-800 shadow-theme-xs placeholder:text-gray-400 focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
+              />
+              {codeUniqueFilter && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCodeUniqueFilter("");
+                    setCurrentPage(1);
+                  }}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs font-semibold text-gray-600 dark:text-gray-400">
+              Mode de paiement
+            </label>
+            <select
+              value={methodeFilter}
+              onChange={(event) => {
+                setMethodeFilter(event.target.value);
+                setCurrentPage(1);
+              }}
+              className="h-10 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
+            >
+              <option value="all">Tous les modes</option>
+              <option value="especes">Cash / Espèces</option>
+              <option value="virement">Virement bancaire</option>
+              <option value="mobile">MonCash / Mobile</option>
+              <option value="cheque">Chèque</option>
+              <option value="carte">Carte bancaire</option>
+              <option value="depot">Dépôt bancaire</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs font-semibold text-gray-600 dark:text-gray-400">
+              Devise
+            </label>
+            <select
+              value={deviseFilter}
+              onChange={(event) => {
+                setDeviseFilter(event.target.value);
+                setCurrentPage(1);
+              }}
+              className="h-10 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
+            >
+              <option value="all">Toutes devises</option>
+              <option value="US">USD</option>
+              <option value="HTG">HTG</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs font-semibold text-gray-600 dark:text-gray-400">
+              Saison
+            </label>
+            <select
+              value={selectedSeason}
+              onChange={(event) => {
+                setSelectedSeason(event.target.value);
+                setCurrentPage(1);
+              }}
+              className="h-10 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
+            >
+              <option value="all">Toutes les saisons</option>
+              {seasons.map((season) => (
+                <option key={season} value={season}>
+                  {String(season).toLowerCase().startsWith('saison') ? season : `Saison ${season}`}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
 
-        <div className="shrink-0">
-          <button
-            onClick={() => setIsAddModalOpen(true)}
-            className="inline-flex h-11 items-center justify-center whitespace-nowrap rounded-lg bg-brand-500 px-4 text-sm font-medium text-white shadow-theme-xs hover:bg-brand-600 cursor-pointer"
-          >
-            + Ajouter un paiement
-          </button>
+        {/* Ligne 2: Filtrage par Période (Date début - Date fin) + Bouton action */}
+        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3 pt-2 border-t border-gray-100 dark:border-gray-800">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+            <span className="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400 flex items-center gap-1.5">
+              <svg className="w-4 h-4 text-brand-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              Période :
+            </span>
+
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-gray-500 dark:text-gray-400">Du</span>
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => {
+                  setStartDate(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="h-9 rounded-lg border border-gray-300 bg-white px-2.5 text-xs text-gray-800 shadow-theme-xs focus:border-brand-300 focus:ring-2 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
+              />
+            </div>
+
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-gray-500 dark:text-gray-400">Au</span>
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => {
+                  setEndDate(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="h-9 rounded-lg border border-gray-300 bg-white px-2.5 text-xs text-gray-800 shadow-theme-xs focus:border-brand-300 focus:ring-2 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
+              />
+            </div>
+
+            {(startDate || endDate) && (
+              <button
+                type="button"
+                onClick={() => {
+                  setStartDate("");
+                  setEndDate("");
+                  setCurrentPage(1);
+                }}
+                className="text-xs text-red-500 hover:text-red-700 dark:hover:text-red-400 font-medium px-2 py-1 rounded bg-red-50 dark:bg-red-950/30"
+              >
+                Effacer dates
+              </button>
+            )}
+
+            {(searchQuery || codeUniqueFilter || startDate || endDate || methodeFilter !== "all" || deviseFilter !== "all" || selectedSeason !== "all") && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchQuery("");
+                  setCodeUniqueFilter("");
+                  setStartDate("");
+                  setEndDate("");
+                  setMethodeFilter("all");
+                  setDeviseFilter("all");
+                  setSelectedSeason("all");
+                  setCurrentPage(1);
+                }}
+                className="text-xs text-brand-600 dark:text-brand-400 hover:underline font-semibold"
+              >
+                Réinitialiser tous les filtres
+              </button>
+            )}
+          </div>
+
+          <div className="shrink-0">
+            <button
+              onClick={() => setIsAddModalOpen(true)}
+              className="inline-flex h-9 items-center justify-center whitespace-nowrap rounded-lg bg-brand-500 px-4 text-xs font-semibold text-white shadow-theme-xs hover:bg-brand-600 cursor-pointer"
+            >
+              + Ajouter un paiement
+            </button>
+          </div>
         </div>
       </div>
 
@@ -1245,8 +1416,13 @@ function PaymentsPageContent() {
                 <button
                   onClick={() => {
                     setSearchQuery("");
+                    setCodeUniqueFilter("");
+                    setStartDate("");
+                    setEndDate("");
+                    setMethodeFilter("all");
                     setDeviseFilter("all");
                     setSelectedSeason("all");
+                    setCurrentPage(1);
                   }}
                   className="ml-2 text-xs text-brand-500 hover:underline font-medium"
                 >
@@ -1418,7 +1594,14 @@ function PaymentsPageContent() {
                         </TableCell>
                       )}
                       <TableCell className="py-3 text-theme-sm text-gray-800 dark:text-white/90">
-                        <span className="font-semibold">{getPlayerFullName(player)}</span>
+                        <div className="flex flex-col">
+                          <span className="font-semibold">{getPlayerFullName(player)}</span>
+                          <span className="text-[11px] font-mono text-gray-400 dark:text-gray-500 font-medium">
+                            {player.matricule && !player.matricule.includes("XXXX")
+                              ? player.matricule
+                              : generatePlayerMatricule(player.id, player.saison, player.sourceDetection)}
+                          </span>
+                        </div>
                       </TableCell>
                       <TableCell className="py-3 text-theme-sm text-gray-700 dark:text-gray-300 font-medium">
                         {payment.datePaiement ? formatClubDate(payment.datePaiement) : "-"}

@@ -656,9 +656,29 @@ export function PaymentAddModal({ isOpen, onClose, initialPlayerId }: PaymentAdd
   const playerPastPayments = useMemo(() => {
     if (!playerId) return [];
     return (payments || []).filter(
-      (p: any) => String(p.etudiantId) === String(playerId) || String(p.etudiant_id) === String(playerId)
+      (p: any) => String(p.etudiantId) === String(playerId) || String(p.etudiant_id) === String(playerId) || String(p.playerId) === String(playerId)
     );
   }, [payments, playerId]);
+
+  // Détection d'un rabais accordé antérieurement au joueur
+  const detectedPastRabais = useMemo(() => {
+    if (!playerId || playerPastPayments.length === 0) return 0;
+    for (const p of playerPastPayments) {
+      const remark = String(p.remarque || "");
+      const match = remark.match(/\[RABAIS:\s*(\d+)%?\]/i) || remark.match(/\[REDUCTION_PERCENT:\s*(\d+)\]/i);
+      if (match && match[1]) {
+        const val = parseInt(match[1], 10);
+        if (!isNaN(val) && val > 0) return val;
+      }
+    }
+    return 0;
+  }, [playerId, playerPastPayments]);
+
+  useEffect(() => {
+    if (detectedPastRabais > 0) {
+      setRabaisPercent(detectedPastRabais);
+    }
+  }, [detectedPastRabais]);
 
   // Calculate cumulative paid in USD from past payments
   const pastPaidUSD = useMemo(() => {
@@ -1075,9 +1095,19 @@ export function PaymentAddModal({ isOpen, onClose, initialPlayerId }: PaymentAdd
             {/* Rabais sur adhésion */}
             {!isBoursier && !isDemiBoursier && (
               <div className="md:col-span-2">
-                <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
-                  Rabais additionnel (%)
-                </label>
+                <div className="flex flex-wrap items-center justify-between gap-2 mb-1.5">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-400">
+                    Rabais additionnel (%)
+                  </label>
+                  {detectedPastRabais > 0 && (
+                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-300 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-700">
+                      <svg className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                      </svg>
+                      Rabais de {detectedPastRabais}% reconduit automatiquement
+                    </span>
+                  )}
+                </div>
                 <div className="flex flex-col sm:flex-row sm:items-center gap-3">
                   <div className="relative max-w-[140px]">
                     <input

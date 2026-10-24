@@ -121,10 +121,16 @@ const getPlayerFinancialSummary = (player: Player, playerPayments: any[]) => {
     }
   });
 
+  const isSpecial = isBoursier || isDemiBoursier;
+  let balanceDevise: "US" | "HTG" = "US";
+  if (isSpecial && mainDevise === "HTG") {
+    balanceDevise = "HTG";
+  }
+
   // Le solde dû du dossier = Total Dû du Dossier - Total déjà versé par le joueur
   let balance = 0;
   if (dossierTotalDueUSD > 0) {
-    if (mainDevise === "HTG") {
+    if (balanceDevise === "HTG") {
       let taux = 130;
       const firstHTG = uniquePayments.find(p => p.devise === "HTG" || (p.montantHTG && p.montantHTG > 0));
       if (firstHTG) {
@@ -137,7 +143,18 @@ const getPlayerFinancialSummary = (player: Player, playerPayments: any[]) => {
       const totalDueHTG = dossierTotalDueUSD * taux;
       balance = Math.max(0, totalDueHTG - totalPaid);
     } else {
-      balance = Math.max(0, dossierTotalDueUSD - totalPaid);
+      const totalPaidInUSD = uniquePayments.reduce((acc, p) => {
+        if (p.devise === "US" || (p.montantUS && p.montantUS > 0)) {
+          return acc + (p.montantUS || p.montant || 0);
+        }
+        let pTaux = p.taux || 0;
+        if (pTaux <= 1) {
+          const tauxMatch = (p.remarque || "").match(/\[TAUX:\s*([\d.]+)\s*\]/i);
+          pTaux = tauxMatch ? parseFloat(tauxMatch[1]) : 130;
+        }
+        return acc + (pTaux > 0 ? (p.montantHTG || p.montant || 0) / pTaux : 0);
+      }, 0);
+      balance = Math.max(0, dossierTotalDueUSD - totalPaidInUSD);
     }
   }
 
@@ -145,7 +162,7 @@ const getPlayerFinancialSummary = (player: Player, playerPayments: any[]) => {
     isBoursier: false,
     hasNoPayments: false,
     balance: Math.round(balance * 100) / 100,
-    devise: mainDevise,
+    devise: balanceDevise,
     isPaidInFull: balance <= 0.01,
     isMonthlyPlan,
     monthsPaid: maxMonthsPaid || (isMonthlyPlan && uniquePayments.length > 0 ? 1 : 0),

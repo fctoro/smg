@@ -146,12 +146,12 @@ const coachNavItems: NavItem[] = [
   },
   {
     icon: <GroupIcon />,
-    name: "Effectif Joueurs",
+    name: "Liste Globale",
     path: "/coach?tab=effectif",
   },
   {
     icon: <DocsIcon />,
-    name: "Effectifs de Match",
+    name: "Matchs",
     path: "/coach?tab=effectifs",
   },
   {

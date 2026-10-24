@@ -7,6 +7,7 @@ import { useUserRole } from "@/context/UserRoleContext";
 import { getPlayerFullName } from "@/lib/club/metrics";
 import { Effectif } from "@/types/club";
 import { fetchEffectifsByCoach, deleteEffectif } from "@/lib/club/effectifs";
+import { PasswordConfirmModal } from "../modals/PasswordConfirmModal";
 import Link from "next/link";
 import { GroupIcon } from "@/icons";
 import Pagination from "@/components/tables/Pagination";
@@ -19,6 +20,7 @@ export default function CoachDashboardPage() {
   const coachEmail = userEmail || "";
   const [recentMatches, setRecentMatches] = React.useState<Effectif[]>([]);
   const [loadingMatches, setLoadingMatches] = React.useState(true);
+  const [matchToDelete, setMatchToDelete] = React.useState<Effectif | null>(null);
   const [unavailablePage, setUnavailablePage] = React.useState(1);
   const [unavailablePageSize, setUnavailablePageSize] = React.useState(10);
 
@@ -40,11 +42,11 @@ export default function CoachDashboardPage() {
     loadRecentMatches();
   }, [loadRecentMatches]);
 
-  const handleDeleteMatch = async (id: string) => {
-    if (window.confirm("Êtes-vous sûr de vouloir supprimer cet effectif de match ?")) {
-      await deleteEffectif(id);
-      loadRecentMatches();
-    }
+  const confirmDeleteMatch = async () => {
+    if (!matchToDelete) return;
+    await deleteEffectif(matchToDelete.id);
+    loadRecentMatches();
+    setMatchToDelete(null);
   };
 
   if (!hydrated) {
@@ -385,7 +387,7 @@ export default function CoachDashboardPage() {
               href="/coach?tab=effectifs"
               className="text-xs font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 hover:underline"
             >
-              Voir tous les effectifs →
+              Voir tous les matchs →
             </Link>
           </div>
 
@@ -462,7 +464,7 @@ export default function CoachDashboardPage() {
                             Tactique
                           </Link>
                           <button 
-                            onClick={() => handleDeleteMatch(match.id)} 
+                            onClick={() => setMatchToDelete(match)} 
                             className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
                           >
                             Supprimer
@@ -483,6 +485,15 @@ export default function CoachDashboardPage() {
           </div>
         </div>
       </div>
+      <PasswordConfirmModal
+        isOpen={Boolean(matchToDelete)}
+        onClose={() => setMatchToDelete(null)}
+        onConfirm={confirmDeleteMatch}
+        title={`Supprimer le match ${matchToDelete?.nom ? '"' + matchToDelete.nom + '"' : ''}`}
+        message="Attention : cette action est irréversible. La suppression de ce match supprimera définitivement tous les buts, passes décisives, cartons et statistiques associés à cette rencontre pour l'ensemble des joueurs."
+        userEmail={coachEmail}
+        confirmText="Supprimer définitivement"
+      />
     </div>
   );
 }

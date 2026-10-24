@@ -135,7 +135,7 @@ export function RosterFormModal({
     <Modal isOpen={isOpen} onClose={onClose} className="max-w-2xl p-0">
       <div className="border-b border-gray-200 dark:border-gray-800 px-6 py-4 flex items-center justify-between">
         <h2 className="text-lg font-bold text-gray-900 dark:text-white">
-          {initialData ? "Modifier l'effectif" : "Créer un effectif"}
+          {initialData ? "Modifier le match" : "Nouveau Match"}
         </h2>
         <button onClick={onClose} className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300">
           <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -343,7 +343,7 @@ export function RosterFormModal({
             disabled={isSubmitting}
             className="px-4 py-2 text-sm font-medium text-white bg-brand-500 rounded-lg hover:bg-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-500/20 disabled:opacity-50"
           >
-            {isSubmitting ? "Sauvegarde..." : "Sauvegarder l'effectif"}
+            {isSubmitting ? "Sauvegarde..." : "Sauvegarder le match"}
           </button>
         </div>
       </form>

@@ -145,3 +145,42 @@ export const saveBulkAttendance = async (
 
   return [];
 };
+
+export const fetchAllAttendance = async (saison?: string) => {
+  let query = supabase
+    .from('player_attendance')
+    .select('*')
+    .order('date', { ascending: false });
+
+  if (saison) {
+    query = query.eq('saison', saison);
+  }
+
+  const { data, error } = await query;
+  if (error) {
+    console.error('Error fetching all attendances:', error);
+    return [];
+  }
+  return data as PlayerAttendance[];
+};
+
+export const deleteAttendanceSession = async (
+  date: string,
+  eventType: EventType,
+  saison: string,
+  playerIds: string[]
+) => {
+  if (playerIds.length === 0) return;
+  const { error } = await supabase
+    .from('player_attendance')
+    .delete()
+    .in('player_id', playerIds)
+    .eq('date', date)
+    .eq('event_type', eventType)
+    .eq('saison', saison);
+
+  if (error) {
+    console.error('Error deleting attendance session:', error);
+    throw error;
+  }
+};

@@ -15,6 +15,7 @@ import CoachMatchReportModal from "../modals/CoachMatchReportModal";
 import { fetchEffectifsByCoach, deleteEffectif } from "@/lib/club/effectifs";
 import { convertRostersToCSV, downloadCSV } from "@/lib/club/rosterExport";
 import { useConfirm } from "@/hooks/useConfirm";
+import { PasswordConfirmModal } from "../modals/PasswordConfirmModal";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 
@@ -103,18 +104,12 @@ export default function CoachPlayersPage({ initialTab }: CoachPlayersPageProps =
     }
   }, [evalSuccessMessage]);
   
-  // Tabs
-  const [activeTab, setActiveTab] = useState<"liste" | "effectifs">(defaultTab);
+  // Active Tab derived directly from initialTab or queryTab
+  const activeTab: "liste" | "effectifs" =
+    initialTab === "effectifs" || queryTab === "effectifs" || queryTab === "effectifs-match"
+      ? "effectifs"
+      : "liste";
   const [selectedCategory, setSelectedCategory] = useState<string>("");
-
-  useEffect(() => {
-    const qTab = searchParams?.get("tab") || searchParams?.get("subtab");
-    if (qTab === "effectifs" || qTab === "effectifs-match" || initialTab === "effectifs") {
-      setActiveTab("effectifs");
-    } else if (qTab === "effectif" || qTab === "liste" || initialTab === "liste") {
-      setActiveTab("liste");
-    }
-  }, [searchParams, initialTab]);
 
   // Rosters State
   const [rosters, setRosters] = useState<Effectif[]>([]);
@@ -122,6 +117,7 @@ export default function CoachPlayersPage({ initialTab }: CoachPlayersPageProps =
   const [isRosterModalOpen, setIsRosterModalOpen] = useState(false);
   const [selectedRoster, setSelectedRoster] = useState<Effectif | null>(null);
   const [selectedReportRoster, setSelectedReportRoster] = useState<Effectif | null>(null);
+  const [rosterToDelete, setRosterToDelete] = useState<Effectif | null>(null);
   const [rosterPeriodFilter, setRosterPeriodFilter] = useState("all");
 
   // Pagination
@@ -198,15 +194,11 @@ export default function CoachPlayersPage({ initialTab }: CoachPlayersPageProps =
     loadRosters();
   };
 
-  const handleDeleteRoster = (id: string) => {
-    confirm({
-      title: "Supprimer l'effectif",
-      message: "Êtes-vous sûr de vouloir supprimer cet effectif ?",
-      onConfirm: async () => {
-        await deleteEffectif(id);
-        loadRosters();
-      }
-    });
+  const confirmDeleteRoster = async () => {
+    if (!rosterToDelete) return;
+    await deleteEffectif(rosterToDelete.id);
+    loadRosters();
+    setRosterToDelete(null);
   };
 
   const handleExportRoster = (roster: Effectif) => {
@@ -454,12 +446,12 @@ export default function CoachPlayersPage({ initialTab }: CoachPlayersPageProps =
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
-            {activeTab === "effectifs" ? "Effectifs de Match" : "Effectif Joueurs"}
+            {activeTab === "effectifs" ? "Matchs" : "Liste Globale"}
           </h1>
           <p className="text-gray-500 dark:text-gray-400">
             {activeTab === "effectifs"
               ? "Gérez vos feuilles de match, compositions et rapports de match."
-              : "Gérez la liste de vos joueurs et consultez leurs statistiques."}
+              : "Consultez et gérez la liste globale de vos joueurs et leurs statistiques."}
           </p>
         </div>
         
@@ -496,41 +488,10 @@ export default function CoachPlayersPage({ initialTab }: CoachPlayersPageProps =
               }}
               className="inline-flex h-9 items-center justify-center rounded-lg bg-brand-500 px-4 text-sm font-medium text-white shadow-theme-xs hover:bg-brand-600 transition-colors"
             >
-              + Nouvel Effectif
+              + Nouveau Match
             </button>
           </div>
         )}
-      </div>
-
-      <div className="border-b border-gray-200 dark:border-gray-800">
-        <nav className="-mb-px flex space-x-8">
-          <button
-            onClick={() => {
-              setActiveTab("liste");
-              window.history.pushState(null, "", "/coach?tab=effectif");
-            }}
-            className={`whitespace-nowrap pb-4 px-1 border-b-2 font-medium text-sm ${
-              activeTab === "liste"
-                ? "border-brand-500 text-brand-600 dark:text-brand-400"
-                : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300"
-            }`}
-          >
-            Liste Globale
-          </button>
-          <button
-            onClick={() => {
-              setActiveTab("effectifs");
-              window.history.pushState(null, "", "/coach?tab=effectifs");
-            }}
-            className={`whitespace-nowrap pb-4 px-1 border-b-2 font-medium text-sm ${
-              activeTab === "effectifs"
-                ? "border-brand-500 text-brand-600 dark:text-brand-400"
-                : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300"
-            }`}
-          >
-            Effectifs de Match
-          </button>
-        </nav>
       </div>
 
       {activeTab === "liste" && (
@@ -538,7 +499,7 @@ export default function CoachPlayersPage({ initialTab }: CoachPlayersPageProps =
           <PlayerTable
             players={coachPlayers}
             columns={["avatarNom", "poste", "sexe", "statut", "categorie", "saison", "matchsJoues", "actions"]}
-            title="Effectif Joueurs"
+            title="Liste Globale des Joueurs"
             showToolbar={true}
             pageSize={10}
             availableCategories={userCategories}
@@ -615,7 +576,7 @@ export default function CoachPlayersPage({ initialTab }: CoachPlayersPageProps =
             </div>
           ) : filteredRosters.length === 0 ? (
             <div className="py-12 text-center border border-dashed border-gray-300 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-900">
-              <p className="text-gray-500">Aucun effectif trouvé pour cette Période.</p>
+              <p className="text-gray-500">Aucun match trouvé pour cette Période.</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -757,16 +718,16 @@ export default function CoachPlayersPage({ initialTab }: CoachPlayersPageProps =
                           setIsRosterModalOpen(true);
                         }}
                         className="inline-flex items-center justify-center h-7 w-7 text-xs font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-200 transition-colors shadow-xs shrink-0"
-                        title="Modifier l'effectif"
+                        title="Modifier le match"
                       >
                         <svg className="w-3.5 h-3.5 text-gray-600 dark:text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                         </svg>
                       </button>
                       <button
-                        onClick={() => handleDeleteRoster(roster.id)}
+                        onClick={() => setRosterToDelete(roster)}
                         className="inline-flex items-center justify-center h-7 w-7 text-xs font-medium text-red-600 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 dark:bg-red-900/30 dark:border-red-800 dark:text-red-400 transition-colors shadow-xs shrink-0"
-                        title="Supprimer l'effectif"
+                        title="Supprimer le match"
                       >
                         <svg className="w-3.5 h-3.5 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -828,6 +789,16 @@ export default function CoachPlayersPage({ initialTab }: CoachPlayersPageProps =
       />
 
       <ConfirmComponent />
+
+      <PasswordConfirmModal
+        isOpen={Boolean(rosterToDelete)}
+        onClose={() => setRosterToDelete(null)}
+        onConfirm={confirmDeleteRoster}
+        title={`Supprimer le match ${rosterToDelete?.nom ? '"' + rosterToDelete.nom + '"' : ''}`}
+        message="Attention : cette action est irréversible. La suppression de ce match supprimera définitivement tous les buts, passes décisives, cartons et statistiques associés à cette rencontre pour l'ensemble des joueurs."
+        userEmail={userEmail}
+        confirmText="Supprimer définitivement"
+      />
 
       {selectedReportRoster && (
         <CoachMatchReportModal

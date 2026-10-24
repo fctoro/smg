@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useClubData } from "@/context/ClubDataContext";
 import { useUserRole } from "@/context/UserRoleContext";
@@ -26,6 +26,20 @@ import { PencilIcon, TrashBinIcon } from "@/icons";
 import Badge from "@/components/ui/badge/Badge";
 import { colorFromPlayerStatus, playerStatusLabel } from "@/lib/club/status";
 import { generatePlayerMatricule } from "@/lib/club/season";
+
+const getMonthLabel = (yearMonth: string) => {
+  if (!yearMonth || !yearMonth.includes("-")) return yearMonth;
+  const [year, monthStr] = yearMonth.split("-");
+  const monthNames = [
+    "Janvier", "Février", "Mars", "Avril", "Mai", "Juin",
+    "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"
+  ];
+  const idx = parseInt(monthStr, 10) - 1;
+  if (idx >= 0 && idx < 12) {
+    return `${monthNames[idx]} ${year}`;
+  }
+  return yearMonth;
+};
 
 interface CoachPlayersPageProps {
   initialTab?: "liste" | "effectifs";
@@ -119,6 +133,7 @@ export default function CoachPlayersPage({ initialTab }: CoachPlayersPageProps =
   const [selectedReportRoster, setSelectedReportRoster] = useState<Effectif | null>(null);
   const [rosterToDelete, setRosterToDelete] = useState<Effectif | null>(null);
   const [rosterPeriodFilter, setRosterPeriodFilter] = useState("all");
+  const [rosterMonthFilter, setRosterMonthFilter] = useState("all");
 
   // Pagination
   const [pagePerCategory, setPagePerCategory] = useState<Record<string, number>>({});
@@ -210,7 +225,9 @@ export default function CoachPlayersPage({ initialTab }: CoachPlayersPageProps =
   const handleExportAllRosters = () => {
     const playersMap = coachPlayers.reduce((acc, p) => { acc[p.id] = p; return acc; }, {} as Record<string, Player>);
     const csvContent = convertRostersToCSV(filteredRosters, playersMap);
-    downloadCSV(csvContent, `Effectifs_${rosterPeriodFilter === "all" ? "ToutesPeriodes" : rosterPeriodFilter}.csv`);
+    const periodSuffix = rosterPeriodFilter === "all" ? "ToutesPeriodes" : rosterPeriodFilter;
+    const monthSuffix = rosterMonthFilter === "all" ? "" : `_${rosterMonthFilter}`;
+    downloadCSV(csvContent, `Effectifs_${periodSuffix}${monthSuffix}.csv`);
   };
 
   const handleExportExcel = (exportData: Player[]) => {
@@ -569,17 +586,18 @@ export default function CoachPlayersPage({ initialTab }: CoachPlayersPageProps =
       {activeTab === "effectifs" && (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
           {loadingRosters ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4 md:gap-6">
+              <CardSkeleton />
               <CardSkeleton />
               <CardSkeleton />
               <CardSkeleton />
             </div>
           ) : filteredRosters.length === 0 ? (
             <div className="py-12 text-center border border-dashed border-gray-300 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-900">
-              <p className="text-gray-500">Aucun match trouvé pour cette Période.</p>
+              <p className="text-gray-500">Aucun match trouvé pour ces critères.</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4 md:gap-6">
               {filteredRosters.map((roster) => {
                 const { team1, team2, isToroHome } = parseTeams(roster.nom);
                 const scorers = getScorers(roster);
@@ -589,150 +607,158 @@ export default function CoachPlayersPage({ initialTab }: CoachPlayersPageProps =
                 const scoreRight = isToroHome ? roster.score_adversaire : roster.score_toro;
 
                 return (
-                  <div key={roster.id} className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
-                    {/* Top Date / Cat pill centered */}
-                    <div className="flex justify-center mb-3">
-                      <span className="px-3 py-1 rounded-full text-xs font-semibold bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300">
-                        {roster.date_match} • {roster.categorie} • {(roster.joueurs || []).length} joueurs
-                      </span>
-                    </div>
-
-                    {/* Match Scoreboard Row */}
-                    <div className="grid grid-cols-12 items-center gap-2 my-2">
-                      <div className="col-span-5 text-center">
-                        <span className="font-bold text-gray-900 dark:text-white text-base block truncate">
-                          {team1}
+                  <div key={roster.id} className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl p-3 sm:p-5 shadow-xs hover:shadow-md transition-shadow flex flex-col justify-between">
+                    <div>
+                      {/* Top Date / Cat pill centered */}
+                      <div className="flex justify-center mb-2 sm:mb-3">
+                        <span
+                          className="px-2 sm:px-3 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-xs font-semibold bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 text-center truncate max-w-full"
+                          title={`${roster.date_match} • ${roster.categorie} • ${(roster.joueurs || []).length} joueurs`}
+                        >
+                          {roster.date_match} • {roster.categorie} • {(roster.joueurs || []).length} <span className="hidden sm:inline">joueurs</span><span className="sm:hidden">j.</span>
                         </span>
                       </div>
 
-                      <div className="col-span-2 text-center">
-                        {hasScore ? (
-                          <span className="font-black text-xl text-gray-900 dark:text-white tracking-tight">
-                            {scoreLeft ?? 0} - {scoreRight ?? 0}
+                      {/* Match Scoreboard Row */}
+                      <div className="grid grid-cols-12 items-center gap-1 sm:gap-2 my-1.5 sm:my-2">
+                        <div className="col-span-5 text-center min-w-0">
+                          <span className="font-bold text-gray-900 dark:text-white text-xs sm:text-base block truncate" title={team1}>
+                            {team1}
                           </span>
-                        ) : (
-                          <span className="font-bold text-xs text-gray-400 dark:text-gray-500 uppercase tracking-wider">
-                            VS
+                        </div>
+
+                        <div className="col-span-2 text-center min-w-0">
+                          {hasScore ? (
+                            <span className="font-black text-sm sm:text-xl text-gray-900 dark:text-white tracking-tight whitespace-nowrap">
+                              {scoreLeft ?? 0} - {scoreRight ?? 0}
+                            </span>
+                          ) : (
+                            <span className="font-bold text-[10px] sm:text-xs text-gray-400 dark:text-gray-500 uppercase tracking-wider">
+                              VS
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="col-span-5 text-center min-w-0">
+                          <span className="font-bold text-gray-900 dark:text-white text-xs sm:text-base block truncate" title={team2}>
+                            {team2}
                           </span>
-                        )}
+                        </div>
                       </div>
 
-                      <div className="col-span-5 text-center">
-                        <span className="font-bold text-gray-900 dark:text-white text-base block truncate">
-                          {team2}
-                        </span>
-                      </div>
+                      {/* Scorers Section */}
+                      {(scorers.length > 0 || oppScorers.length > 0) && (
+                        <div className="grid grid-cols-12 items-start gap-1 sm:gap-2 pt-1 pb-1.5 sm:pb-2 text-[10px] sm:text-xs text-gray-700 dark:text-gray-300">
+                          {isToroHome ? (
+                            <>
+                              <div className="col-span-5 text-right space-y-0.5 min-w-0">
+                                {scorers.map(s => (
+                                  <div key={s.name} className="font-medium truncate" title={`${s.name} ${s.count > 1 ? `(${s.count})` : ""}`}>
+                                    {s.name} {s.count > 1 ? `(${s.count})` : ""}
+                                  </div>
+                                ))}
+                              </div>
+                              <div className="col-span-2 flex justify-center pt-0.5 min-w-0">
+                                <span className="text-xs sm:text-sm leading-none">⚽</span>
+                              </div>
+                              <div className="col-span-5 text-left space-y-0.5 min-w-0">
+                                {oppScorers.map(s => (
+                                  <div key={s.name} className="font-medium text-gray-600 dark:text-gray-400 truncate" title={`${s.name} ${s.count > 1 ? `(${s.count})` : ""}`}>
+                                    {s.name} {s.count > 1 ? `(${s.count})` : ""}
+                                  </div>
+                                ))}
+                              </div>
+                            </>
+                          ) : (
+                            <>
+                              <div className="col-span-5 text-right space-y-0.5 min-w-0">
+                                {oppScorers.map(s => (
+                                  <div key={s.name} className="font-medium text-gray-600 dark:text-gray-400 truncate" title={`${s.name} ${s.count > 1 ? `(${s.count})` : ""}`}>
+                                    {s.name} {s.count > 1 ? `(${s.count})` : ""}
+                                  </div>
+                                ))}
+                              </div>
+                              <div className="col-span-2 flex justify-center pt-0.5 min-w-0">
+                                <span className="text-xs sm:text-sm leading-none">⚽</span>
+                              </div>
+                              <div className="col-span-5 text-left space-y-0.5 min-w-0">
+                                {scorers.map(s => (
+                                  <div key={s.name} className="font-medium truncate" title={`${s.name} ${s.count > 1 ? `(${s.count})` : ""}`}>
+                                    {s.name} {s.count > 1 ? `(${s.count})` : ""}
+                                  </div>
+                                ))}
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      )}
+
+                      {roster.tactique_id ? (
+                        <div className="mt-1 sm:mt-2 mb-2 sm:mb-3 text-[10px] sm:text-xs flex items-center gap-1 text-brand-600 dark:text-brand-400 min-w-0">
+                          <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                          </svg>
+                          <Link href={`/coach?tab=tactiques&planId=${roster.tactique_id}&effectifId=${roster.id}`} className="hover:underline font-medium truncate">
+                            Voir Tactique
+                          </Link>
+                        </div>
+                      ) : (
+                        <div className="mt-1 sm:mt-2 mb-2 sm:mb-3 text-[10px] sm:text-xs flex items-center gap-1 text-gray-500 dark:text-gray-400 min-w-0">
+                          <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 21v-4m0 0V5a2 2 0 012-2h6.5l1 1H21l-3 6 3 6h-8.5l-1-1H5a2 2 0 00-2 2zm9-13.5V9" />
+                          </svg>
+                          <Link href={`/coach?tab=tactiques&effectifId=${roster.id}`} className="hover:underline hover:text-brand-600 dark:hover:text-brand-400 transition-colors truncate">
+                            <span className="hidden sm:inline">Ouvrir sur le terrain</span>
+                            <span className="sm:hidden">Terrain</span>
+                          </Link>
+                        </div>
+                      )}
                     </div>
 
-                    {/* Scorers Section */}
-                    {(scorers.length > 0 || oppScorers.length > 0) && (
-                      <div className="grid grid-cols-12 items-start gap-2 pt-1 pb-2 text-xs text-gray-700 dark:text-gray-300">
-                        {isToroHome ? (
-                          <>
-                            <div className="col-span-5 text-right space-y-0.5">
-                              {scorers.map(s => (
-                                <div key={s.name} className="font-medium truncate">
-                                  {s.name} {s.count > 1 ? `(${s.count})` : ""}
-                                </div>
-                              ))}
-                            </div>
-                            <div className="col-span-2 flex justify-center pt-0.5">
-                              <span className="text-sm leading-none">⚽</span>
-                            </div>
-                            <div className="col-span-5 text-left space-y-0.5">
-                              {oppScorers.map(s => (
-                                <div key={s.name} className="font-medium text-gray-600 dark:text-gray-400 truncate">
-                                  {s.name} {s.count > 1 ? `(${s.count})` : ""}
-                                </div>
-                              ))}
-                            </div>
-                          </>
-                        ) : (
-                          <>
-                            <div className="col-span-5 text-right space-y-0.5">
-                              {oppScorers.map(s => (
-                                <div key={s.name} className="font-medium text-gray-600 dark:text-gray-400 truncate">
-                                  {s.name} {s.count > 1 ? `(${s.count})` : ""}
-                                </div>
-                              ))}
-                            </div>
-                            <div className="col-span-2 flex justify-center pt-0.5">
-                              <span className="text-sm leading-none">⚽</span>
-                            </div>
-                            <div className="col-span-5 text-left space-y-0.5">
-                              {scorers.map(s => (
-                                <div key={s.name} className="font-medium truncate">
-                                  {s.name} {s.count > 1 ? `(${s.count})` : ""}
-                                </div>
-                              ))}
-                            </div>
-                          </>
-                        )}
-                      </div>
-                    )}
-
-                    {roster.tactique_id ? (
-                      <div className="mt-2 mb-3 text-xs flex items-center gap-1.5 text-brand-600 dark:text-brand-400">
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                        </svg>
-                        <Link href={`/coach?tab=tactiques&planId=${roster.tactique_id}&effectifId=${roster.id}`} className="hover:underline font-medium">
-                          Voir Tactique
-                        </Link>
-                      </div>
-                    ) : (
-                      <div className="mt-2 mb-3 text-xs flex items-center gap-1.5 text-gray-500 dark:text-gray-400">
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 21v-4m0 0V5a2 2 0 012-2h6.5l1 1H21l-3 6 3 6h-8.5l-1-1H5a2 2 0 00-2 2zm9-13.5V9" />
-                        </svg>
-                        <Link href={`/coach?tab=tactiques&effectifId=${roster.id}`} className="hover:underline hover:text-brand-600 dark:hover:text-brand-400 transition-colors">
-                          Ouvrir sur le terrain (sans tactique)
-                        </Link>
-                      </div>
-                    )}
-
-                    <div className="flex items-center gap-2 border-t border-gray-100 dark:border-gray-800 pt-3 mt-3">
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-1.5 sm:gap-2 border-t border-gray-100 dark:border-gray-800 pt-2 sm:pt-3 mt-2 sm:mt-3">
                       <button
                         onClick={() => setSelectedReportRoster(roster)}
-                        className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-red-600 border border-transparent rounded-lg hover:bg-red-700 transition-colors shadow-xs"
+                        className="w-full sm:flex-1 inline-flex items-center justify-center gap-1 px-2 py-1.5 text-[11px] sm:text-xs font-semibold text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors shadow-xs cursor-pointer"
                       >
                         <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                         </svg>
-                        <span>{hasScore ? "Rapport" : "Saisir Score"}</span>
+                        <span className="truncate">{hasScore ? "Rapport" : "Score"}</span>
                       </button>
                       
-                      <button
-                        onClick={() => handleExportRoster(roster)}
-                        className="inline-flex items-center justify-center gap-1 px-2.5 py-1.5 text-xs font-medium text-white bg-emerald-600 border border-transparent rounded-lg hover:bg-emerald-700 transition-colors shadow-xs"
-                        title="Exporter CSV"
-                      >
-                        <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                        </svg>
-                        <span>CSV</span>
-                      </button>
-                      <button
-                        onClick={() => {
-                          setSelectedRoster(roster);
-                          setIsRosterModalOpen(true);
-                        }}
-                        className="inline-flex items-center justify-center h-7 w-7 text-xs font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-200 transition-colors shadow-xs shrink-0"
-                        title="Modifier le match"
-                      >
-                        <svg className="w-3.5 h-3.5 text-gray-600 dark:text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                        </svg>
-                      </button>
-                      <button
-                        onClick={() => setRosterToDelete(roster)}
-                        className="inline-flex items-center justify-center h-7 w-7 text-xs font-medium text-red-600 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 dark:bg-red-900/30 dark:border-red-800 dark:text-red-400 transition-colors shadow-xs shrink-0"
-                        title="Supprimer le match"
-                      >
-                        <svg className="w-3.5 h-3.5 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
-                      </button>
+                      <div className="flex items-center justify-between sm:justify-end gap-1 sm:gap-1.5">
+                        <button
+                          onClick={() => handleExportRoster(roster)}
+                          className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1 px-2 py-1.5 text-[11px] sm:text-xs font-medium text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors shadow-xs cursor-pointer"
+                          title="Exporter CSV"
+                        >
+                          <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                          </svg>
+                          <span>CSV</span>
+                        </button>
+                        <button
+                          onClick={() => {
+                            setSelectedRoster(roster);
+                            setIsRosterModalOpen(true);
+                          }}
+                          className="inline-flex items-center justify-center h-7 w-7 text-xs font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-200 transition-colors shadow-xs shrink-0 cursor-pointer"
+                          title="Modifier le match"
+                        >
+                          <svg className="w-3.5 h-3.5 text-gray-600 dark:text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          </svg>
+                        </button>
+                        <button
+                          onClick={() => setRosterToDelete(roster)}
+                          className="inline-flex items-center justify-center h-7 w-7 text-xs font-medium text-red-600 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 dark:bg-red-900/30 dark:border-red-800 dark:text-red-400 transition-colors shadow-xs shrink-0 cursor-pointer"
+                          title="Supprimer le match"
+                        >
+                          <svg className="w-3.5 h-3.5 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      </div>
                     </div>
                   </div>
                 );

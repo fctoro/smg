@@ -32,7 +32,8 @@ const getSafeAvatarSrc = (photoUrl?: string) => {
 
 const getPlayerFinancialSummary = (player: Player, playerPayments: any[]) => {
   const playerStatus = String((player as any).statutJoueur || "").toLowerCase().trim();
-  const isBoursier = playerStatus === "bourse" || playerStatus === "boursier" || playerPayments.some(p => String(p.remarque || "").toLowerCase().includes("[plan:boursier]"));
+  const isDemiBoursier = playerStatus.includes("demi") || playerPayments.some(p => String(p.remarque || "").toLowerCase().includes("[plan:demi"));
+  const isBoursier = !isDemiBoursier && (playerStatus === "bourse" || playerStatus === "boursier" || playerPayments.some(p => String(p.remarque || "").toLowerCase().includes("[plan:boursier]")));
 
   if (isBoursier) {
     return {

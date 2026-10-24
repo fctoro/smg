@@ -628,15 +628,15 @@ export default function CoachAttendancePage() {
             </div>
           ) : (
             <div className="overflow-hidden rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-white/[0.03]">
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-800 text-left text-sm">
+              <div className="overflow-x-auto custom-scrollbar">
+                <table className="w-full min-w-[700px] divide-y divide-gray-200 dark:divide-gray-800 text-left text-sm">
                   <thead className="bg-gray-50 dark:bg-gray-900/60 text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">
                     <tr>
-                      <th className="px-5 py-3.5">Date</th>
-                      <th className="px-4 py-3.5">Catégorie</th>
-                      <th className="px-4 py-3.5">Type</th>
-                      <th className="px-5 py-3.5">Assiduité & Présences</th>
-                      <th className="px-5 py-3.5 text-right">Actions</th>
+                      <th className="px-5 py-3.5 whitespace-nowrap min-w-[130px]">Date</th>
+                      <th className="px-4 py-3.5 whitespace-nowrap min-w-[100px]">Catégorie</th>
+                      <th className="px-4 py-3.5 whitespace-nowrap min-w-[90px]">Type</th>
+                      <th className="px-5 py-3.5 whitespace-nowrap min-w-[220px]">Assiduité & Présences</th>
+                      <th className="px-5 py-3.5 whitespace-nowrap text-right min-w-[130px]">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200 dark:divide-gray-800">
@@ -938,15 +938,26 @@ export default function CoachAttendancePage() {
                   </button>
                 </div>
 
+                {/* Mobile scroll hint */}
+                <div className="flex sm:hidden items-center justify-between gap-1 text-[11px] text-gray-400 dark:text-gray-500 mb-2 px-1">
+                  <span className="flex items-center gap-1.5">
+                    <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                    </svg>
+                    Glissez pour voir tous les statuts (Absent, Blessé, Retard...)
+                  </span>
+                  <span className="font-semibold text-brand-600 dark:text-brand-400">↔ Défilement</span>
+                </div>
+
                 {/* Players Table */}
-                <div className="overflow-hidden rounded-xl border border-gray-200 dark:border-gray-800">
-                  <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-800">
+                <div className="overflow-x-auto custom-scrollbar rounded-xl border border-gray-200 dark:border-gray-800">
+                  <table className="w-full min-w-[640px] divide-y divide-gray-200 dark:divide-gray-800">
                     <thead className="bg-gray-50 dark:bg-gray-900/50">
                       <tr>
-                        <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">
+                        <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500 whitespace-nowrap min-w-[200px]">
                           Joueur
                         </th>
-                        <th className="px-4 py-3 text-right text-xs font-bold uppercase tracking-wider text-gray-500">
+                        <th className="px-4 py-3 text-right text-xs font-bold uppercase tracking-wider text-gray-500 whitespace-nowrap min-w-[400px]">
                           {eventType === "Match" ? "A joué le match" : "Statut de présence"}
                         </th>
                       </tr>
@@ -975,7 +986,7 @@ export default function CoachAttendancePage() {
                                 : "hover:bg-gray-50 dark:hover:bg-gray-800/50"
                             }`}
                           >
-                            <td className="px-4 py-3 whitespace-nowrap">
+                            <td className="px-4 py-3 whitespace-nowrap min-w-[200px]">
                               <div className="flex items-center">
                                 {eventType === "Match" && (
                                   <div className="mr-3 flex items-center">
@@ -1007,7 +1018,7 @@ export default function CoachAttendancePage() {
                               </div>
                             </td>
 
-                            <td className="px-4 py-3 whitespace-nowrap text-right">
+                            <td className="px-4 py-3 whitespace-nowrap text-right min-w-[400px]">
                               {eventType === "Match" ? (
                                 <div className="flex justify-end">
                                   <button
@@ -1045,7 +1056,7 @@ export default function CoachAttendancePage() {
                                     type="button"
                                     onClick={() => handleToggleStatus(player.id, "Présent")}
                                     disabled={isDuplicateDate}
-                                    className={`group flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-bold transition-all duration-200 ${
+                                    className={`group flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-bold transition-all duration-200 whitespace-nowrap shrink-0 ${
                                       isPresent
                                         ? "bg-emerald-50 border-emerald-300 text-emerald-700 dark:bg-emerald-500/15 dark:border-emerald-500/30 dark:text-emerald-400 shadow-xs ring-1 ring-emerald-400/20"
                                         : "bg-transparent border-transparent text-gray-500 hover:bg-gray-100 hover:text-gray-900 dark:hover:bg-gray-800 dark:hover:text-white"
@@ -1063,7 +1074,7 @@ export default function CoachAttendancePage() {
                                     type="button"
                                     onClick={() => handleToggleStatus(player.id, "Absent")}
                                     disabled={isDuplicateDate}
-                                    className={`group flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-bold transition-all duration-200 ${
+                                    className={`group flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-bold transition-all duration-200 whitespace-nowrap shrink-0 ${
                                       isAbsent
                                         ? "bg-red-50 border-red-300 text-red-700 dark:bg-red-500/15 dark:border-red-500/30 dark:text-red-400 shadow-xs ring-1 ring-red-400/20"
                                         : "bg-transparent border-transparent text-gray-500 hover:bg-gray-100 hover:text-gray-900 dark:hover:bg-gray-800 dark:hover:text-white"
@@ -1081,7 +1092,7 @@ export default function CoachAttendancePage() {
                                     type="button"
                                     onClick={() => handleToggleStatus(player.id, "Blessé")}
                                     disabled={isDuplicateDate}
-                                    className={`group flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-bold transition-all duration-200 ${
+                                    className={`group flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-bold transition-all duration-200 whitespace-nowrap shrink-0 ${
                                       isInjured
                                         ? "bg-amber-50 border-amber-300 text-amber-700 dark:bg-amber-500/15 dark:border-amber-500/30 dark:text-amber-400 shadow-xs ring-1 ring-amber-400/20"
                                         : "bg-transparent border-transparent text-gray-500 hover:bg-gray-100 hover:text-gray-900 dark:hover:bg-gray-800 dark:hover:text-white"
@@ -1099,7 +1110,7 @@ export default function CoachAttendancePage() {
                                     type="button"
                                     onClick={() => handleToggleStatus(player.id, "En retard")}
                                     disabled={isDuplicateDate}
-                                    className={`group flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-bold transition-all duration-200 ${
+                                    className={`group flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-bold transition-all duration-200 whitespace-nowrap shrink-0 ${
                                       isLate
                                         ? "bg-orange-50 border-orange-300 text-orange-700 dark:bg-orange-500/15 dark:border-orange-500/30 dark:text-orange-400 shadow-xs ring-1 ring-orange-400/20"
                                         : "bg-transparent border-transparent text-gray-500 hover:bg-gray-100 hover:text-gray-900 dark:hover:bg-gray-800 dark:hover:text-white"

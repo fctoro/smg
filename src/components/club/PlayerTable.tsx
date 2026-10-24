@@ -300,6 +300,7 @@ export default function PlayerTable({
   }, [currentPage, filteredPlayers, currentPageSize]);
 
   const visibleColumnsCount = Math.max(1, visibleColumnSet.size);
+  const minTableWidth = visibleColumnsCount >= 10 ? "min-w-[1100px]" : "min-w-[950px]";
 
   const getSafeAvatarSrc = (photoUrl?: string) => {
     const trimmed = (photoUrl || "").trim();
@@ -401,14 +402,25 @@ export default function PlayerTable({
         </div>
       ) : null}
 
-      <div className="max-w-full overflow-x-auto">
-        <Table>
+      {/* Indicateur de défilement mobile */}
+      <div className="flex sm:hidden items-center justify-between gap-1 text-[11px] text-gray-400 dark:text-gray-500 mb-2 px-1">
+        <span className="flex items-center gap-1.5">
+          <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+          </svg>
+          Glissez pour voir toutes les colonnes
+        </span>
+        <span className="font-semibold text-brand-600 dark:text-brand-400">↔ Défilement</span>
+      </div>
+
+      <div className="max-w-full overflow-x-auto custom-scrollbar">
+        <Table className={`w-full ${minTableWidth}`}>
           <TableHeader className="border-y border-gray-100 dark:border-gray-800">
             <TableRow>
               {visibleColumnSet.has("avatarNom") ? (
                 <TableCell
                   isHeader
-                  className="py-3 text-start text-theme-xs font-medium text-gray-500 dark:text-gray-400"
+                  className="py-3 px-4 text-start text-theme-xs font-medium text-gray-500 dark:text-gray-400 whitespace-nowrap min-w-[220px]"
                 >
                   Photo + Nom
                 </TableCell>
@@ -416,7 +428,7 @@ export default function PlayerTable({
               {visibleColumnSet.has("poste") ? (
                 <TableCell
                   isHeader
-                  className="py-3 text-start text-theme-xs font-medium text-gray-500 dark:text-gray-400"
+                  className="py-3 px-4 text-start text-theme-xs font-medium text-gray-500 dark:text-gray-400 whitespace-nowrap min-w-[90px]"
                 >
                   Poste
                 </TableCell>
@@ -424,7 +436,7 @@ export default function PlayerTable({
               {visibleColumnSet.has("sexe") ? (
                 <TableCell
                   isHeader
-                  className="py-3 text-start text-theme-xs font-medium text-gray-500 dark:text-gray-400"
+                  className="py-3 px-4 text-start text-theme-xs font-medium text-gray-500 dark:text-gray-400 whitespace-nowrap min-w-[80px]"
                 >
                   Sexe
                 </TableCell>
@@ -432,7 +444,7 @@ export default function PlayerTable({
               {visibleColumnSet.has("statut") ? (
                 <TableCell
                   isHeader
-                  className="py-3 text-start text-theme-xs font-medium text-gray-500 dark:text-gray-400"
+                  className="py-3 px-4 text-start text-theme-xs font-medium text-gray-500 dark:text-gray-400 whitespace-nowrap min-w-[100px]"
                 >
                   Statut
                 </TableCell>
@@ -440,7 +452,7 @@ export default function PlayerTable({
               {visibleColumnSet.has("categorie") ? (
                 <TableCell
                   isHeader
-                  className="py-3 text-start text-theme-xs font-medium text-gray-500 dark:text-gray-400"
+                  className="py-3 px-4 text-start text-theme-xs font-medium text-gray-500 dark:text-gray-400 whitespace-nowrap min-w-[110px]"
                 >
                   Catégorie
                 </TableCell>
@@ -448,7 +460,7 @@ export default function PlayerTable({
               {visibleColumnSet.has("cotisation") ? (
                 <TableCell
                   isHeader
-                  className="py-3 text-start text-theme-xs font-medium text-gray-500 dark:text-gray-400"
+                  className="py-3 px-4 text-start text-theme-xs font-medium text-gray-500 dark:text-gray-400 whitespace-nowrap min-w-[110px]"
                 >
                   Cotisation
                 </TableCell>
@@ -456,7 +468,7 @@ export default function PlayerTable({
               {visibleColumnSet.has("montant") ? (
                 <TableCell
                   isHeader
-                  className="py-3 text-start text-theme-xs font-medium text-gray-500 dark:text-gray-400"
+                  className="py-3 px-4 text-start text-theme-xs font-medium text-gray-500 dark:text-gray-400 whitespace-nowrap min-w-[100px]"
                 >
                   Montant
                 </TableCell>
@@ -464,7 +476,7 @@ export default function PlayerTable({
               {visibleColumnSet.has("dernierPaiement") ? (
                 <TableCell
                   isHeader
-                  className="py-3 text-start text-theme-xs font-medium text-gray-500 dark:text-gray-400"
+                  className="py-3 px-4 text-start text-theme-xs font-medium text-gray-500 dark:text-gray-400 whitespace-nowrap min-w-[130px]"
                 >
                   Dernier paiement
                 </TableCell>
@@ -472,7 +484,7 @@ export default function PlayerTable({
               {visibleColumnSet.has("saison") ? (
                 <TableCell
                   isHeader
-                  className="py-3 text-start text-theme-xs font-medium text-gray-500 dark:text-gray-400"
+                  className="py-3 px-4 text-start text-theme-xs font-medium text-gray-500 dark:text-gray-400 whitespace-nowrap min-w-[100px]"
                 >
                   Saison
                 </TableCell>
@@ -480,7 +492,7 @@ export default function PlayerTable({
               {visibleColumnSet.has("programme") ? (
                 <TableCell
                   isHeader
-                  className="py-3 text-start text-theme-xs font-medium text-gray-500 dark:text-gray-400"
+                  className="py-3 px-4 text-start text-theme-xs font-medium text-gray-500 dark:text-gray-400 whitespace-nowrap min-w-[120px]"
                 >
                   Programme
                 </TableCell>
@@ -488,7 +500,7 @@ export default function PlayerTable({
               {visibleColumnSet.has("matchsJoues") ? (
                 <TableCell
                   isHeader
-                  className="py-3 text-start text-theme-xs font-medium text-gray-500 dark:text-gray-400"
+                  className="py-3 px-4 text-start text-theme-xs font-medium text-gray-500 dark:text-gray-400 whitespace-nowrap min-w-[110px]"
                 >
                   Matchs joués
                 </TableCell>
@@ -496,7 +508,7 @@ export default function PlayerTable({
               {visibleColumnSet.has("actions") ? (
                 <TableCell
                   isHeader
-                  className="py-3 text-start text-theme-xs font-medium text-gray-500 dark:text-gray-400"
+                  className="py-3 px-4 text-start text-theme-xs font-medium text-gray-500 dark:text-gray-400 whitespace-nowrap min-w-[140px]"
                 >
                   Actions
                 </TableCell>
@@ -558,22 +570,22 @@ export default function PlayerTable({
                 return (
                 <TableRow key={player.id}>
                   {visibleColumnSet.has("avatarNom") ? (
-                    <TableCell className="py-3">
+                    <TableCell className="py-3 px-4 whitespace-nowrap min-w-[220px]">
                       <div className="flex items-center gap-3">
                         <Image
                           width={40}
                           height={40}
                           src={safeAvatarSrc}
                           alt={fullName}
-                          className="h-10 w-10 rounded-full object-cover shadow-xs border border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800 p-0.5"
+                          className="h-10 w-10 shrink-0 rounded-full object-cover shadow-xs border border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800 p-0.5"
                           unoptimized
                         />
-                        <div>
-                          <p className="text-theme-sm font-medium text-gray-800 dark:text-white/90">
+                        <div className="min-w-0">
+                          <p className="text-theme-sm font-medium text-gray-800 dark:text-white/90 whitespace-nowrap">
                             {fullName}
                           </p>
-                          <p className="text-theme-xs font-semibold text-brand-600 dark:text-brand-400 mt-1 flex items-center gap-1.5">
-                            <span className="flex h-1.5 w-1.5 rounded-full bg-brand-500"></span>
+                          <p className="text-theme-xs font-semibold text-brand-600 dark:text-brand-400 mt-1 flex items-center gap-1.5 whitespace-nowrap">
+                            <span className="flex h-1.5 w-1.5 rounded-full bg-brand-500 shrink-0"></span>
                             {safeMatricule}
                           </p>
                         </div>
@@ -581,29 +593,29 @@ export default function PlayerTable({
                     </TableCell>
                   ) : null}
                   {visibleColumnSet.has("poste") ? (
-                    <TableCell className="py-3 text-theme-sm text-gray-500 dark:text-gray-400">
+                    <TableCell className="py-3 px-4 text-theme-sm text-gray-500 dark:text-gray-400 whitespace-nowrap min-w-[90px]">
                       {player.poste}
                     </TableCell>
                   ) : null}
                   {visibleColumnSet.has("sexe") ? (
-                    <TableCell className="py-3 text-theme-sm text-gray-500 dark:text-gray-400">
+                    <TableCell className="py-3 px-4 text-theme-sm text-gray-500 dark:text-gray-400 whitespace-nowrap min-w-[80px]">
                       {player.sexe}
                     </TableCell>
                   ) : null}
                     {visibleColumnSet.has("statut") ? (
-                      <TableCell className="py-3 text-theme-sm text-gray-500 dark:text-gray-400">
+                      <TableCell className="py-3 px-4 text-theme-sm text-gray-500 dark:text-gray-400 whitespace-nowrap min-w-[100px]">
                         <Badge size="sm" color={colorFromPlayerStatus(player.statut)}>
                           {playerStatusLabel[player.statut]}
                         </Badge>
                       </TableCell>
                     ) : null}
                   {visibleColumnSet.has("categorie") ? (
-                    <TableCell className="py-3 text-theme-sm text-gray-500 dark:text-gray-400">
+                    <TableCell className="py-3 px-4 text-theme-sm text-gray-500 dark:text-gray-400 whitespace-nowrap min-w-[110px]">
                       {player.categorie}
                     </TableCell>
                   ) : null}
                   {visibleColumnSet.has("cotisation") ? (
-                    <TableCell className="py-3 text-theme-sm text-gray-500 dark:text-gray-400">
+                    <TableCell className="py-3 px-4 text-theme-sm text-gray-500 dark:text-gray-400 whitespace-nowrap min-w-[110px]">
                       <span
                         className={`inline-flex items-center justify-center whitespace-nowrap rounded-full px-3 py-1 text-sm font-medium ${badgeBgClass}`}
                       >
@@ -612,32 +624,32 @@ export default function PlayerTable({
                     </TableCell>
                   ) : null}
                   {visibleColumnSet.has("montant") ? (
-                    <TableCell className="py-3 text-theme-sm font-medium text-gray-700 dark:text-gray-300">
+                    <TableCell className="py-3 px-4 text-theme-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap min-w-[100px]">
                       {formatClubCurrency(displayMontant, displayDevise)}
                     </TableCell>
                   ) : null}
                   {visibleColumnSet.has("dernierPaiement") ? (
-                    <TableCell className="py-3 text-theme-sm text-gray-500 dark:text-gray-400">
+                    <TableCell className="py-3 px-4 text-theme-sm text-gray-500 dark:text-gray-400 whitespace-nowrap min-w-[130px]">
                       {formatClubDate(player.dernierPaiement)}
                     </TableCell>
                   ) : null}
                   {visibleColumnSet.has("saison") ? (
-                    <TableCell className="py-3 text-theme-sm text-gray-500 dark:text-gray-400">
+                    <TableCell className="py-3 px-4 text-theme-sm text-gray-500 dark:text-gray-400 whitespace-nowrap min-w-[100px]">
                       {player.saison || "-"}
                     </TableCell>
                   ) : null}
                   {visibleColumnSet.has("programme") ? (
-                    <TableCell className="py-3 text-theme-sm text-gray-500 dark:text-gray-400">
+                    <TableCell className="py-3 px-4 text-theme-sm text-gray-500 dark:text-gray-400 whitespace-nowrap min-w-[120px]">
                       {player.programme || "-"}
                     </TableCell>
                   ) : null}
                   {visibleColumnSet.has("matchsJoues") ? (
-                    <TableCell className="py-3 text-theme-sm font-medium text-gray-700 dark:text-gray-300">
+                    <TableCell className="py-3 px-4 text-theme-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap min-w-[110px]">
                       {playerMatchCounts?.get(player.id) ?? (player as any).matchsJoues ?? 0}
                     </TableCell>
                   ) : null}
                   {visibleColumnSet.has("actions") ? (
-                    <TableCell className="py-3 text-theme-sm text-gray-500 dark:text-gray-400">
+                    <TableCell className="py-3 px-4 text-theme-sm text-gray-500 dark:text-gray-400 whitespace-nowrap min-w-[140px]">
                       <div className="flex items-center gap-3">
                         <button
                           type="button"

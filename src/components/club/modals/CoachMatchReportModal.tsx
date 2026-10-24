@@ -397,11 +397,11 @@ export default function CoachMatchReportModal({ isOpen, onClose, effectif, playe
           </div>
 
           {/* Sub-bar: Events Actions Toolbar */}
-          <div style={{ backgroundColor: '#000000' }} className="px-6 py-3 border-t border-[#1c1c1c] flex items-center justify-between flex-wrap gap-3">
+          <div style={{ backgroundColor: '#000000' }} className="px-3 sm:px-6 py-2 sm:py-2.5 border-t border-[#1c1c1c] flex items-center justify-between flex-wrap gap-2 sm:gap-3">
             {/* FC Toro actions */}
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-xs font-semibold text-gray-300">
-                Faits de jeu (FC Toro) :
+            <div className="flex items-center gap-1 sm:gap-1.5 flex-nowrap sm:flex-wrap">
+              <span className="text-[11px] sm:text-xs font-semibold text-gray-300 shrink-0">
+                <span className="hidden sm:inline">Faits de jeu </span>(FC Toro) :
               </span>
               <button
                 type="button"
@@ -410,9 +410,9 @@ export default function CoachMatchReportModal({ isOpen, onClose, effectif, playe
                   setNewScorerId("");
                   setNewAssistId("");
                 }}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-white bg-blue-600 hover:bg-blue-500 border border-blue-500 transition-all shadow-xs"
+                className="inline-flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-lg text-[11px] sm:text-xs font-bold text-white bg-blue-600 hover:bg-blue-500 border border-blue-500 transition-all shadow-xs shrink-0 cursor-pointer active:scale-95 whitespace-nowrap"
               >
-                <span>⚽</span> + But
+                <span className="text-[11px]">⚽</span> <span>+ But</span>
               </button>
               <button
                 type="button"
@@ -420,7 +420,7 @@ export default function CoachMatchReportModal({ isOpen, onClose, effectif, playe
                   setActiveModalType("yellow_card");
                   setNewScorerId("");
                 }}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-400 hover:bg-amber-300 text-neutral-950 border border-amber-300 transition-all shadow-xs"
+                className="inline-flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-lg text-[11px] sm:text-xs font-bold bg-amber-400 hover:bg-amber-300 text-neutral-950 border border-amber-300 transition-all shadow-xs shrink-0 cursor-pointer active:scale-95 whitespace-nowrap"
               >
                 + Carton jaune
               </button>
@@ -430,15 +430,15 @@ export default function CoachMatchReportModal({ isOpen, onClose, effectif, playe
                   setActiveModalType("red_card");
                   setNewScorerId("");
                 }}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-red-600 hover:bg-red-500 text-white border border-red-500 transition-all shadow-xs"
+                className="inline-flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-lg text-[11px] sm:text-xs font-bold bg-red-600 hover:bg-red-500 text-white border border-red-500 transition-all shadow-xs shrink-0 cursor-pointer active:scale-95 whitespace-nowrap"
               >
                 + Carton rouge
               </button>
             </div>
 
             {/* Opponent actions */}
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-xs font-semibold text-gray-400">
+            <div className="flex items-center gap-1 sm:gap-1.5 flex-nowrap sm:flex-wrap">
+              <span className="text-[11px] sm:text-xs font-semibold text-gray-400 shrink-0 truncate max-w-[130px]" title={opponentName || "Adversaire"}>
                 {opponentName ? opponentName : "Adversaire"} :
               </span>
               <button
@@ -448,9 +448,10 @@ export default function CoachMatchReportModal({ isOpen, onClose, effectif, playe
                   setNewOpponentScorerName("");
                   setNewOpponentAssistName("");
                 }}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-white bg-blue-600 hover:bg-blue-500 border border-blue-500 transition-all shadow-xs"
+                className="inline-flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-lg text-[11px] sm:text-xs font-bold text-white bg-blue-600 hover:bg-blue-500 border border-blue-500 transition-all shadow-xs shrink-0 cursor-pointer active:scale-95 whitespace-nowrap"
+                title={`Ajouter un but pour ${opponentName || "l'adversaire"}`}
               >
-                <span>⚽</span> + But {opponentName ? opponentName : "adverse"}
+                <span className="text-[11px]">⚽</span> <span>+ But</span>
               </button>
             </div>
           </div>

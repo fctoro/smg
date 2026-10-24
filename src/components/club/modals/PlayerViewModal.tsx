@@ -418,7 +418,7 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
               </div>
               <h4 className="font-semibold text-gray-900 dark:text-white text-base">Suivi Sportif & Présences</h4>
             </div>
-            <PlayerSportsTracking playerId={player.id} />
+            <PlayerSportsTracking playerId={player.id} playerCategory={player.categorie} />
           </div>
 
           {/* Section 02: Parents / Tuteur */}

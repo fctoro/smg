@@ -7,10 +7,13 @@ import Image from "next/image";
 
 interface MatchEvent {
   id: string;
-  type: "goal" | "yellow_card" | "red_card";
-  scorerId: string; // Player who scored or got carded
-  assistId?: string;
+  type: "goal" | "yellow_card" | "red_card" | "opponent_goal";
+  scorerId?: string; // Player who scored or got carded (FC Toro)
+  scorerName?: string; // Opponent player name (free text)
+  assistId?: string; // FC Toro assister player ID
+  assistName?: string; // Opponent assister name (free text)
   minute?: number;
+  team?: "toro" | "opponent";
 }
 
 interface Props {
@@ -37,9 +40,11 @@ export default function CoachMatchReportModal({ isOpen, onClose, effectif, playe
   const [opponentName, setOpponentName] = useState("ADVERSAIRE");
 
   // New Event creation popup state
-  const [activeModalType, setActiveModalType] = useState<"goal" | "yellow_card" | "red_card" | null>(null);
+  const [activeModalType, setActiveModalType] = useState<"goal" | "yellow_card" | "red_card" | "opponent_goal" | null>(null);
   const [newScorerId, setNewScorerId] = useState("");
   const [newAssistId, setNewAssistId] = useState("");
+  const [newOpponentScorerName, setNewOpponentScorerName] = useState("");
+  const [newOpponentAssistName, setNewOpponentAssistName] = useState("");
 
   // Extract initial Opponent Name & Home/Away
   const extractOpponent = (title: string) => {
@@ -70,6 +75,8 @@ export default function CoachMatchReportModal({ isOpen, onClose, effectif, playe
       setWeaknesses(effectif.coach_notes_weaknesses || "");
       setError(null);
       setActiveModalType(null);
+      setNewOpponentScorerName("");
+      setNewOpponentAssistName("");
 
       const parsed = extractOpponent(effectif.nom);
       setOpponentName(parsed.name);
@@ -82,9 +89,9 @@ export default function CoachMatchReportModal({ isOpen, onClose, effectif, playe
     return players.filter(p => effectif.joueurs?.includes(p.id));
   }, [players, effectif.joueurs]);
 
-  // Grouped Scorers
+  // Grouped Scorers (FC Toro)
   const scorersList = useMemo(() => {
-    const goalEvents = events.filter(e => e.type === "goal");
+    const goalEvents = events.filter(e => e.type === "goal" && e.scorerId);
     const map = new Map<string, { player: Player; count: number; assists: string[]; eventIds: string[] }>();
     
     goalEvents.forEach(ev => {
@@ -106,6 +113,27 @@ export default function CoachMatchReportModal({ isOpen, onClose, effectif, playe
 
     return Array.from(map.values()).sort((a, b) => b.count - a.count);
   }, [events, players]);
+
+  // Grouped Scorers (Adversaire)
+  const opponentScorersList = useMemo(() => {
+    const oppGoalEvents = events.filter(e => e.type === "opponent_goal" || e.team === "opponent");
+    const map = new Map<string, { name: string; count: number; assists: string[]; eventIds: string[] }>();
+
+    oppGoalEvents.forEach(ev => {
+      const name = ev.scorerName?.trim() || "Buteur adverse";
+      if (!map.has(name)) {
+        map.set(name, { name, count: 0, assists: [], eventIds: [] });
+      }
+      const entry = map.get(name)!;
+      entry.count += 1;
+      entry.eventIds.push(ev.id);
+      if (ev.assistName?.trim()) {
+        entry.assists.push(ev.assistName.trim());
+      }
+    });
+
+    return Array.from(map.values()).sort((a, b) => b.count - a.count);
+  }, [events]);
 
   // Grouped Assists
   const assistsList = useMemo(() => {
@@ -145,13 +173,33 @@ export default function CoachMatchReportModal({ isOpen, onClose, effectif, playe
 
   const handleCreateEvent = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!activeModalType || !newScorerId) return;
+    if (!activeModalType) return;
+
+    if (activeModalType === "opponent_goal") {
+      const newEvent: MatchEvent = {
+        id: Math.random().toString(36).substring(7),
+        type: "opponent_goal",
+        scorerName: newOpponentScorerName.trim() || (opponentName ? `Joueur ${opponentName}` : "Buteur adverse"),
+        assistName: newOpponentAssistName.trim() || undefined,
+        team: "opponent",
+      };
+
+      setEvents(prev => [...prev, newEvent]);
+      setScoreAdv(prev => (typeof prev === "number" ? prev + 1 : 1));
+      setNewOpponentScorerName("");
+      setNewOpponentAssistName("");
+      setActiveModalType(null);
+      return;
+    }
+
+    if (!newScorerId) return;
 
     const newEvent: MatchEvent = {
       id: Math.random().toString(36).substring(7),
       type: activeModalType,
       scorerId: newScorerId,
-      assistId: activeModalType === "goal" && newAssistId ? newAssistId : undefined
+      assistId: activeModalType === "goal" && newAssistId ? newAssistId : undefined,
+      team: "toro",
     };
 
     const nextEvents = [...events, newEvent];
@@ -170,13 +218,23 @@ export default function CoachMatchReportModal({ isOpen, onClose, effectif, playe
 
   const removeEvent = (id: string) => {
     const target = events.find(e => e.id === id);
-    if (target && target.type === "goal") {
-      setScoreToro(prev => Math.max(0, (typeof prev === "number" ? prev - 1 : 0)));
+    if (target) {
+      if (target.type === "goal") {
+        setScoreToro(prev => Math.max(0, (typeof prev === "number" ? prev - 1 : 0)));
+      } else if (target.type === "opponent_goal" || target.team === "opponent") {
+        setScoreAdv(prev => Math.max(0, (typeof prev === "number" ? prev - 1 : 0)));
+      }
     }
     setEvents(events.filter(e => e.id !== id));
   };
 
   const removeScorerLastGoal = (eventIds: string[]) => {
+    if (eventIds.length === 0) return;
+    const lastId = eventIds[eventIds.length - 1];
+    removeEvent(lastId);
+  };
+
+  const removeOpponentLastGoal = (eventIds: string[]) => {
     if (eventIds.length === 0) return;
     const lastId = eventIds[eventIds.length - 1];
     removeEvent(lastId);
@@ -217,15 +275,11 @@ export default function CoachMatchReportModal({ isOpen, onClose, effectif, playe
   return (
     <Modal isOpen={isOpen} onClose={onClose} showCloseButton={false} className="max-w-5xl w-full p-0 overflow-hidden rounded-3xl bg-white dark:bg-gray-950 border border-gray-200 dark:border-gray-800 shadow-2xl">
       <form onSubmit={handleSubmit} className="flex flex-col max-h-[90vh]">
-        {/* --- 1. PRO SCOREBOARD HEADER --- */}
-        <div className="bg-slate-950 text-white border-b border-gray-800">
+        {/* --- 1. PRO SCOREBOARD HEADER (SOLID NOIR PUR #000000) --- */}
+        <div style={{ backgroundColor: '#000000' }} className="text-white border-b border-[#222222]">
           {/* Top metadata strip */}
-          <div className="px-6 py-3 border-b border-white/5 flex items-center justify-between text-xs text-gray-400">
+          <div style={{ backgroundColor: '#000000' }} className="px-6 py-3 border-b border-[#1c1c1c] flex items-center justify-between text-xs text-gray-400">
             <div className="flex items-center gap-2">
-              <span className="px-2.5 py-0.5 rounded-full bg-red-500/20 text-red-400 font-bold uppercase tracking-wider text-[10px] border border-red-500/30">
-                Rapport de Match
-              </span>
-              <span className="text-gray-600">•</span>
               <span className="font-semibold text-gray-200">{effectif.categorie}</span>
               <span className="text-gray-600">•</span>
               <span>{effectif.date_match}</span>
@@ -242,7 +296,7 @@ export default function CoachMatchReportModal({ isOpen, onClose, effectif, playe
           </div>
 
           {/* Main Scoreboard Arena */}
-          <div className="px-6 py-6 sm:px-8">
+          <div style={{ backgroundColor: '#000000' }} className="px-6 py-6 sm:px-8">
             <div className="grid grid-cols-12 items-center gap-4">
               {/* Left Team */}
               <div className="col-span-5 min-w-0">
@@ -273,7 +327,7 @@ export default function CoachMatchReportModal({ isOpen, onClose, effectif, playe
 
               {/* Center Score & Switch */}
               <div className="col-span-2 flex flex-col items-center justify-center shrink-0">
-                <div className="bg-black/50 backdrop-blur-md px-4 py-2 rounded-2xl border border-white/15 shadow-2xl flex items-center gap-2">
+                <div style={{ backgroundColor: '#111111' }} className="px-4 py-2 rounded-2xl border border-[#333333] shadow-2xl flex items-center gap-2">
                   <input
                     type="number"
                     min="0"
@@ -304,7 +358,7 @@ export default function CoachMatchReportModal({ isOpen, onClose, effectif, playe
                   type="button"
                   onClick={() => setIsToroHome(!isToroHome)}
                   title="Inverser Domicile / Extérieur"
-                  className="mt-2.5 inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold text-gray-300 bg-white/5 hover:bg-white/15 border border-white/10 hover:text-white transition-all shadow-xs"
+                  className="mt-2.5 inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold text-gray-300 bg-white/10 hover:bg-white/20 border border-white/15 hover:text-white transition-all shadow-xs"
                 >
                   <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
@@ -343,31 +397,60 @@ export default function CoachMatchReportModal({ isOpen, onClose, effectif, playe
           </div>
 
           {/* Sub-bar: Events Actions Toolbar */}
-          <div className="px-6 py-3 bg-slate-900/90 border-t border-white/10 flex items-center justify-between flex-wrap gap-2">
-            <span className="text-xs font-semibold text-gray-300">
-              Faits de jeu (FC Toro) :
-            </span>
-            <div className="flex items-center gap-2">
+          <div style={{ backgroundColor: '#000000' }} className="px-6 py-3 border-t border-[#1c1c1c] flex items-center justify-between flex-wrap gap-3">
+            {/* FC Toro actions */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs font-semibold text-gray-300">
+                Faits de jeu (FC Toro) :
+              </span>
               <button
                 type="button"
-                onClick={() => setActiveModalType("goal")}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-slate-500 transition-all shadow-xs"
+                onClick={() => {
+                  setActiveModalType("goal");
+                  setNewScorerId("");
+                  setNewAssistId("");
+                }}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-white bg-blue-600 hover:bg-blue-500 border border-blue-500 transition-all shadow-xs"
               >
                 <span>⚽</span> + But
               </button>
               <button
                 type="button"
-                onClick={() => setActiveModalType("yellow_card")}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-gray-200 bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-slate-500 transition-all shadow-xs"
+                onClick={() => {
+                  setActiveModalType("yellow_card");
+                  setNewScorerId("");
+                }}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-400 hover:bg-amber-300 text-neutral-950 border border-amber-300 transition-all shadow-xs"
               >
-                <span className="h-3.5 w-2.5 bg-amber-400 rounded-xs inline-block" /> + Carton jaune
+                + Carton jaune
               </button>
               <button
                 type="button"
-                onClick={() => setActiveModalType("red_card")}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-gray-200 bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-slate-500 transition-all shadow-xs"
+                onClick={() => {
+                  setActiveModalType("red_card");
+                  setNewScorerId("");
+                }}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-red-600 hover:bg-red-500 text-white border border-red-500 transition-all shadow-xs"
               >
-                <span className="h-3.5 w-2.5 bg-red-600 rounded-xs inline-block" /> + Carton rouge
+                + Carton rouge
+              </button>
+            </div>
+
+            {/* Opponent actions */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs font-semibold text-gray-400">
+                {opponentName ? opponentName : "Adversaire"} :
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveModalType("opponent_goal");
+                  setNewOpponentScorerName("");
+                  setNewOpponentAssistName("");
+                }}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-white bg-blue-600 hover:bg-blue-500 border border-blue-500 transition-all shadow-xs"
+              >
+                <span>⚽</span> + But {opponentName ? opponentName : "adverse"}
               </button>
             </div>
           </div>
@@ -376,75 +459,155 @@ export default function CoachMatchReportModal({ isOpen, onClose, effectif, playe
         {/* --- INLINE EVENT CREATION POPOVER --- */}
         {activeModalType && (
           <div className="bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 p-4">
-            <div className="max-w-2xl mx-auto bg-white dark:bg-gray-800 p-4 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm">
-              <div className="flex items-center justify-between mb-3">
-                <h4 className="text-sm font-bold text-gray-900 dark:text-white">
-                  {activeModalType === "goal" ? "⚽ Ajouter un But" : activeModalType === "yellow_card" ? "🟨 Ajouter un Carton jaune" : "🟥 Ajouter un Carton rouge"}
-                </h4>
-                <button type="button" onClick={() => setActiveModalType(null)} className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
-                  ✕
-                </button>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    {activeModalType === "goal" ? "Buteur FC Toro *" : "Joueur sanctionné *"}
-                  </label>
-                  <select
-                    value={newScorerId}
-                    onChange={e => setNewScorerId(e.target.value)}
-                    required
-                    className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-xs p-2 font-medium dark:text-white focus:outline-none focus:ring-1 focus:ring-gray-400"
+            {activeModalType === "opponent_goal" ? (
+              <div className="max-w-xl mx-auto bg-white dark:bg-gray-800 p-4 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm">
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                    <span>⚽</span>
+                    <span>Ajouter un but pour {opponentName || "l'adversaire"}</span>
+                  </h4>
+                  <button
+                    type="button"
+                    onClick={() => setActiveModalType(null)}
+                    className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
                   >
-                    <option value="">-- Choisir le joueur --</option>
-                    {rosterPlayers.map(p => (
-                      <option key={p.id} value={p.id}>
-                        {getPlayerFullName(p)} ({p.poste || "Poste inconnu"})
-                      </option>
-                    ))}
-                  </select>
+                    ✕
+                  </button>
                 </div>
 
-                {activeModalType === "goal" && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
                   <div>
                     <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Passeur décisif (Optionnel)
+                      Buteur adverse (Nom ou N° de maillot) *
+                    </label>
+                    <input
+                      type="text"
+                      autoFocus
+                      value={newOpponentScorerName}
+                      onChange={(e) => setNewOpponentScorerName(e.target.value)}
+                      placeholder="Ex: Jean-Baptiste, N°10..."
+                      className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-xs p-2.5 font-medium text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-gray-400"
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          handleCreateEvent(e);
+                        }
+                      }}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Passeur décisif adverse (Optionnel)
+                    </label>
+                    <input
+                      type="text"
+                      value={newOpponentAssistName}
+                      onChange={(e) => setNewOpponentAssistName(e.target.value)}
+                      placeholder="Ex: N°7, Stevenson..."
+                      className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-xs p-2.5 font-medium text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-gray-400"
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          handleCreateEvent(e);
+                        }
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <p className="text-[11px] text-gray-400 mb-3">
+                  Si le buteur n&apos;est pas renseigné, il sera noté &quot;Buteur adverse&quot;.
+                </p>
+
+                <div className="flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setActiveModalType(null)}
+                    className="px-3 py-1.5 text-xs text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200"
+                  >
+                    Annuler
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleCreateEvent}
+                    className="px-4 py-1.5 text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 dark:bg-white dark:text-gray-900 rounded-lg"
+                  >
+                    Valider le but
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="max-w-2xl mx-auto bg-white dark:bg-gray-800 p-4 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm">
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="text-sm font-bold text-gray-900 dark:text-white">
+                    {activeModalType === "goal" ? "⚽ Ajouter un But (FC Toro)" : activeModalType === "yellow_card" ? "🟨 Ajouter un Carton jaune" : "🟥 Ajouter un Carton rouge"}
+                  </h4>
+                  <button type="button" onClick={() => setActiveModalType(null)} className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
+                    ✕
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      {activeModalType === "goal" ? "Buteur FC Toro *" : "Joueur sanctionné *"}
                     </label>
                     <select
-                      value={newAssistId}
-                      onChange={e => setNewAssistId(e.target.value)}
+                      value={newScorerId}
+                      onChange={e => setNewScorerId(e.target.value)}
+                      required
                       className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-xs p-2 font-medium dark:text-white focus:outline-none focus:ring-1 focus:ring-gray-400"
                     >
-                      <option value="">-- Aucun (action individuelle) --</option>
-                      {rosterPlayers.filter(p => p.id !== newScorerId).map(p => (
+                      <option value="">-- Choisir le joueur --</option>
+                      {rosterPlayers.map(p => (
                         <option key={p.id} value={p.id}>
-                          {getPlayerFullName(p)}
+                          {getPlayerFullName(p)} ({p.poste || "Poste inconnu"})
                         </option>
                       ))}
                     </select>
                   </div>
-                )}
-              </div>
 
-              <div className="flex justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setActiveModalType(null)}
-                  className="px-3 py-1.5 text-xs text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200"
-                >
-                  Annuler
-                </button>
-                <button
-                  type="button"
-                  onClick={handleCreateEvent}
-                  disabled={!newScorerId}
-                  className="px-4 py-1.5 text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 dark:bg-white dark:text-gray-900 rounded-lg disabled:opacity-50"
-                >
-                  Valider
-                </button>
+                  {activeModalType === "goal" && (
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Passeur décisif (Optionnel)
+                      </label>
+                      <select
+                        value={newAssistId}
+                        onChange={e => setNewAssistId(e.target.value)}
+                        className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-xs p-2 font-medium dark:text-white focus:outline-none focus:ring-1 focus:ring-gray-400"
+                      >
+                        <option value="">-- Aucun (action individuelle) --</option>
+                        {rosterPlayers.filter(p => p.id !== newScorerId).map(p => (
+                          <option key={p.id} value={p.id}>
+                            {getPlayerFullName(p)}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setActiveModalType(null)}
+                    className="px-3 py-1.5 text-xs text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200"
+                  >
+                    Annuler
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleCreateEvent}
+                    disabled={!newScorerId}
+                    className="px-4 py-1.5 text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 dark:bg-white dark:text-gray-900 rounded-lg disabled:opacity-50"
+                  >
+                    Valider
+                  </button>
+                </div>
               </div>
-            </div>
+            )}
           </div>
         )}
 
@@ -456,12 +619,12 @@ export default function CoachMatchReportModal({ isOpen, onClose, effectif, playe
             </div>
           )}
 
-          {/* ROW 1: Buteurs & Passeurs */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-            {/* Buts Card */}
-            <div className="lg:col-span-2 rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-5 shadow-xs">
+          {/* ROW 1: Buteurs FC Toro & Buteurs Adversaire (avec passeurs sous chaque buteur) */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            {/* Buts Card (FC Toro) */}
+            <div className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-5 shadow-xs">
               <div className="flex items-center justify-between mb-4">
-                <h4 className="text-sm font-bold text-gray-900 dark:text-white">
+                <h4 className="text-sm font-bold text-gray-900 dark:text-white truncate">
                   Buteurs FC Toro
                 </h4>
                 <span className="text-xs font-medium px-2.5 py-0.5 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700">
@@ -527,38 +690,58 @@ export default function CoachMatchReportModal({ isOpen, onClose, effectif, playe
               )}
             </div>
 
-            {/* Passeurs Card */}
+            {/* Buts Card (Adversaire) */}
             <div className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-5 shadow-xs">
               <div className="flex items-center justify-between mb-4">
-                <h4 className="text-sm font-bold text-gray-900 dark:text-white">
-                  Passeurs décisifs
+                <h4 className="text-sm font-bold text-gray-900 dark:text-white truncate">
+                  Buteurs {opponentName || "Adversaire"}
                 </h4>
-                <span className="text-xs font-medium px-2.5 py-0.5 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700">
-                  {assistsList.reduce((acc, a) => acc + a.count, 0)} {assistsList.reduce((acc, a) => acc + a.count, 0) > 1 ? "passes" : "passe"}
+                <span className="text-xs font-medium px-2.5 py-0.5 rounded-full bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20">
+                  {opponentScorersList.reduce((acc, s) => acc + s.count, 0)} {opponentScorersList.reduce((acc, s) => acc + s.count, 0) > 1 ? "buts au total" : "but au total"}
                 </span>
               </div>
 
-              {assistsList.length === 0 ? (
+              {opponentScorersList.length === 0 ? (
                 <div className="p-6 text-center border border-dashed rounded-xl border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/30">
                   <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">
-                    Aucune passe décisive enregistrée.
+                    Aucun but adverse enregistré.
                   </p>
                 </div>
               ) : (
                 <div className="space-y-3 divide-y divide-gray-100 dark:divide-gray-800">
-                  {assistsList.map(({ player, count }) => (
-                    <div key={player.id} className="pt-3 first:pt-0 flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <div className="h-8 w-8 rounded-full bg-slate-800 text-white font-bold text-xs flex items-center justify-center shrink-0">
-                          {player.numeroMaillot || `${player.prenom?.charAt(0)}${player.nom?.charAt(0)}`}
+                  {opponentScorersList.map(({ name, count, assists, eventIds }) => (
+                    <div key={name} className="pt-3 first:pt-0 flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="h-9.5 w-9.5 rounded-full bg-neutral-900 text-amber-400 font-bold text-xs flex items-center justify-center shrink-0 border border-neutral-700">
+                          ⚽
                         </div>
-                        <span className="text-xs font-semibold text-gray-900 dark:text-white truncate">
-                          {getPlayerFullName(player)}
-                        </span>
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">
+                            {name}
+                          </p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                            {assists.length > 0 ? (
+                              <span>Passeurs : {assists.join(", ")}</span>
+                            ) : (
+                              <span className="italic text-gray-400">Action individuelle</span>
+                            )}
+                          </p>
+                        </div>
                       </div>
-                      <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700">
-                        {count} {count > 1 ? "passes" : "passe"}
-                      </span>
+
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 border border-gray-200 dark:border-gray-700">
+                          {count} {count > 1 ? "buts" : "but"}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => removeOpponentLastGoal(eventIds)}
+                          className="text-gray-400 hover:text-red-500 p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                          title="Supprimer un but de ce joueur"
+                        >
+                          ✕
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>

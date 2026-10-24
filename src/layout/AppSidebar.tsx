@@ -150,6 +150,11 @@ const coachNavItems: NavItem[] = [
     path: "/coach?tab=effectif",
   },
   {
+    icon: <DocsIcon />,
+    name: "Effectifs de Match",
+    path: "/coach?tab=effectifs",
+  },
+  {
     icon: <CalenderIcon />,
     name: "Faire l'appel",
     path: "/coach?tab=presences",

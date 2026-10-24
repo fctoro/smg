@@ -89,3 +89,59 @@ export const deletePlayerAttendance = async (
 
   if (error) throw error;
 };
+
+export const saveBulkAttendance = async (
+  date: string,
+  eventType: EventType,
+  saison: string,
+  playerStatuses: { playerId: string; statuses: AttendanceStatus[] }[],
+  coachId?: string
+) => {
+  const playerIds = playerStatuses.map(p => p.playerId);
+
+  // 1. Delete all existing records for these players on this date, eventType, and saison
+  if (playerIds.length > 0) {
+    const { error: delError } = await supabase
+      .from('player_attendance')
+      .delete()
+      .in('player_id', playerIds)
+      .eq('date', date)
+      .eq('event_type', eventType)
+      .eq('saison', saison);
+
+    if (delError) {
+      console.error("Error clearing existing attendances:", delError);
+      throw delError;
+    }
+  }
+
+  // 2. Build rows to insert
+  const rowsToInsert: any[] = [];
+  playerStatuses.forEach(({ playerId, statuses }) => {
+    statuses.forEach(status => {
+      rowsToInsert.push({
+        player_id: playerId,
+        date,
+        event_type: eventType,
+        status,
+        saison,
+        coach_id: coachId
+      });
+    });
+  });
+
+  if (rowsToInsert.length > 0) {
+    const { data, error: insError } = await supabase
+      .from('player_attendance')
+      .insert(rowsToInsert)
+      .select();
+
+    if (insError) {
+      console.error("Error inserting attendances:", insError);
+      throw insError;
+    }
+    return data;
+  }
+
+  return [];
+};

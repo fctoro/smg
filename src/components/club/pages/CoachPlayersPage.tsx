@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { supabase } from "@/lib/supabaseClient";
 import { useClubData } from "@/context/ClubDataContext";
 import { useUserRole } from "@/context/UserRoleContext";
 import { Player, Effectif } from "@/types/club";
@@ -8,6 +9,7 @@ import { getPlayerFullName } from "@/lib/club/metrics";
 import { CoachPlayerStatusModal } from "../modals/CoachPlayerStatusModal";
 import { PlayerViewModal } from "../modals/PlayerViewModal";
 import { CoachPlayerEvaluationModal } from "../modals/CoachPlayerEvaluationModal";
+import { ToastNotification } from "@/components/ui/toast/ToastNotification";
 import { RosterFormModal } from "../modals/RosterFormModal";
 import CoachMatchReportModal from "../modals/CoachMatchReportModal";
 import { fetchEffectifsByCoach, deleteEffectif } from "@/lib/club/effectifs";
@@ -38,6 +40,68 @@ export default function CoachPlayersPage({ initialTab }: CoachPlayersPageProps =
   const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
   const [selectedViewPlayer, setSelectedViewPlayer] = useState<Player | null>(null);
   const [selectedEvalPlayer, setSelectedEvalPlayer] = useState<Player | null>(null);
+  const [evalSuccessMessage, setEvalSuccessMessage] = useState<string | null>(null);
+  const [playerMatchCounts, setPlayerMatchCounts] = useState<Map<string, number>>(new Map());
+  const [isExportOpen, setIsExportOpen] = useState(false);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (isExportOpen && !(e.target as HTMLElement)?.closest("#coach-export-menu")) {
+        setIsExportOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [isExportOpen]);
+
+  useEffect(() => {
+    const fetchMatchCounts = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("player_attendance")
+          .select("player_id, date, saison")
+          .eq("event_type", "Match")
+          .eq("status", "Présent");
+
+        if (error) {
+          console.error("Error fetching match counts:", error);
+          return;
+        }
+
+        if (data) {
+          const datesByPlayer = new Map<string, Set<string>>();
+          data.forEach((row: any) => {
+            if (!row.player_id) return;
+            if (!datesByPlayer.has(row.player_id)) {
+              datesByPlayer.set(row.player_id, new Set());
+            }
+            if (row.date) {
+              datesByPlayer.get(row.player_id)!.add(row.date);
+            }
+          });
+
+          const map = new Map<string, number>();
+          datesByPlayer.forEach((dates, pid) => {
+            map.set(pid, dates.size);
+          });
+          setPlayerMatchCounts(map);
+        }
+      } catch (err) {
+        console.error("Error loading player match counts:", err);
+      }
+    };
+
+    fetchMatchCounts();
+  }, []);
+
+  useEffect(() => {
+    if (evalSuccessMessage) {
+      const timer = setTimeout(() => {
+        setEvalSuccessMessage(null);
+      }, 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [evalSuccessMessage]);
   
   // Tabs
   const [activeTab, setActiveTab] = useState<"liste" | "effectifs">(defaultTab);
@@ -45,9 +109,9 @@ export default function CoachPlayersPage({ initialTab }: CoachPlayersPageProps =
 
   useEffect(() => {
     const qTab = searchParams?.get("tab") || searchParams?.get("subtab");
-    if (qTab === "effectifs" || initialTab === "effectifs") {
+    if (qTab === "effectifs" || qTab === "effectifs-match" || initialTab === "effectifs") {
       setActiveTab("effectifs");
-    } else if (qTab === "effectif" || qTab === "liste") {
+    } else if (qTab === "effectif" || qTab === "liste" || initialTab === "liste") {
       setActiveTab("liste");
     }
   }, [searchParams, initialTab]);
@@ -157,25 +221,188 @@ export default function CoachPlayersPage({ initialTab }: CoachPlayersPageProps =
     downloadCSV(csvContent, `Effectifs_${rosterPeriodFilter === "all" ? "ToutesPeriodes" : rosterPeriodFilter}.csv`);
   };
 
-  const handleExportPlayers = () => {
-    const playersToExport = selectedCategory && playersByCategory[selectedCategory] 
-      ? playersByCategory[selectedCategory] 
-      : coachPlayers;
-      
-    const headers = ["Nom et Prénoms", "Date de Naissance", "Poste", "Statut", "Sexe", "Catégorie"];
-    const rows = playersToExport.map(p => [
-      getPlayerFullName(p),
-      p.dateNaissance || "",
-      p.poste || "",
-      p.statut || "",
-      p.sexe || "",
-      p.categorie || ""
-    ]);
-    const csvContent = [
-      headers.join(","),
-      ...rows.map(row => row.map(cell => `"${cell}"`).join(","))
-    ].join("\n");
-    downloadCSV(csvContent, `Joueurs_${selectedCategory || 'Coach'}.csv`);
+  const handleExportExcel = (exportData: Player[]) => {
+    setIsExportOpen(false);
+    confirm({
+      title: "Exporter la liste des joueurs",
+      message: `Voulez-vous exporter la liste de ${exportData.length} joueur(s) au format Excel (.xls) avec les statistiques de matchs joués ?`,
+      confirmText: "Exporter en Excel",
+      onConfirm: () => {
+        const dateStr = new Date().toLocaleDateString("fr-FR", {
+          day: "2-digit",
+          month: "2-digit",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+
+        const headers = [
+          "Matricule",
+          "Nom",
+          "Prénom",
+          "Catégorie",
+          "Saison",
+          "Poste",
+          "Sexe",
+          "Statut",
+          "Nombre de matchs joués",
+          "Date de Naissance",
+          "Téléphone",
+        ];
+
+        const thead = headers
+          .map((h) => {
+            const isMatchCol = h === "Nombre de matchs joués";
+            const bg = isMatchCol ? "#0284c7" : "#107C41";
+            const align = isMatchCol ? "center" : "left";
+            return `<th style="background-color: ${bg}; color: #ffffff; font-weight: bold; padding: 10px 12px; border: 1px solid #cccccc; text-align: ${align};">${h}</th>`;
+          })
+          .join("");
+
+        const tbody = exportData
+          .map((p) => {
+            const matricule =
+              p.matricule && !p.matricule.includes("XXXX")
+                ? p.matricule
+                : generatePlayerMatricule(p.id, p.saison, p.sourceDetection);
+            const matchCount = playerMatchCounts.get(p.id) ?? (p as any).matchsJoues ?? 0;
+
+            const row = [
+              matricule || "-",
+              p.nom || "-",
+              p.prenom || "-",
+              p.categorie || "-",
+              p.saison || "-",
+              p.poste || "-",
+              p.sexe || "-",
+              playerStatusLabel[p.statut] || p.statut || "-",
+              matchCount,
+              p.dateNaissance || "-",
+              p.telephone || "-",
+            ];
+
+            return `<tr>${row
+              .map((field, idx) => {
+                const isMatchCol = idx === 8;
+                const align = isMatchCol
+                  ? "text-align: center; font-weight: bold; color: #0284c7;"
+                  : "text-align: left;";
+                return `<td style="border: 1px solid #e5e7eb; padding: 8px 10px; ${align}">${String(
+                  field
+                )
+                  .replace(/</g, "&lt;")
+                  .replace(/>/g, "&gt;")}</td>`;
+              })
+              .join("")}</tr>`;
+          })
+          .join("");
+
+        const htmlContent = `
+          <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+          <head>
+            <meta charset="utf-8" />
+            <style>
+              body { font-family: 'Segoe UI', Calibri, Arial, sans-serif; }
+              table { border-collapse: collapse; width: 100%; font-size: 13px; }
+              th { font-family: 'Segoe UI', Calibri, Arial, sans-serif; font-size: 13px; }
+              td { font-family: 'Segoe UI', Calibri, Arial, sans-serif; font-size: 12px; }
+              tr:nth-child(even) { background-color: #f9fafb; }
+            </style>
+          </head>
+          <body>
+            <table>
+              <tr>
+                <td colspan="${headers.length}" style="background-color: #0a2347; color: #ffffff; font-size: 16px; font-weight: bold; text-align: center; padding: 14px; border: 1px solid #0a2347;">
+                  FC TORO — EFFECTIF JOUEURS (ESPACE COACH)
+                </td>
+              </tr>
+              <tr>
+                <td colspan="${headers.length}" style="background-color: #f3f4f6; color: #4b5563; font-size: 11px; text-align: center; padding: 6px; border: 1px solid #e5e7eb;">
+                  Document officiel généré le ${dateStr} • Total : ${exportData.length} joueur(s)
+                </td>
+              </tr>
+              <thead><tr>${thead}</tr></thead>
+              <tbody>${tbody}</tbody>
+            </table>
+          </body>
+          </html>
+        `;
+
+        const blob = new Blob([htmlContent], {
+          type: "application/vnd.ms-excel;charset=utf-8;",
+        });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `effectif_joueurs_coach_${new Date().toISOString().split("T")[0]}.xls`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      },
+    });
+  };
+
+  const handleExportCSV = (exportData: Player[]) => {
+    setIsExportOpen(false);
+    confirm({
+      title: "Exporter la liste des joueurs",
+      message: `Voulez-vous exporter la liste de ${exportData.length} joueur(s) au format CSV ?`,
+      confirmText: "Exporter en CSV",
+      onConfirm: () => {
+        const headers = [
+          "Matricule",
+          "Nom",
+          "Prénom",
+          "Catégorie",
+          "Saison",
+          "Poste",
+          "Sexe",
+          "Statut",
+          "Nombre de matchs joués",
+          "Date de Naissance",
+          "Téléphone",
+        ];
+        let csvContent = "\uFEFF" + headers.join(",") + "\n";
+
+        exportData.forEach((p) => {
+          const matricule =
+            p.matricule && !p.matricule.includes("XXXX")
+              ? p.matricule
+              : generatePlayerMatricule(p.id, p.saison, p.sourceDetection);
+          const matchCount = playerMatchCounts.get(p.id) ?? (p as any).matchsJoues ?? 0;
+
+          const row = [
+            matricule || "-",
+            p.nom || "-",
+            p.prenom || "-",
+            p.categorie || "-",
+            p.saison || "-",
+            p.poste || "-",
+            p.sexe || "-",
+            playerStatusLabel[p.statut] || p.statut || "-",
+            matchCount,
+            p.dateNaissance || "-",
+            p.telephone || "-",
+          ];
+          const csvRow = row.map((field) => `"${(field ?? "").toString().replace(/"/g, '""')}"`);
+          csvContent += csvRow.join(",") + "\n";
+        });
+
+        const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.setAttribute(
+          "download",
+          `effectif_joueurs_coach_${new Date().toISOString().split("T")[0]}.csv`
+        );
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      },
+    });
   };
 
   const parseTeams = (nom: string) => {
@@ -209,13 +436,30 @@ export default function CoachPlayersPage({ initialTab }: CoachPlayersPageProps =
     return Array.from(scorersMap.values());
   };
 
+  const getOpponentScorers = (roster: Effectif) => {
+    const events = (roster as any).match_events || [];
+    const oppGoals = events.filter((e: any) => e.type === "opponent_goal" || e.team === "opponent");
+    const scorersMap = new Map<string, { name: string; count: number }>();
+    oppGoals.forEach((ev: any) => {
+      const name = ev.scorerName?.trim() || "Buteur adverse";
+      const cur = scorersMap.get(name) || { name, count: 0 };
+      cur.count += 1;
+      scorersMap.set(name, cur);
+    });
+    return Array.from(scorersMap.values());
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Effectif Joueurs</h1>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
+            {activeTab === "effectifs" ? "Effectifs de Match" : "Effectif Joueurs"}
+          </h1>
           <p className="text-gray-500 dark:text-gray-400">
-            Gérez vos joueurs et vos effectifs de match.
+            {activeTab === "effectifs"
+              ? "Gérez vos feuilles de match, compositions et rapports de match."
+              : "Gérez la liste de vos joueurs et consultez leurs statistiques."}
           </p>
         </div>
         
@@ -261,7 +505,10 @@ export default function CoachPlayersPage({ initialTab }: CoachPlayersPageProps =
       <div className="border-b border-gray-200 dark:border-gray-800">
         <nav className="-mb-px flex space-x-8">
           <button
-            onClick={() => setActiveTab("liste")}
+            onClick={() => {
+              setActiveTab("liste");
+              window.history.pushState(null, "", "/coach?tab=effectif");
+            }}
             className={`whitespace-nowrap pb-4 px-1 border-b-2 font-medium text-sm ${
               activeTab === "liste"
                 ? "border-brand-500 text-brand-600 dark:text-brand-400"
@@ -271,7 +518,10 @@ export default function CoachPlayersPage({ initialTab }: CoachPlayersPageProps =
             Liste Globale
           </button>
           <button
-            onClick={() => setActiveTab("effectifs")}
+            onClick={() => {
+              setActiveTab("effectifs");
+              window.history.pushState(null, "", "/coach?tab=effectifs");
+            }}
             className={`whitespace-nowrap pb-4 px-1 border-b-2 font-medium text-sm ${
               activeTab === "effectifs"
                 ? "border-brand-500 text-brand-600 dark:text-brand-400"
@@ -287,24 +537,66 @@ export default function CoachPlayersPage({ initialTab }: CoachPlayersPageProps =
         <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
           <PlayerTable
             players={coachPlayers}
-            columns={["avatarNom", "poste", "sexe", "statut", "categorie", "saison", "actions"]}
+            columns={["avatarNom", "poste", "sexe", "statut", "categorie", "saison", "matchsJoues", "actions"]}
             title="Effectif Joueurs"
             showToolbar={true}
             pageSize={10}
             availableCategories={userCategories}
-            exportButton={
-              coachPlayers.length > 0 ? (
+            playerMatchCounts={playerMatchCounts}
+            exportButton={(filteredList) => (
+              <div className="relative" id="coach-export-menu">
                 <button
-                  onClick={handleExportPlayers}
-                  className="inline-flex h-9 items-center justify-center rounded-lg border border-transparent bg-emerald-500 px-4 text-sm font-medium text-white shadow-sm hover:bg-emerald-600 dark:bg-emerald-600 dark:hover:bg-emerald-700 transition-colors"
+                  type="button"
+                  onClick={() => setIsExportOpen(!isExportOpen)}
+                  className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-transparent bg-emerald-600 px-4 text-sm font-semibold text-white shadow-xs hover:bg-emerald-700 transition-colors cursor-pointer"
+                  title="Exporter la liste des joueurs"
                 >
-                  <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                   </svg>
-                  Exporter Excel / CSV
+                  <span>Exporter Excel / CSV</span>
+                  <svg
+                    className={`w-3.5 h-3.5 transition-transform ${isExportOpen ? "rotate-180" : ""}`}
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
                 </button>
-              ) : undefined
-            }
+
+                {isExportOpen && (
+                  <div className="absolute right-0 mt-2 w-56 rounded-xl border border-gray-200 bg-white py-2 shadow-xl z-50 dark:border-gray-700 dark:bg-gray-800 animate-in fade-in zoom-in-95 duration-150">
+                    <div className="px-3 py-1.5 border-b border-gray-100 dark:border-gray-700">
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-gray-400">
+                        Format d'export ({filteredList.length} joueurs)
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleExportExcel(filteredList)}
+                      className="flex items-center gap-2.5 w-full px-4 py-2.5 text-left text-xs font-semibold text-gray-700 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-gray-700/50 transition-colors cursor-pointer"
+                    >
+                      <svg className="w-4 h-4 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                      <span>Format Excel (.xls)</span>
+                      <span className="ml-auto text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-bold">Recommandé</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleExportCSV(filteredList)}
+                      className="flex items-center gap-2.5 w-full px-4 py-2.5 text-left text-xs font-semibold text-gray-700 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-gray-700/50 transition-colors cursor-pointer"
+                    >
+                      <svg className="w-4 h-4 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                      </svg>
+                      <span>Format CSV (.csv)</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
             onViewPlayer={(player) => setSelectedViewPlayer(player)}
             onEditPlayer={(player) => setSelectedPlayer(player)}
             onEvaluatePlayer={(player) => setSelectedEvalPlayer(player)}
@@ -330,6 +622,7 @@ export default function CoachPlayersPage({ initialTab }: CoachPlayersPageProps =
               {filteredRosters.map((roster) => {
                 const { team1, team2, isToroHome } = parseTeams(roster.nom);
                 const scorers = getScorers(roster);
+                const oppScorers = getOpponentScorers(roster);
                 const hasScore = roster.score_toro !== null && roster.score_toro !== undefined;
                 const scoreLeft = isToroHome ? roster.score_toro : roster.score_adversaire;
                 const scoreRight = isToroHome ? roster.score_adversaire : roster.score_toro;
@@ -371,13 +664,13 @@ export default function CoachPlayersPage({ initialTab }: CoachPlayersPageProps =
                     </div>
 
                     {/* Scorers Section */}
-                    {scorers.length > 0 && (
+                    {(scorers.length > 0 || oppScorers.length > 0) && (
                       <div className="grid grid-cols-12 items-start gap-2 pt-1 pb-2 text-xs text-gray-700 dark:text-gray-300">
                         {isToroHome ? (
                           <>
                             <div className="col-span-5 text-right space-y-0.5">
                               {scorers.map(s => (
-                                <div key={s.name} className="font-medium">
+                                <div key={s.name} className="font-medium truncate">
                                   {s.name} {s.count > 1 ? `(${s.count})` : ""}
                                 </div>
                               ))}
@@ -385,17 +678,29 @@ export default function CoachPlayersPage({ initialTab }: CoachPlayersPageProps =
                             <div className="col-span-2 flex justify-center pt-0.5">
                               <span className="text-sm leading-none">⚽</span>
                             </div>
-                            <div className="col-span-5" />
+                            <div className="col-span-5 text-left space-y-0.5">
+                              {oppScorers.map(s => (
+                                <div key={s.name} className="font-medium text-gray-600 dark:text-gray-400 truncate">
+                                  {s.name} {s.count > 1 ? `(${s.count})` : ""}
+                                </div>
+                              ))}
+                            </div>
                           </>
                         ) : (
                           <>
-                            <div className="col-span-5" />
+                            <div className="col-span-5 text-right space-y-0.5">
+                              {oppScorers.map(s => (
+                                <div key={s.name} className="font-medium text-gray-600 dark:text-gray-400 truncate">
+                                  {s.name} {s.count > 1 ? `(${s.count})` : ""}
+                                </div>
+                              ))}
+                            </div>
                             <div className="col-span-2 flex justify-center pt-0.5">
                               <span className="text-sm leading-none">⚽</span>
                             </div>
                             <div className="col-span-5 text-left space-y-0.5">
                               {scorers.map(s => (
-                                <div key={s.name} className="font-medium">
+                                <div key={s.name} className="font-medium truncate">
                                   {s.name} {s.count > 1 ? `(${s.count})` : ""}
                                 </div>
                               ))}
@@ -494,7 +799,20 @@ export default function CoachPlayersPage({ initialTab }: CoachPlayersPageProps =
         isOpen={!!selectedEvalPlayer}
         onClose={() => setSelectedEvalPlayer(null)}
         player={selectedEvalPlayer}
+        onSuccess={() => {
+          if (selectedEvalPlayer) {
+            setEvalSuccessMessage(`Fiche d'évaluation enregistrée avec succès pour ${getPlayerFullName(selectedEvalPlayer)}.`);
+          }
+        }}
       />
+
+      {evalSuccessMessage && (
+        <ToastNotification
+          message={evalSuccessMessage}
+          type="success"
+          onClose={() => setEvalSuccessMessage(null)}
+        />
+      )}
 
       <RosterFormModal
         isOpen={isRosterModalOpen}

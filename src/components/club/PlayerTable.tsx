@@ -55,6 +55,7 @@ interface PlayerTableProps {
   actionButton?: React.ReactNode;
   exportButton?: React.ReactNode | ((filteredPlayers: Player[]) => React.ReactNode);
   availableCategories?: string[];
+  playerMatchCounts?: Map<string, number>;
 }
 
 export default function PlayerTable({
@@ -72,6 +73,7 @@ export default function PlayerTable({
   actionButton,
   exportButton,
   availableCategories,
+  playerMatchCounts,
 }: PlayerTableProps) {
   const { hydrated, payments } = useClubData();
 
@@ -483,6 +485,14 @@ export default function PlayerTable({
                   Programme
                 </TableCell>
               ) : null}
+              {visibleColumnSet.has("matchsJoues") ? (
+                <TableCell
+                  isHeader
+                  className="py-3 text-start text-theme-xs font-medium text-gray-500 dark:text-gray-400"
+                >
+                  Matchs joués
+                </TableCell>
+              ) : null}
               {visibleColumnSet.has("actions") ? (
                 <TableCell
                   isHeader
@@ -619,6 +629,11 @@ export default function PlayerTable({
                   {visibleColumnSet.has("programme") ? (
                     <TableCell className="py-3 text-theme-sm text-gray-500 dark:text-gray-400">
                       {player.programme || "-"}
+                    </TableCell>
+                  ) : null}
+                  {visibleColumnSet.has("matchsJoues") ? (
+                    <TableCell className="py-3 text-theme-sm font-medium text-gray-700 dark:text-gray-300">
+                      {playerMatchCounts?.get(player.id) ?? (player as any).matchsJoues ?? 0}
                     </TableCell>
                   ) : null}
                   {visibleColumnSet.has("actions") ? (

@@ -10,8 +10,11 @@ export default function CoachTabsWrapper() {
   const searchParams = useSearchParams();
   const tab = searchParams.get("tab");
 
-  if (tab === "effectif" || tab === "effectifs" || tab === "joueurs") {
-    return <CoachPlayersPage initialTab={tab === "effectifs" ? "effectifs" : undefined} />;
+  if (tab === "effectifs" || tab === "effectifs-match") {
+    return <CoachPlayersPage initialTab="effectifs" />;
+  }
+  if (tab === "effectif" || tab === "joueurs" || tab === "liste") {
+    return <CoachPlayersPage initialTab="liste" />;
   }
   if (tab === "presences") {
     return <CoachAttendancePage />;

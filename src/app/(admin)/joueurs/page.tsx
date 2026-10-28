@@ -409,7 +409,7 @@ function PlayersPageContent() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 w-full min-w-0 max-w-full">
       <PageBreadcrumb pageTitle="Joueurs" />
 
       <PlayerTable

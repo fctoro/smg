@@ -708,7 +708,10 @@ export const updatePaymentInSupabase = async (paymentId: string, data: Partial<i
       updatePayload.MntPayeGd = 0;
     }
   }
-  if (data.datePaiement !== undefined) updatePayload.DateTransact = data.datePaiement;
+  if (data.datePaiement !== undefined) {
+    updatePayload.DateTransact = data.datePaiement;
+    updatePayload.DatePaiement = data.datePaiement;
+  }
   if (data.methode !== undefined) {
     const modePaiementMap: Record<string, number> = {
       'especes': 1,

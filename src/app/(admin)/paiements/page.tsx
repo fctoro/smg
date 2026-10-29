@@ -291,6 +291,42 @@ function PaymentsPageContent() {
   const hasPaymentPlan = (remark?: string) =>
     /(?:\[plan\s*:\s*|plan\s*:\s*)(annuel|semestriel|mensuel)/i.test(remark || "");
 
+  // Récupère la date de paiement la plus récente (premier paiement ou solde/versement le plus récent)
+  const getLatestPaymentDate = (payment: (typeof payments)[number]): string => {
+    const dates: string[] = [];
+    if (payment.datePaiement) {
+      dates.push(payment.datePaiement.split("T")[0]);
+    }
+
+    if (payment.remarque) {
+      const versementMatches = payment.remarque.matchAll(/_DATE:(\d{4}-\d{2}-\d{2})/gi);
+      for (const m of versementMatches) {
+        if (m[1]) dates.push(m[1]);
+      }
+      const genericDateMatches = payment.remarque.matchAll(/\[(?:DATE|SOLDE_DATE|DERNIER_VERSEMENT):(\d{4}-\d{2}-\d{2})\]/gi);
+      for (const m of genericDateMatches) {
+        if (m[1]) dates.push(m[1]);
+      }
+    }
+
+    const playerAllP = payments.filter((p) => p.playerId === payment.playerId);
+    playerAllP.forEach((p) => {
+      if (p.datePaiement) {
+        dates.push(p.datePaiement.split("T")[0]);
+      }
+      if (p.remarque) {
+        const matches = p.remarque.matchAll(/_DATE:(\d{4}-\d{2}-\d{2})/gi);
+        for (const m of matches) {
+          if (m[1]) dates.push(m[1]);
+        }
+      }
+    });
+
+    if (dates.length === 0) return payment.datePaiement ? payment.datePaiement.split("T")[0] : "";
+    dates.sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
+    return dates[0];
+  };
+
   const openEditModal = (payment: (typeof payments)[number]) => {
     setEditingPayment(payment);
     setNewAmount("");
@@ -419,13 +455,18 @@ function PaymentsPageContent() {
         baseRemarque = baseRemarque.replace(/\[MOIS_PAYES:\s*\d+\s*\]/gi, "").trim();
       }
 
-      const paymentDateToSave = newPaymentDate || editingPayment.datePaiement || new Date().toISOString().split("T")[0];
+      const paymentDateToSave = newPaymentDate || new Date().toISOString().split("T")[0];
+
+      if (!baseRemarque.includes("[DATE_INITIALE:") && editingPayment.datePaiement) {
+        baseRemarque = `[DATE_INITIALE:${editingPayment.datePaiement.split("T")[0]}] ${baseRemarque}`;
+      }
 
       if (editDevise === "HTG" && newAmountNum > 0) {
         baseRemarque += ` [SOLDE_HTG:${newAmountNum}_TAUX:${editTaux}_USD:${addedUSD.toFixed(2)}]`;
       }
       if (newAmountNum > 0) {
         baseRemarque += ` [VERSEMENT:${newAmountNum}_${editDevise}_DATE:${paymentDateToSave}]`;
+        baseRemarque += ` [DERNIER_VERSEMENT:${paymentDateToSave}]`;
       }
 
       const finalRemarque = `${baseRemarque}${paymentPhotoNotes}`.trim();
@@ -984,8 +1025,10 @@ function PaymentsPageContent() {
         return !query || playerName.includes(query) || safeMatricule.includes(query) || String(player.id).toLowerCase().includes(query);
       })
       .sort((a, b) => {
-        const dateA = new Date(a.datePaiement || 0).getTime();
-        const dateB = new Date(b.datePaiement || 0).getTime();
+        const dateAStr = getLatestPaymentDate(a) || a.datePaiement || "0";
+        const dateBStr = getLatestPaymentDate(b) || b.datePaiement || "0";
+        const dateA = new Date(dateAStr).getTime();
+        const dateB = new Date(dateBStr).getTime();
         if (dateB !== dateA) return dateB - dateA;
         const idA = parseInt(String(a.id).replace(/\D/g, ""), 10) || 0;
         const idB = parseInt(String(b.id).replace(/\D/g, ""), 10) || 0;
@@ -1000,6 +1043,8 @@ function PaymentsPageContent() {
       if (!seenPlayerIds.has(payment.playerId)) {
         seenPlayerIds.add(payment.playerId);
 
+        const latestPDate = getLatestPaymentDate(payment) || payment.datePaiement;
+
         // Si le joueur possède d'autres versements, consolider le montant affiché
         const playerAllP = payments.filter((p) => p.playerId === payment.playerId);
         if (playerAllP.length > 1) {
@@ -1013,12 +1058,16 @@ function PaymentsPageContent() {
           }
           uniquePayments.push({
             ...payment,
+            datePaiement: latestPDate,
             montant: sumMontant,
             montantUS: sumUS > 0 ? sumUS : payment.montantUS,
             montantHTG: sumHTG > 0 ? sumHTG : payment.montantHTG,
           });
         } else {
-          uniquePayments.push(payment);
+          uniquePayments.push({
+            ...payment,
+            datePaiement: latestPDate,
+          });
         }
       }
     }
@@ -1872,7 +1921,10 @@ function PaymentsPageContent() {
                         </div>
                       </TableCell>
                       <TableCell className="py-3 text-theme-sm text-gray-700 dark:text-gray-300 font-medium">
-                        {payment.datePaiement ? formatClubDate(payment.datePaiement) : "-"}
+                        {(() => {
+                          const latestDate = payment.datePaiement || getLatestPaymentDate(payment);
+                          return latestDate ? formatClubDate(latestDate) : "-";
+                        })()}
                       </TableCell>
                       <TableCell className="py-3 text-theme-sm text-gray-500 dark:text-gray-400">
                         <div className="flex flex-col">

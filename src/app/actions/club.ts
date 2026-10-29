@@ -496,25 +496,21 @@ export async function getRubriquesAdmin() {
 
 export async function insertRubriqueAdmin(payload: any) {
   if (!supabaseAdmin) return { success: false, error: "Service role Supabase indisponible." };
-  const { data, error } = await supabaseAdmin
+  const { error } = await supabaseAdmin
     .from("tblRubriques")
-    .insert([payload])
-    .select()
-    .single();
+    .insert([payload]);
   if (error) return { success: false, error: error.message };
-  return { success: true, data };
+  return { success: true };
 }
 
 export async function updateRubriqueAdmin(id: string, payload: any) {
   if (!supabaseAdmin) return { success: false, error: "Service role Supabase indisponible." };
-  const { data, error } = await supabaseAdmin
+  const { error } = await supabaseAdmin
     .from("tblRubriques")
     .update(payload)
-    .eq("id", id)
-    .select()
-    .single();
+    .eq("id", id);
   if (error) return { success: false, error: error.message };
-  return { success: true, data };
+  return { success: true };
 }
 
 export async function deleteRubriqueAdmin(id: string) {

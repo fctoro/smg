@@ -1346,12 +1346,20 @@ export const addRubriqueToSupabase = async (data: Omit<import("@/types/club").Pr
   try {
     const { insertRubriqueAdmin } = await import("@/app/actions/club");
     const adminRes = await insertRubriqueAdmin(payload);
-    if (!adminRes.success) {
-      await supabase.from("tblRubriques").insert(payload);
+    if (adminRes.success) {
+      return {
+        id: rubriqueId,
+        ...data,
+        precision: data.precision || "",
+        actif: data.actif !== undefined ? data.actif : true,
+      };
     }
-  } catch (e) {
-    await supabase.from("tblRubriques").insert(payload);
+  } catch {
+    // Use the client fallback once if the server action is unavailable.
   }
+
+  const { error } = await supabase.from("tblRubriques").insert(payload);
+  if (error) throw error;
 
   return {
     id: rubriqueId,

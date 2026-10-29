@@ -1,11 +1,12 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import { useClubData } from "@/context/ClubDataContext";
 import { useUserRole } from "@/context/UserRoleContext";
 import { PricingItem } from "@/types/club";
 import { Modal } from "@/components/ui/modal";
+import { ToastNotification, ToastType } from "@/components/ui/toast/ToastNotification";
 
 const inputClassName =
   "h-11 w-full rounded-lg border border-gray-300 bg-transparent px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs placeholder:text-gray-400 focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90";
@@ -17,6 +18,11 @@ export default function RubriquesPage() {
   const { isSuperAdmin, isAdmin } = useUserRole();
   const { rubriques, addRubrique, updateRubrique, deleteRubrique } = useClubData();
 
+  const [toast, setToast] = useState<{ message: string; type: ToastType } | null>(null);
+  const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const saveInFlightRef = useRef(false);
+  const [isSaving, setIsSaving] = useState(false);
+
   const [searchTerm, setSearchTerm] = useState("");
   const [filterDevise, setFilterDevise] = useState<"ALL" | "US" | "HTG">("ALL");
   const [filterStatus, setFilterStatus] = useState<"ALL" | "active" | "inactive">("ALL");
@@ -27,7 +33,7 @@ export default function RubriquesPage() {
 
   // Form inputs
   const [rubriqueTitle, setRubriqueTitle] = useState("");
-  const [montant, setMontant] = useState<number>(0);
+  const [montant, setMontant] = useState<number | null>(null);
   const [devise, setDevise] = useState<"US" | "HTG">("US");
   const [precision, setPrecision] = useState("");
   const [categorie, setCategorie] = useState("");
@@ -36,6 +42,29 @@ export default function RubriquesPage() {
 
   // Delete Modal
   const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    // Load the server-action proxy before the user clicks save or delete.
+    void import("@/app/actions/club").catch(() => undefined);
+
+    return () => {
+      if (toastTimeoutRef.current) {
+        clearTimeout(toastTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  const showToast = (message: string, type: ToastType) => {
+    if (toastTimeoutRef.current) {
+      clearTimeout(toastTimeoutRef.current);
+    }
+
+    setToast({ message, type });
+    toastTimeoutRef.current = setTimeout(() => {
+      setToast(null);
+      toastTimeoutRef.current = null;
+    }, 4000);
+  };
 
   const filteredRubriques = useMemo(() => {
     return rubriques.filter((item) => {
@@ -59,7 +88,7 @@ export default function RubriquesPage() {
   const openAddModal = () => {
     setEditingRubrique(null);
     setRubriqueTitle("");
-    setMontant(0);
+    setMontant(null);
     setDevise("US");
     setPrecision("");
     setCategorie("");
@@ -83,15 +112,27 @@ export default function RubriquesPage() {
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!rubriqueTitle.trim()) {
-      alert("Veuillez saisir le titre de la rubrique.");
+      showToast("Veuillez saisir le titre de la rubrique.", "error");
       return;
     }
+    if (montant === null || Number.isNaN(montant)) {
+      showToast("Veuillez saisir un montant valide.", "error");
+      return;
+    }
+
+    // A ref changes synchronously, so it also blocks rapid duplicate submits
+    // before React has had a chance to re-render the disabled button.
+    if (saveInFlightRef.current) return;
+
+    const isEditing = Boolean(editingRubrique);
+    saveInFlightRef.current = true;
+    setIsSaving(true);
 
     try {
       if (editingRubrique) {
         await updateRubrique(editingRubrique.id, {
           rubrique: rubriqueTitle.trim(),
-          montant,
+          montant: montant,
           devise,
           precision: precision.trim(),
           categorie: categorie.trim() || undefined,
@@ -101,7 +142,7 @@ export default function RubriquesPage() {
       } else {
         await addRubrique({
           rubrique: rubriqueTitle.trim(),
-          montant,
+          montant: montant,
           devise,
           precision: precision.trim(),
           categorie: categorie.trim() || undefined,
@@ -110,9 +151,16 @@ export default function RubriquesPage() {
         });
       }
       setIsModalOpen(false);
+      showToast(
+        isEditing ? "Rubrique modifiée avec succès." : "Rubrique ajoutée avec succès.",
+        "success",
+      );
     } catch (err) {
       console.error("Erreur d'enregistrement :", err);
-      alert("Une erreur est survenue lors de l'enregistrement.");
+      showToast("Une erreur est survenue lors de l'enregistrement.", "error");
+    } finally {
+      saveInFlightRef.current = false;
+      setIsSaving(false);
     }
   };
 
@@ -121,9 +169,10 @@ export default function RubriquesPage() {
     try {
       await deleteRubrique(deletingId);
       setDeletingId(null);
+      showToast("Rubrique supprimée avec succès.", "success");
     } catch (err) {
       console.error("Erreur de suppression :", err);
-      alert("Erreur lors de la suppression de la rubrique.");
+      showToast("Erreur lors de la suppression de la rubrique.", "error");
     }
   };
 
@@ -137,6 +186,9 @@ export default function RubriquesPage() {
 
   return (
     <div className="space-y-6">
+      {toast && (
+        <ToastNotification message={toast.message} type={toast.type} onClose={() => setToast(null)} />
+      )}
       <PageBreadcrumb pageTitle="Gestion des Rubriques" />
 
       {/* Header action panel */}
@@ -332,8 +384,8 @@ export default function RubriquesPage() {
                 min={0}
                 step="0.01"
                 required
-                value={montant}
-                onChange={(e) => setMontant(Number(e.target.value))}
+                value={montant ?? ""}
+                onChange={(e) => setMontant(e.target.value === "" ? null : e.target.valueAsNumber)}
                 className={inputClassName}
               />
             </div>
@@ -410,15 +462,19 @@ export default function RubriquesPage() {
             <button
               type="button"
               onClick={() => setIsModalOpen(false)}
+              disabled={isSaving}
               className="rounded-xl border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
             >
               Annuler
             </button>
             <button
               type="submit"
-              className="rounded-xl bg-brand-500 px-4 py-2 text-sm font-medium text-white hover:bg-brand-600"
+              disabled={isSaving}
+              className={`rounded-xl bg-brand-500 px-4 py-2 text-sm font-medium text-white ${
+                isSaving ? "cursor-not-allowed opacity-50" : "hover:bg-brand-600"
+              }`}
             >
-              Enregistrer
+              {isSaving ? "Enregistrement..." : "Enregistrer"}
             </button>
           </div>
         </form>

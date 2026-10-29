@@ -2498,17 +2498,16 @@ function PaymentsPageContent() {
                             </td>
                             <td className="px-4 py-3 text-gray-700 dark:text-gray-300 whitespace-nowrap">
                               <span className="inline-flex items-center rounded-md bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-800 dark:bg-gray-800 dark:text-gray-200">
-                                {p.methode === "especes" || p.methode === "1"
-                                  ? "Espèces"
-                                  : p.methode === "virement" || p.methode === "2"
-                                  ? "Virement"
-                                  : p.methode === "cheque" || p.methode === "3"
-                                  ? "Chèque"
-                                  : p.methode === "carte" || p.methode === "4"
-                                  ? "Carte"
-                                  : p.methode === "mobile" || p.methode === "5"
-                                  ? "Dépôt"
-                                  : String(p.methode || "Autre")}
+                                {(() => {
+                                  const m = String(p.methode || "");
+                                  if (m === "especes" || m === "1") return "Espèces";
+                                  if (m === "virement" || m === "2") return "Virement";
+                                  if (m === "cheque" || m === "3" || m === "6") return "Chèque";
+                                  if (m === "carte" || m === "4") return "Carte";
+                                  if (m === "mobile" || m === "5") return "MonCash / Mobile";
+                                  if (m === "depot" || m === "7") return "Dépôt";
+                                  return m || "Autre";
+                                })()}
                               </span>
                             </td>
                             <td className="px-4 py-3 text-xs text-gray-600 dark:text-gray-300 max-w-xs truncate" title={cleanRub}>

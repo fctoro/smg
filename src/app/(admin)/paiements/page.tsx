@@ -1185,7 +1185,7 @@ function PaymentsPageContent() {
 
   const historyPlayerPayments = useMemo(() => {
     if (!historyPlayerId) return [];
-    return payments
+    const directPayments = payments
       .filter((p) => p.playerId === historyPlayerId)
       .sort((a, b) => {
         const dateA = new Date(a.datePaiement || 0).getTime();
@@ -1195,7 +1195,119 @@ function PaymentsPageContent() {
         const idB = parseInt(String(b.id).replace(/\D/g, ""), 10) || 0;
         return idB - idA;
       });
-  }, [historyPlayerId, payments]);
+
+    // Décomposer également les versements archivés dans les remarques si présent
+    const allTransactions: Array<(typeof payments)[number]> = [];
+
+    directPayments.forEach((p) => {
+      const remark = p.remarque || "";
+      const versementRegex = /\[VERSEMENT:\s*([\d.]+)_([A-Za-z]+)(?:_TAUX:([\d.]+))?(?:_USD:([\d.]+))?_DATE:(\d{4}-\d{2}-\d{2})\]/gi;
+      const soldeHtgRegex = /\[SOLDE_HTG:\s*([\d.]+)_TAUX:\s*([\d.]+)_USD:\s*([\d.]+)\]/gi;
+
+      const versementMatches = [...remark.matchAll(versementRegex)];
+      const soldeHtgMatches = [...remark.matchAll(soldeHtgRegex)];
+
+      if (versementMatches.length === 0 && soldeHtgMatches.length === 0) {
+        allTransactions.push(p);
+        return;
+      }
+
+      let sumVersementsUSD = 0;
+      let sumVersementsHTG = 0;
+
+      versementMatches.forEach((m, idx) => {
+        const amt = parseFloat(m[1]) || 0;
+        const devRaw = (m[2] || "US").toUpperCase();
+        const dev: "US" | "HTG" = devRaw.includes("HTG") ? "HTG" : "US";
+        const taux = m[3] ? parseFloat(m[3]) : (p.taux || 0);
+        const amtUSD = m[4] ? parseFloat(m[4]) : (dev === "HTG" && taux > 0 ? amt / taux : amt);
+        const amtHTG = dev === "HTG" ? amt : (taux > 0 ? amt * taux : 0);
+        const vDate = m[5] || p.datePaiement || "";
+
+        if (dev === "HTG") {
+          sumVersementsHTG += amt;
+          sumVersementsUSD += amtUSD;
+        } else {
+          sumVersementsUSD += amt;
+          sumVersementsHTG += amtHTG;
+        }
+
+        allTransactions.push({
+          ...p,
+          id: `${p.id}-v${idx + 1}`,
+          montant: amt,
+          montantUS: amtUSD,
+          montantHTG: amtHTG,
+          devise: dev,
+          taux: taux > 0 ? taux : undefined,
+          datePaiement: vDate,
+          remarque: `Versement solde #${idx + 1} (${formatClubDate(vDate)})`,
+        });
+      });
+
+      if (versementMatches.length === 0 && soldeHtgMatches.length > 0) {
+        soldeHtgMatches.forEach((m, idx) => {
+          const amtHTG = parseFloat(m[1]) || 0;
+          const taux = parseFloat(m[2]) || p.taux || 0;
+          const amtUSD = parseFloat(m[3]) || (taux > 0 ? amtHTG / taux : 0);
+          const vDate = p.datePaiement || "";
+
+          sumVersementsHTG += amtHTG;
+          sumVersementsUSD += amtUSD;
+
+          allTransactions.push({
+            ...p,
+            id: `${p.id}-solde-htg-${idx + 1}`,
+            montant: amtHTG,
+            montantUS: amtUSD,
+            montantHTG: amtHTG,
+            devise: "HTG",
+            taux: taux > 0 ? taux : undefined,
+            datePaiement: vDate,
+            remarque: `Versement solde HTG #${idx + 1} (${formatClubDate(vDate)})`,
+          });
+        });
+      }
+
+      // Reconstituer le paiement initial (déduction des versements ultérieurs du total cumulé)
+      const initialDateMatch = remark.match(/\[DATE_INITIALE:(\d{4}-\d{2}-\d{2})\]/i);
+      const playerObj = playerMap.get(p.playerId);
+      const initialDate = initialDateMatch ? initialDateMatch[1] : (playerObj?.dateInscription ? playerObj.dateInscription.split("T")[0] : (p.datePaiement || ""));
+
+      const totalUS = Number(p.montantUS) || (p.devise === "HTG" && p.taux ? p.montant / p.taux : Number(p.montant) || 0);
+      const totalHTG = Number(p.montantHTG) || (p.devise === "HTG" ? Number(p.montant) || 0 : 0);
+
+      const initialUS = Math.max(0, totalUS - sumVersementsUSD);
+      const initialHTG = Math.max(0, totalHTG - sumVersementsHTG);
+      const initialPrimary = p.devise === "HTG" ? initialHTG : initialUS;
+
+      if (initialPrimary > 0 || (initialUS === 0 && initialHTG === 0 && versementMatches.length === 0)) {
+        allTransactions.push({
+          ...p,
+          id: `${p.id}-init`,
+          montant: initialPrimary > 0 ? Number(initialPrimary.toFixed(2)) : p.montant,
+          montantUS: initialUS > 0 ? Number(initialUS.toFixed(2)) : p.montantUS,
+          montantHTG: initialHTG > 0 ? Math.round(initialHTG) : p.montantHTG,
+          datePaiement: initialDate,
+          remarque: (p.remarque || "")
+            .replace(/\[VERSEMENT:[^\]]+\]/gi, "")
+            .replace(/\[DERNIER_VERSEMENT:[^\]]+\]/gi, "")
+            .replace(/\[SOLDE_HTG:[^\]]+\]/gi, "")
+            .replace(/\[DATE_INITIALE:[^\]]+\]/gi, "")
+            .trim() || "Paiement initial",
+        });
+      }
+    });
+
+    return allTransactions.sort((a, b) => {
+      const dateA = new Date(a.datePaiement || 0).getTime();
+      const dateB = new Date(b.datePaiement || 0).getTime();
+      if (dateB !== dateA) return dateB - dateA;
+      const idA = parseInt(String(a.id).replace(/\D/g, ""), 10) || 0;
+      const idB = parseInt(String(b.id).replace(/\D/g, ""), 10) || 0;
+      return idB - idA;
+    });
+  }, [historyPlayerId, payments, playerMap]);
 
   const historyMetrics = useMemo(() => {
     if (!historyPlayerPayments.length) {

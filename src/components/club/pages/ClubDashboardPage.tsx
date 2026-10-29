@@ -56,11 +56,11 @@ export default function ClubDashboardPage() {
   const [userCount, setUserCount] = useState(0);
 
   const currentRevenueUS = payments
-    .filter((p) => p.statut === "paid" && (isAllTime || p.periode.startsWith(selectedYear)))
+    .filter((p) => p.statut === "paid" && (isAllTime || p.periode.startsWith(selectedYear) || (p.datePaiement && p.datePaiement.startsWith(selectedYear))))
     .reduce((sum, p) => sum + (p.montantUS || 0), 0);
 
   const currentRevenueHTG = payments
-    .filter((p) => p.statut === "paid" && (isAllTime || p.periode.startsWith(selectedYear)))
+    .filter((p) => p.statut === "paid" && (isAllTime || p.periode.startsWith(selectedYear) || (p.datePaiement && p.datePaiement.startsWith(selectedYear))))
     .reduce((sum, p) => sum + (p.montantHTG || 0), 0);
 
   const lateCurrentMonth = payments.filter(

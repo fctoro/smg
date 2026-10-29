@@ -5,7 +5,8 @@ import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import { useClubData } from "@/context/ClubDataContext";
 import CombinedRevenueChart from "@/components/club/charts/CombinedRevenueChart";
 import RegistrationsChart from "@/components/club/charts/RegistrationsChart";
-import { formatClubCurrency } from "@/lib/club/metrics";
+import { formatClubCurrency, formatClubNumber } from "@/lib/club/metrics";
+import KpiCardClub from "@/components/club/KpiCardClub";
 import {
   getYearlyRevenue,
   getYearlyRegistrations,
@@ -16,6 +17,8 @@ import {
   getDailyRevenue,
   getAvailableYears,
   combineYearlyData,
+  getPaymentRealAmounts,
+  isUSDDevise,
 } from "@/lib/club/statistics";
 import {
   GroupIcon,
@@ -67,10 +70,6 @@ export default function StatistiquesPage() {
   const isAllTime = selectedYear === "all";
   const displayYear = isAllTime ? currentYearActual : parseInt(selectedYear || String(currentYearActual), 10);
 
-  const isUSDDevise = (devise?: string): boolean => {
-    const d = String(devise || "").toUpperCase();
-    return d === "US" || d === "USD" || d === "$";
-  };
 
   useEffect(() => {
     try {
@@ -169,16 +168,25 @@ export default function StatistiquesPage() {
     }
   };
 
-  // Filtrage strict : uniquement les paiements filtrés
+  // Filtrage strict : uniquement les paiements filtrés (avec prise en compte de la saison)
   const filteredPayments = useMemo(() => {
     return payments.filter((p) => {
       if (statusFilter !== "all" && p.statut !== statusFilter) return false;
       const dateStr = p.datePaiement || p.periode || (p as any).createdAt || null;
-      return isDateInRange(dateStr, dateFrom, dateTo);
-    });
-  }, [payments, dateFrom, dateTo, statusFilter]);
+      if (!isDateInRange(dateStr, dateFrom, dateTo)) return false;
 
-  // FILTRAGE STRICT DES JOUEURS : UNIQUEMENT LES JOUEURS ACTIFS !
+      if (selectedYear !== "all") {
+        const pYear = dateStr ? String(dateStr).slice(0, 4) : "";
+        const periYear = p.periode ? String(p.periode).slice(0, 4) : "";
+        if (pYear !== selectedYear && periYear !== selectedYear) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }, [payments, dateFrom, dateTo, statusFilter, selectedYear]);
+
+  // FILTRAGE STRICT DES JOUEURS : UNIQUEMENT LES JOUEURS ACTIFS DE LA SAISON !
   const activePlayersList = useMemo(() => {
     return players.filter((pl) => pl.statut === "actif");
   }, [players]);
@@ -186,26 +194,54 @@ export default function StatistiquesPage() {
   const filteredPlayers = useMemo(() => {
     return activePlayersList.filter((pl) => {
       const dateStr = pl.dateInscription || (pl as any).createdAt || (pl as any).dtInscription || null;
-      return isDateInRange(dateStr, dateFrom, dateTo);
+      if (!isDateInRange(dateStr, dateFrom, dateTo)) return false;
+
+      if (selectedYear !== "all") {
+        const s = pl.saison ? String(pl.saison).replace(/^saison\s*/i, "").trim() : "";
+        const matchSeason = s.includes(selectedYear) || (pl.saisons && pl.saisons.some(x => String(x).includes(selectedYear)));
+        const matchDate = dateStr && String(dateStr).startsWith(selectedYear);
+        if (!matchSeason && !matchDate) return false;
+      }
+      return true;
     });
-  }, [activePlayersList, dateFrom, dateTo]);
+  }, [activePlayersList, dateFrom, dateTo, selectedYear]);
 
   // Agrégations
   const availableYears = useMemo(() => getAvailableYears(filteredPlayers, filteredPayments), [filteredPlayers, filteredPayments]);
 
-  const totalRevenueHTG = useMemo(
-    () => filteredPayments
-      .filter((p) => p.statut === "paid" && p.devise === "HTG")
-      .reduce((sum, p) => sum + (p.montantHTG || p.montant || 0), 0),
-    [filteredPayments]
-  );
+  // Agrégations financières fiables et strictement identiques au Dashboard
+  const financialMetrics = useMemo(() => {
+    let usd = 0;
+    let htg = 0;
+    let countUSD = 0;
+    let countHTG = 0;
+    let totalValidCount = 0;
 
-  const totalRevenueUSD = useMemo(
-    () => filteredPayments
-      .filter((p) => p.statut === "paid" && isUSDDevise(p.devise))
-      .reduce((sum, p) => sum + (p.montantUS || p.montant || 0), 0),
-    [filteredPayments]
-  );
+    filteredPayments.forEach((p) => {
+      if (p.statut !== "paid") return;
+      totalValidCount++;
+      const u = Number(p.montantUS) || 0;
+      const h = Number(p.montantHTG) || 0;
+      usd += u;
+      htg += h;
+
+      if (u > 0) countUSD++;
+      if (h > 0) countHTG++;
+    });
+
+    const consolidated = usd + (htg / 135);
+
+    return {
+      totalRevenueUSD: Math.round(usd * 100) / 100,
+      totalRevenueHTG: Math.round(htg * 100) / 100,
+      consolidatedTotalUSD: Math.round(consolidated * 100) / 100,
+      countUSD,
+      countHTG,
+      totalValidCount,
+    };
+  }, [filteredPayments]);
+
+  const { totalRevenueUSD, totalRevenueHTG, consolidatedTotalUSD, countUSD, countHTG, totalValidCount: totalPaymentsCount } = financialMetrics;
 
   const totalActivePlayersCount = filteredPlayers.length;
 
@@ -213,8 +249,6 @@ export default function StatistiquesPage() {
     const paidIds = new Set(filteredPayments.filter(p => p.statut === "paid").map(p => String(p.playerId)));
     return filteredPlayers.filter(p => paidIds.has(String(p.id))).length;
   }, [filteredPlayers, filteredPayments]);
-
-  const totalPaymentsCount = filteredPayments.filter(p => p.statut === "paid").length;
 
   const trackingPeriodPayments = useMemo(() => {
     const startDayStr = getDateDayString(getTrackingPeriodStart(trackingReferenceDate, trackingPeriod));
@@ -235,12 +269,27 @@ export default function StatistiquesPage() {
     }, 0) + (trackingPeriod === "day" ? trackingActiveSeconds : 0);
   }, [trackingTimeByDay, trackingActiveSeconds, trackingPeriod, trackingReferenceDate]);
 
-  const trackingTotalUSD = trackingPeriodPayments
-    .filter((payment) => isUSDDevise(payment.devise))
-    .reduce((total, payment) => total + (payment.montantUS || payment.montant || 0), 0);
-  const trackingTotalHTG = trackingPeriodPayments
-    .filter((payment) => payment.devise === "HTG")
-    .reduce((total, payment) => total + (payment.montantHTG || payment.montant || 0), 0);
+  const trackingFinancials = useMemo(() => {
+    let usd = 0;
+    let htg = 0;
+
+    trackingPeriodPayments.forEach((p) => {
+      const u = Number(p.montantUS) || 0;
+      const h = Number(p.montantHTG) || 0;
+      usd += u;
+      htg += h;
+    });
+
+    const consolidated = usd + (htg / 135);
+
+    return {
+      trackingTotalUSD: Math.round(usd * 100) / 100,
+      trackingTotalHTG: Math.round(htg * 100) / 100,
+      trackingTotalConsolidated: Math.round(consolidated * 100) / 100,
+    };
+  }, [trackingPeriodPayments]);
+
+  const { trackingTotalUSD, trackingTotalHTG, trackingTotalConsolidated } = trackingFinancials;
 
   const trackingPeriodLabels: Record<TrackingPeriod, string> = {
     day: "Aujourd'hui",
@@ -250,24 +299,32 @@ export default function StatistiquesPage() {
   };
 
   const playerStatusStats = useMemo(() => {
-    const statusLabels = ["Boursier", "Demi-bourse", "Joueur spécial"];
-    const stats: Record<string, number> = Object.fromEntries(
-      statusLabels.map((status) => [status, 0]),
-    );
+    const counts: Record<string, number> = {
+      "Boursier (100%)": 0,
+      "Demi-bourse (2500 HTG)": 0,
+      "Joueur spécial": 0,
+      "Plein tarif (Standard)": 0,
+    };
+
     filteredPlayers.forEach((player) => {
-      const status = player.statutJoueur?.trim();
-      const matchingStatus = statusLabels.find(
-        (label) => label.toLowerCase() === status?.toLowerCase(),
-      );
-      if (matchingStatus) stats[matchingStatus] += 1;
+      const raw = (player.statutJoueur || "").toLowerCase().trim();
+      if (raw.includes("demi")) {
+        counts["Demi-bourse (2500 HTG)"] += 1;
+      } else if (raw.includes("bourse") || raw.includes("boursier")) {
+        counts["Boursier (100%)"] += 1;
+      } else if (raw.includes("spec") || raw.includes("spéc")) {
+        counts["Joueur spécial"] += 1;
+      } else {
+        counts["Plein tarif (Standard)"] += 1;
+      }
     });
-    
-    return stats;
+
+    return counts;
   }, [filteredPlayers]);
 
   const yearsList = availableYears.length > 0 ? availableYears : Array.from({ length: currentYearActual - 2012 + 1 }, (_, i) => currentYearActual - i);
 
-  // EXPORTATION EXCEL EXPLOITABLE
+  // EXPORTATION EXCEL EXPLOITABLE AVEC VENTILATION RÉELLE ET CONSOLIDATION
   const exportPaymentsCSV = (rows: typeof payments) => {
     if (!rows || rows.length === 0) return;
     const playerMap = new Map(players.map(p => [p.id, p]));
@@ -302,18 +359,27 @@ export default function StatistiquesPage() {
       const recu = (p as any).numeroRecu || (p as any).recuNo || `REC-${p.id}`;
       const mode = p.methode || "especes";
       
-      const mntUS = isUSDDevise(p.devise) ? Number(p.montantUS || p.montant || 0).toFixed(2) : "0.00";
-      const mntHTG = p.devise === "HTG" ? Number(p.montantHTG || p.montant || 0).toFixed(2) : "0.00";
+      const u = Number(p.montantUS) || 0;
+      const h = Number(p.montantHTG) || 0;
+      const mntUS = u > 0 ? u.toFixed(2) : "0.00";
+      const mntHTG = h > 0 ? h.toFixed(2) : "0.00";
       const statut = p.statut || "paid";
 
       csvContent += `${dt},${recu},${pName},${mat},${prog},${cat},${mode},${p.devise || 'US'},${mntUS},${mntHTG},${statut}\n`;
     });
 
     // Lignes de synthèse totales au bas du fichier CSV pour Excel (avec devises explicites)
-    const totalUSDExport = rows.filter(p => isUSDDevise(p.devise) && p.statut === "paid").reduce((sum, p) => sum + (p.montantUS || p.montant || 0), 0);
-    const totalHTGExport = rows.filter(p => p.devise === "HTG" && p.statut === "paid").reduce((sum, p) => sum + (p.montantHTG || p.montant || 0), 0);
+    let totalUSDExport = 0;
+    let totalHTGExport = 0;
 
-    csvContent += `\nTOTAL,,,,"TOTAL ENCAISSEMENTS",,,${totalUSDExport.toFixed(2)} USD,${totalHTGExport.toFixed(2)} HTG,VALIDES\n`;
+    rows.filter(p => p.statut === "paid").forEach(p => {
+      totalUSDExport += Number(p.montantUS) || 0;
+      totalHTGExport += Number(p.montantHTG) || 0;
+    });
+    const totalConsolidatedExport = totalUSDExport + (totalHTGExport / 135);
+
+    csvContent += `\nTOTAL,,,,"TOTAL ENCAISSEMENTS RÉELS",,,${totalUSDExport.toFixed(2)} USD,${totalHTGExport.toFixed(2)} HTG,VALIDES\n`;
+    csvContent += `CONSOLIDÉ,,,,"TOTAL CONSOLIDÉ ÉQUIV. USD (TAUX 135)",,,${totalConsolidatedExport.toFixed(2)} USD,,OFFICIEL\n`;
     csvContent += `JOUEURS_ACTIFS,,,,"EFFECTIF JOUEURS ACTIFS",,,${totalActivePlayersCount} Joueurs,,ACTIFS\n`;
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -460,93 +526,39 @@ export default function StatistiquesPage() {
               onClick={() => exportPaymentsCSV(filteredPayments)} 
               className="inline-flex h-9 items-center justify-center gap-2 whitespace-nowrap rounded-lg bg-[#107C41] px-4 text-xs font-medium text-white shadow-theme-xs hover:bg-[#0c5e31] transition-colors"
             >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                <path d="M14 2v6h6"></path>
-                <path d="M8 13h2"></path>
-                <path d="M14 13h2"></path>
-                <path d="M8 17h2"></path>
-                <path d="M14 17h2"></path>
-              </svg>
+              <DownloadIcon className="size-4" />
               <span>Exporter CSV</span>
             </button>
           </div>
         </div>
       </div>
 
-      {/* KPI Cards Grid — Design Exécutif Épuré (Monochrome & Professionnel) */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {/* Recettes USD */}
-        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-xs dark:border-gray-800 dark:bg-gray-900 transition-all hover:border-gray-300">
-          <div className="flex items-center justify-between">
-            <div>
-              <span className="block text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">Recettes USD ($)</span>
-              <span className="mt-1 block text-2xl font-black text-gray-900 dark:text-white">
-                {formatClubCurrency(totalRevenueUSD, "US")}
-              </span>
-              <span className="mt-0.5 block text-xs text-emerald-600 dark:text-emerald-400 font-semibold">
-                {totalPaymentsCount} versement(s) en USD validé(s)
-              </span>
-            </div>
-            <div className="h-12 w-12 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 flex items-center justify-center border border-gray-200 dark:border-gray-700">
-              <DollarLineIcon className="size-6 text-emerald-600 dark:text-emerald-400" />
-            </div>
-          </div>
-        </div>
-
-        {/* Recettes HTG */}
-        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-xs dark:border-gray-800 dark:bg-gray-900 transition-all hover:border-gray-300">
-          <div className="flex items-center justify-between">
-            <div>
-              <span className="block text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">Recettes HTG (Gourdes)</span>
-              <span className="mt-1 block text-2xl font-black text-gray-900 dark:text-white">
-                {formatClubCurrency(totalRevenueHTG, "HTG")}
-              </span>
-              <span className="mt-0.5 block text-xs text-blue-600 dark:text-blue-400 font-semibold">
-                Paiements enregistrés en Gourdes
-              </span>
-            </div>
-            <div className="h-12 w-12 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 flex items-center justify-center border border-gray-200 dark:border-gray-700">
-              <DollarLineIcon className="size-6 text-blue-600 dark:text-blue-400" />
-            </div>
-          </div>
-        </div>
-
-        {/* Joueurs Actifs */}
-        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-xs dark:border-gray-800 dark:bg-gray-900 transition-all hover:border-gray-300">
-          <div className="flex items-center justify-between">
-            <div>
-              <span className="block text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">Joueurs Actifs</span>
-              <span className="mt-1 block text-2xl font-black text-gray-900 dark:text-white">
-                {totalActivePlayersCount}
-              </span>
-              <span className="mt-0.5 block text-xs text-brand-600 dark:text-brand-400 font-semibold">
-                Saison en cours 2026-2027
-              </span>
-            </div>
-            <div className="h-12 w-12 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 flex items-center justify-center border border-gray-200 dark:border-gray-700">
-              <GroupIcon className="size-6 text-brand-600 dark:text-brand-400" />
-            </div>
-          </div>
-        </div>
-
-        {/* Bilan des Paiements */}
-        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-xs dark:border-gray-800 dark:bg-gray-900 transition-all hover:border-gray-300">
-          <div className="flex items-center justify-between">
-            <div>
-              <span className="block text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">Cotisations Réglées</span>
-              <span className="mt-1 block text-2xl font-black text-gray-900 dark:text-white">
-                {totalPaidPlayersCount} / {totalActivePlayersCount}
-              </span>
-              <span className="mt-0.5 block text-xs text-amber-600 dark:text-amber-400 font-semibold">
-                Joueurs à jour sur la période
-              </span>
-            </div>
-            <div className="h-12 w-12 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 flex items-center justify-center border border-gray-200 dark:border-gray-700">
-              <CheckCircleIcon className="size-6 text-amber-600 dark:text-amber-400" />
-            </div>
-          </div>
-        </div>
+      {/* KPI Cards Grid — Corporate TailAdmin Identique au Dashboard */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4 md:gap-6">
+        <KpiCardClub
+          title="Joueurs actifs"
+          value={formatClubNumber(totalActivePlayersCount)}
+          icon={<GroupIcon className="size-6 text-gray-800 dark:text-white/90" />}
+        />
+        <KpiCardClub
+          title={isAllTime ? "Revenus Globaux (USD)" : `Revenus (USD) ${displayYear}`}
+          value={formatClubCurrency(totalRevenueUSD, "US")}
+          icon={<DollarLineIcon className="size-6 text-emerald-500" />}
+        />
+        <KpiCardClub
+          title={isAllTime ? "Revenus Globaux (HTG)" : `Revenus (HTG) ${displayYear}`}
+          value={formatClubCurrency(totalRevenueHTG, "HTG")}
+          icon={<DollarLineIcon className="size-6 text-blue-500" />}
+        />
+        <KpiCardClub
+          title="Paiements"
+          value={formatClubNumber(filteredPayments.length)}
+          trend={{
+            value: `${totalActivePlayersCount > 0 ? Math.round((totalPaidPlayersCount / totalActivePlayersCount) * 100) : 0}% à jour`,
+            direction: "up",
+          }}
+          icon={<CheckCircleIcon className="size-6 text-emerald-600 dark:text-emerald-400" />}
+        />
       </div>
 
       {/* Graphiques Principaux avec Mode Aujourd'hui */}
@@ -627,20 +639,28 @@ export default function StatistiquesPage() {
             </h4>
             <div className="space-y-2 text-xs">
               <div className="flex justify-between py-1.5 border-b border-gray-100 dark:border-gray-800">
-                <span className="text-gray-500">Joueurs Actifs (Total)</span>
-                <span className="font-bold text-gray-900 dark:text-white">{totalActivePlayersCount}</span>
-              </div>
-              <div className="flex justify-between py-1.5 border-b border-gray-100 dark:border-gray-800">
-                <span className="text-gray-500">Reçus financiers émis</span>
-                <span className="font-bold text-gray-900 dark:text-white">{totalPaymentsCount}</span>
+                <span className="text-gray-500">Total Consolidé (Équiv. USD)</span>
+                <span className="font-extrabold text-brand-600 dark:text-brand-400">{formatClubCurrency(consolidatedTotalUSD, "US")}</span>
               </div>
               <div className="flex justify-between py-1.5 border-b border-gray-100 dark:border-gray-800">
                 <span className="text-gray-500">Total USD encaissé</span>
                 <span className="font-bold text-emerald-600 dark:text-emerald-400">{formatClubCurrency(totalRevenueUSD, "US")}</span>
               </div>
-              <div className="flex justify-between py-1.5">
+              <div className="flex justify-between py-1.5 border-b border-gray-100 dark:border-gray-800">
                 <span className="text-gray-500">Total HTG encaissé</span>
                 <span className="font-bold text-blue-600 dark:text-blue-400">{formatClubCurrency(totalRevenueHTG, "HTG")}</span>
+              </div>
+              <div className="flex justify-between py-1.5 border-b border-gray-100 dark:border-gray-800">
+                <span className="text-gray-500">Joueurs Actifs (Total)</span>
+                <span className="font-bold text-gray-900 dark:text-white">{totalActivePlayersCount}</span>
+              </div>
+              <div className="flex justify-between py-1.5 border-b border-gray-100 dark:border-gray-800">
+                <span className="text-gray-500">Taux de recouvrement</span>
+                <span className="font-bold text-amber-600 dark:text-amber-400">{totalActivePlayersCount > 0 ? Math.round((totalPaidPlayersCount / totalActivePlayersCount) * 100) : 0}%</span>
+              </div>
+              <div className="flex justify-between py-1.5">
+                <span className="text-gray-500">Reçus financiers émis</span>
+                <span className="font-bold text-gray-900 dark:text-white">{totalPaymentsCount}</span>
               </div>
             </div>
           </div>
@@ -680,10 +700,30 @@ export default function StatistiquesPage() {
         </div>
 
         <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <TrackingMetric label="Reçus validés" value={String(trackingPeriodPayments.length)} detail="Reçus émis sur la période" />
-          <TrackingMetric label="Revenus Dollars ($)" value={formatClubCurrency(trackingTotalUSD, "US")} detail="Entrées nettes en USD" />
-          <TrackingMetric label="Revenus Gourdes (G)" value={formatClubCurrency(trackingTotalHTG, "HTG")} detail="Entrées nettes en HTG" />
-          <TrackingMetric label="Durée de session" value={formatTrackingDuration(trackingPeriodTime)} detail="Temps actif enregistré" />
+          <TrackingMetric
+            label="Total Consolidé"
+            value={formatClubCurrency(trackingTotalConsolidated, "US")}
+            detail="Revenu unifié (taux 135)"
+            icon={<DollarLineIcon className="size-6 text-brand-600 dark:text-brand-400" />}
+          />
+          <TrackingMetric
+            label="Revenus Dollars ($)"
+            value={formatClubCurrency(trackingTotalUSD, "US")}
+            detail="Entrées réelles en USD"
+            icon={<DollarLineIcon className="size-6 text-emerald-500" />}
+          />
+          <TrackingMetric
+            label="Revenus Gourdes (HTG)"
+            value={formatClubCurrency(trackingTotalHTG, "HTG")}
+            detail="Entrées réelles en HTG"
+            icon={<DollarLineIcon className="size-6 text-blue-500" />}
+          />
+          <TrackingMetric
+            label="Reçus validés"
+            value={String(trackingPeriodPayments.length)}
+            detail="Reçus émis sur la période"
+            icon={<CheckCircleIcon className="size-6 text-emerald-600 dark:text-emerald-400" />}
+          />
         </div>
 
         {/* Table de détail des transactions de la période avec TOTAL COMPTABLE */}
@@ -715,19 +755,23 @@ export default function StatistiquesPage() {
                     </td>
                   </tr>
                 ) : (
-                  trackingPeriodPayments.map((payment) => (
-                    <tr key={payment.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/30 transition-colors">
-                      <td className="px-4 py-3 font-medium">{payment.datePaiement || payment.periode}</td>
-                      <td className="px-4 py-3 font-mono font-bold text-gray-900 dark:text-white">{(payment as any).numeroRecu || (payment as any).recuNo || `REC-${payment.id}`}</td>
-                      <td className="px-4 py-3 capitalize">{payment.methode || "Standard"}</td>
-                      <td className="px-4 py-3 font-bold text-emerald-600 dark:text-emerald-400">
-                        {isUSDDevise(payment.devise) ? formatClubCurrency(payment.montantUS || payment.montant, "US") : "-"}
-                      </td>
-                      <td className="px-4 py-3 font-bold text-blue-600 dark:text-blue-400">
-                        {payment.devise === "HTG" ? formatClubCurrency(payment.montantHTG || payment.montant, "HTG") : "-"}
-                      </td>
-                    </tr>
-                  ))
+                  trackingPeriodPayments.map((payment) => {
+                    const u = Number(payment.montantUS) || 0;
+                    const h = Number(payment.montantHTG) || 0;
+                    return (
+                      <tr key={payment.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/30 transition-colors">
+                        <td className="px-4 py-3 font-medium">{payment.datePaiement || payment.periode}</td>
+                        <td className="px-4 py-3 font-mono font-bold text-gray-900 dark:text-white">{(payment as any).numeroRecu || (payment as any).recuNo || `REC-${payment.id}`}</td>
+                        <td className="px-4 py-3 capitalize">{payment.methode || "Standard"}</td>
+                        <td className="px-4 py-3 font-bold text-emerald-600 dark:text-emerald-400">
+                          {u > 0 ? formatClubCurrency(u, "US") : "-"}
+                        </td>
+                        <td className="px-4 py-3 font-bold text-blue-600 dark:text-blue-400">
+                          {h > 0 ? formatClubCurrency(h, "HTG") : "-"}
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
 
@@ -747,12 +791,31 @@ export default function StatistiquesPage() {
   );
 }
 
-function TrackingMetric({ label, value, detail }: { label: string; value: string; detail: string }) {
+function TrackingMetric({
+  label,
+  value,
+  detail,
+  icon,
+}: {
+  label: string;
+  value: string;
+  detail: string;
+  icon?: React.ReactNode;
+}) {
   return (
     <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-xs dark:border-gray-800 dark:bg-gray-900">
-      <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">{label}</p>
-      <p className="mt-2 text-2xl font-black text-gray-900 dark:text-white">{value}</p>
-      <p className="mt-1 text-xs text-gray-500 font-medium">{detail}</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">{label}</p>
+          <p className="mt-2 text-2xl font-black text-gray-900 dark:text-white">{value}</p>
+          <p className="mt-1 text-xs font-medium text-gray-500">{detail}</p>
+        </div>
+        {icon ? (
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gray-100 dark:bg-gray-800">
+            {icon}
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 }

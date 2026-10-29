@@ -37,11 +37,85 @@ export interface WeeklyData {
   registrations: number;
 }
 
+export interface PaymentRealAmounts {
+  realUSD: number;
+  realHTG: number;
+  consolidatedUSD: number;
+  taux: number;
+}
+
 // Grouper les revenus par année
-const isUSDDevise = (devise?: string | null): boolean => {
+export const isUSDDevise = (devise?: string | null): boolean => {
   if (!devise) return false;
   const normalized = String(devise).trim().toUpperCase();
-  return normalized === "US" || normalized === "USD";
+  return normalized === "US" || normalized === "USD" || normalized === "$";
+};
+
+/**
+ * Calcule la ventilation monétaire réelle d'un paiement en tenant compte des soldes réglés en HTG.
+ * Si un tag [SOLDE_HTG:...] existe, les HTG correspondants sont reclassés en HTG et retirés du montant US.
+ */
+export const getPaymentRealAmounts = (payment: Payment | any): PaymentRealAmounts => {
+  if (!payment) return { realUSD: 0, realHTG: 0, consolidatedUSD: 0, taux: 135 };
+
+  const rem = String(payment.remarque || payment.Remarque || "");
+  const soldeMatches = [...rem.matchAll(/\[SOLDE_HTG:([\d.]+)_TAUX:([\d.]+)_USD:([\d.]+)\]/g)];
+
+  let soldeHTGSum = 0;
+  let soldeUSDSum = 0;
+  soldeMatches.forEach((m) => {
+    soldeHTGSum += parseFloat(m[1]) || 0;
+    soldeUSDSum += parseFloat(m[3]) || 0;
+  });
+
+  const rawUS = Number(payment.montantUS ?? payment.MntPayeUS) || 0;
+  const rawGd = Number(payment.montantHTG ?? payment.MntPayeGd) || 0;
+  const rawMontant = Number(payment.montant ?? payment.Montant) || 0;
+  const devise = payment.devise || payment.Devise || (rawGd > 0 ? "HTG" : "US");
+
+  let realUSD = 0;
+  let realHTG = 0;
+
+  if (soldeMatches.length > 0) {
+    if (rawUS > 0) {
+      realUSD = Math.max(0, rawUS - soldeUSDSum);
+      realHTG = rawGd + soldeHTGSum;
+    } else if (rawMontant > 0 && isUSDDevise(devise)) {
+      realUSD = Math.max(0, rawMontant - soldeUSDSum);
+      realHTG = rawGd + soldeHTGSum;
+    } else {
+      realUSD = rawUS;
+      realHTG = rawGd + soldeHTGSum;
+    }
+  } else {
+    if (rawUS > 0 && rawGd > 0) {
+      realUSD = rawUS;
+      realHTG = rawGd;
+    } else if (rawGd > 0) {
+      realUSD = 0;
+      realHTG = rawGd;
+    } else if (rawUS > 0) {
+      realUSD = rawUS;
+      realHTG = 0;
+    } else if (devise === "HTG") {
+      realUSD = 0;
+      realHTG = rawMontant;
+    } else {
+      realUSD = rawMontant;
+      realHTG = 0;
+    }
+  }
+
+  const tauxMatch = rem.match(/\[TAUX:\s*([\d.]+)\s*\]/i);
+  const taux = Number(payment.taux || payment.TauxChange) || (tauxMatch ? parseFloat(tauxMatch[1]) : 135);
+  const consolidatedUSD = realUSD + (realHTG > 0 && taux > 0 ? realHTG / taux : 0);
+
+  return {
+    realUSD: Math.round(realUSD * 100) / 100,
+    realHTG: Math.round(realHTG * 100) / 100,
+    consolidatedUSD: Math.round(consolidatedUSD * 100) / 100,
+    taux,
+  };
 };
 
 export const getYearlyRevenue = (payments: Payment[]): YearlyData[] => {
@@ -53,17 +127,14 @@ export const getYearlyRevenue = (payments: Payment[]): YearlyData[] => {
     const year = date.getFullYear();
     const current = yearMap.get(year) || { usd: 0, htg: 0 };
     
-    if (isUSDDevise(payment.devise)) {
-      current.usd += payment.montant;
-    } else {
-      current.htg += payment.montant;
-    }
+    current.usd += Number(payment.montantUS) || (isUSDDevise(payment.devise) ? Number(payment.montant || 0) : 0);
+    current.htg += Number(payment.montantHTG) || (payment.devise === "HTG" ? Number(payment.montant || 0) : 0);
     
     yearMap.set(year, current);
   });
 
   return Array.from(yearMap.entries())
-    .map(([year, { usd, htg }]) => ({ year, revenueUSD: usd, revenueHTG: htg, registrations: 0 }))
+    .map(([year, { usd, htg }]) => ({ year, revenueUSD: Math.round(usd * 100) / 100, revenueHTG: Math.round(htg * 100) / 100, registrations: 0 }))
     .sort((a, b) => a.year - b.year);
 };
 
@@ -98,19 +169,16 @@ export const getMonthlyRevenue = (payments: Payment[], year: number): MonthlyDat
     const date = parseDateLocal(payment.datePaiement || payment.periode) || new Date();
     if (date.getFullYear() === year) {
       const month = date.getMonth();
-      if (isUSDDevise(payment.devise)) {
-        totalsUSD[month] += payment.montant;
-      } else {
-        totalsHTG[month] += payment.montant;
-      }
+      totalsUSD[month] += Number(payment.montantUS) || (isUSDDevise(payment.devise) ? Number(payment.montant || 0) : 0);
+      totalsHTG[month] += Number(payment.montantHTG) || (payment.devise === "HTG" ? Number(payment.montant || 0) : 0);
     }
   });
 
   return totalsUSD.map((usd, index) => ({
     month: `${year}-${String(index + 1).padStart(2, "0")}`,
     monthLabel: `${monthNames[index]} ${year}`,
-    revenueUSD: usd,
-    revenueHTG: totalsHTG[index],
+    revenueUSD: Math.round(usd * 100) / 100,
+    revenueHTG: Math.round(totalsHTG[index] * 100) / 100,
     registrations: 0,
   }));
 };
@@ -150,14 +218,11 @@ export const getWeeklyRevenue = (payments: Payment[], year: number): WeeklyData[
     const date = parseDateLocal(payment.datePaiement || payment.periode) || new Date();
     if (date.getFullYear() === year) {
       const weekNumber = getWeekNumber(date);
-      const weekKey = `${year}-W${String(weekNumber).padStart(2, "0")}`;
+      const weekKey = `${year}-S${String(weekNumber).padStart(2, "0")}`;
       const current = weekMap.get(weekKey) || { usd: 0, htg: 0 };
       
-      if (isUSDDevise(payment.devise)) {
-        current.usd += payment.montant;
-      } else {
-        current.htg += payment.montant;
-      }
+      current.usd += Number(payment.montantUS) || (isUSDDevise(payment.devise) ? Number(payment.montant || 0) : 0);
+      current.htg += Number(payment.montantHTG) || (payment.devise === "HTG" ? Number(payment.montant || 0) : 0);
       
       weekMap.set(weekKey, current);
     }
@@ -166,9 +231,9 @@ export const getWeeklyRevenue = (payments: Payment[], year: number): WeeklyData[
   weekMap.forEach(({ usd, htg }, weekKey) => {
     weeks.push({
       week: weekKey,
-      weekLabel: weekKey,
-      revenueUSD: usd,
-      revenueHTG: htg,
+      weekLabel: `Semaine ${weekKey.split('-S')[1] || weekKey}`,
+      revenueUSD: Math.round(usd * 100) / 100,
+      revenueHTG: Math.round(htg * 100) / 100,
       registrations: 0,
     });
   });
@@ -185,7 +250,7 @@ export const getWeeklyRegistrations = (players: Player[], year: number): WeeklyD
     const date = parseDateLocal(player.dateInscription) || new Date();
     if (date.getFullYear() === year) {
       const weekNumber = getWeekNumber(date);
-      const weekKey = `${year}-W${String(weekNumber).padStart(2, "0")}`;
+      const weekKey = `${year}-S${String(weekNumber).padStart(2, "0")}`;
       weekMap.set(weekKey, (weekMap.get(weekKey) || 0) + 1);
     }
   });
@@ -193,7 +258,7 @@ export const getWeeklyRegistrations = (players: Player[], year: number): WeeklyD
   weekMap.forEach((registrations, weekKey) => {
     weeks.push({
       week: weekKey,
-      weekLabel: weekKey,
+      weekLabel: `Semaine ${weekKey.split('-S')[1] || weekKey}`,
       revenueUSD: 0,
       revenueHTG: 0,
       registrations,
@@ -203,44 +268,44 @@ export const getWeeklyRegistrations = (players: Player[], year: number): WeeklyD
   return weeks.sort((a, b) => a.week.localeCompare(b.week));
 };
 
-// Grouper les revenus par tranche horaire pour la journée en cours
+// Grouper les revenus par jour (7 derniers jours glissants jusqu'à targetDateStr)
 export const getDailyRevenue = (payments: Payment[], targetDateStr?: string): DailyData[] => {
-  const hours = ["08h", "10h", "12h", "14h", "16h", "18h", "20h"];
-  const totalsUSD = Array.from({ length: hours.length }, () => 0);
-  const totalsHTG = Array.from({ length: hours.length }, () => 0);
+  const refDate = targetDateStr ? new Date(`${targetDateStr}T12:00:00`) : new Date();
+  const days: DailyData[] = [];
 
-  const todayStr = targetDateStr || new Date().toISOString().slice(0, 10);
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(refDate);
+    d.setDate(d.getDate() - i);
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    const dayKey = `${yyyy}-${mm}-${dd}`;
+    
+    const dayNames = ["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"];
+    const dayLabel = `${dayNames[d.getDay()]} ${dd}/${mm}`;
 
-  payments.forEach((payment) => {
-    if (payment.statut !== "paid") return;
-    const pDateStr = payment.datePaiement || (payment as any).dateTransact || "";
-    if (pDateStr.startsWith(todayStr)) {
-      const date = parseDateLocal(pDateStr) || new Date();
-      const h = date.getHours();
-      let index = 0;
-      if (h >= 20) index = 6;
-      else if (h >= 18) index = 5;
-      else if (h >= 16) index = 4;
-      else if (h >= 14) index = 3;
-      else if (h >= 12) index = 2;
-      else if (h >= 10) index = 1;
-      else index = 0;
+    let revUSD = 0;
+    let revHTG = 0;
 
-      if (isUSDDevise(payment.devise)) {
-        totalsUSD[index] += payment.montant;
-      } else {
-        totalsHTG[index] += payment.montant;
+    payments.forEach((payment) => {
+      if (payment.statut !== "paid") return;
+      const pDateStr = payment.datePaiement || (payment as any).dateTransact || "";
+      if (pDateStr.startsWith(dayKey)) {
+        revUSD += Number(payment.montantUS) || (isUSDDevise(payment.devise) ? Number(payment.montant || 0) : 0);
+        revHTG += Number(payment.montantHTG) || (payment.devise === "HTG" ? Number(payment.montant || 0) : 0);
       }
-    }
-  });
+    });
 
-  return hours.map((hourLabel, index) => ({
-    day: hourLabel,
-    dayLabel: hourLabel,
-    revenueUSD: totalsUSD[index],
-    revenueHTG: totalsHTG[index],
-    registrations: 0,
-  }));
+    days.push({
+      day: dayKey,
+      dayLabel,
+      revenueUSD: Math.round(revUSD * 100) / 100,
+      revenueHTG: Math.round(revHTG * 100) / 100,
+      registrations: 0,
+    });
+  }
+
+  return days;
 };
 
 // Fonction utilitaire pour obtenir le numéro de semaine

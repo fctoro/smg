@@ -5,6 +5,113 @@ import autoTable from "jspdf-autotable";
 import { Player } from "@/types/club";
 import { PDFDocument } from "pdf-lib";
 
+export const mapMode = (mode: any) => {
+  const modeStr = String(mode || "").toLowerCase().trim();
+  if (modeStr === "1") return "Espèces";
+  if (modeStr === "2") return "Virement";
+  if (modeStr === "3") return "Chèque";
+  if (modeStr === "4") return "Carte";
+  if (modeStr === "5" || modeStr === "mobile" || modeStr === "depot" || modeStr === "dépôt" || modeStr.includes("depot") || modeStr.includes("dépôt")) return "Dépôt bancaire";
+  if (modeStr === "virement") return "Virement";
+  if (modeStr === "especes" || modeStr === "espèces" || modeStr === "espece" || modeStr === "espèce") return "Espèces";
+  if (modeStr === "cheque" || modeStr === "chèque") return "Chèque";
+  if (modeStr === "carte") return "Carte";
+  return String(mode || "-");
+};
+
+export const extractRabaisLabelFromRemark = (remark?: string, isHTG: boolean = false): string | null => {
+  if (!remark) return null;
+
+  // 1. Marqueur explicite [RABAIS:X%] ou [RABAIS:$X]
+  const rabaisPctMatch = remark.match(/\[RABAIS:\s*([\d.]+)%\s*\]/i);
+  const rabaisAmtMatch = remark.match(/\[RABAIS:\s*\$?([\d.]+)\s*\]/i);
+  let explicitRabais = "";
+  if (rabaisPctMatch && rabaisPctMatch[1]) {
+    const val = parseFloat(rabaisPctMatch[1]);
+    if (val > 0) explicitRabais = `${val}%`;
+  } else if (rabaisAmtMatch && rabaisAmtMatch[1]) {
+    const val = parseFloat(rabaisAmtMatch[1]);
+    if (val > 0) explicitRabais = `$${val.toFixed(2)}`;
+  }
+
+  // 2. Détection du Plan (Annuel = 10%, Semestriel = 5%)
+  const isPlanAnnuel = /\[PLAN:\s*ANNUEL\s*\]/i.test(remark) || /Plan\s*:\s*Annuel/i.test(remark);
+  const isPlanSemestriel = /\[PLAN:\s*SEMESTRIEL\s*\]/i.test(remark) || /Plan\s*:\s*Semestriel/i.test(remark);
+
+  if (explicitRabais && isPlanAnnuel) {
+    return `${explicitRabais} (+ 10% Plan Annuel)`;
+  }
+  if (explicitRabais && isPlanSemestriel) {
+    return `${explicitRabais} (+ 5% Plan Semestriel)`;
+  }
+  if (explicitRabais) {
+    return explicitRabais;
+  }
+  if (isPlanAnnuel) {
+    return "10% (Plan Annuel)";
+  }
+  if (isPlanSemestriel) {
+    return "5% (Plan Semestriel)";
+  }
+
+  // 3. Bourses / Demi-bourses
+  if (/\[REDUCTION:\s*FULL\s*\]/i.test(remark)) return "100% (Bourse)";
+  if (/\[REDUCTION:\s*HALF\s*\]/i.test(remark) || /\[REDUCTION:\s*FIXED_2500_HTG\s*\]/i.test(remark)) {
+    const remLower = remark.toLowerCase();
+    const isDemi2500 = remLower.includes("2 500") || remLower.includes("2,500") || remLower.includes("2500") || isHTG;
+    if (isDemi2500) return null; // La demi-bourse 2 500 HTG est un tarif forfaitaire en Gourdes, pas un rabais de 50%
+    return "50% (Demi-bourse)";
+  }
+  const customRedMatch = remark.match(/\[REDUCTION_PERCENT:\s*([\d.]+)\s*\]/i);
+  if (customRedMatch && customRedMatch[1]) {
+    const val = parseFloat(customRedMatch[1]);
+    if (val > 0) return `${val}%`;
+  }
+
+  return null;
+};
+
+export const cleanRemarkForPDF = (remark: string, isHTG: boolean = false) => {
+  if (!remark) return "Paiement de cotisation";
+  const rabaisLabel = extractRabaisLabelFromRemark(remark, isHTG);
+
+  // Supprime tous les tags système du type [CLE:VALEUR] ou [CLE]
+  let cleaned = remark.replace(/\[.*?\]\s*/g, '').trim();
+  
+  // Remplacer les séparateurs par des sauts de ligne
+  cleaned = cleaned.replace(/\s*\|\s*/g, '\n');
+  
+  // Nettoyer d'anciennes mentions textuelles injectées dans la description
+  cleaned = cleaned.replace(/Rabais accordé\s*:\s*50%\s*\(Demi-bourse\)/gi, '').trim();
+  cleaned = cleaned.replace(/Rabais accordé\s*:\s*50%/gi, '').trim();
+  
+  // Si c'est un paiement sans adhésion, on supprime la mention "Plan: XXX" ajoutée par erreur
+  const isKitOnly = !remark.toLowerCase().includes("adhésion") && !remark.toLowerCase().includes("adhesion");
+  if (isKitOnly) {
+    cleaned = cleaned.replace(/\n?Plan\s*:\s*[^\n]+/gi, '');
+    cleaned = cleaned.replace(/^Plan\s*:\s*[^\n]+\n?/gi, '');
+  } else {
+    cleaned = cleaned.replace(/\s*Plan:\s*/g, '\nPlan : ');
+  }
+  
+  // Retirer complètement le mot "Rubriques:" pour ne garder que les noms des articles
+  cleaned = cleaned.replace(/Rubriques\s*:\s*/gi, '');
+  cleaned = cleaned.replace(/Rubriques:\s*/gi, '');
+  
+  if (cleaned.includes('•')) {
+    cleaned = cleaned.replace(/,\s*/g, '\n• ');
+  }
+
+  if (rabaisLabel) {
+    cleaned = `${cleaned}\nRabais accordé : ${rabaisLabel}`;
+  }
+
+  // Supprimer les sauts de lignes consécutifs
+  cleaned = cleaned.replace(/\n\s*\n+/g, '\n').trim();
+
+  return cleaned || "Paiement de cotisation";
+};
+
 export async function generateReceiptPDFBase64(
   player: Player,
   payments: any[],
@@ -15,7 +122,8 @@ export async function generateReceiptPDFBase64(
   parentAddress?: string,
   proofImageBase64?: string | string[] | null,
   autoPrint: boolean = false,
-  totalRubriques?: number
+  totalRubriques?: number,
+  allPlayerPayments?: any[]
 ): Promise<string> {
   const doc = new jsPDF();
   
@@ -141,113 +249,6 @@ export async function generateReceiptPDFBase64(
   const tableColumn = ["Date", "Joueur (Enfant)", "Description", "Mode", "Montant"];
   const tableRows: any[] = [];
 
-  const mapMode = (mode: any) => {
-    const modeStr = String(mode || "").toLowerCase().trim();
-    if (modeStr === "1") return "Espèces";
-    if (modeStr === "2") return "Virement";
-    if (modeStr === "3") return "Chèque";
-    if (modeStr === "4") return "Carte";
-    if (modeStr === "5" || modeStr === "mobile" || modeStr === "depot" || modeStr === "dépôt" || modeStr.includes("depot") || modeStr.includes("dépôt")) return "Dépôt bancaire";
-    if (modeStr === "virement") return "Virement";
-    if (modeStr === "especes" || modeStr === "espèces" || modeStr === "espece" || modeStr === "espèce") return "Espèces";
-    if (modeStr === "cheque" || modeStr === "chèque") return "Chèque";
-    if (modeStr === "carte") return "Carte";
-    return String(mode || "-");
-  };
-
-  const extractRabaisLabelFromRemark = (remark?: string): string | null => {
-    if (!remark) return null;
-
-    // 1. Marqueur explicite [RABAIS:X%] ou [RABAIS:$X]
-    const rabaisPctMatch = remark.match(/\[RABAIS:\s*([\d.]+)%\s*\]/i);
-    const rabaisAmtMatch = remark.match(/\[RABAIS:\s*\$?([\d.]+)\s*\]/i);
-    let explicitRabais = "";
-    if (rabaisPctMatch && rabaisPctMatch[1]) {
-      const val = parseFloat(rabaisPctMatch[1]);
-      if (val > 0) explicitRabais = `${val}%`;
-    } else if (rabaisAmtMatch && rabaisAmtMatch[1]) {
-      const val = parseFloat(rabaisAmtMatch[1]);
-      if (val > 0) explicitRabais = `$${val.toFixed(2)}`;
-    }
-
-    // 2. Détection du Plan (Annuel = 10%, Semestriel = 5%)
-    const isPlanAnnuel = /\[PLAN:\s*ANNUEL\s*\]/i.test(remark) || /Plan\s*:\s*Annuel/i.test(remark);
-    const isPlanSemestriel = /\[PLAN:\s*SEMESTRIEL\s*\]/i.test(remark) || /Plan\s*:\s*Semestriel/i.test(remark);
-
-    if (explicitRabais && isPlanAnnuel) {
-      return `${explicitRabais} (+ 10% Plan Annuel)`;
-    }
-    if (explicitRabais && isPlanSemestriel) {
-      return `${explicitRabais} (+ 5% Plan Semestriel)`;
-    }
-    if (explicitRabais) {
-      return explicitRabais;
-    }
-    if (isPlanAnnuel) {
-      return "10% (Plan Annuel)";
-    }
-    if (isPlanSemestriel) {
-      return "5% (Plan Semestriel)";
-    }
-
-    // 3. Bourses / Demi-bourses
-    if (/\[REDUCTION:\s*FULL\s*\]/i.test(remark)) return "100% (Bourse)";
-    if (/\[REDUCTION:\s*HALF\s*\]/i.test(remark) || /\[REDUCTION:\s*FIXED_2500_HTG\s*\]/i.test(remark)) {
-      const remLower = remark.toLowerCase();
-      const isDemi2500 = remLower.includes("2 500") || remLower.includes("2,500") || remLower.includes("2500") || isHTG;
-      if (isDemi2500) return null; // La demi-bourse 2 500 HTG est un tarif forfaitaire en Gourdes, pas un rabais de 50%
-      return "50% (Demi-bourse)";
-    }
-    const customRedMatch = remark.match(/\[REDUCTION_PERCENT:\s*([\d.]+)\s*\]/i);
-    if (customRedMatch && customRedMatch[1]) {
-      const val = parseFloat(customRedMatch[1]);
-      if (val > 0) return `${val}%`;
-    }
-
-    return null;
-  };
-
-  const cleanRemarkForPDF = (remark: string) => {
-    if (!remark) return "Paiement de cotisation";
-    const rabaisLabel = extractRabaisLabelFromRemark(remark);
-
-    // Supprime tous les tags système du type [CLE:VALEUR] ou [CLE]
-    let cleaned = remark.replace(/\[.*?\]\s*/g, '').trim();
-    
-    // Remplacer les séparateurs par des sauts de ligne
-    cleaned = cleaned.replace(/\s*\|\s*/g, '\n');
-    
-    // Nettoyer d'anciennes mentions textuelles injectées dans la description
-    cleaned = cleaned.replace(/Rabais accordé\s*:\s*50%\s*\(Demi-bourse\)/gi, '').trim();
-    cleaned = cleaned.replace(/Rabais accordé\s*:\s*50%/gi, '').trim();
-    
-    // Si c'est un paiement sans adhésion, on supprime la mention "Plan: XXX" ajoutée par erreur
-    const isKitOnly = !remark.toLowerCase().includes("adhésion") && !remark.toLowerCase().includes("adhesion");
-    if (isKitOnly) {
-      cleaned = cleaned.replace(/\n?Plan\s*:\s*[^\n]+/gi, '');
-      cleaned = cleaned.replace(/^Plan\s*:\s*[^\n]+\n?/gi, '');
-    } else {
-      cleaned = cleaned.replace(/\s*Plan:\s*/g, '\nPlan : ');
-    }
-    
-    // Retirer complètement le mot "Rubriques:" pour ne garder que les noms des articles
-    cleaned = cleaned.replace(/Rubriques\s*:\s*/gi, '');
-    cleaned = cleaned.replace(/Rubriques:\s*/gi, '');
-    
-    if (cleaned.includes('•')) {
-      cleaned = cleaned.replace(/,\s*/g, '\n• ');
-    }
-
-    if (rabaisLabel) {
-      cleaned = `${cleaned}\nRabais accordé : ${rabaisLabel}`;
-    }
-
-    // Supprimer les sauts de lignes consécutifs
-    cleaned = cleaned.replace(/\n\s*\n+/g, '\n').trim();
-
-    return cleaned || "Paiement de cotisation";
-  };
-
   const mainPayment = payments[0] || {};
   const isHTG = mainPayment.devise === "HTG" || payments.some((p: any) => p.devise === "HTG" || Number(p.montantHTG) > 0 || Number(p.MntPayeGd) > 0);
   // Lire taux depuis la colonne DB, sinon depuis le marqueur [TAUX:XXX] dans la remarque
@@ -261,6 +262,7 @@ export async function generateReceiptPDFBase64(
     }
   }
 
+  // 1. Calcul du montant strict de cette transaction (reçu émis)
   let totalUSD = 0;
   let totalHTG = 0;
 
@@ -287,7 +289,7 @@ export async function generateReceiptPDFBase64(
     const pData = [
       String(formatClubDate(p.datePaiement ?? new Date())),
       getPlayerFullName(player),
-      cleanRemarkForPDF(p.remarque),
+      cleanRemarkForPDF(p.remarque, isHTG),
       String(mapMode(p.methode || p.ModePaiement)),
       mntStr,
     ];
@@ -334,17 +336,19 @@ export async function generateReceiptPDFBase64(
 
   const finalY = (doc as any).lastAutoTable.finalY || tableStartY;
 
+  // 2. Calcul du dossier complet (Total Dû et Solde Restant)
+  const paymentHistory = (allPlayerPayments && allPlayerPayments.length > 0) ? allPlayerPayments : payments;
   const playerStatus = (player.statutJoueur || "").toLowerCase().trim();
   const isBoursierReceipt = playerStatus === "bourse" || playerStatus === "boursier" ||
-    payments.some((p: any) => (p.remarque || "").toLowerCase().includes("[plan:boursier]"));
+    paymentHistory.some((p: any) => (p.remarque || "").toLowerCase().includes("[plan:boursier]"));
   const isDemiBoursierReceipt = playerStatus.includes("demi") ||
-    payments.some((p: any) => {
+    paymentHistory.some((p: any) => {
       const rem = (p.remarque || "").toLowerCase();
       return rem.includes("demi-bourse") || rem.includes("demi bourse") || rem.includes("[reduction:half]") || rem.includes("[statut:demi-bourse]");
     });
   const isDemiBoursier2500Receipt = isDemiBoursierReceipt && (
     isHTG || playerStatus.includes("2500") || playerStatus.includes("2 500") ||
-    payments.some((p: any) => {
+    paymentHistory.some((p: any) => {
       const rem = (p.remarque || "").toLowerCase();
       return rem.includes("2500") || rem.includes("2 500") || p.devise === "HTG";
     })
@@ -354,14 +358,14 @@ export async function generateReceiptPDFBase64(
   let totalDueHTG = 0;
 
   if (isBoursierReceipt) {
-    totalDueValue = payments.reduce((sum, p) => {
+    totalDueValue = paymentHistory.reduce((sum, p) => {
       const match = (p.remarque || "").match(/\[TOTAL_DUE:\s*([\d.]+)\s*\]/i);
       if (match && match[1]) return sum + parseFloat(match[1]);
       return sum + (p.devise === "HTG" && taux > 0 ? (p.montant || 0) / taux : (p.montant || 0));
     }, 0);
     totalDueHTG = Math.round(totalDueValue * (taux > 0 ? taux : 130));
   } else if (isDemiBoursier2500Receipt) {
-    totalDueHTG = payments.reduce((sum, p) => {
+    totalDueHTG = paymentHistory.reduce((sum, p) => {
       const payesMatch = (p.remarque || "").match(/\[MOIS_PAYES:\s*(\d+)\s*\]/i) || (p.remarque || "").match(/(\d+)\s*mois/i);
       const restantsMatch = (p.remarque || "").match(/\[MOIS_RESTANTS:\s*(\d+)\s*\]/i);
       const moisPayes = payesMatch ? parseInt(payesMatch[1], 10) : 1;
@@ -375,7 +379,7 @@ export async function generateReceiptPDFBase64(
     const isTi = cat.includes("titoro") || cat.includes("ti-toro") || cat.includes("ti_toro");
     const demiMonthlyUSD = isTi ? 57.5 : 77.5;
 
-    totalDueValue = payments.reduce((sum, p) => {
+    totalDueValue = paymentHistory.reduce((sum, p) => {
       const payesMatch = (p.remarque || "").match(/\[MOIS_PAYES:\s*(\d+)\s*\]/i) || (p.remarque || "").match(/(\d+)\s*mois/i);
       const restantsMatch = (p.remarque || "").match(/\[MOIS_RESTANTS:\s*(\d+)\s*\]/i);
       const moisPayes = payesMatch ? parseInt(payesMatch[1], 10) : 1;
@@ -385,43 +389,50 @@ export async function generateReceiptPDFBase64(
     }, 0);
     totalDueHTG = (isHTG && taux > 0) ? Math.round(totalDueValue * taux) : 0;
   } else {
-    payments.forEach((p: any) => {
-      const dueMatch = p.remarque?.match(/\[TOTAL_DUE:\s*([\d.]+)\s*\]/i);
-      let isValidDue = false;
-      let parsedDue = 0;
-      if (dueMatch && dueMatch[1]) {
-        parsedDue = parseFloat(dueMatch[1]);
-        const remarkLower = (p.remarque || "").toLowerCase();
-        const isKitOnly = !remarkLower.includes("adhésion") && !remarkLower.includes("adhesion");
-        // Ignore phantom adhesion debt on kit-only payments
-        if (!(isKitOnly && parsedDue >= 900)) {
-          isValidDue = true;
-        }
-      }
+    // Chercher le TOTAL_DUE le plus précis dans l'historique
+    const explicitDueMarkers = paymentHistory
+      .map((p: any) => p.remarque?.match(/\[TOTAL_DUE:\s*([\d.]+)\s*\]/i)?.[1])
+      .filter(Boolean);
 
-      if (isValidDue) {
-        totalDueValue += parsedDue;
-      } else {
-        // Fallback : utiliser le montant payé
+    if (explicitDueMarkers.length > 0) {
+      totalDueValue = parseFloat(explicitDueMarkers[0]);
+    } else {
+      paymentHistory.forEach((p: any) => {
         const pTaux = p.taux || 0;
-        totalDueValue += (p.devise === "HTG" && pTaux > 0) ? p.montant / pTaux : p.montant;
-      }
-    });
+        totalDueValue += (p.devise === "HTG" && pTaux > 0) ? p.montant / pTaux : (p.montant || 0);
+      });
+    }
     totalDueHTG = (isHTG && taux > 0) ? Math.round(totalDueValue * taux) : 0;
   }
 
+  // Calcul du cumul versé dans tout l'historique du dossier
+  let historyPaidUSD = 0;
+  let historyPaidHTG = 0;
+  paymentHistory.forEach((p: any) => {
+    const pTaux = Number(p.taux) || 0;
+    if (p.devise === "HTG" || (!p.devise && (p.montantHTG || p.MntPayeGd))) {
+      const htg = Number(p.montantHTG || p.montant || p.MntPayeGd || 0);
+      historyPaidHTG += htg;
+      historyPaidUSD += pTaux > 0 ? htg / pTaux : (taux > 0 ? htg / taux : 0);
+    } else {
+      const usd = Number(p.montantUS || p.montant || p.MntPayeUS || 0);
+      historyPaidUSD += usd;
+      historyPaidHTG += pTaux > 0 ? usd * pTaux : (taux > 0 ? usd * taux : 0);
+    }
+  });
+
   // Calcul des totaux et soldes selon la devise
-  const balanceHTG = Math.max(0, totalDueHTG - totalHTG);
-  const balanceUSD = Math.max(0, totalDueValue - totalUSD);
+  const balanceHTG = Math.max(0, totalDueHTG - historyPaidHTG);
+  const balanceUSD = Math.max(0, totalDueValue - historyPaidUSD);
 
   const balanceNumeric = isHTG ? balanceHTG : Number(balanceUSD.toFixed(2));
 
-  // Libellé du montant versé — strictement dans la devise du reçu
+  // Libellé du montant versé pour CETTE transaction (reçu)
   const totalPayeLabel = isHTG
     ? formatClubCurrency(totalHTG, "HTG")
     : formatClubCurrency(totalUSD, "US");
 
-  // Libellé du montant total dû — strictly dans la devise du reçu
+  // Libellé du montant total dû
   const totalDueLabel = (() => {
     if (isHTG) {
       return formatClubCurrency(totalDueHTG, "HTG");
@@ -430,7 +441,7 @@ export async function generateReceiptPDFBase64(
     return formatClubCurrency(totalDueValue, "US");
   })();
 
-  // Libellé du solde restant — strictement dans la devise du reçu
+  // Libellé du solde restant
   const balanceLabel = isHTG
     ? formatClubCurrency(balanceHTG, "HTG")
     : formatClubCurrency(balanceUSD, "US");
@@ -438,7 +449,7 @@ export async function generateReceiptPDFBase64(
   let yPos = finalY + 10;
 
   const appliedRabais = payments
-    .map((p: any) => extractRabaisLabelFromRemark(p.remarque))
+    .map((p: any) => extractRabaisLabelFromRemark(p.remarque, isHTG))
     .find(Boolean);
 
   // 0. RABAIS ACCORDÉ (si présent)
@@ -462,14 +473,27 @@ export async function generateReceiptPDFBase64(
   doc.setTextColor(grayDark[0], grayDark[1], grayDark[2]);
   doc.text(totalDueLabel, 196, yPos, { align: 'right' });
 
-  // 2. MONTANT DONNÉ (PAYÉ)
+  // 2. MONTANT VERSÉ (CETTE TRANSACTION)
   yPos += 7;
   doc.setFont("helvetica", "normal");
   doc.setTextColor(grayMedium[0], grayMedium[1], grayMedium[2]);
-  doc.text("Montant versé :", 110, yPos);
+  doc.text("Montant versé (cette transaction) :", 110, yPos);
   doc.setFont("helvetica", "bold");
   doc.setTextColor(grayDark[0], grayDark[1], grayDark[2]);
   doc.text(totalPayeLabel, 196, yPos, { align: 'right' });
+
+  // Rappel du total déjà versé à ce jour si plusieurs versements existent
+  if (paymentHistory.length > payments.length) {
+    yPos += 6;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.setTextColor(grayMedium[0], grayMedium[1], grayMedium[2]);
+    doc.text("Total réglé à ce jour :", 110, yPos);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(grayDark[0], grayDark[1], grayDark[2]);
+    const historyPaidLabel = isHTG ? formatClubCurrency(historyPaidHTG, "HTG") : formatClubCurrency(historyPaidUSD, "US");
+    doc.text(historyPaidLabel, 196, yPos, { align: 'right' });
+  }
 
   // Séparateur
   yPos += 4;
@@ -688,3 +712,315 @@ export async function generateReceiptPDFBase64(
   // Use datauristring and we will process it in the server
   return doc.output('datauristring');
 }
+
+export interface PlayerHistoryMetrics {
+  totalUSD?: number;
+  totalHTG?: number;
+  count?: number;
+  totalDue?: string;
+  balance?: string;
+  balanceNum?: number;
+}
+
+export async function generatePlayerHistoryPDFBase64(
+  player: Player,
+  payments: any[],
+  parentNom?: string,
+  parentPrenom?: string,
+  parentTelephone?: string,
+  parentEmail?: string,
+  parentAddress?: string,
+  autoPrint: boolean = false,
+  metrics?: PlayerHistoryMetrics
+): Promise<string> {
+  const doc = new jsPDF({
+    orientation: "portrait",
+    unit: "mm",
+    format: "a4",
+  });
+
+  const computedName = [parentNom, parentPrenom].filter(Boolean).join(" ");
+  const parentFullName = computedName.length > 0 ? computedName : (player.parentNomPrenom || "Parent / Tuteur");
+
+  // Tri chronologique des versements
+  const sortedPayments = [...payments].sort((a, b) => {
+    const dateA = new Date(a.datePaiement || 0).getTime();
+    const dateB = new Date(b.datePaiement || 0).getTime();
+    return dateA - dateB;
+  });
+
+  // Calculs financiers
+  let calcUSD = 0;
+  let calcHTG = 0;
+  sortedPayments.forEach((p: any) => {
+    const amt = Number(p.montant) || 0;
+    const pTaux = Number(p.taux) || 0;
+    if (p.devise === "HTG") {
+      calcHTG += amt;
+      calcUSD += pTaux > 0 ? amt / pTaux : 0;
+    } else {
+      calcUSD += amt;
+    }
+  });
+
+  const totalUSD = metrics?.totalUSD !== undefined ? metrics.totalUSD : calcUSD;
+  const totalHTG = metrics?.totalHTG !== undefined ? metrics.totalHTG : calcHTG;
+  const paymentsCount = metrics?.count !== undefined ? metrics.count : sortedPayments.length;
+
+  let totalDueDisplay = metrics?.totalDue || "-";
+  if (totalDueDisplay === "-") {
+    const explicitDue = sortedPayments
+      .map((p: any) => p.remarque?.match(/\[TOTAL_DUE:\s*([\d.]+)\s*\]/i)?.[1])
+      .filter(Boolean)[0];
+    if (explicitDue) {
+      totalDueDisplay = formatClubCurrency(parseFloat(explicitDue), "US");
+    } else {
+      totalDueDisplay = formatClubCurrency(totalUSD, "US");
+    }
+  }
+
+  let balanceDisplay = metrics?.balance || "À jour (US$0.00)";
+  const balanceNum = metrics?.balanceNum !== undefined ? metrics.balanceNum : 0;
+  const isDue = balanceNum > 0.01;
+
+  let paidStr = "";
+  if (totalUSD > 0 && totalHTG > 0) {
+    paidStr = `${formatClubCurrency(totalUSD, "US")} (${totalHTG.toLocaleString("fr-FR")} HTG)`;
+  } else if (totalHTG > 0) {
+    paidStr = formatClubCurrency(totalHTG, "HTG");
+  } else {
+    paidStr = formatClubCurrency(totalUSD, "US");
+  }
+
+  const nowFormatted = new Date().toLocaleDateString("fr-FR", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+
+  // 1. En-tête Club épuré (Logo + Coordonnées)
+  try {
+    doc.addImage(FC_TORO_LOGO, "PNG", 15, 12, 18, 18);
+  } catch (e) {
+    console.warn("Erreur chargement logo PDF", e);
+  }
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(15);
+  doc.setTextColor(15, 23, 42);
+  doc.text("FC TORO", 37, 17.5);
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8.5);
+  doc.setTextColor(100, 116, 139);
+  doc.text("Football Club • Direction Administrative", 37, 22.5);
+  doc.text("Pétion-Ville, Haïti • +509 2817-8676 • www.fctoro.com", 37, 27);
+
+  // Titre & Date d'édition à droite
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(13);
+  doc.setTextColor(15, 23, 42);
+  doc.text("HISTORIQUE DES TRANSACTIONS", 195, 17.5, { align: "right" });
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8);
+  doc.setTextColor(71, 85, 105);
+  doc.text("Relevé & Preuve des Versements Effectués", 195, 22.5, { align: "right" });
+
+  doc.setFontSize(7.5);
+  doc.setTextColor(100, 116, 139);
+  doc.text(`Date d'édition : ${nowFormatted}`, 195, 27, { align: "right" });
+
+  // Ligne de séparation sobre
+  doc.setDrawColor(203, 213, 225);
+  doc.setLineWidth(0.4);
+  doc.line(15, 31, 195, 31);
+
+  // 2. Encadré Synthétique Sobre : Joueur & Situation du Compte (Simple & Lisible)
+  doc.setFillColor(248, 250, 252);
+  doc.setDrawColor(226, 232, 240);
+  doc.setLineWidth(0.3);
+  doc.roundedRect(15, 34.5, 180, 19, 1.2, 1.2, "FD");
+
+  // Ligne 1 : Infos Joueur
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8.5);
+  doc.setTextColor(71, 85, 105);
+  doc.text("Joueur :", 19, 40);
+  doc.setFontSize(9.5);
+  doc.setTextColor(15, 23, 42);
+  doc.text(getPlayerFullName(player).toUpperCase(), 33, 40);
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8.5);
+  doc.setTextColor(71, 85, 105);
+  doc.text("Matricule :", 110, 40);
+  doc.setFontSize(9);
+  doc.setTextColor(37, 99, 235);
+  doc.text(player.matricule || "N/A", 127, 40);
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8.5);
+  doc.setTextColor(71, 85, 105);
+  doc.text("Catégorie :", 162, 40);
+  doc.setFontSize(9);
+  doc.setTextColor(15, 23, 42);
+  doc.text(player.categorie || "N/A", 179, 40);
+
+  // Séparateur fin dans le bandeau
+  doc.setDrawColor(226, 232, 240);
+  doc.line(19, 43.5, 191, 43.5);
+
+  // Ligne 2 : Montants & Solde
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8);
+  doc.setTextColor(71, 85, 105);
+  doc.text("Total déjà versé :", 19, 49);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(5, 150, 105);
+  doc.text(paidStr, 44, 49);
+
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(71, 85, 105);
+  doc.text("Total dû (dossier) :", 84, 49);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(15, 23, 42);
+  doc.text(totalDueDisplay, 109, 49);
+
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(71, 85, 105);
+  doc.text("Solde restant :", 143, 49);
+  doc.setFont("helvetica", "bold");
+  if (isDue) {
+    doc.setTextColor(220, 38, 38);
+  } else {
+    doc.setTextColor(5, 150, 105);
+  }
+  doc.text(balanceDisplay, 163, 49);
+
+  // 3. Grand Tableau des Transactions (Clair, Aéré et Lisible)
+  const tableStartY = 58;
+  const tableColumn = ["#", "Date", "N° Reçu / Réf.", "Mode", "Rubriques & Détails du Paiement", "Montant"];
+  const tableRows: any[] = [];
+
+  sortedPayments.forEach((p: any, idx: number) => {
+    const isHTG = p.devise === "HTG";
+    const amt = Number(p.montant) || 0;
+    const refNo = p.id ? `REC-${String(p.id).slice(0, 8).toUpperCase()}` : `#${idx + 1}`;
+    const cleanDesc = cleanRemarkForPDF(p.remarque || "", isHTG);
+    const mntStr = formatClubCurrency(amt, isHTG ? "HTG" : "US");
+
+    tableRows.push([
+      String(idx + 1),
+      p.datePaiement ? formatClubDate(p.datePaiement) : "-",
+      refNo,
+      mapMode(p.methode || p.ModePaiement),
+      cleanDesc,
+      mntStr,
+    ]);
+  });
+
+  autoTable(doc, {
+    head: [tableColumn],
+    body: tableRows.length > 0 ? tableRows : [["-", "-", "-", "-", "Aucun versement enregistré", "-"]],
+    foot: [
+      [
+        {
+          content: "TOTAL VERSÉ :",
+          colSpan: 5,
+          styles: { halign: "right", fontStyle: "bold", fontSize: 8.5 },
+        },
+        {
+          content: paidStr,
+          styles: { halign: "right", fontStyle: "bold", fontSize: 8.5 },
+        },
+      ],
+    ],
+    startY: tableStartY,
+    theme: "striped",
+    styles: {
+      fontSize: 8.5,
+      cellPadding: { top: 3.5, bottom: 3.5, left: 3, right: 3 },
+      textColor: [31, 41, 55],
+      lineColor: [226, 232, 240],
+      lineWidth: 0.2,
+    },
+    headStyles: {
+      fillColor: [30, 41, 59],
+      textColor: [255, 255, 255],
+      fontStyle: "bold",
+      fontSize: 8,
+      halign: "left",
+    },
+    alternateRowStyles: {
+      fillColor: [248, 250, 252],
+    },
+    columnStyles: {
+      0: { cellWidth: 10, halign: "center" },
+      1: { cellWidth: 26, halign: "left" },
+      2: { cellWidth: 32, halign: "left", fontStyle: "bold" },
+      3: { cellWidth: 24, halign: "left" },
+      4: { cellWidth: "auto", halign: "left" },
+      5: { cellWidth: 30, halign: "right", fontStyle: "bold" },
+    },
+    footStyles: {
+      fillColor: [241, 245, 249],
+      textColor: [15, 23, 42],
+      fontStyle: "bold",
+      fontSize: 8.5,
+      halign: "right",
+    },
+    didParseCell: function (data: any) {
+      if (data.section === "head" && data.column.index === 5) {
+        data.cell.styles.halign = "right";
+      }
+    },
+  });
+
+  let finalY = (doc as any).lastAutoTable.finalY || 130;
+  if (finalY > 245) {
+    doc.addPage();
+    finalY = 25;
+  }
+
+  // 4. Mention de Preuve & Visa Administration Sobre
+  const proofY = finalY + 10;
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8);
+  doc.setTextColor(100, 116, 139);
+  doc.text("Document officiel certifiant les versements enregistrés au dossier du joueur.", 15, proofY);
+  doc.text("Fait foi de preuve de paiement pour toute vérification administrative interne.", 15, proofY + 4.5);
+
+  // Espace Signature / Visa à droite
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8);
+  doc.setTextColor(71, 85, 105);
+  doc.text("Visa & Signature Administration :", 140, proofY);
+  doc.setDrawColor(203, 213, 225);
+  doc.setLineWidth(0.4);
+  doc.line(140, proofY + 14, 195, proofY + 14);
+
+  // 5. Pied de Page Sobre
+  const pageCount = doc.getNumberOfPages();
+  for (let i = 1; i <= pageCount; i++) {
+    doc.setPage(i);
+    doc.setDrawColor(226, 232, 240);
+    doc.setLineWidth(0.3);
+    doc.line(15, 284, 195, 284);
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7.5);
+    doc.setTextColor(148, 163, 184);
+    doc.text("FC TORO — Historique des Transactions • Usage Interne & Administratif", 15, 288);
+    doc.text(`Page ${i} sur ${pageCount}`, 195, 288, { align: "right" });
+  }
+
+  if (autoPrint) {
+    doc.autoPrint();
+  }
+
+  return doc.output("datauristring");
+}
+

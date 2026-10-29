@@ -472,6 +472,9 @@ export function PaymentAddModal({ isOpen, onClose, initialPlayerId }: PaymentAdd
 
           const proofBase64List = await filesToBase64(paymentPhotos);
 
+          const playerPastPayments = payments.filter((p) => p.playerId === selectedPlayer.id);
+          const allPlayerPayments = [paymentForPdf, ...playerPastPayments];
+
           const receiptBase64 = await generateReceiptPDFBase64(
             selectedPlayer,
             [paymentForPdf],
@@ -482,7 +485,8 @@ export function PaymentAddModal({ isOpen, onClose, initialPlayerId }: PaymentAdd
             selectedPlayer.parentAdresse || selectedPlayer.adresse || "",
             proofBase64List,
             false,
-            discountedDue
+            discountedDue,
+            allPlayerPayments
           );
 
           // Print the generated PDF receipt on the same page using a hidden iframe

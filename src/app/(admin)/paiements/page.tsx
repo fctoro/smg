@@ -18,7 +18,7 @@ import Link from "next/link";
 
 import { useClubData } from "@/context/ClubDataContext";
 import { formatClubCurrency, formatClubDate, getPlayerFullName } from "@/lib/club/metrics";
-import { updatePaymentInSupabase, deletePaymentInSupabase } from "@/lib/club/supabase-crud";
+import { updatePaymentInSupabase, deletePaymentInSupabase, addPaymentToSupabase } from "@/lib/club/supabase-crud";
 import { calculateDiscountedAmount, parseReductionFromRemark } from "@/lib/club/payment-reduction-utils";
 import { ImageModal } from "@/components/club/modals/ImageModal";
 import { extractPhotoUrlFromRemark, extractPhotoUrlsFromRemark, isPdfProof, validatePaymentPhotoFile, getPaymentPhotoPreviewUrl, uploadPaymentPhotosToSupabase, filesToBase64 } from "@/lib/club/payment-photo-utils";
@@ -26,7 +26,7 @@ import { BellIcon, PencilIcon, TrashBinIcon } from "@/icons";
 import { ActiveBellIcon } from "@/icons/ActiveBellIcon";
 import { ConfirmModal } from "@/components/ui/modal/ConfirmModal";
 import { CustomReminderMessageModal } from "@/components/club/modals/CustomReminderMessageModal";
-import { generateReceiptPDFBase64 } from "@/lib/club/pdf-generator";
+import { generateReceiptPDFBase64, generatePlayerHistoryPDFBase64 } from "@/lib/club/pdf-generator";
 import { generatePlayerMatricule } from "@/lib/club/season";
 import { useConfirm } from "@/hooks/useConfirm";
 
@@ -141,7 +141,7 @@ function PaymentsPageContent() {
     return [...new Set(list.filter(Boolean))].sort((a, b) => (b || "").localeCompare(a || ""));
   }, [players]);
 
-  // Calcule la balance (y compris boursiers et demi-bourse avec mois restants)
+  // Calcule la balance globale du joueur en tenant compte de tous ses versements
   const calculateBalance = (currentPayment: (typeof payments)[number]): { balance: number; devise: "US" | "HTG"; moisRestants?: number; isSpecial?: boolean; dbg?: string } => {
     const paymentDevise = (currentPayment.devise || "US") as "US" | "HTG";
     const zero = { balance: 0, devise: paymentDevise };
@@ -153,7 +153,27 @@ function PaymentsPageContent() {
     const isBoursier = (playerStatus === "bourse" || playerStatus === "boursier" || remarkLower.includes("[plan:boursier]")) && !playerStatus.includes("demi") && !remarkLower.includes("demi");
     const isDemiBoursier = playerStatus.includes("demi") || remarkLower.includes("demi-bourse") || remarkLower.includes("demi bourse") || remarkLower.includes("[reduction:half]") || (remarkLower.includes("demi") && !remarkLower.includes("pandemie"));
 
-    const amountPaid = Number(currentPayment.montant) || 0;
+    // Somme cumulée de TOUS les paiements de ce joueur
+    const playerPayments = payments.filter((p) => p.playerId === currentPayment.playerId);
+    let defaultTaux = currentPayment.taux || 0;
+    if (defaultTaux <= 1) {
+      const tauxMatch = currentPayment.remarque?.match(/\[TAUX:\s*([\d.]+)\s*\]/i);
+      defaultTaux = tauxMatch ? parseFloat(tauxMatch[1]) : 130;
+    }
+
+    let playerTotalPaidUSD = 0;
+    let playerTotalPaidHTG = 0;
+    playerPayments.forEach((p) => {
+      const pAmt = Number(p.montant) || 0;
+      const pTaux = Number(p.taux) || defaultTaux;
+      if (p.devise === "HTG") {
+        playerTotalPaidHTG += pAmt;
+        playerTotalPaidUSD += pTaux > 0 ? pAmt / pTaux : 0;
+      } else {
+        playerTotalPaidUSD += pAmt;
+        playerTotalPaidHTG += pTaux > 0 ? pAmt * pTaux : 0;
+      }
+    });
 
     // 1. Cas Boursier : paie seulement un montant à définir (pas de formule mensuelle comme demi-bourse)
     if (isBoursier) {
@@ -162,13 +182,9 @@ function PaymentsPageContent() {
         const totalDueVal = parseFloat(totalDueMarker[1]);
         if (!isNaN(totalDueVal) && totalDueVal > 0) {
           if (paymentDevise === "HTG") {
-            let taux = currentPayment.taux || 0;
-            if (taux <= 1) {
-              const tauxMatch = currentPayment.remarque?.match(/\[TAUX:\s*([\d.]+)\s*\]/i);
-              taux = tauxMatch ? parseFloat(tauxMatch[1]) : 130;
-            }
+            let taux = currentPayment.taux || defaultTaux;
             const totalDueHTG = Math.round(totalDueVal * taux);
-            const balanceHTG = Math.max(0, totalDueHTG - amountPaid);
+            const balanceHTG = Math.max(0, totalDueHTG - playerTotalPaidHTG);
             return {
               balance: balanceHTG,
               devise: "HTG",
@@ -176,7 +192,7 @@ function PaymentsPageContent() {
               dbg: `boursier_defined_htg`,
             };
           } else {
-            const balanceUSD = Math.max(0, totalDueVal - amountPaid);
+            const balanceUSD = Math.max(0, totalDueVal - playerTotalPaidUSD);
             return {
               balance: Number(balanceUSD.toFixed(2)),
               devise: "US",
@@ -205,7 +221,7 @@ function PaymentsPageContent() {
 
         if (isDemi2500) {
           const totalSeasonDueHTG = totalSeasonMonths * 2500;
-          const balanceHTG = Math.max(0, totalSeasonDueHTG - amountPaid);
+          const balanceHTG = Math.max(0, totalSeasonDueHTG - playerTotalPaidHTG);
           const effectiveMoisRestants = Math.max(0, Math.ceil(balanceHTG / 2500));
           return {
             balance: balanceHTG,
@@ -220,17 +236,9 @@ function PaymentsPageContent() {
         const isTi = cat.includes("titoro") || cat.includes("ti-toro") || cat.includes("ti_toro");
         const demiMonthlyUSD = isTi ? 57.5 : 77.5;
 
-        let taux = currentPayment.taux || 0;
-        if (taux <= 1) {
-          const tauxMatch = currentPayment.remarque?.match(/\[TAUX:\s*([\d.]+)\s*\]/i);
-          if (tauxMatch && tauxMatch[1]) {
-            taux = parseFloat(tauxMatch[1]);
-          }
-        }
-
+        let taux = currentPayment.taux || defaultTaux;
         const totalSeasonDueUSD = totalSeasonMonths * demiMonthlyUSD;
-        const amountPaidInUSD = paymentDevise === "HTG" ? (taux > 0 ? amountPaid / taux : 0) : amountPaid;
-        const balanceUSD = Math.max(0, totalSeasonDueUSD - amountPaidInUSD);
+        const balanceUSD = Math.max(0, totalSeasonDueUSD - playerTotalPaidUSD);
         const effectiveMoisRestants = Math.max(0, Math.ceil(balanceUSD / demiMonthlyUSD));
 
         if (paymentDevise === "HTG" && taux > 1) {
@@ -254,44 +262,19 @@ function PaymentsPageContent() {
       }
     }
 
-    // Lire le TOTAL_DUE (toujours stocké en USD)
+    // 3. Cas Standard : Lire le TOTAL_DUE (stocké en USD)
     const totalDueMarker = currentPayment.remarque?.match(/\[TOTAL_DUE:\s*([\d.]+)\s*\]/i);
     if (!totalDueMarker || !totalDueMarker[1]) return { ...zero, dbg: "no_marker" };
     const totalDueUSD = parseFloat(totalDueMarker[1]);
     if (isNaN(totalDueUSD) || totalDueUSD <= 0) return { ...zero, dbg: `nan_or_zero_(${totalDueUSD})` };
 
-    const isHTG = paymentDevise === "HTG";
-
-    if (isHTG) {
-      // Pour les transactions en Gourdes, convertir en USD pour garder la balance toujours en Dollars US ($)
-      let taux = currentPayment.taux || 0;
-      if (taux <= 1) {
-        const tauxMatch = currentPayment.remarque?.match(/\[TAUX:\s*([\d.]+)\s*\]/i);
-        if (tauxMatch && tauxMatch[1]) {
-            taux = parseFloat(tauxMatch[1]);
-        } else {
-            taux = 130; // Fallback
-        }
-      }
-      const paidInUSD = taux > 0 ? (currentPayment.montant / taux) : 0;
-      const balanceUSD = totalDueUSD - paidInUSD;
-      if (balanceUSD > 0.01) {
-        return { balance: Number(balanceUSD.toFixed(2)), devise: "US", dbg: `HTG_PAID_BALANCE_USD_${balanceUSD}` };
-      } else {
-        return { balance: 0, devise: "US", dbg: `HTG_PAID_BALANCE_ZERO` };
-      }
+    const paidUSD = playerTotalPaidUSD;
+    const balanceUSD = totalDueUSD - paidUSD;
+    if (balanceUSD > 0.01) {
+      return { balance: Number(balanceUSD.toFixed(2)), devise: "US", dbg: `USD_PATH_balance_${balanceUSD}` };
     } else {
-      // Travailler entièrement en USD
-      const paidUSD = currentPayment.montant;
-      const balanceUSD = totalDueUSD - paidUSD;
-      if (balanceUSD > 0.01) {
-        return { balance: Number(balanceUSD.toFixed(2)), devise: "US", dbg: `USD_PATH_balance_${balanceUSD}` };
-      } else {
-        return { balance: 0, devise: "US", dbg: `USD_PATH_balanceUSD_less_than_0.01_(${balanceUSD})` };
-      }
+      return { balance: 0, devise: "US", dbg: `USD_PATH_balanceUSD_less_than_0.01_(${balanceUSD})` };
     }
-
-    return { ...zero, dbg: "END_REACHED" };
   };
 
   const hasPaymentPlan = (remark?: string) =>
@@ -389,18 +372,7 @@ function PaymentsPageContent() {
         ? newAmountNum
         : (editTaux > 0 ? newAmountNum * editTaux : 0);
 
-      // On préserve la devise initiale du dossier (US par défaut) pour ne pas altérer l'affichage principal
       const targetDevise = editingPayment.devise || "US";
-
-      // Cumul total mis à jour en USD et HTG
-      const prevMontantUS = Number(editingPayment.montantUS) || (editingPayment.devise === "HTG" && editingPayment.taux ? editingPayment.montant / editingPayment.taux : Number(editingPayment.montant) || 0);
-      const prevMontantHTG = Number(editingPayment.montantHTG) || (editingPayment.devise === "HTG" ? Number(editingPayment.montant) || 0 : 0);
-
-      const totalMontantUS = prevMontantUS + addedUSD;
-      const totalMontantHTG = prevMontantHTG + addedHTG;
-
-      // Le montant principal reste exprimé dans la devise initiale du dossier
-      const newPrimaryAmount = targetDevise === "HTG" ? totalMontantHTG : totalMontantUS;
       
       const paymentPhotoNotes = (paymentPhotoUrls && paymentPhotoUrls.length > 0)
         ? paymentPhotoUrls.map((url) => ` [JUSTIFICATIF:${url}]`).join("")
@@ -432,22 +404,50 @@ function PaymentsPageContent() {
 
       const finalRemarque = `${baseRemarque}${paymentPhotoNotes}`.trim();
 
-      await updatePaymentInSupabase(editingPayment.id, {
-        montant: newPrimaryAmount,
-        montantUS: totalMontantUS,
-        montantHTG: totalMontantHTG,
-        devise: targetDevise,
-        taux: editTaux > 0 ? editTaux : editingPayment.taux,
-        datePaiement: newPaymentDate,
-        remarque: finalRemarque,
-      });
-      setPayments((currentPayments) =>
-        currentPayments.map((payment) =>
-          payment.id === editingPayment.id
-            ? { ...payment, montant: newPrimaryAmount, montantUS: totalMontantUS, montantHTG: totalMontantHTG, devise: targetDevise, taux: editTaux > 0 ? editTaux : editingPayment.taux, datePaiement: newPaymentDate, remarque: finalRemarque }
-            : payment,
-        ),
-      );
+      let insertedNewPayment: any = null;
+
+      if (newAmountNum > 0) {
+        // Enregistrer une nouvelle transaction pour ce versement (sans écraser le paiement précédent avec le cumul)
+        const newPaymentPayload: any = {
+          playerId: editingPayment.playerId,
+          montant: newAmountNum,
+          montantUS: addedUSD,
+          montantHTG: addedHTG,
+          devise: editDevise,
+          taux: editDevise === "HTG" && editTaux > 0 ? editTaux : undefined,
+          statut: "paid",
+          periode: editingPayment.periode || "",
+          methode: editingPayment.methode || "especes",
+          datePaiement: newPaymentDate || new Date().toISOString().split("T")[0],
+          remarque: finalRemarque,
+        };
+
+        const inserted = await addPaymentToSupabase(newPaymentPayload);
+        insertedNewPayment = {
+          id: inserted?.Id ? String(inserted.Id) : `SOLDE-${Date.now()}`,
+          ...newPaymentPayload,
+        };
+
+        setPayments((currentPayments) => [insertedNewPayment, ...currentPayments]);
+      } else {
+        // Simple modification des métadonnées de la transaction sélectionnée (date, plan, remarque)
+        await updatePaymentInSupabase(editingPayment.id, {
+          montant: editingPayment.montant,
+          montantUS: editingPayment.montantUS,
+          montantHTG: editingPayment.montantHTG,
+          devise: targetDevise,
+          taux: editTaux > 0 ? editTaux : editingPayment.taux,
+          datePaiement: newPaymentDate,
+          remarque: finalRemarque,
+        });
+        setPayments((currentPayments) =>
+          currentPayments.map((payment) =>
+            payment.id === editingPayment.id
+              ? { ...payment, datePaiement: newPaymentDate, remarque: finalRemarque }
+              : payment,
+          ),
+        );
+      }
 
       // Fermeture immédiate du modal et mise à jour UI instantanée !
       closeEditModal();
@@ -460,16 +460,12 @@ function PaymentsPageContent() {
         if (!emailToSend) return;
 
         try {
-          const updatedPaymentForPdf = {
-            id: editingPayment.id,
-            playerId: editingPayment.playerId,
-            montant: newPrimaryAmount,
-            montantUS: totalMontantUS,
-            montantHTG: totalMontantHTG,
-            devise: targetDevise,
-            datePaiement: newPaymentDate,
-            remarque: finalRemarque,
-          };
+          const paymentForPdf = insertedNewPayment || editingPayment;
+          const playerAllPayments = payments.filter((p) => p.playerId === editingPayment.playerId);
+          const allPaymentsIncludingNew = insertedNewPayment
+            ? [insertedNewPayment, ...playerAllPayments]
+            : playerAllPayments;
+
           const nomParts = (player.parentNomPrenom || "").split(" ");
           const parentNom = nomParts[0] || "";
           const parentPrenom = nomParts.slice(1).join(" ") || "";
@@ -500,7 +496,7 @@ function PaymentsPageContent() {
 
           const receiptBase64 = await generateReceiptPDFBase64(
             player,
-            [updatedPaymentForPdf],
+            [paymentForPdf],
             parentNom,
             parentPrenom,
             player.parentTelephone || player.telephone || "",
@@ -508,10 +504,11 @@ function PaymentsPageContent() {
             player.parentAdresse || player.adresse || "",
             allProofBase64List,
             false,
-            totalRubriques
+            totalRubriques,
+            allPaymentsIncludingNew
           );
 
-          const mntStr = targetDevise === "HTG" ? `${newAmount} HTG` : `${newAmount} USD`;
+          const mntStr = editDevise === "HTG" ? `${newAmountNum} HTG` : `${newAmountNum} USD`;
           await fetch("/api/send-receipt", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -519,7 +516,7 @@ function PaymentsPageContent() {
               email: emailToSend,
               parentName: player.parentNomPrenom || getPlayerFullName(player),
               receiptBase64,
-              receiptNumber: `SOLDE-${Date.now()}`,
+              receiptNumber: `REC-${paymentForPdf.id.slice(0, 8).toUpperCase()}`,
               amount: mntStr,
             }),
           });
@@ -582,6 +579,7 @@ function PaymentsPageContent() {
       // Extraire le total des rubriques depuis la remarque du paiement
       const totalRubriquesMatch = payment.remarque?.match(/\[TOTAL_DUE:\s*([\d.]+)\s*\]/i);
       const totalRubriques = totalRubriquesMatch ? parseFloat(totalRubriquesMatch[1]) : undefined;
+      const playerAllPayments = payments.filter((p) => p.playerId === payment.playerId);
       
       const receiptBase64 = await generateReceiptPDFBase64(
         player,
@@ -593,7 +591,8 @@ function PaymentsPageContent() {
         player.parentAdresse || player.adresse || "",
         proofBase64List,
         false,
-        totalRubriques
+        totalRubriques,
+        playerAllPayments
       );
       
       // Télécharger le PDF
@@ -650,6 +649,7 @@ function PaymentsPageContent() {
       // Extraire le total des rubriques depuis la remarque du paiement
       const totalRubriquesMatch = payment.remarque?.match(/\[TOTAL_DUE:\s*([\d.]+)\s*\]/i);
       const totalRubriques = totalRubriquesMatch ? parseFloat(totalRubriquesMatch[1]) : undefined;
+      const playerAllPayments = payments.filter((p) => p.playerId === payment.playerId);
       
       const receiptBase64 = await generateReceiptPDFBase64(
         player,
@@ -661,14 +661,15 @@ function PaymentsPageContent() {
         player.parentAdresse || player.adresse || "",
         proofBase64List,
         true,
-        totalRubriques
+        totalRubriques,
+        playerAllPayments
       );
       
       const base64Data = receiptBase64.includes("base64,") ? receiptBase64.split("base64,")[1] : receiptBase64;
       const byteCharacters = atob(base64Data);
       const byteNumbers = new Array(byteCharacters.length);
       for (let i = 0; i < byteCharacters.length; i++) {
-          byteNumbers[i] = byteCharacters.charCodeAt(i);
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
       }
       const byteArray = new Uint8Array(byteNumbers);
       const blob = new Blob([byteArray], {type: 'application/pdf'});
@@ -693,6 +694,112 @@ function PaymentsPageContent() {
     } catch (err) {
       console.error("Erreur lors de la génération du PDF", err);
       alert("Erreur lors de la génération du PDF pour impression");
+    }
+  };
+
+  const handlePrintPlayerHistory = async (
+    player: (typeof players)[number],
+    playerPayments: (typeof payments),
+    metrics?: { totalUSD?: number; totalHTG?: number; count?: number; totalDue?: string; balance?: string; balanceNum?: number }
+  ) => {
+    if (!player || playerPayments.length === 0) return;
+    try {
+      const nomParts = (player.parentNomPrenom || "").split(" ");
+      const parentNom = nomParts[0] || "";
+      const parentPrenom = nomParts.slice(1).join(" ") || "";
+
+      const historyBase64 = await generatePlayerHistoryPDFBase64(
+        player,
+        playerPayments,
+        parentNom,
+        parentPrenom,
+        player.parentTelephone || player.telephone || "",
+        player.parentEmail || player.email || "",
+        player.parentAdresse || player.adresse || "",
+        true,
+        metrics
+      );
+
+      const base64Data = historyBase64.includes("base64,") ? historyBase64.split("base64,")[1] : historyBase64;
+      const byteCharacters = atob(base64Data);
+      const byteNumbers = new Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      }
+      const byteArray = new Uint8Array(byteNumbers);
+      const blob = new Blob([byteArray], { type: "application/pdf" });
+      const blobUrl = URL.createObjectURL(blob);
+
+      const iframe = document.createElement("iframe");
+      iframe.style.position = "fixed";
+      iframe.style.right = "0";
+      iframe.style.bottom = "0";
+      iframe.style.width = "0";
+      iframe.style.height = "0";
+      iframe.style.border = "0";
+      iframe.src = blobUrl;
+      document.body.appendChild(iframe);
+
+      iframe.onload = () => {
+        setTimeout(() => {
+          try {
+            iframe.contentWindow?.focus();
+            iframe.contentWindow?.print();
+          } catch (e) {
+            console.error("Erreur lors de l'impression de la fiche financière via iframe", e);
+          }
+        }, 300);
+      };
+    } catch (err) {
+      console.error("Erreur lors de l'impression de l'historique", err);
+      alert("Erreur lors de l'impression de l'historique : " + (err instanceof Error ? err.message : String(err)));
+    }
+  };
+
+  const handleDownloadPlayerHistoryPDF = async (
+    player: (typeof players)[number],
+    playerPayments: (typeof payments),
+    metrics?: { totalUSD?: number; totalHTG?: number; count?: number; totalDue?: string; balance?: string; balanceNum?: number }
+  ) => {
+    if (!player || playerPayments.length === 0) return;
+    try {
+      const nomParts = (player.parentNomPrenom || "").split(" ");
+      const parentNom = nomParts[0] || "";
+      const parentPrenom = nomParts.slice(1).join(" ") || "";
+
+      const historyBase64 = await generatePlayerHistoryPDFBase64(
+        player,
+        playerPayments,
+        parentNom,
+        parentPrenom,
+        player.parentTelephone || player.telephone || "",
+        player.parentEmail || player.email || "",
+        player.parentAdresse || player.adresse || "",
+        false,
+        metrics
+      );
+
+      const base64Data = historyBase64.includes("base64,") ? historyBase64.split("base64,")[1] : historyBase64;
+      const byteCharacters = atob(base64Data);
+      const byteNumbers = new Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      }
+      const byteArray = new Uint8Array(byteNumbers);
+      const blob = new Blob([byteArray], { type: "application/pdf" });
+      const blobUrl = URL.createObjectURL(blob);
+
+      const link = document.createElement("a");
+      link.href = blobUrl;
+      const safeMatricule = player.matricule || player.id;
+      link.download = `RELEVE-TRANSACTIONS-${safeMatricule}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 2000);
+    } catch (err) {
+      console.error("Erreur lors du téléchargement de l'historique", err);
+      alert("Erreur lors du téléchargement de l'historique : " + (err instanceof Error ? err.message : String(err)));
     }
   };
 
@@ -2088,7 +2195,29 @@ function PaymentsPageContent() {
                 </div>
               </div>
 
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => handlePrintPlayerHistory(historyPlayer, historyPlayerPayments, historyMetrics)}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 text-xs font-semibold shadow-xs transition cursor-pointer"
+                  title="Imprimer l'historique des transactions"
+                >
+                  <svg className="size-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                  </svg>
+                  <span>Imprimer l'historique</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleDownloadPlayerHistoryPDF(historyPlayer, historyPlayerPayments, historyMetrics)}
+                  className="hidden sm:inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700/50 transition cursor-pointer"
+                  title="Télécharger l'historique des transactions au format PDF"
+                >
+                  <svg className="size-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                  </svg>
+                  <span>PDF Relevé</span>
+                </button>
                 <Link
                   href={`/joueurs/${historyPlayer.id}`}
                   target="_blank"
@@ -2293,7 +2422,17 @@ function PaymentsPageContent() {
             </div>
 
             {/* Modal Footer */}
-            <div className="flex items-center justify-end px-6 py-3 border-t border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/40">
+            <div className="flex items-center justify-between px-6 py-3 border-t border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/40">
+              <button
+                type="button"
+                onClick={() => handlePrintPlayerHistory(historyPlayer, historyPlayerPayments, historyMetrics)}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 text-sm font-semibold shadow-xs transition cursor-pointer"
+              >
+                <svg className="size-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                </svg>
+                <span>Imprimer l'historique</span>
+              </button>
               <button
                 type="button"
                 onClick={() => setHistoryPlayerId(null)}

@@ -18,7 +18,7 @@ import Link from "next/link";
 
 import { useClubData } from "@/context/ClubDataContext";
 import { formatClubCurrency, formatClubDate, getPlayerFullName } from "@/lib/club/metrics";
-import { updatePaymentInSupabase, deletePaymentInSupabase, addPaymentToSupabase } from "@/lib/club/supabase-crud";
+import { updatePaymentInSupabase, deletePaymentInSupabase } from "@/lib/club/supabase-crud";
 import { calculateDiscountedAmount, parseReductionFromRemark } from "@/lib/club/payment-reduction-utils";
 import { ImageModal } from "@/components/club/modals/ImageModal";
 import { extractPhotoUrlFromRemark, extractPhotoUrlsFromRemark, isPdfProof, validatePaymentPhotoFile, getPaymentPhotoPreviewUrl, uploadPaymentPhotosToSupabase, filesToBase64 } from "@/lib/club/payment-photo-utils";
@@ -384,7 +384,17 @@ function PaymentsPageContent() {
         : (editTaux > 0 ? newAmountNum * editTaux : 0);
 
       const targetDevise = editingPayment.devise || "US";
-      
+
+      // Cumul total mis à jour en USD et HTG
+      const prevMontantUS = Number(editingPayment.montantUS) || (editingPayment.devise === "HTG" && editingPayment.taux ? editingPayment.montant / editingPayment.taux : Number(editingPayment.montant) || 0);
+      const prevMontantHTG = Number(editingPayment.montantHTG) || (editingPayment.devise === "HTG" ? Number(editingPayment.montant) || 0 : 0);
+
+      const totalMontantUS = prevMontantUS + addedUSD;
+      const totalMontantHTG = prevMontantHTG + addedHTG;
+
+      // Le montant principal reste exprimé dans la devise initiale du dossier
+      const newPrimaryAmount = targetDevise === "HTG" ? totalMontantHTG : totalMontantUS;
+
       const paymentPhotoNotes = (paymentPhotoUrls && paymentPhotoUrls.length > 0)
         ? paymentPhotoUrls.map((url) => ` [JUSTIFICATIF:${url}]`).join("")
         : paymentPhotos.map((p) => ` [JUSTIFICATIF:${p.name}]`).join("");
@@ -409,45 +419,65 @@ function PaymentsPageContent() {
         baseRemarque = baseRemarque.replace(/\[MOIS_PAYES:\s*\d+\s*\]/gi, "").trim();
       }
 
+      const paymentDateToSave = newPaymentDate || editingPayment.datePaiement || new Date().toISOString().split("T")[0];
+
       if (editDevise === "HTG" && newAmountNum > 0) {
         baseRemarque += ` [SOLDE_HTG:${newAmountNum}_TAUX:${editTaux}_USD:${addedUSD.toFixed(2)}]`;
+      }
+      if (newAmountNum > 0) {
+        baseRemarque += ` [VERSEMENT:${newAmountNum}_${editDevise}_DATE:${paymentDateToSave}]`;
       }
 
       const finalRemarque = `${baseRemarque}${paymentPhotoNotes}`.trim();
 
-      let insertedNewPayment: any = null;
-
       if (newAmountNum > 0) {
-        // Enregistrer une nouvelle transaction pour ce versement (sans écraser le paiement précédent avec le cumul)
-        const newPaymentPayload: any = {
-          playerId: editingPayment.playerId,
-          montant: newAmountNum,
-          montantUS: addedUSD,
-          montantHTG: addedHTG,
-          devise: editDevise,
-          taux: editDevise === "HTG" && editTaux > 0 ? editTaux : undefined,
-          statut: "paid",
-          periode: editingPayment.periode || "",
-          methode: editingPayment.methode || "especes",
-          datePaiement: newPaymentDate || new Date().toISOString().split("T")[0],
+        // Mettre à jour la transaction existante en place (cumul) pour ne JAMAIS créer de nouvelle ligne dans la table
+        await updatePaymentInSupabase(editingPayment.id, {
+          montant: newPrimaryAmount,
+          montantUS: totalMontantUS,
+          montantHTG: totalMontantHTG,
+          devise: targetDevise,
+          taux: editTaux > 0 ? editTaux : editingPayment.taux,
+          datePaiement: paymentDateToSave,
+          remarque: finalRemarque,
+        });
+
+        const updatedPayment = {
+          ...editingPayment,
+          montant: newPrimaryAmount,
+          montantUS: totalMontantUS,
+          montantHTG: totalMontantHTG,
+          devise: targetDevise,
+          taux: editTaux > 0 ? editTaux : editingPayment.taux,
+          datePaiement: paymentDateToSave,
           remarque: finalRemarque,
         };
 
-        const inserted = await addPaymentToSupabase(newPaymentPayload);
-        insertedNewPayment = {
-          id: inserted?.Id ? String(inserted.Id) : `SOLDE-${Date.now()}`,
-          ...newPaymentPayload,
-        };
-
-        setPayments((currentPayments) => [insertedNewPayment, ...currentPayments]);
+        setPayments((currentPayments) =>
+          currentPayments.map((payment) =>
+            payment.id === editingPayment.id ? updatedPayment : payment
+          )
+        );
 
         // Génération du reçu et envoi par email
         const player = playerMap.get(editingPayment.playerId);
         if (player) {
           try {
-            const paymentForPdf = insertedNewPayment;
-            const playerAllPayments = payments.filter((p) => p.playerId === editingPayment.playerId);
-            const allPaymentsIncludingNew = [insertedNewPayment, ...playerAllPayments];
+            const installmentPaymentForPdf = {
+              ...editingPayment,
+              id: `${editingPayment.id}-${Date.now().toString().slice(-4)}`,
+              montant: newAmountNum,
+              montantUS: addedUSD,
+              montantHTG: addedHTG,
+              devise: editDevise,
+              taux: editDevise === "HTG" && editTaux > 0 ? editTaux : editingPayment.taux,
+              datePaiement: paymentDateToSave,
+              remarque: finalRemarque,
+            };
+
+            const playerAllPayments = payments
+              .filter((p) => p.playerId === editingPayment.playerId)
+              .map((p) => (p.id === editingPayment.id ? updatedPayment : p));
 
             const nomParts = (player.parentNomPrenom || "").split(" ");
             const parentNom = nomParts[0] || "";
@@ -481,7 +511,7 @@ function PaymentsPageContent() {
 
             const receiptBase64 = await generateReceiptPDFBase64(
               player,
-              [paymentForPdf],
+              [installmentPaymentForPdf],
               parentNom,
               parentPrenom,
               player.parentTelephone || player.telephone || "",
@@ -490,11 +520,11 @@ function PaymentsPageContent() {
               allProofBase64List,
               false,
               totalRubriques,
-              allPaymentsIncludingNew
+              playerAllPayments
             );
 
             const mntStr = editDevise === "HTG" ? `${newAmountNum.toLocaleString()} HTG` : `$${newAmountNum.toFixed(2)} USD`;
-            const receiptNo = `REC-${paymentForPdf.id.slice(0, 8).toUpperCase()}`;
+            const receiptNo = `REC-${editingPayment.id.slice(0, 8).toUpperCase()}-${Date.now().toString().slice(-4)}`;
 
             const base64Data = receiptBase64.includes("base64,") ? receiptBase64.split("base64,")[1] : receiptBase64;
             const byteCharacters = atob(base64Data);
@@ -525,12 +555,12 @@ function PaymentsPageContent() {
             // Afficher la fenêtre modale avec le récapitulatif complet du reçu pour l'administrateur
             setSettledReceiptModalData({
               player,
-              payment: paymentForPdf,
+              payment: installmentPaymentForPdf,
               receiptBase64,
               blobUrl,
               receiptNumber: receiptNo,
               amountFormatted: mntStr,
-              datePaiement: newPaymentDate || new Date().toISOString().split("T")[0],
+              datePaiement: paymentDateToSave,
               methode: editingPayment.methode || "especes",
               emailSentTo,
             });
@@ -546,13 +576,13 @@ function PaymentsPageContent() {
           montantHTG: editingPayment.montantHTG,
           devise: targetDevise,
           taux: editTaux > 0 ? editTaux : editingPayment.taux,
-          datePaiement: newPaymentDate,
+          datePaiement: paymentDateToSave,
           remarque: finalRemarque,
         });
         setPayments((currentPayments) =>
           currentPayments.map((payment) =>
             payment.id === editingPayment.id
-              ? { ...payment, datePaiement: newPaymentDate, remarque: finalRemarque }
+              ? { ...payment, datePaiement: paymentDateToSave, remarque: finalRemarque }
               : payment,
           ),
         );
@@ -905,7 +935,7 @@ function PaymentsPageContent() {
     const query = searchQuery.trim().toLowerCase();
     const codeTarget = codeUniqueFilter.trim().toLowerCase();
 
-    return payments
+    const sorted = payments
       .filter((payment) => {
         if (methodeFilter !== "all") {
           const m = (payment.methode || "").toLowerCase().trim();
@@ -961,6 +991,39 @@ function PaymentsPageContent() {
         const idB = parseInt(String(b.id).replace(/\D/g, ""), 10) || 0;
         return idB - idA;
       });
+
+    // Chaque joueur/dossier n'apparaît strictement qu'une seule fois dans la table principale des paiements
+    const seenPlayerIds = new Set<string>();
+    const uniquePayments: typeof payments = [];
+
+    for (const payment of sorted) {
+      if (!seenPlayerIds.has(payment.playerId)) {
+        seenPlayerIds.add(payment.playerId);
+
+        // Si le joueur possède d'autres versements, consolider le montant affiché
+        const playerAllP = payments.filter((p) => p.playerId === payment.playerId);
+        if (playerAllP.length > 1) {
+          let sumMontant = 0;
+          let sumUS = 0;
+          let sumHTG = 0;
+          for (const item of playerAllP) {
+            sumMontant += Number(item.montant) || 0;
+            sumUS += Number(item.montantUS) || 0;
+            sumHTG += Number(item.montantHTG) || 0;
+          }
+          uniquePayments.push({
+            ...payment,
+            montant: sumMontant,
+            montantUS: sumUS > 0 ? sumUS : payment.montantUS,
+            montantHTG: sumHTG > 0 ? sumHTG : payment.montantHTG,
+          });
+        } else {
+          uniquePayments.push(payment);
+        }
+      }
+    }
+
+    return uniquePayments;
   }, [payments, playerMap, searchQuery, codeUniqueFilter, startDate, endDate, methodeFilter, deviseFilter, selectedSeason]);
 
   // ----- Logique de Rappel en Masse -----

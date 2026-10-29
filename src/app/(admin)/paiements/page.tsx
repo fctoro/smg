@@ -119,6 +119,17 @@ function PaymentsPageContent() {
   const [editDevise, setEditDevise] = useState<"US" | "HTG">("US");
   const [editTaux, setEditTaux] = useState<number>(0);
   const [historyPlayerId, setHistoryPlayerId] = useState<string | null>(null);
+  const [settledReceiptModalData, setSettledReceiptModalData] = useState<{
+    player: (typeof players)[number];
+    payment: any;
+    receiptBase64: string;
+    blobUrl: string;
+    receiptNumber: string;
+    amountFormatted: string;
+    datePaiement: string;
+    methode: string;
+    emailSentTo: string | null;
+  } | null>(null);
 
   const playerMap = useMemo(
     () => new Map(players.map((player) => [player.id, player])),
@@ -429,6 +440,104 @@ function PaymentsPageContent() {
         };
 
         setPayments((currentPayments) => [insertedNewPayment, ...currentPayments]);
+
+        // Génération du reçu et envoi par email
+        const player = playerMap.get(editingPayment.playerId);
+        if (player) {
+          try {
+            const paymentForPdf = insertedNewPayment;
+            const playerAllPayments = payments.filter((p) => p.playerId === editingPayment.playerId);
+            const allPaymentsIncludingNew = [insertedNewPayment, ...playerAllPayments];
+
+            const nomParts = (player.parentNomPrenom || "").split(" ");
+            const parentNom = nomParts[0] || "";
+            const parentPrenom = nomParts.slice(1).join(" ") || "";
+
+            const totalRubriquesMatch = finalRemarque.match(/\[TOTAL_DUE:\s*([\d.]+)\s*\]/i);
+            const totalRubriques = totalRubriquesMatch ? parseFloat(totalRubriquesMatch[1]) : undefined;
+
+            const existingPhotoUrls = extractPhotoUrlsFromRemark(editingPayment.remarque);
+            const existingProofBase64List: string[] = [];
+            for (const proofUrl of existingPhotoUrls) {
+              try {
+                const res = await fetch(proofUrl);
+                const blob = await res.blob();
+                const b64 = await new Promise<string>((resolve, reject) => {
+                  const reader = new FileReader();
+                  reader.onloadend = () => resolve(reader.result as string);
+                  reader.onerror = reject;
+                  reader.readAsDataURL(blob);
+                });
+                if (b64) existingProofBase64List.push(b64);
+              } catch (e) {
+                console.warn("Erreur lors de la récupération de la preuve", proofUrl, e);
+              }
+            }
+
+            const newProofBase64List = await filesToBase64(paymentPhotos);
+            const allProofBase64List = [...existingProofBase64List, ...newProofBase64List];
+
+            const emailToSend = (player.parentEmail || player.email || "").trim();
+
+            const receiptBase64 = await generateReceiptPDFBase64(
+              player,
+              [paymentForPdf],
+              parentNom,
+              parentPrenom,
+              player.parentTelephone || player.telephone || "",
+              emailToSend,
+              player.parentAdresse || player.adresse || "",
+              allProofBase64List,
+              false,
+              totalRubriques,
+              allPaymentsIncludingNew
+            );
+
+            const mntStr = editDevise === "HTG" ? `${newAmountNum.toLocaleString()} HTG` : `$${newAmountNum.toFixed(2)} USD`;
+            const receiptNo = `REC-${paymentForPdf.id.slice(0, 8).toUpperCase()}`;
+
+            const base64Data = receiptBase64.includes("base64,") ? receiptBase64.split("base64,")[1] : receiptBase64;
+            const byteCharacters = atob(base64Data);
+            const byteNumbers = new Array(byteCharacters.length);
+            for (let i = 0; i < byteCharacters.length; i++) {
+              byteNumbers[i] = byteCharacters.charCodeAt(i);
+            }
+            const byteArray = new Uint8Array(byteNumbers);
+            const blob = new Blob([byteArray], { type: "application/pdf" });
+            const blobUrl = URL.createObjectURL(blob);
+
+            let emailSentTo: string | null = null;
+            if (emailToSend) {
+              emailSentTo = emailToSend;
+              fetch("/api/send-receipt", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  email: emailSentTo,
+                  parentName: player.parentNomPrenom || getPlayerFullName(player),
+                  receiptBase64,
+                  receiptNumber: receiptNo,
+                  amount: mntStr,
+                }),
+              }).catch((emailErr) => console.error("Erreur lors de l'envoi du mail de solde:", emailErr));
+            }
+
+            // Afficher la fenêtre modale avec le récapitulatif complet du reçu pour l'administrateur
+            setSettledReceiptModalData({
+              player,
+              payment: paymentForPdf,
+              receiptBase64,
+              blobUrl,
+              receiptNumber: receiptNo,
+              amountFormatted: mntStr,
+              datePaiement: newPaymentDate || new Date().toISOString().split("T")[0],
+              methode: editingPayment.methode || "especes",
+              emailSentTo,
+            });
+          } catch (pdfErr) {
+            console.error("Erreur lors de la génération du reçu:", pdfErr);
+          }
+        }
       } else {
         // Simple modification des métadonnées de la transaction sélectionnée (date, plan, remarque)
         await updatePaymentInSupabase(editingPayment.id, {
@@ -449,86 +558,75 @@ function PaymentsPageContent() {
         );
       }
 
-      // Fermeture immédiate du modal et mise à jour UI instantanée !
-      closeEditModal();
-
-      // Envoi du mail de reçu en arrière-plan (sans faire attendre l'utilisateur)
-      (async () => {
-        const player = playerMap.get(editingPayment.playerId);
-        if (!player) return;
-        const emailToSend = player.parentEmail || player.email;
-        if (!emailToSend) return;
-
-        try {
-          const paymentForPdf = insertedNewPayment || editingPayment;
-          const playerAllPayments = payments.filter((p) => p.playerId === editingPayment.playerId);
-          const allPaymentsIncludingNew = insertedNewPayment
-            ? [insertedNewPayment, ...playerAllPayments]
-            : playerAllPayments;
-
-          const nomParts = (player.parentNomPrenom || "").split(" ");
-          const parentNom = nomParts[0] || "";
-          const parentPrenom = nomParts.slice(1).join(" ") || "";
-
-          const totalRubriquesMatch = finalRemarque.match(/\[TOTAL_DUE:\s*([\d.]+)\s*\]/i);
-          const totalRubriques = totalRubriquesMatch ? parseFloat(totalRubriquesMatch[1]) : undefined;
-
-          const existingPhotoUrls = extractPhotoUrlsFromRemark(editingPayment.remarque);
-          const existingProofBase64List: string[] = [];
-          for (const proofUrl of existingPhotoUrls) {
-            try {
-              const res = await fetch(proofUrl);
-              const blob = await res.blob();
-              const b64 = await new Promise<string>((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onloadend = () => resolve(reader.result as string);
-                reader.onerror = reject;
-                reader.readAsDataURL(blob);
-              });
-              if (b64) existingProofBase64List.push(b64);
-            } catch (e) {
-              console.warn("Erreur lors de la récupération de la preuve", proofUrl, e);
-            }
-          }
-
-          const newProofBase64List = await filesToBase64(paymentPhotos);
-          const allProofBase64List = [...existingProofBase64List, ...newProofBase64List];
-
-          const receiptBase64 = await generateReceiptPDFBase64(
-            player,
-            [paymentForPdf],
-            parentNom,
-            parentPrenom,
-            player.parentTelephone || player.telephone || "",
-            emailToSend,
-            player.parentAdresse || player.adresse || "",
-            allProofBase64List,
-            false,
-            totalRubriques,
-            allPaymentsIncludingNew
-          );
-
-          const mntStr = editDevise === "HTG" ? `${newAmountNum} HTG` : `${newAmountNum} USD`;
-          await fetch("/api/send-receipt", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              email: emailToSend,
-              parentName: player.parentNomPrenom || getPlayerFullName(player),
-              receiptBase64,
-              receiptNumber: `REC-${paymentForPdf.id.slice(0, 8).toUpperCase()}`,
-              amount: mntStr,
-            }),
-          });
-        } catch (emailErr) {
-          console.error("Erreur lors de l'envoi du mail de solde:", emailErr);
-        }
-      })();
+      // Fermeture propre du modal de saisie
+      setEditingPayment(null);
+      setEditError("");
+      paymentPhotoPreviews.forEach((p) => {
+        if (p.url.startsWith("blob:")) URL.revokeObjectURL(p.url);
+      });
+      setPaymentPhotos([]);
+      setPaymentPhotoPreviews([]);
+      setPaymentPhotoError(null);
     } catch (error: any) {
       console.error("Erreur complète:", error);
       setEditError(error?.message || "Impossible d'enregistrer la modification.");
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const closeSettledReceiptModal = () => {
+    if (settledReceiptModalData?.blobUrl) {
+      try {
+        URL.revokeObjectURL(settledReceiptModalData.blobUrl);
+      } catch {}
+    }
+    setSettledReceiptModalData(null);
+  };
+
+  const handleOpenReceiptTab = (blobUrl: string) => {
+    try {
+      window.open(blobUrl, "_blank");
+    } catch (e) {
+      console.error(e);
+      alert("Impossible d'ouvrir le document");
+    }
+  };
+
+  const handlePrintSettledReceipt = (blobUrl: string) => {
+    try {
+      const iframe = document.createElement("iframe");
+      iframe.style.display = "none";
+      iframe.src = blobUrl;
+      document.body.appendChild(iframe);
+
+      iframe.onload = () => {
+        setTimeout(() => {
+          try {
+            iframe.contentWindow?.focus();
+            iframe.contentWindow?.print();
+          } catch (e) {
+            console.error("Erreur lors de l'impression via iframe", e);
+          }
+        }, 300);
+      };
+    } catch (e) {
+      console.error(e);
+      alert("Erreur lors de l'impression du reçu");
+    }
+  };
+
+  const handleDownloadSettledReceipt = (blobUrl: string, receiptNumber: string) => {
+    try {
+      const link = document.createElement("a");
+      link.href = blobUrl;
+      link.download = `${receiptNumber}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (e) {
+      console.error(e);
+      alert("Erreur lors du téléchargement du reçu");
     }
   };
 
@@ -2437,6 +2535,190 @@ function PaymentsPageContent() {
                 type="button"
                 onClick={() => setHistoryPlayerId(null)}
                 className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700/50 transition cursor-pointer"
+              >
+                Fermer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Récapitulatif Complet du Reçu lors du règlement de solde */}
+      {settledReceiptModalData && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in">
+          <div className="relative w-full max-w-xl bg-white dark:bg-gray-900 rounded-2xl shadow-2xl border border-gray-100 dark:border-gray-800 overflow-hidden flex flex-col max-h-[92vh]">
+            
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-800 bg-emerald-50/70 dark:bg-emerald-950/20">
+              <div className="flex items-center gap-3">
+                <div className="size-10 rounded-xl bg-emerald-100 dark:bg-emerald-900/50 flex items-center justify-center text-emerald-600 dark:text-emerald-400 shadow-xs">
+                  <svg className="size-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-gray-900 dark:text-white">
+                    Solde Réglé — Reçu Disponible
+                  </h3>
+                  <p className="text-xs text-emerald-700 dark:text-emerald-400 font-medium">
+                    Versement enregistré avec succès
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={closeSettledReceiptModal}
+                className="p-1.5 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 rounded-lg transition cursor-pointer"
+                title="Fermer"
+              >
+                <svg className="size-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="p-6 space-y-4 overflow-y-auto">
+              {/* Notification statut email */}
+              {settledReceiptModalData.emailSentTo ? (
+                <div className="flex items-center gap-2.5 p-3 rounded-xl bg-blue-50/80 border border-blue-200/80 text-blue-900 dark:bg-blue-950/30 dark:border-blue-900/50 dark:text-blue-300 text-xs font-medium">
+                  <svg className="size-4 shrink-0 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                  </svg>
+                  <span>
+                    Un exemplaire officiel a été automatiquement envoyé par courriel à : <strong>{settledReceiptModalData.emailSentTo}</strong>
+                  </span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2.5 p-3 rounded-xl bg-amber-50/80 border border-amber-200/80 text-amber-900 dark:bg-amber-950/30 dark:border-amber-900/50 dark:text-amber-300 text-xs font-medium">
+                  <svg className="size-4 shrink-0 text-amber-600 dark:text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                  <span>
+                    Aucune adresse courriel parent trouvée. Le reçu officiel peut être consulté, imprimé ou téléchargé ci-dessous.
+                  </span>
+                </div>
+              )}
+
+              {/* Fiche récapitulative du Reçu */}
+              <div className="border border-gray-200 dark:border-gray-700/80 rounded-2xl p-5 bg-gray-50/50 dark:bg-gray-800/40 space-y-4">
+                
+                {/* En-tête Reçu */}
+                <div className="flex items-center justify-between pb-3 border-b border-gray-200/80 dark:border-gray-700/80">
+                  <div>
+                    <span className="text-[11px] font-bold tracking-wider uppercase text-gray-500 dark:text-gray-400 block">
+                      Numéro de Reçu
+                    </span>
+                    <span className="text-base font-black text-gray-900 dark:text-white font-mono">
+                      {settledReceiptModalData.receiptNumber}
+                    </span>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-[11px] font-bold tracking-wider uppercase text-gray-500 dark:text-gray-400 block">
+                      Date du règlement
+                    </span>
+                    <span className="text-sm font-semibold text-gray-800 dark:text-gray-200">
+                      {formatClubDate(settledReceiptModalData.datePaiement)}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Détails Joueur & Parent */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                  <div className="p-3 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 block mb-1">
+                      Bénéficiaire (Joueur)
+                    </span>
+                    <p className="font-bold text-gray-900 dark:text-white text-sm">
+                      {getPlayerFullName(settledReceiptModalData.player)}
+                    </p>
+                    <p className="text-gray-500 dark:text-gray-400 mt-0.5">
+                      Matricule : <strong className="text-blue-600 dark:text-blue-400">{settledReceiptModalData.player.matricule || "—"}</strong>
+                    </p>
+                    {settledReceiptModalData.player.categorie && (
+                      <p className="text-gray-500 dark:text-gray-400">
+                        Catégorie : {settledReceiptModalData.player.categorie}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="p-3 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 block mb-1">
+                      Parent / Tuteur
+                    </span>
+                    <p className="font-bold text-gray-900 dark:text-white text-sm">
+                      {settledReceiptModalData.player.parentNomPrenom || "Parent / Tuteur"}
+                    </p>
+                    <p className="text-gray-500 dark:text-gray-400 mt-0.5">
+                      Tél : {settledReceiptModalData.player.parentTelephone || settledReceiptModalData.player.telephone || "—"}
+                    </p>
+                    <p className="text-gray-500 dark:text-gray-400 truncate">
+                      Email : {settledReceiptModalData.player.parentEmail || settledReceiptModalData.player.email || "—"}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Détails Financiers du Règlement */}
+                <div className="p-4 bg-emerald-50/60 dark:bg-emerald-950/20 rounded-xl border border-emerald-200/70 dark:border-emerald-900/50 flex items-center justify-between">
+                  <div>
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-800 dark:text-emerald-400 block">
+                      Montant Versé (Solde réglé)
+                    </span>
+                    <span className="text-xl font-black text-emerald-700 dark:text-emerald-400">
+                      {settledReceiptModalData.amountFormatted}
+                    </span>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400 block">
+                      Mode de paiement
+                    </span>
+                    <span className="text-sm font-bold text-gray-800 dark:text-gray-200 capitalize">
+                      {settledReceiptModalData.methode || "Espèces"}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Actions Footer */}
+            <div className="flex flex-wrap items-center justify-between gap-2.5 px-6 py-4 border-t border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/40">
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleOpenReceiptTab(settledReceiptModalData.blobUrl)}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-brand-500 hover:bg-brand-600 text-white px-3.5 py-2 text-xs font-semibold shadow-xs transition cursor-pointer"
+                  title="Ouvrir le document PDF complet dans un nouvel onglet"
+                >
+                  <svg className="size-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                  </svg>
+                  <span>Ouvrir le reçu (PDF)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handlePrintSettledReceipt(settledReceiptModalData.blobUrl)}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 px-3.5 py-2 text-xs font-semibold shadow-xs transition cursor-pointer"
+                >
+                  <svg className="size-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                  </svg>
+                  <span>Imprimer</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleDownloadSettledReceipt(settledReceiptModalData.blobUrl, settledReceiptModalData.receiptNumber)}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 px-3.5 py-2 text-xs font-semibold shadow-xs transition cursor-pointer"
+                >
+                  <svg className="size-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                  </svg>
+                  <span>Télécharger</span>
+                </button>
+              </div>
+              <button
+                type="button"
+                onClick={closeSettledReceiptModal}
+                className="rounded-xl border border-gray-300 bg-white px-4 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700 transition cursor-pointer"
               >
                 Fermer
               </button>

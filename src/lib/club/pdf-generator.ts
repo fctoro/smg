@@ -20,6 +20,20 @@ export const mapMode = (mode: any) => {
   return String(mode || "-");
 };
 
+export const isPaymentHTG = (payment?: any): boolean => {
+  if (!payment) return false;
+  const dev = String(payment.devise || "").trim().toUpperCase();
+  if (dev === "HTG" || dev === "GOURDE" || dev === "GOURDES") return true;
+  if (dev === "US" || dev === "USD" || dev === "$") return false;
+
+  // Si la devise n'est pas spécifiée explicitement (enregistrements bruts / anciens)
+  const us = Number(payment.montantUS ?? payment.MntPayeUS ?? 0);
+  const gd = Number(payment.MntPayeGd ?? 0);
+  if (gd > 0 && us === 0) return true;
+  if (Number(payment.montant) >= 2000 && us === 0 && !payment.devise) return true;
+  return false;
+};
+
 export const extractRabaisLabelFromRemark = (remark?: string, isHTG: boolean = false): string | null => {
   if (!remark) return null;
 
@@ -283,7 +297,7 @@ export async function generateReceiptPDFBase64(
   const tableRows: any[] = [];
 
   const mainPayment = targetPayments[0] || {};
-  const isHTG = mainPayment.devise === "HTG" || targetPayments.some((p: any) => p.devise === "HTG" || Number(p.montantHTG) > 0 || Number(p.MntPayeGd) > 0);
+  const isHTG = isPaymentHTG(mainPayment) || targetPayments.some((p: any) => isPaymentHTG(p));
   // Lire taux depuis la colonne DB, sinon depuis le marqueur [TAUX:XXX] dans la remarque
   let taux = mainPayment.taux || 0;
   if (isHTG && taux <= 1) {
@@ -301,23 +315,24 @@ export async function generateReceiptPDFBase64(
 
   targetPayments.forEach((p: any) => {
     const pTaux = Number(p.taux) || 0;
+    const isThisHTG = isPaymentHTG(p);
     let valUS = 0;
     let valHTG = 0;
 
-    if (p.devise === "HTG" || (!p.devise && (p.montantHTG || p.MntPayeGd)) || (Number(p.montant) >= 2000 && !p.montantUS)) {
-      valHTG = Number(p.montantHTG || p.montant || p.MntPayeGd || 0);
+    if (isThisHTG) {
+      valHTG = Number(p.montant ?? p.montantHTG ?? p.MntPayeGd ?? 0);
       valUS = pTaux > 0 ? valHTG / pTaux : (taux > 0 ? valHTG / taux : 0);
     } else {
-      valUS = Number(p.montantUS || p.montant || p.MntPayeUS || 0);
+      valUS = Number(p.montant ?? p.montantUS ?? p.MntPayeUS ?? 0);
       valHTG = pTaux > 0 ? valUS * pTaux : (taux > 0 ? valUS * taux : 0);
     }
 
     totalUSD += valUS;
     totalHTG += valHTG;
 
-    const mntStr = p.devise === "HTG" || p.MntPayeGd 
-      ? formatClubCurrency(p.montant || p.MntPayeGd, "HTG") 
-      : formatClubCurrency(p.montant || p.MntPayeUS, "US");
+    const mntStr = isThisHTG 
+      ? formatClubCurrency(valHTG, "HTG") 
+      : formatClubCurrency(valUS, "US");
 
     const pData = [
       String(formatClubDate(p.datePaiement ?? new Date())),
@@ -521,28 +536,34 @@ export async function generateReceiptPDFBase64(
     for (let i = 0; i < currentTxIndex; i++) {
       const tx = decomposedHistory[i];
       const txTaux = Number(tx.taux) || taux || 135;
+      const isTxHTG = isPaymentHTG(tx);
       const txUS = Number(tx.montantUS || 0);
       const txHTG = Number(tx.montantHTG || 0);
-      if (tx.devise === "HTG" || txHTG > 0) {
-        priorPaidHTG += txHTG > 0 ? txHTG : (txUS > 0 && txTaux > 0 ? txUS * txTaux : 0);
-        priorPaidUSD += txUS > 0 ? txUS : (txHTG > 0 && txTaux > 0 ? txHTG / txTaux : 0);
+      if (isTxHTG) {
+        const htgVal = txHTG > 0 ? txHTG : Number(tx.montant || 0);
+        priorPaidHTG += htgVal;
+        priorPaidUSD += txUS > 0 ? txUS : (txTaux > 0 ? htgVal / txTaux : 0);
       } else {
-        priorPaidUSD += txUS > 0 ? txUS : Number(tx.montant || 0);
-        priorPaidHTG += txHTG > 0 ? txHTG : (txUS > 0 && txTaux > 0 ? txUS * txTaux : 0);
+        const usVal = txUS > 0 ? txUS : Number(tx.montant || 0);
+        priorPaidUSD += usVal;
+        priorPaidHTG += txHTG > 0 ? txHTG : (txTaux > 0 ? usVal * txTaux : 0);
       }
     }
   } else if (currentTxIndex === -1 && decomposedHistory.length > 0) {
     for (const tx of decomposedHistory) {
       if (mainDate && tx.datePaiement && tx.datePaiement < mainDate) {
         const txTaux = Number(tx.taux) || taux || 135;
+        const isTxHTG = isPaymentHTG(tx);
         const txUS = Number(tx.montantUS || 0);
         const txHTG = Number(tx.montantHTG || 0);
-        if (tx.devise === "HTG" || txHTG > 0) {
-          priorPaidHTG += txHTG > 0 ? txHTG : (txUS > 0 && txTaux > 0 ? txUS * txTaux : 0);
-          priorPaidUSD += txUS > 0 ? txUS : (txHTG > 0 && txTaux > 0 ? txHTG / txTaux : 0);
+        if (isTxHTG) {
+          const htgVal = txHTG > 0 ? txHTG : Number(tx.montant || 0);
+          priorPaidHTG += htgVal;
+          priorPaidUSD += txUS > 0 ? txUS : (txTaux > 0 ? htgVal / txTaux : 0);
         } else {
-          priorPaidUSD += txUS > 0 ? txUS : Number(tx.montant || 0);
-          priorPaidHTG += txHTG > 0 ? txHTG : (txUS > 0 && txTaux > 0 ? txUS * txTaux : 0);
+          const usVal = txUS > 0 ? txUS : Number(tx.montant || 0);
+          priorPaidUSD += usVal;
+          priorPaidHTG += txHTG > 0 ? txHTG : (txTaux > 0 ? usVal * txTaux : 0);
         }
       }
     }

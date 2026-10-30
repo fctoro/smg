@@ -1377,10 +1377,8 @@ function PaymentsPageContent() {
 
         if (dev === "HTG") {
           sumVersementsHTG += amt;
-          sumVersementsUSD += amtUSD;
         } else {
           sumVersementsUSD += amt;
-          sumVersementsHTG += amtHTG;
         }
 
         allTransactions.push({
@@ -1430,7 +1428,9 @@ function PaymentsPageContent() {
 
       const initialUS = Math.max(0, totalUS - sumVersementsUSD);
       const initialHTG = Math.max(0, totalHTG - sumVersementsHTG);
-      const initialPrimary = p.devise === "HTG" ? initialHTG : initialUS;
+      const initialPrimary = p.devise === "HTG"
+        ? initialHTG
+        : (initialUS > 0 ? initialUS : (p.taux ? initialHTG / p.taux : (initialHTG > 0 ? initialHTG / 130 : 0)));
 
       if (initialPrimary > 0 || (initialUS === 0 && initialHTG === 0 && versementMatches.length === 0)) {
         allTransactions.push({

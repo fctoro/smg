@@ -4,6 +4,7 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { Player } from "@/types/club";
 import { PDFDocument } from "pdf-lib";
+import { decomposePaymentTransactions } from "@/lib/club/statistics";
 
 export const mapMode = (mode: any) => {
   const modeStr = String(mode || "").toLowerCase().trim();
@@ -436,34 +437,89 @@ export async function generateReceiptPDFBase64(
     totalDueHTG = (isHTG && taux > 0) ? Math.round(totalDueValue * taux) : 0;
   }
 
-  // Calcul du cumul versé dans tout l'historique du dossier
-  let historyPaidUSD = 0;
-  let historyPaidHTG = 0;
-  paymentHistory.forEach((p: any) => {
-    const pTaux = Number(p.taux) || 0;
-    if (p.devise === "HTG" || (!p.devise && (p.montantHTG || p.MntPayeGd))) {
-      const htg = Number(p.montantHTG || p.montant || p.MntPayeGd || 0);
-      historyPaidHTG += htg;
-      historyPaidUSD += pTaux > 0 ? htg / pTaux : (taux > 0 ? htg / taux : 0);
-    } else {
-      const usd = Number(p.montantUS || p.montant || p.MntPayeUS || 0);
-      historyPaidUSD += usd;
-      historyPaidHTG += pTaux > 0 ? usd * pTaux : (taux > 0 ? usd * taux : 0);
-    }
-  });
+  // Utiliser totalRubriques si totalDueValue n'a pas été déterminé
+  if ((totalDueValue <= 0 || isNaN(totalDueValue)) && totalRubriques && totalRubriques > 0) {
+    totalDueValue = totalRubriques;
+    totalDueHTG = (isHTG && taux > 0) ? Math.round(totalDueValue * taux) : 0;
+  }
 
-  // Calcul des totaux et soldes selon la devise
-  const balanceHTG = Math.max(0, totalDueHTG - historyPaidHTG);
-  const balanceUSD = Math.max(0, totalDueValue - historyPaidUSD);
+  // 3. Décomposition chronologique pour trouver les règlements antérieurs à cette transaction
+  const decomposedHistory = decomposePaymentTransactions(paymentHistory, [player]).sort(
+    (a, b) => new Date(a.datePaiement || 0).getTime() - new Date(b.datePaiement || 0).getTime()
+  );
+
+  const mainId = String(mainPayment.id || mainPayment.Id || "");
+  const mainDate = String(mainPayment.datePaiement || mainPayment.DateTransact || "").split("T")[0];
+  const mainMnt = Number(mainPayment.montant || mainPayment.Montant || 0);
+
+  let currentTxIndex = decomposedHistory.findIndex((tx) => String(tx.id) === mainId);
+
+  if (currentTxIndex === -1 && decomposedHistory.length > 0) {
+    currentTxIndex = decomposedHistory.findIndex(
+      (tx) => tx.datePaiement === mainDate && Math.abs(Number(tx.montant) - mainMnt) < 0.01
+    );
+  }
+
+  if (currentTxIndex === -1 && decomposedHistory.length > 0) {
+    const vMatches = [...String(mainPayment.remarque || mainPayment.Remarque || "").matchAll(/\[VERSEMENT:\s*([\d.]+)_([A-Za-z]+)(?:_TAUX:([\d.]+))?(?:_USD:([\d.]+))?_DATE:(\d{4}-\d{2}-\d{2})\]/gi)];
+    if (vMatches.length > 0) {
+      currentTxIndex = decomposedHistory.length - 1;
+    }
+  }
+
+  let priorPaidUSD = 0;
+  let priorPaidHTG = 0;
+
+  if (currentTxIndex > 0) {
+    for (let i = 0; i < currentTxIndex; i++) {
+      const tx = decomposedHistory[i];
+      const txTaux = Number(tx.taux) || taux || 135;
+      const txUS = Number(tx.montantUS || 0);
+      const txHTG = Number(tx.montantHTG || 0);
+      if (tx.devise === "HTG" || txHTG > 0) {
+        priorPaidHTG += txHTG > 0 ? txHTG : (txUS > 0 && txTaux > 0 ? txUS * txTaux : 0);
+        priorPaidUSD += txUS > 0 ? txUS : (txHTG > 0 && txTaux > 0 ? txHTG / txTaux : 0);
+      } else {
+        priorPaidUSD += txUS > 0 ? txUS : Number(tx.montant || 0);
+        priorPaidHTG += txHTG > 0 ? txHTG : (txUS > 0 && txTaux > 0 ? txUS * txTaux : 0);
+      }
+    }
+  } else if (currentTxIndex === -1 && decomposedHistory.length > 0) {
+    for (const tx of decomposedHistory) {
+      if (mainDate && tx.datePaiement && tx.datePaiement < mainDate) {
+        const txTaux = Number(tx.taux) || taux || 135;
+        const txUS = Number(tx.montantUS || 0);
+        const txHTG = Number(tx.montantHTG || 0);
+        if (tx.devise === "HTG" || txHTG > 0) {
+          priorPaidHTG += txHTG > 0 ? txHTG : (txUS > 0 && txTaux > 0 ? txUS * txTaux : 0);
+          priorPaidUSD += txUS > 0 ? txUS : (txHTG > 0 && txTaux > 0 ? txHTG / txTaux : 0);
+        } else {
+          priorPaidUSD += txUS > 0 ? txUS : Number(tx.montant || 0);
+          priorPaidHTG += txHTG > 0 ? txHTG : (txUS > 0 && txTaux > 0 ? txUS * txTaux : 0);
+        }
+      }
+    }
+  }
+
+  const hasPreviousPayments = isHTG ? priorPaidHTG >= 10 : priorPaidUSD >= 0.5;
+
+  const previousBalanceUSD = Math.max(0, totalDueValue - priorPaidUSD);
+  const previousBalanceHTG = (isHTG && taux > 0)
+    ? Math.round(previousBalanceUSD * taux)
+    : Math.max(0, totalDueHTG - priorPaidHTG);
+
+  const balanceUSD = Math.max(0, previousBalanceUSD - totalUSD);
+  const balanceHTG = (isHTG && taux > 0)
+    ? Math.round(balanceUSD * taux)
+    : Math.max(0, previousBalanceHTG - totalHTG);
 
   const balanceNumeric = isHTG ? balanceHTG : Number(balanceUSD.toFixed(2));
 
-  // Libellé du montant versé pour CETTE transaction (reçu)
+  // Libellés formatés
   const totalPayeLabel = isHTG
     ? formatClubCurrency(totalHTG, "HTG")
     : formatClubCurrency(totalUSD, "US");
 
-  // Libellé du montant total dû
   const totalDueLabel = (() => {
     if (isHTG) {
       return formatClubCurrency(totalDueHTG, "HTG");
@@ -472,7 +528,14 @@ export async function generateReceiptPDFBase64(
     return formatClubCurrency(totalDueValue, "US");
   })();
 
-  // Libellé du solde restant
+  const alreadyPaidBeforeLabel = isHTG
+    ? formatClubCurrency(priorPaidHTG, "HTG")
+    : formatClubCurrency(priorPaidUSD, "US");
+
+  const previousBalanceLabel = isHTG
+    ? formatClubCurrency(previousBalanceHTG, "HTG")
+    : formatClubCurrency(previousBalanceUSD, "US");
+
   const balanceLabel = isHTG
     ? formatClubCurrency(balanceHTG, "HTG")
     : formatClubCurrency(balanceUSD, "US");
@@ -492,7 +555,7 @@ export async function generateReceiptPDFBase64(
     doc.setFont("helvetica", "bold");
     doc.setTextColor(grayDark[0], grayDark[1], grayDark[2]);
     doc.text(appliedRabais, 196, yPos, { align: 'right' });
-    yPos += 7;
+    yPos += 6;
   }
 
   // 1. MONTANT TOTAL DÛ
@@ -503,37 +566,48 @@ export async function generateReceiptPDFBase64(
   doc.setFont("helvetica", "bold");
   doc.setTextColor(grayDark[0], grayDark[1], grayDark[2]);
   doc.text(totalDueLabel, 196, yPos, { align: 'right' });
+  yPos += 6;
+
+  // Lignes de décomposition si des versements antérieurs existent
+  if (hasPreviousPayments) {
+    // 1.b DÉJÀ RÉGLÉ PRÉCÉDEMMENT
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.setTextColor(grayMedium[0], grayMedium[1], grayMedium[2]);
+    doc.text("Déjà réglé précédemment :", 110, yPos);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(grayDark[0], grayDark[1], grayDark[2]);
+    doc.text(alreadyPaidBeforeLabel, 196, yPos, { align: 'right' });
+    yPos += 6;
+
+    // 1.c SOLDE PRÉCÉDENT
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9.5);
+    doc.setTextColor(grayMedium[0], grayMedium[1], grayMedium[2]);
+    doc.text("Solde précédent :", 110, yPos);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(grayDark[0], grayDark[1], grayDark[2]);
+    doc.text(previousBalanceLabel, 196, yPos, { align: 'right' });
+    yPos += 6;
+  }
 
   // 2. MONTANT VERSÉ (CETTE TRANSACTION)
-  yPos += 7;
   doc.setFont("helvetica", "normal");
+  doc.setFontSize(10);
   doc.setTextColor(grayMedium[0], grayMedium[1], grayMedium[2]);
   doc.text("Montant versé (cette transaction) :", 110, yPos);
   doc.setFont("helvetica", "bold");
   doc.setTextColor(grayDark[0], grayDark[1], grayDark[2]);
   doc.text(totalPayeLabel, 196, yPos, { align: 'right' });
-
-  // Rappel du total déjà versé à ce jour si plusieurs versements existent
-  if (paymentHistory.length > payments.length) {
-    yPos += 6;
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(9);
-    doc.setTextColor(grayMedium[0], grayMedium[1], grayMedium[2]);
-    doc.text("Total réglé à ce jour :", 110, yPos);
-    doc.setFont("helvetica", "bold");
-    doc.setTextColor(grayDark[0], grayDark[1], grayDark[2]);
-    const historyPaidLabel = isHTG ? formatClubCurrency(historyPaidHTG, "HTG") : formatClubCurrency(historyPaidUSD, "US");
-    doc.text(historyPaidLabel, 196, yPos, { align: 'right' });
-  }
+  yPos += 4;
 
   // Séparateur
-  yPos += 4;
   doc.setDrawColor(grayLight[0], grayLight[1], grayLight[2]);
   doc.setLineWidth(0.5);
   doc.line(100, yPos, 196, yPos);
+  yPos += 6;
 
   // 3. SOLDE RESTANT
-  yPos += 7;
   doc.setFont("helvetica", "bold");
   doc.setFontSize(11);
   doc.setTextColor(grayDark[0], grayDark[1], grayDark[2]);

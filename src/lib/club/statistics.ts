@@ -160,17 +160,15 @@ export const decomposePaymentTransactions = (payments: Payment[], players?: Play
       const devRaw = (m[2] || "US").toUpperCase();
       const dev: "US" | "HTG" = devRaw.includes("HTG") ? "HTG" : "US";
       const tauxMatch = remark.match(/\[TAUX:\s*([\d.]+)\s*\]/i);
-      const taux = m[3] ? parseFloat(m[3]) : (Number(p.taux) || (tauxMatch ? parseFloat(tauxMatch[1]) : 135));
+      const taux = m[3] ? parseFloat(m[3]) : (Number(p.taux || (p as any).TauxChange) || (tauxMatch ? parseFloat(tauxMatch[1]) : 135));
       const amtUSD = m[4] ? parseFloat(m[4]) : (dev === "HTG" && taux > 0 ? amt / taux : amt);
       const amtHTG = dev === "HTG" ? amt : (taux > 0 ? amt * taux : 0);
       const vDate = m[5] || (p.datePaiement ? p.datePaiement.split("T")[0] : "");
 
       if (dev === "HTG") {
         sumVersementsHTG += amt;
-        sumVersementsUSD += amtUSD;
       } else {
         sumVersementsUSD += amt;
-        sumVersementsHTG += amtHTG;
       }
 
       result.push({
@@ -196,7 +194,9 @@ export const decomposePaymentTransactions = (payments: Payment[], players?: Play
     const realAll = getPaymentRealAmounts(p);
     const initialUS = Math.max(0, realAll.realUSD - sumVersementsUSD);
     const initialHTG = Math.max(0, realAll.realHTG - sumVersementsHTG);
-    const initialPrimary = p.devise === "HTG" ? initialHTG : initialUS;
+    const initialPrimary = p.devise === "HTG"
+      ? initialHTG
+      : (initialUS > 0 ? initialUS : (p.taux ? initialHTG / p.taux : (initialHTG > 0 && realAll.taux > 0 ? initialHTG / realAll.taux : 0)));
 
     if (initialUS > 0 || initialHTG > 0 || initialPrimary > 0) {
       result.push({
@@ -205,6 +205,7 @@ export const decomposePaymentTransactions = (payments: Payment[], players?: Play
         montant: initialPrimary > 0 ? Math.round(initialPrimary * 100) / 100 : p.montant,
         montantUS: Math.round(initialUS * 100) / 100,
         montantHTG: Math.round(initialHTG * 100) / 100,
+        taux: realAll.taux > 0 ? realAll.taux : undefined,
         datePaiement: initialDate,
         remarque: (p.remarque || "")
           .replace(/\[VERSEMENT:[^\]]+\]/gi, "")

@@ -18,6 +18,7 @@ import {
   getAvailableYears,
   combineYearlyData,
   getPaymentRealAmounts,
+  decomposePaymentTransactions,
   isUSDDevise,
 } from "@/lib/club/statistics";
 import {
@@ -168,9 +169,14 @@ export default function StatistiquesPage() {
     }
   };
 
-  // Filtrage strict : uniquement les paiements filtrés (avec prise en compte de la saison)
+  // Décomposition des paiements multi-versements en transactions individuelles datées
+  const decomposedPayments = useMemo(() => {
+    return decomposePaymentTransactions(payments, players);
+  }, [payments, players]);
+
+  // Filtrage strict : uniquement les transactions filtrées (avec prise en compte de la saison)
   const filteredPayments = useMemo(() => {
-    return payments.filter((p) => {
+    return decomposedPayments.filter((p) => {
       if (statusFilter !== "all" && p.statut !== statusFilter) return false;
       const dateStr = p.datePaiement || p.periode || (p as any).createdAt || null;
       if (!isDateInRange(dateStr, dateFrom, dateTo)) return false;
@@ -184,7 +190,7 @@ export default function StatistiquesPage() {
       }
       return true;
     });
-  }, [payments, dateFrom, dateTo, statusFilter, selectedYear]);
+  }, [decomposedPayments, dateFrom, dateTo, statusFilter, selectedYear]);
 
   // FILTRAGE STRICT DES JOUEURS : UNIQUEMENT LES JOUEURS ACTIFS DE LA SAISON !
   const activePlayersList = useMemo(() => {
@@ -254,12 +260,12 @@ export default function StatistiquesPage() {
     const startDayStr = getDateDayString(getTrackingPeriodStart(trackingReferenceDate, trackingPeriod));
     const endDayStr = getDateDayString(trackingReferenceDate);
 
-    return payments.filter((payment) => {
+    return decomposedPayments.filter((payment) => {
       if (payment.statut !== "paid") return false;
       const dateStr = payment.datePaiement || (payment as any).dateTransact || (payment as any).dtCreation || `${payment.periode}-01`;
       return isDateInRange(dateStr, startDayStr, endDayStr);
     });
-  }, [payments, trackingPeriod, trackingReferenceDate]);
+  }, [decomposedPayments, trackingPeriod, trackingReferenceDate]);
 
   const trackingPeriodTime = useMemo(() => {
     const start = getTrackingPeriodStart(trackingReferenceDate, trackingPeriod);
@@ -402,7 +408,7 @@ export default function StatistiquesPage() {
 
   const weeklyRevenueData = useMemo(() => getWeeklyRevenue(filteredPayments, displayYear), [filteredPayments, displayYear]);
   const weeklyRegistrationsData = useMemo(() => getWeeklyRegistrations(filteredPlayers, displayYear), [filteredPlayers, displayYear]);
-  const dailyRevenueData = useMemo(() => getDailyRevenue(filteredPayments, dateFrom || new Date().toISOString().slice(0, 10)), [filteredPayments, dateFrom]);
+  const dailyRevenueData = useMemo(() => getDailyRevenue(decomposedPayments, dateFrom || new Date().toISOString().slice(0, 10), players), [decomposedPayments, dateFrom, players]);
 
   return (
     <div className="space-y-6 pb-12 print:p-0 print:bg-white text-gray-900 dark:text-white">
@@ -541,12 +547,24 @@ export default function StatistiquesPage() {
           icon={<GroupIcon className="size-6 text-gray-800 dark:text-white/90" />}
         />
         <KpiCardClub
-          title={isAllTime ? "Revenus Globaux (USD)" : `Revenus (USD) ${displayYear}`}
+          title={
+            dateFrom && dateTo && dateFrom === dateTo
+              ? `Revenus (USD) • ${dateFrom === new Date().toISOString().slice(0, 10) ? "Aujourd'hui" : dateFrom}`
+              : isAllTime
+              ? "Revenus Globaux (USD)"
+              : `Revenus (USD) ${displayYear}`
+          }
           value={formatClubCurrency(totalRevenueUSD, "US")}
           icon={<DollarLineIcon className="size-6 text-emerald-500" />}
         />
         <KpiCardClub
-          title={isAllTime ? "Revenus Globaux (HTG)" : `Revenus (HTG) ${displayYear}`}
+          title={
+            dateFrom && dateTo && dateFrom === dateTo
+              ? `Revenus (HTG) • ${dateFrom === new Date().toISOString().slice(0, 10) ? "Aujourd'hui" : dateFrom}`
+              : isAllTime
+              ? "Revenus Globaux (HTG)"
+              : `Revenus (HTG) ${displayYear}`
+          }
           value={formatClubCurrency(totalRevenueHTG, "HTG")}
           icon={<DollarLineIcon className="size-6 text-blue-500" />}
         />

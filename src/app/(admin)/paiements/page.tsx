@@ -2007,24 +2007,32 @@ function PaymentsPageContent() {
     <div className="space-y-4">
       <PageBreadcrumb pageTitle="Paiements" />
 
-      {/* Sélecteur d'onglets Saison vs Programmes Spéciaux */}
+      {/* Sélecteur d'onglets Corporate : Saison vs Programmes Spéciaux */}
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 pb-3 dark:border-gray-800">
-        <div className="flex items-center gap-2">
+        <div className="inline-flex p-1 rounded-xl bg-gray-100/90 dark:bg-gray-800/80 border border-gray-200/80 dark:border-gray-700/80 shadow-xs">
           <button
             type="button"
             onClick={() => setActiveTab("saison")}
-            className={`inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-all cursor-pointer ${
+            className={`inline-flex items-center gap-2.5 rounded-lg px-4 py-2 text-xs sm:text-sm font-semibold transition-all cursor-pointer ${
               activeTab === "saison"
-                ? "bg-brand-500 text-white shadow-md shadow-brand-500/20"
-                : "bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+                ? "bg-white text-gray-900 shadow-xs dark:bg-gray-900 dark:text-white"
+                : "text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white"
             }`}
           >
-            <span>⚽ Cotisations de Saison</span>
+            <svg
+              className={`size-4.5 shrink-0 transition-colors ${activeTab === "saison" ? "text-brand-500" : "text-gray-400"}`}
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+            <span>Cotisations de Saison</span>
             <span
-              className={`inline-flex items-center justify-center rounded-full px-2 py-0.5 text-xs font-bold ${
+              className={`inline-flex items-center justify-center rounded-full px-2 py-0.5 text-xs font-bold transition-colors ${
                 activeTab === "saison"
-                  ? "bg-white/20 text-white"
-                  : "bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-200"
+                  ? "bg-brand-50 text-brand-600 dark:bg-brand-950/60 dark:text-brand-400"
+                  : "bg-gray-200/80 text-gray-700 dark:bg-gray-700 dark:text-gray-300"
               }`}
             >
               {payments.filter((p) => !p.remarque || !p.remarque.includes("[PROGRAMME:")).length}
@@ -2034,18 +2042,26 @@ function PaymentsPageContent() {
           <button
             type="button"
             onClick={() => setActiveTab("programmes")}
-            className={`inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-all cursor-pointer ${
+            className={`inline-flex items-center gap-2.5 rounded-lg px-4 py-2 text-xs sm:text-sm font-semibold transition-all cursor-pointer ${
               activeTab === "programmes"
-                ? "bg-brand-500 text-white shadow-md shadow-brand-500/20"
-                : "bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+                ? "bg-white text-gray-900 shadow-xs dark:bg-gray-900 dark:text-white"
+                : "text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white"
             }`}
           >
-            <span>🏆 Programmes Spéciaux & Tournois</span>
+            <svg
+              className={`size-4.5 shrink-0 transition-colors ${activeTab === "programmes" ? "text-amber-500" : "text-gray-400"}`}
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 15a6 6 0 006-6V4H6v5a6 6 0 006 6zm0 0v4m-4 0h8M4 6H2v3a4 4 0 004 4h.34M20 6h2v3a4 4 0 01-4 4h-.34" />
+            </svg>
+            <span>Programmes Spéciaux & Tournois</span>
             <span
-              className={`inline-flex items-center justify-center rounded-full px-2 py-0.5 text-xs font-bold ${
+              className={`inline-flex items-center justify-center rounded-full px-2 py-0.5 text-xs font-bold transition-colors ${
                 activeTab === "programmes"
-                  ? "bg-white/20 text-white"
-                  : "bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-200"
+                  ? "bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-400"
+                  : "bg-gray-200/80 text-gray-700 dark:bg-gray-700 dark:text-gray-300"
               }`}
             >
               {allProgrammePayments.length}
@@ -2905,7 +2921,7 @@ function PaymentsPageContent() {
                   <option value="all">Tous les programmes ({availableProgrammes.length})</option>
                   {availableProgrammes.map((prog) => (
                     <option key={prog} value={prog}>
-                      🏆 {prog}
+                      {prog}
                     </option>
                   ))}
                 </select>
@@ -3221,8 +3237,11 @@ function PaymentsPageContent() {
                           </TableCell>
 
                           <TableCell className="py-3 text-theme-sm">
-                            <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-700 border border-brand-200 dark:bg-brand-950/40 dark:border-brand-800 dark:text-brand-300">
-                              🏆 {progName}
+                            <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700 border border-amber-200/80 dark:bg-amber-950/40 dark:border-amber-800 dark:text-amber-300">
+                              <svg className="size-3.5 text-amber-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 15a6 6 0 006-6V4H6v5a6 6 0 006 6zm0 0v4m-4 0h8M4 6H2v3a4 4 0 004 4h.34M20 6h2v3a4 4 0 01-4 4h-.34" />
+                              </svg>
+                              <span>{progName}</span>
                             </span>
                           </TableCell>
 
@@ -3504,22 +3523,25 @@ function PaymentsPageContent() {
 
             {/* Onglets de séparation Saison vs Programmes */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-6 py-3 border-b border-gray-100 dark:border-gray-800 bg-gray-50/70 dark:bg-gray-800/30">
-              <div className="flex items-center gap-2">
+              <div className="inline-flex p-1 rounded-xl bg-gray-100/90 dark:bg-gray-800/80 border border-gray-200/80 dark:border-gray-700/80 shadow-xs">
                 <button
                   type="button"
                   onClick={() => {
                     setHistoryTab("saison");
                     setHistorySelectedProgramme("all");
                   }}
-                  className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${
+                  className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                     historyTab === "saison"
-                      ? "bg-blue-600 text-white shadow-xs"
-                      : "bg-white text-gray-700 hover:bg-gray-100 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700/60 border border-gray-200 dark:border-gray-700"
+                      ? "bg-white text-gray-900 shadow-xs dark:bg-gray-900 dark:text-white"
+                      : "text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white"
                   }`}
                 >
-                  <span>⚽ Cotisations de Saison</span>
-                  <span className={`px-1.5 py-0.5 rounded-full text-[11px] font-bold ${
-                    historyTab === "saison" ? "bg-white/20 text-white" : "bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300"
+                  <svg className={`size-3.5 shrink-0 ${historyTab === "saison" ? "text-brand-500" : "text-gray-400"}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                  <span>Cotisations de Saison</span>
+                  <span className={`px-1.5 py-0.5 rounded-full text-[11px] font-bold transition-colors ${
+                    historyTab === "saison" ? "bg-brand-50 text-brand-600 dark:bg-brand-950/60 dark:text-brand-400" : "bg-gray-200/80 text-gray-700 dark:bg-gray-700 dark:text-gray-300"
                   }`}>
                     {historySeasonPayments.length}
                   </span>
@@ -3527,15 +3549,18 @@ function PaymentsPageContent() {
                 <button
                   type="button"
                   onClick={() => setHistoryTab("programmes")}
-                  className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${
+                  className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                     historyTab === "programmes"
-                      ? "bg-amber-600 text-white shadow-xs"
-                      : "bg-white text-gray-700 hover:bg-gray-100 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700/60 border border-gray-200 dark:border-gray-700"
+                      ? "bg-white text-gray-900 shadow-xs dark:bg-gray-900 dark:text-white"
+                      : "text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white"
                   }`}
                 >
-                  <span>🏆 Programmes Spéciaux & Tournois</span>
-                  <span className={`px-1.5 py-0.5 rounded-full text-[11px] font-bold ${
-                    historyTab === "programmes" ? "bg-white/20 text-white" : "bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300"
+                  <svg className={`size-3.5 shrink-0 ${historyTab === "programmes" ? "text-amber-500" : "text-gray-400"}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 15a6 6 0 006-6V4H6v5a6 6 0 006 6zm0 0v4m-4 0h8M4 6H2v3a4 4 0 004 4h.34M20 6h2v3a4 4 0 01-4 4h-.34" />
+                  </svg>
+                  <span>Programmes Spéciaux & Tournois</span>
+                  <span className={`px-1.5 py-0.5 rounded-full text-[11px] font-bold transition-colors ${
+                    historyTab === "programmes" ? "bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-400" : "bg-gray-200/80 text-gray-700 dark:bg-gray-700 dark:text-gray-300"
                   }`}>
                     {historyAllProgrammePayments.length}
                   </span>

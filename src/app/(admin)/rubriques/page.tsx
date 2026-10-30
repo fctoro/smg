@@ -317,8 +317,11 @@ export default function RubriquesPage() {
                       <td className="px-6 py-4">
                         <div className="flex flex-col gap-1 items-start">
                           {item.programmeNom && (
-                            <span className="inline-flex items-center gap-1 rounded-md bg-indigo-50 border border-indigo-200 px-2 py-0.5 text-xs font-semibold text-indigo-700 dark:bg-indigo-950/40 dark:border-indigo-800 dark:text-indigo-300">
-                              🏆 {item.programmeNom}
+                            <span className="inline-flex items-center gap-1.5 rounded-md bg-amber-50 border border-amber-200/80 px-2 py-0.5 text-xs font-semibold text-amber-700 dark:bg-amber-950/40 dark:border-amber-800 dark:text-amber-300">
+                              <svg className="size-3.5 text-amber-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 15a6 6 0 006-6V4H6v5a6 6 0 006 6zm0 0v4m-4 0h8M4 6H2v3a4 4 0 004 4h.34M20 6h2v3a4 4 0 01-4 4h-.34" />
+                              </svg>
+                              <span>{item.programmeNom}</span>
                             </span>
                           )}
                           {item.categorie ? (
@@ -460,7 +463,7 @@ export default function RubriquesPage() {
               <option value="">Aucun (Rubrique générale de saison)</option>
               {programmes.map((p) => (
                 <option key={p.id} value={p.nom}>
-                  🏆 {p.nom} {p.saison ? `(${p.saison})` : ""}
+                  {p.nom} {p.saison ? `(${p.saison})` : ""}
                 </option>
               ))}
             </select>

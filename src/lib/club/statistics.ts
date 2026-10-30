@@ -118,17 +118,119 @@ export const getPaymentRealAmounts = (payment: Payment | any): PaymentRealAmount
   };
 };
 
+/**
+ * Décompose les paiements cumulés multi-versements en transactions individuelles datées.
+ * Si un paiement possède des tags [VERSEMENT:amt_DEV_DATE:YYYY-MM-DD], chaque versement
+ * est extrait avec sa date réelle et son montant propre. Le paiement initial est recalculé
+ * avec la date [DATE_INITIALE:YYYY-MM-DD] et le solde restant.
+ * Pour les paiements sans versements multiples, getPaymentRealAmounts est appliqué.
+ */
+export const decomposePaymentTransactions = (payments: Payment[], players?: Player[]): Payment[] => {
+  const playerMap = new Map((players || []).map((pl) => [String(pl.id), pl]));
+  const result: Payment[] = [];
+
+  payments.forEach((p) => {
+    const remark = String(p.remarque || (p as any).Remarque || "");
+    const versementRegex = /\[VERSEMENT:\s*([\d.]+)_([A-Za-z]+)(?:_TAUX:([\d.]+))?(?:_USD:([\d.]+))?_DATE:(\d{4}-\d{2}-\d{2})\]/gi;
+
+    const versementMatches = [...remark.matchAll(versementRegex)];
+
+    // Si aucun versement daté ultérieur, le paiement est une transaction unique
+    if (versementMatches.length === 0) {
+      const real = getPaymentRealAmounts(p);
+      const cleanDate = p.datePaiement
+        ? p.datePaiement.split("T")[0]
+        : ((p as any).dateTransact ? (p as any).dateTransact.split("T")[0] : (p.periode ? `${p.periode}-01` : ""));
+      result.push({
+        ...p,
+        datePaiement: cleanDate,
+        montantUS: real.realUSD,
+        montantHTG: real.realHTG,
+        taux: real.taux,
+      });
+      return;
+    }
+
+    // Le paiement a des versements ultérieurs avec dates spécifiques
+    let sumVersementsUSD = 0;
+    let sumVersementsHTG = 0;
+
+    versementMatches.forEach((m, idx) => {
+      const amt = parseFloat(m[1]) || 0;
+      const devRaw = (m[2] || "US").toUpperCase();
+      const dev: "US" | "HTG" = devRaw.includes("HTG") ? "HTG" : "US";
+      const tauxMatch = remark.match(/\[TAUX:\s*([\d.]+)\s*\]/i);
+      const taux = m[3] ? parseFloat(m[3]) : (Number(p.taux) || (tauxMatch ? parseFloat(tauxMatch[1]) : 135));
+      const amtUSD = m[4] ? parseFloat(m[4]) : (dev === "HTG" && taux > 0 ? amt / taux : amt);
+      const amtHTG = dev === "HTG" ? amt : (taux > 0 ? amt * taux : 0);
+      const vDate = m[5] || (p.datePaiement ? p.datePaiement.split("T")[0] : "");
+
+      if (dev === "HTG") {
+        sumVersementsHTG += amt;
+        sumVersementsUSD += amtUSD;
+      } else {
+        sumVersementsUSD += amt;
+        sumVersementsHTG += amtHTG;
+      }
+
+      result.push({
+        ...p,
+        id: `${p.id}-v${idx + 1}` as any,
+        montant: amt,
+        montantUS: Math.round(amtUSD * 100) / 100,
+        montantHTG: Math.round(amtHTG * 100) / 100,
+        devise: dev,
+        taux: taux > 0 ? taux : undefined,
+        datePaiement: vDate,
+        remarque: `Versement solde #${idx + 1} (${vDate})`,
+      });
+    });
+
+    // Reconstituer le paiement initial
+    const initialDateMatch = remark.match(/\[DATE_INITIALE:(\d{4}-\d{2}-\d{2})\]/i);
+    const pl = playerMap.get(String(p.playerId));
+    const initialDate = initialDateMatch
+      ? initialDateMatch[1]
+      : (pl?.dateInscription ? pl.dateInscription.split("T")[0] : (p.datePaiement ? p.datePaiement.split("T")[0] : ""));
+
+    const realAll = getPaymentRealAmounts(p);
+    const initialUS = Math.max(0, realAll.realUSD - sumVersementsUSD);
+    const initialHTG = Math.max(0, realAll.realHTG - sumVersementsHTG);
+    const initialPrimary = p.devise === "HTG" ? initialHTG : initialUS;
+
+    if (initialUS > 0 || initialHTG > 0 || initialPrimary > 0) {
+      result.push({
+        ...p,
+        id: `${p.id}-init` as any,
+        montant: initialPrimary > 0 ? Math.round(initialPrimary * 100) / 100 : p.montant,
+        montantUS: Math.round(initialUS * 100) / 100,
+        montantHTG: Math.round(initialHTG * 100) / 100,
+        datePaiement: initialDate,
+        remarque: (p.remarque || "")
+          .replace(/\[VERSEMENT:[^\]]+\]/gi, "")
+          .replace(/\[DERNIER_VERSEMENT:[^\]]+\]/gi, "")
+          .replace(/\[SOLDE_HTG:[^\]]+\]/gi, "")
+          .replace(/\[DATE_INITIALE:[^\]]+\]/gi, "")
+          .trim() || "Paiement initial",
+      });
+    }
+  });
+
+  return result;
+};
+
 export const getYearlyRevenue = (payments: Payment[]): YearlyData[] => {
   const yearMap = new Map<number, { usd: number; htg: number }>();
+  const transactions = decomposePaymentTransactions(payments);
 
-  payments.forEach((payment) => {
+  transactions.forEach((payment) => {
     if (payment.statut !== "paid") return;
     const date = parseDateLocal(payment.datePaiement || payment.periode) || new Date();
     const year = date.getFullYear();
     const current = yearMap.get(year) || { usd: 0, htg: 0 };
     
-    current.usd += Number(payment.montantUS) || (isUSDDevise(payment.devise) ? Number(payment.montant || 0) : 0);
-    current.htg += Number(payment.montantHTG) || (payment.devise === "HTG" ? Number(payment.montant || 0) : 0);
+    current.usd += Number(payment.montantUS) || 0;
+    current.htg += Number(payment.montantHTG) || 0;
     
     yearMap.set(year, current);
   });
@@ -163,14 +265,15 @@ export const getMonthlyRevenue = (payments: Payment[], year: number): MonthlyDat
   ];
   const totalsUSD = Array.from({ length: 12 }, () => 0);
   const totalsHTG = Array.from({ length: 12 }, () => 0);
+  const transactions = decomposePaymentTransactions(payments);
 
-  payments.forEach((payment) => {
+  transactions.forEach((payment) => {
     if (payment.statut !== "paid") return;
     const date = parseDateLocal(payment.datePaiement || payment.periode) || new Date();
     if (date.getFullYear() === year) {
       const month = date.getMonth();
-      totalsUSD[month] += Number(payment.montantUS) || (isUSDDevise(payment.devise) ? Number(payment.montant || 0) : 0);
-      totalsHTG[month] += Number(payment.montantHTG) || (payment.devise === "HTG" ? Number(payment.montant || 0) : 0);
+      totalsUSD[month] += Number(payment.montantUS) || 0;
+      totalsHTG[month] += Number(payment.montantHTG) || 0;
     }
   });
 
@@ -212,8 +315,9 @@ export const getMonthlyRegistrations = (players: Player[], year: number): Monthl
 export const getWeeklyRevenue = (payments: Payment[], year: number): WeeklyData[] => {
   const weeks: WeeklyData[] = [];
   const weekMap = new Map<string, { usd: number; htg: number }>();
+  const transactions = decomposePaymentTransactions(payments);
 
-  payments.forEach((payment) => {
+  transactions.forEach((payment) => {
     if (payment.statut !== "paid") return;
     const date = parseDateLocal(payment.datePaiement || payment.periode) || new Date();
     if (date.getFullYear() === year) {
@@ -221,8 +325,8 @@ export const getWeeklyRevenue = (payments: Payment[], year: number): WeeklyData[
       const weekKey = `${year}-S${String(weekNumber).padStart(2, "0")}`;
       const current = weekMap.get(weekKey) || { usd: 0, htg: 0 };
       
-      current.usd += Number(payment.montantUS) || (isUSDDevise(payment.devise) ? Number(payment.montant || 0) : 0);
-      current.htg += Number(payment.montantHTG) || (payment.devise === "HTG" ? Number(payment.montant || 0) : 0);
+      current.usd += Number(payment.montantUS) || 0;
+      current.htg += Number(payment.montantHTG) || 0;
       
       weekMap.set(weekKey, current);
     }
@@ -269,9 +373,10 @@ export const getWeeklyRegistrations = (players: Player[], year: number): WeeklyD
 };
 
 // Grouper les revenus par jour (7 derniers jours glissants jusqu'à targetDateStr)
-export const getDailyRevenue = (payments: Payment[], targetDateStr?: string): DailyData[] => {
+export const getDailyRevenue = (payments: Payment[], targetDateStr?: string, players?: Player[]): DailyData[] => {
   const refDate = targetDateStr ? new Date(`${targetDateStr}T12:00:00`) : new Date();
   const days: DailyData[] = [];
+  const transactions = decomposePaymentTransactions(payments, players);
 
   for (let i = 6; i >= 0; i--) {
     const d = new Date(refDate);
@@ -287,12 +392,12 @@ export const getDailyRevenue = (payments: Payment[], targetDateStr?: string): Da
     let revUSD = 0;
     let revHTG = 0;
 
-    payments.forEach((payment) => {
+    transactions.forEach((payment) => {
       if (payment.statut !== "paid") return;
       const pDateStr = payment.datePaiement || (payment as any).dateTransact || "";
       if (pDateStr.startsWith(dayKey)) {
-        revUSD += Number(payment.montantUS) || (isUSDDevise(payment.devise) ? Number(payment.montant || 0) : 0);
-        revHTG += Number(payment.montantHTG) || (payment.devise === "HTG" ? Number(payment.montant || 0) : 0);
+        revUSD += Number(payment.montantUS) || 0;
+        revHTG += Number(payment.montantHTG) || 0;
       }
     });
 

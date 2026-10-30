@@ -1046,13 +1046,16 @@ export function PaymentAddModal({ isOpen, onClose, initialPlayerId, initialProgr
                 <option value="">Aucun (Cotisation régulière de saison)</option>
                 {programmesList.map((prog) => (
                   <option key={prog.id} value={prog.nom}>
-                    🏆 {prog.nom} ({prog.saison || "Tous"})
+                    {prog.nom} ({prog.saison || "Tous"})
                   </option>
                 ))}
               </select>
               {selectedProgrammeNom ? (
-                <div className="mt-2 flex items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 p-2.5 text-xs font-semibold text-amber-800 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-300">
-                  <span>🏆 Ce paiement est lié uniquement au programme <strong>{selectedProgrammeNom}</strong> (isolé des cotisations de saison).</span>
+                <div className="mt-2 flex items-center gap-2 rounded-lg border border-amber-300/80 bg-amber-50 p-2.5 text-xs font-semibold text-amber-800 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-300">
+                  <svg className="size-4 shrink-0 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 15a6 6 0 006-6V4H6v5a6 6 0 006 6zm0 0v4m-4 0h8M4 6H2v3a4 4 0 004 4h.34M20 6h2v3a4 4 0 01-4 4h-.34" />
+                  </svg>
+                  <span>Ce paiement est lié uniquement au programme <strong>{selectedProgrammeNom}</strong> (isolé des cotisations de saison).</span>
                 </div>
               ) : null}
             </div>
@@ -1165,9 +1168,12 @@ export function PaymentAddModal({ isOpen, onClose, initialPlayerId, initialProgr
                       <button
                         type="button"
                         onClick={() => setShowAllClubPlayers(false)}
-                        className="text-xs font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 hover:underline cursor-pointer"
+                        className="inline-flex items-center gap-1.5 text-xs font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 hover:underline cursor-pointer"
                       >
-                        🏆 Revenir aux {programmeParticipatingPlayers.length} inscrits de « {selectedProgrammeNom} »
+                        <svg className="size-3.5 text-brand-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 15a6 6 0 006-6V4H6v5a6 6 0 006 6zm0 0v4m-4 0h8M4 6H2v3a4 4 0 004 4h.34M20 6h2v3a4 4 0 01-4 4h-.34" />
+                        </svg>
+                        <span>Revenir aux {programmeParticipatingPlayers.length} inscrits de « {selectedProgrammeNom} »</span>
                       </button>
                     )}
                   </div>
@@ -1240,15 +1246,22 @@ export function PaymentAddModal({ isOpen, onClose, initialPlayerId, initialProgr
                       </p>
                       {selectedProgrammeNom && (
                         <span
-                          className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold ${
+                          className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-[11px] font-semibold border ${
                             (selectedProgrammeObj?.joueurs || []).map(String).includes(String(selectedPlayer.id))
-                              ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300"
-                              : "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300"
+                              ? "bg-emerald-50 text-emerald-800 border-emerald-200 dark:bg-emerald-950/40 dark:border-emerald-800 dark:text-emerald-300"
+                              : "bg-gray-100 text-gray-700 border-gray-200 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-300"
                           }`}
                         >
-                          {(selectedProgrammeObj?.joueurs || []).map(String).includes(String(selectedPlayer.id))
-                            ? `🏆 Inscrit à ${selectedProgrammeNom}`
-                            : `Hors liste officielle du programme`}
+                          {(selectedProgrammeObj?.joueurs || []).map(String).includes(String(selectedPlayer.id)) ? (
+                            <>
+                              <svg className="size-3 text-emerald-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                              </svg>
+                              <span>Inscrit à {selectedProgrammeNom}</span>
+                            </>
+                          ) : (
+                            <span>Hors liste officielle du programme</span>
+                          )}
                         </span>
                       )}
                     </div>

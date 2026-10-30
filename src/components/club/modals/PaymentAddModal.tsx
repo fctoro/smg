@@ -260,25 +260,54 @@ export function PaymentAddModal({ isOpen, onClose, initialPlayerId, initialProgr
   const [paymentPhotoError, setPaymentPhotoError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [toast, setToast] = useState<{ message: string; type?: "success" | "error" | "info" } | null>(null);
+  const [showAllClubPlayers, setShowAllClubPlayers] = useState(false);
 
   const searchContainerRef = useRef<HTMLDivElement>(null);
+
+  const selectedProgrammeObj = useMemo(() => {
+    if (!selectedProgrammeNom) return null;
+    return (
+      programmesList.find(
+        (p) => (p.nom || "").toLowerCase().trim() === selectedProgrammeNom.toLowerCase().trim()
+      ) || null
+    );
+  }, [selectedProgrammeNom, programmesList]);
+
+  const programmeParticipatingPlayers = useMemo(() => {
+    if (!selectedProgrammeNom) return [];
+    const enrolledIds = new Set((selectedProgrammeObj?.joueurs || []).map((id) => String(id).trim()));
+
+    return players.filter((player) => {
+      if (enrolledIds.has(String(player.id).trim())) return true;
+      if (player.playerIds && player.playerIds.some((pid) => enrolledIds.has(String(pid).trim()))) return true;
+      if (player.programme && player.programme.toLowerCase().trim() === selectedProgrammeNom.toLowerCase().trim()) return true;
+      return false;
+    });
+  }, [selectedProgrammeNom, selectedProgrammeObj, players]);
 
   const selectedPlayer = useMemo(
     () => players.find((p) => p.id === playerId) ?? null,
     [players, playerId]
   );
 
-
-
   const filteredPlayers = useMemo(() => {
     const query = playerSearch.trim().toLowerCase();
-    if (!query) return players.slice(0, 20);
-    return players.filter((player) => {
+    const sourceList =
+      selectedProgrammeNom && !showAllClubPlayers && programmeParticipatingPlayers.length > 0
+        ? programmeParticipatingPlayers
+        : players;
+
+    if (!query) {
+      return selectedProgrammeNom && !showAllClubPlayers && programmeParticipatingPlayers.length > 0
+        ? sourceList
+        : sourceList.slice(0, 20);
+    }
+    return sourceList.filter((player) => {
       const fullName = getPlayerFullName(player).toLowerCase();
       const matricule = (player.matricule || "").toLowerCase();
       return fullName.includes(query) || matricule.includes(query);
     });
-  }, [players, playerSearch]);
+  }, [players, playerSearch, selectedProgrammeNom, showAllClubPlayers, programmeParticipatingPlayers]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -297,6 +326,7 @@ export function PaymentAddModal({ isOpen, onClose, initialPlayerId, initialProgr
     setPlayerId("");
     setPlayerSearch("");
     setShowPlayerDropdown(false);
+    setShowAllClubPlayers(false);
     setSelectedProgrammeNom(initialProgrammeNom || "");
     setMontantDuManuel("");
     setMontantDonne("");
@@ -1027,70 +1057,204 @@ export function PaymentAddModal({ isOpen, onClose, initialPlayerId, initialProgr
               ) : null}
             </div>
 
-            {/* Recherche Joueur */}
+            {/* Recherche / Sélection Joueur */}
             <div className="md:col-span-2">
-              <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
-                Joueur
-              </label>
-              <div ref={searchContainerRef} className="relative">
-                <input
-                  type="text"
-                  value={playerSearch}
-                  onChange={(event) => {
-                    setPlayerSearch(event.target.value);
-                    setShowPlayerDropdown(true);
-                  }}
-                  onFocus={() => setShowPlayerDropdown(true)}
-                  placeholder={
-                    selectedPlayer
-                      ? `${getPlayerFullName(selectedPlayer)}${
-                          selectedPlayer.matricule ? ` (${selectedPlayer.matricule})` : ""
-                        }`
-                      : "Rechercher un joueur..."
-                  }
-                  className={inputClassName}
-                />
-                {showPlayerDropdown && (
-                  <div className="absolute z-20 mt-1 max-h-60 w-full overflow-auto rounded-lg border border-gray-200 bg-white shadow-lg dark:border-gray-700 dark:bg-gray-900">
-                    {filteredPlayers.length === 0 ? (
-                      <div className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
-                        Aucun joueur trouvé.
+              {selectedProgrammeNom && programmeParticipatingPlayers.length > 0 && !showAllClubPlayers ? (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="block text-sm font-semibold text-gray-800 dark:text-white">
+                      Joueur participant ({programmeParticipatingPlayers.length} inscrit{programmeParticipatingPlayers.length > 1 ? "s" : ""})
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setShowAllClubPlayers(true)}
+                      className="text-xs font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 hover:underline cursor-pointer"
+                    >
+                      🔍 Chercher un autre joueur du club
+                    </button>
+                  </div>
+
+                  {/* Sélecteur direct déroulant des joueurs du programme */}
+                  <select
+                    value={playerId}
+                    onChange={(event) => {
+                      const targetPlayer = players.find((p) => p.id === event.target.value);
+                      if (targetPlayer) {
+                        handleSelectPlayer(targetPlayer);
+                      } else {
+                        setPlayerId("");
+                        setPlayerSearch("");
+                      }
+                    }}
+                    className={`${selectClassName} font-medium border-brand-300 dark:border-brand-500/40 bg-brand-50/20`}
+                  >
+                    <option value="">
+                      -- Cliquez ici pour choisir parmi les {programmeParticipatingPlayers.length} joueurs de « {selectedProgrammeNom} » --
+                    </option>
+                    {programmeParticipatingPlayers.map((player) => (
+                      <option key={player.id} value={player.id}>
+                        {getPlayerFullName(player)} {player.matricule ? `(${player.matricule})` : ""} {player.categorie ? `— ${player.categorie}` : ""}
+                      </option>
+                    ))}
+                  </select>
+
+                  {/* Recherche rapide au sein des participants du programme */}
+                  <div ref={searchContainerRef} className="relative mt-1">
+                    <input
+                      type="text"
+                      value={playerSearch}
+                      onChange={(event) => {
+                        setPlayerSearch(event.target.value);
+                        setShowPlayerDropdown(true);
+                      }}
+                      onFocus={() => setShowPlayerDropdown(true)}
+                      placeholder={
+                        selectedPlayer
+                          ? `${getPlayerFullName(selectedPlayer)}${
+                              selectedPlayer.matricule ? ` (${selectedPlayer.matricule})` : ""
+                            }`
+                          : `Ou filtrer parmi les ${programmeParticipatingPlayers.length} participants (nom, matricule)...`
+                      }
+                      className={inputClassName}
+                    />
+                    {showPlayerDropdown && (
+                      <div className="absolute z-20 mt-1 max-h-60 w-full overflow-auto rounded-lg border border-gray-200 bg-white shadow-lg dark:border-gray-700 dark:bg-gray-900">
+                        {filteredPlayers.length === 0 ? (
+                          <div className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
+                            Aucun joueur trouvé parmi les inscrits.
+                          </div>
+                        ) : (
+                          filteredPlayers.map((player) => (
+                            <button
+                              type="button"
+                              key={player.id}
+                              onMouseDown={(event) => event.preventDefault()}
+                              onClick={() => handleSelectPlayer(player)}
+                              className={`flex w-full flex-col items-start px-4 py-2.5 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer ${
+                                player.id === playerId
+                                  ? "bg-brand-50 dark:bg-brand-500/10 font-semibold"
+                                  : ""
+                              }`}
+                            >
+                              <div className="flex items-center justify-between w-full">
+                                <span className={`font-medium text-gray-800 dark:text-white/90 ${player.id === playerId ? "font-semibold" : ""}`}>
+                                  {getPlayerFullName(player)}
+                                </span>
+                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-brand-100 text-brand-800 dark:bg-brand-900/40 dark:text-brand-300">
+                                  Inscrit
+                                </span>
+                              </div>
+                              <span className="text-xs text-gray-500 dark:text-gray-400">
+                                {player.matricule ? `Code: ${player.matricule}` : "Sans code"}
+                                {` • ${player.categorie || "Sans catégorie"} • ${player.poste || ""}`}
+                              </span>
+                            </button>
+                          ))
+                        )}
                       </div>
-                    ) : (
-                      filteredPlayers.map((player) => (
-                        <button
-                          type="button"
-                          key={player.id}
-                          onMouseDown={(event) => event.preventDefault()}
-                          onClick={() => handleSelectPlayer(player)}
-                          className={`flex w-full flex-col items-start px-4 py-2.5 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-800 ${
-                            player.id === playerId
-                              ? "bg-brand-50 dark:bg-brand-500/10"
-                              : ""
-                          }`}
-                        >
-                          <span className={`font-medium text-gray-800 dark:text-white/90 ${player.id === playerId ? "font-semibold" : ""}`}>
-                            {getPlayerFullName(player)}
-                          </span>
-                          <span className="text-xs text-gray-500 dark:text-gray-400">
-                            {player.matricule ? `Code: ${player.matricule}` : "Sans code"}
-                            {` • ${player.categorie} • ${player.poste}`}
-                          </span>
-                        </button>
-                      ))
                     )}
                   </div>
-                )}
-              </div>
+                </div>
+              ) : (
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-400">
+                      {selectedProgrammeNom ? "Joueur" : "Rechercher un joueur"}
+                    </label>
+                    {selectedProgrammeNom && programmeParticipatingPlayers.length > 0 && showAllClubPlayers && (
+                      <button
+                        type="button"
+                        onClick={() => setShowAllClubPlayers(false)}
+                        className="text-xs font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 hover:underline cursor-pointer"
+                      >
+                        🏆 Revenir aux {programmeParticipatingPlayers.length} inscrits de « {selectedProgrammeNom} »
+                      </button>
+                    )}
+                  </div>
+
+                  {selectedProgrammeNom && programmeParticipatingPlayers.length === 0 && (
+                    <div className="mb-2 rounded-lg border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-300">
+                      ℹ️ Aucun joueur n'a encore été associé à ce programme dans le module Programmes. Vous pouvez rechercher et sélectionner n'importe quel joueur du club ci-dessous :
+                    </div>
+                  )}
+
+                  <div ref={searchContainerRef} className="relative">
+                    <input
+                      type="text"
+                      value={playerSearch}
+                      onChange={(event) => {
+                        setPlayerSearch(event.target.value);
+                        setShowPlayerDropdown(true);
+                      }}
+                      onFocus={() => setShowPlayerDropdown(true)}
+                      placeholder={
+                        selectedPlayer
+                          ? `${getPlayerFullName(selectedPlayer)}${
+                              selectedPlayer.matricule ? ` (${selectedPlayer.matricule})` : ""
+                            }`
+                          : "Rechercher un joueur (nom, prénom, matricule)..."
+                      }
+                      className={inputClassName}
+                    />
+                    {showPlayerDropdown && (
+                      <div className="absolute z-20 mt-1 max-h-60 w-full overflow-auto rounded-lg border border-gray-200 bg-white shadow-lg dark:border-gray-700 dark:bg-gray-900">
+                        {filteredPlayers.length === 0 ? (
+                          <div className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
+                            Aucun joueur trouvé.
+                          </div>
+                        ) : (
+                          filteredPlayers.map((player) => (
+                            <button
+                              type="button"
+                              key={player.id}
+                              onMouseDown={(event) => event.preventDefault()}
+                              onClick={() => handleSelectPlayer(player)}
+                              className={`flex w-full flex-col items-start px-4 py-2.5 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer ${
+                                player.id === playerId
+                                  ? "bg-brand-50 dark:bg-brand-500/10 font-semibold"
+                                  : ""
+                              }`}
+                            >
+                              <span className={`font-medium text-gray-800 dark:text-white/90 ${player.id === playerId ? "font-semibold" : ""}`}>
+                                {getPlayerFullName(player)}
+                              </span>
+                              <span className="text-xs text-gray-500 dark:text-gray-400">
+                                {player.matricule ? `Code: ${player.matricule}` : "Sans code"}
+                                {` • ${player.categorie} • ${player.poste}`}
+                              </span>
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {selectedPlayer && (
-                <div className="mt-2 flex items-center gap-2 rounded-lg border border-brand-200 bg-brand-50 px-3 py-2 dark:border-brand-500/30 dark:bg-brand-500/10">
+                <div className="mt-2.5 flex items-center gap-2 rounded-lg border border-brand-200 bg-brand-50 px-3.5 py-2.5 dark:border-brand-500/30 dark:bg-brand-500/10">
                   <div className="flex-1">
-                    <p className="text-sm font-semibold text-brand-900 dark:text-brand-100">
-                      <span className="font-bold">{getPlayerFullName(selectedPlayer)}</span>
-                    </p>
-                    <p className="text-xs text-brand-700 dark:text-brand-300">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="text-sm font-bold text-brand-900 dark:text-brand-100">
+                        {getPlayerFullName(selectedPlayer)}
+                      </p>
+                      {selectedProgrammeNom && (
+                        <span
+                          className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold ${
+                            (selectedProgrammeObj?.joueurs || []).map(String).includes(String(selectedPlayer.id))
+                              ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300"
+                              : "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300"
+                          }`}
+                        >
+                          {(selectedProgrammeObj?.joueurs || []).map(String).includes(String(selectedPlayer.id))
+                            ? `🏆 Inscrit à ${selectedProgrammeNom}`
+                            : `Hors liste officielle du programme`}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-brand-700 dark:text-brand-300 mt-0.5">
                       {selectedPlayer.matricule ? `Code: ${selectedPlayer.matricule}` : "Sans code"}
-                      {` • ${selectedPlayer.categorie} • ${selectedPlayer.poste}`}
+                      {` • Catégorie: ${selectedPlayer.categorie || "N/D"} • Poste: ${selectedPlayer.poste || "N/D"}`}
                     </p>
                     <div className="mt-2 flex flex-wrap items-center gap-2">
                       <span className="text-xs font-medium text-brand-700 dark:text-brand-300">
@@ -1111,15 +1275,15 @@ export function PaymentAddModal({ isOpen, onClose, initialPlayerId, initialProgr
                         .map((r) => r.id);
                       setSelectedPricing((current) => current.filter((id) => !otherAdhesionIds.includes(id)));
                     }}
-                    className="rounded-full p-1 text-brand-600 hover:bg-brand-100 dark:text-brand-300 dark:hover:bg-brand-500/20"
+                    className="rounded-full p-1.5 text-brand-600 hover:bg-brand-100 dark:text-brand-300 dark:hover:bg-brand-500/20 cursor-pointer"
                     title="Changer de joueur"
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                     </svg>
                   </button>
-                 </div>
-               )}
+                </div>
+              )}
             </div>
 
             {/* Rubriques */}

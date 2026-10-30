@@ -1137,6 +1137,25 @@ function PaymentsPageContent() {
     return Array.from(set).sort();
   }, [programmesList, allProgrammePayments]);
 
+  // Joueurs inscrits ou ayant payé pour le programme actuellement sélectionné
+  const selectedProgrammeParticipants = useMemo(() => {
+    if (selectedProgrammeFilter === "all") return [];
+    const prog = programmesList.find(
+      (p) => (p.nom || "").toLowerCase().trim() === selectedProgrammeFilter.toLowerCase().trim()
+    );
+    const enrolledSet = new Set<string>();
+    (prog?.joueurs || []).forEach((id) => enrolledSet.add(String(id).trim()));
+    allProgrammePayments.forEach((p) => {
+      const pProg = getProgrammeNameFromRemark(p.remarque);
+      if (pProg.toLowerCase().trim() === selectedProgrammeFilter.toLowerCase().trim()) {
+        enrolledSet.add(String(p.playerId).trim());
+      }
+    });
+    return players
+      .filter((pl) => enrolledSet.has(String(pl.id).trim()))
+      .sort((a, b) => getPlayerFullName(a).localeCompare(getPlayerFullName(b)));
+  }, [selectedProgrammeFilter, programmesList, allProgrammePayments, players]);
+
   // Paiements filtrés pour l'onglet Programmes Spéciaux
   const filteredProgrammePayments = useMemo(() => {
     return allProgrammePayments
@@ -2795,17 +2814,37 @@ function PaymentsPageContent() {
 
               <div>
                 <label className="mb-1 block text-xs font-semibold text-gray-600 dark:text-gray-400">
-                  Rechercher joueur / matricule
+                  {selectedProgrammeFilter !== "all" && selectedProgrammeParticipants.length > 0
+                    ? `Joueur inscrit (${selectedProgrammeParticipants.length})`
+                    : "Rechercher joueur / matricule"}
                 </label>
-                <input
-                  value={searchQuery}
-                  onChange={(e) => {
-                    setSearchQuery(e.target.value);
-                    setProgCurrentPage(1);
-                  }}
-                  placeholder="Nom du joueur, matricule..."
-                  className="h-10 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-800 shadow-theme-xs placeholder:text-gray-400 focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
-                />
+                {selectedProgrammeFilter !== "all" && selectedProgrammeParticipants.length > 0 ? (
+                  <select
+                    value={searchQuery}
+                    onChange={(e) => {
+                      setSearchQuery(e.target.value);
+                      setProgCurrentPage(1);
+                    }}
+                    className="h-10 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90 font-medium cursor-pointer"
+                  >
+                    <option value="">Tous les inscrits ({selectedProgrammeParticipants.length})</option>
+                    {selectedProgrammeParticipants.map((pl) => (
+                      <option key={pl.id} value={getPlayerFullName(pl)}>
+                        {getPlayerFullName(pl)} {pl.matricule ? `(${pl.matricule})` : ""}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    value={searchQuery}
+                    onChange={(e) => {
+                      setSearchQuery(e.target.value);
+                      setProgCurrentPage(1);
+                    }}
+                    placeholder="Nom du joueur, matricule..."
+                    className="h-10 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-800 shadow-theme-xs placeholder:text-gray-400 focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
+                  />
+                )}
               </div>
 
               <div>

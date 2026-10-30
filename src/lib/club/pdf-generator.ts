@@ -444,9 +444,20 @@ export async function generateReceiptPDFBase64(
   }
 
   // 3. Décomposition chronologique pour trouver les règlements antérieurs à cette transaction
-  const decomposedHistory = decomposePaymentTransactions(paymentHistory, [player]).sort(
-    (a, b) => new Date(a.datePaiement || 0).getTime() - new Date(b.datePaiement || 0).getTime()
-  );
+  const decomposedHistory = decomposePaymentTransactions(paymentHistory, [player]).sort((a, b) => {
+    const timeA = new Date(a.datePaiement || 0).getTime();
+    const timeB = new Date(b.datePaiement || 0).getTime();
+    if (timeA !== timeB) return timeA - timeB;
+
+    const idA = String(a.id || "");
+    const idB = String(b.id || "");
+    if (idA.endsWith("-init") && !idB.endsWith("-init")) return -1;
+    if (!idA.endsWith("-init") && idB.endsWith("-init")) return 1;
+
+    const vA = parseInt(idA.match(/-v(\d+)/i)?.[1] || "0", 10);
+    const vB = parseInt(idB.match(/-v(\d+)/i)?.[1] || "0", 10);
+    return vA - vB;
+  });
 
   const mainId = String(mainPayment.id || mainPayment.Id || "");
   const mainDate = String(mainPayment.datePaiement || mainPayment.DateTransact || "").split("T")[0];
@@ -454,12 +465,26 @@ export async function generateReceiptPDFBase64(
 
   let currentTxIndex = decomposedHistory.findIndex((tx) => String(tx.id) === mainId);
 
+  // Si l'ID ne correspond pas exactement, chercher par type (-init ou -vN)
+  if (currentTxIndex === -1 && decomposedHistory.length > 0) {
+    if (mainId.endsWith("-init")) {
+      currentTxIndex = decomposedHistory.findIndex((tx) => String(tx.id).endsWith("-init"));
+    } else {
+      const vNumMatch = mainId.match(/-v(\d+)/i);
+      if (vNumMatch) {
+        currentTxIndex = decomposedHistory.findIndex((tx) => String(tx.id).endsWith(`-v${vNumMatch[1]}`));
+      }
+    }
+  }
+
+  // Matcher par date ET montant
   if (currentTxIndex === -1 && decomposedHistory.length > 0) {
     currentTxIndex = decomposedHistory.findIndex(
       (tx) => tx.datePaiement === mainDate && Math.abs(Number(tx.montant) - mainMnt) < 0.01
     );
   }
 
+  // Si toujours pas trouvé mais que mainPayment a des versements (cas d'un versement nouvellement ajouté dans handleSaveEdit)
   if (currentTxIndex === -1 && decomposedHistory.length > 0) {
     const vMatches = [...String(mainPayment.remarque || mainPayment.Remarque || "").matchAll(/\[VERSEMENT:\s*([\d.]+)_([A-Za-z]+)(?:_TAUX:([\d.]+))?(?:_USD:([\d.]+))?_DATE:(\d{4}-\d{2}-\d{2})\]/gi)];
     if (vMatches.length > 0) {

@@ -522,9 +522,10 @@ function PaymentsPageContent() {
         const player = playerMap.get(editingPayment.playerId);
         if (player) {
           try {
+            const savedVMatches = [...finalRemarque.matchAll(/\[VERSEMENT:\s*([\d.]+)_([A-Za-z]+)(?:_TAUX:([\d.]+))?(?:_USD:([\d.]+))?_DATE:(\d{4}-\d{2}-\d{2})\]/gi)];
             const installmentPaymentForPdf = {
               ...editingPayment,
-              id: `${editingPayment.id}-${Date.now().toString().slice(-4)}`,
+              id: `${editingPayment.id}-v${savedVMatches.length}`,
               montant: newAmountNum,
               montantUS: addedUSD,
               montantHTG: addedHTG,

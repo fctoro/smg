@@ -151,11 +151,11 @@ export const decomposePaymentTransactions = (payments: Payment[], players?: Play
       return;
     }
 
-    // Le paiement a des versements ultérieurs avec dates spécifiques
+    // 1. Calculer d'abord la somme des versements ultérieurs
     let sumVersementsUSD = 0;
     let sumVersementsHTG = 0;
 
-    versementMatches.forEach((m, idx) => {
+    const parsedVersements = versementMatches.map((m, idx) => {
       const amt = parseFloat(m[1]) || 0;
       const devRaw = (m[2] || "US").toUpperCase();
       const dev: "US" | "HTG" = devRaw.includes("HTG") ? "HTG" : "US";
@@ -171,7 +171,7 @@ export const decomposePaymentTransactions = (payments: Payment[], players?: Play
         sumVersementsUSD += amt;
       }
 
-      result.push({
+      return {
         ...p,
         id: `${p.id}-v${idx + 1}` as any,
         montant: amt,
@@ -181,10 +181,10 @@ export const decomposePaymentTransactions = (payments: Payment[], players?: Play
         taux: taux > 0 ? taux : undefined,
         datePaiement: vDate,
         remarque: `Versement solde #${idx + 1} (${vDate})`,
-      });
+      };
     });
 
-    // Reconstituer le paiement initial
+    // 2. Reconstituer le paiement initial et l'insérer EN PREMIER
     const initialDateMatch = remark.match(/\[DATE_INITIALE:(\d{4}-\d{2}-\d{2})\]/i);
     const pl = playerMap.get(String(p.playerId));
     const initialDate = initialDateMatch
@@ -215,9 +215,25 @@ export const decomposePaymentTransactions = (payments: Payment[], players?: Play
           .trim() || "Paiement initial",
       });
     }
+
+    // 3. Insérer les versements ultérieurs
+    result.push(...parsedVersements);
   });
 
-  return result;
+  return result.sort((a, b) => {
+    const timeA = new Date(a.datePaiement || 0).getTime();
+    const timeB = new Date(b.datePaiement || 0).getTime();
+    if (timeA !== timeB) return timeA - timeB;
+
+    const idA = String(a.id || "");
+    const idB = String(b.id || "");
+    if (idA.endsWith("-init") && !idB.endsWith("-init")) return -1;
+    if (!idA.endsWith("-init") && idB.endsWith("-init")) return 1;
+
+    const vA = parseInt(idA.match(/-v(\d+)/i)?.[1] || "0", 10);
+    const vB = parseInt(idB.match(/-v(\d+)/i)?.[1] || "0", 10);
+    return vA - vB;
+  });
 };
 
 export const getYearlyRevenue = (payments: Payment[]): YearlyData[] => {

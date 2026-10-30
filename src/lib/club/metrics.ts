@@ -104,19 +104,25 @@ export const getMonthlyPaymentsSeries = (payments: Payment[], year: number | "al
 
   payments.forEach((payment) => {
     if (payment.statut !== "paid") return;
-    const [paymentYear, paymentMonth] = payment.periode.split("-").map(Number);
+    const dateStr = payment.datePaiement || payment.periode || "";
+    if (!dateStr) return;
+    const parts = dateStr.split("-").map(Number);
+    const paymentYear = parts[0];
+    const paymentMonth = parts[1];
     
     // Si year === "all", on cumule tout par mois (pour voir la saisonnalité globale)
     // Sinon on filtre sur l'année spécifique
     if (year === "all" || (paymentYear === year && paymentMonth >= 1 && paymentMonth <= 12)) {
-      totalsUS[paymentMonth - 1] += (payment.montantUS || 0);
-      totalsHTG[paymentMonth - 1] += (payment.montantHTG || 0);
+      if (paymentMonth >= 1 && paymentMonth <= 12) {
+        totalsUS[paymentMonth - 1] += Number(payment.montantUS) || 0;
+        totalsHTG[paymentMonth - 1] += Number(payment.montantHTG) || 0;
+      }
     }
   });
 
   return {
-    dataUS: totalsUS,
-    dataHTG: totalsHTG
+    dataUS: totalsUS.map((v) => Math.round(v * 100) / 100),
+    dataHTG: totalsHTG.map((v) => Math.round(v * 100) / 100),
   };
 };
 

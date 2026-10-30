@@ -18,6 +18,7 @@ import {
   getRecentPlayers,
   getUpcomingEvents,
 } from "@/lib/club/metrics";
+import { decomposePaymentTransactions } from "@/lib/club/statistics";
 import { eventTypeLabel } from "@/lib/club/status";
 import {
   AlertIcon,
@@ -48,26 +49,50 @@ export default function ClubDashboardPage() {
   const isAllTime = selectedYear === "all";
   const displayYear = isAllTime ? currentYearActual : parseInt(selectedYear, 10);
 
+  // Synchronisation stricte avec Statistiques : décomposition des versements et soldes HTG
+  const decomposedPayments = useMemo(() => {
+    return decomposePaymentTransactions(payments, players);
+  }, [payments, players]);
+
   const activePlayers = getActivePlayersCount(players);
   const employeeCount = employees.length;
   const alumniCount = alumni.length;
-  const paymentCount = payments.length;
+  const paymentCount = decomposedPayments.length;
   const parentFamilies = parents.length;
   const [userCount, setUserCount] = useState(0);
 
-  const currentRevenueUS = payments
-    .filter((p) => p.statut === "paid" && (isAllTime || p.periode.startsWith(selectedYear) || (p.datePaiement && p.datePaiement.startsWith(selectedYear))))
-    .reduce((sum, p) => sum + (p.montantUS || 0), 0);
+  const currentRevenueUS = useMemo(() => {
+    return decomposedPayments
+      .filter((p) => {
+        if (p.statut !== "paid") return false;
+        if (isAllTime) return true;
+        const dateStr = p.datePaiement || p.periode || "";
+        return dateStr.startsWith(selectedYear);
+      })
+      .reduce((sum, p) => sum + (Number(p.montantUS) || 0), 0);
+  }, [decomposedPayments, isAllTime, selectedYear]);
 
-  const currentRevenueHTG = payments
-    .filter((p) => p.statut === "paid" && (isAllTime || p.periode.startsWith(selectedYear) || (p.datePaiement && p.datePaiement.startsWith(selectedYear))))
-    .reduce((sum, p) => sum + (p.montantHTG || 0), 0);
+  const currentRevenueHTG = useMemo(() => {
+    return decomposedPayments
+      .filter((p) => {
+        if (p.statut !== "paid") return false;
+        if (isAllTime) return true;
+        const dateStr = p.datePaiement || p.periode || "";
+        return dateStr.startsWith(selectedYear);
+      })
+      .reduce((sum, p) => sum + (Number(p.montantHTG) || 0), 0);
+  }, [decomposedPayments, isAllTime, selectedYear]);
 
-  const lateCurrentMonth = payments.filter(
-    (payment) => payment.statut === "late" && (isAllTime || payment.periode.startsWith(selectedYear))
-  ).length;
+  const lateCurrentMonth = useMemo(() => {
+    return decomposedPayments.filter(
+      (payment) => payment.statut === "late" && (isAllTime || payment.periode.startsWith(selectedYear))
+    ).length;
+  }, [decomposedPayments, isAllTime, selectedYear]);
 
-  const paymentSeries = getMonthlyPaymentsSeries(payments, isAllTime ? "all" : displayYear);
+  const paymentSeries = useMemo(() => {
+    return getMonthlyPaymentsSeries(decomposedPayments, isAllTime ? "all" : displayYear);
+  }, [decomposedPayments, isAllTime, displayYear]);
+
   const recentPlayers = useMemo(() => {
     return getRecentPlayers(players, 6);
   }, [players]);
@@ -110,19 +135,20 @@ export default function ClubDashboardPage() {
   }, [players]);
 
   const pendingPaymentsCount = useMemo(() => {
-    return payments.filter(
+    return decomposedPayments.filter(
       (p) => p.statut === "pending" && (isAllTime || p.periode.startsWith(selectedYear))
     ).length;
-  }, [payments, selectedYear, isAllTime]);
+  }, [decomposedPayments, selectedYear, isAllTime]);
 
   const methodData = useMemo(() => {
     const methods: Record<string, { totalUS: number; totalHTG: number; count: number; pendingCount: number }> = {};
-    payments.forEach((p) => {
-      if (isAllTime || p.periode.startsWith(selectedYear)) {
+    decomposedPayments.forEach((p) => {
+      const dateStr = p.datePaiement || p.periode || "";
+      if (isAllTime || dateStr.startsWith(selectedYear)) {
         if (!methods[p.methode]) methods[p.methode] = { totalUS: 0, totalHTG: 0, count: 0, pendingCount: 0 };
         if (p.statut === "paid") {
-          methods[p.methode].totalUS += p.montantUS || 0;
-          methods[p.methode].totalHTG += p.montantHTG || 0;
+          methods[p.methode].totalUS += Number(p.montantUS) || 0;
+          methods[p.methode].totalHTG += Number(p.montantHTG) || 0;
           methods[p.methode].count += 1;
         } else if (p.statut === "pending") {
           methods[p.methode].pendingCount += 1;
@@ -131,12 +157,12 @@ export default function ClubDashboardPage() {
     });
     return Object.keys(methods).map((m) => ({
       method: m,
-      totalUS: methods[m].totalUS,
-      totalHTG: methods[m].totalHTG,
+      totalUS: Math.round(methods[m].totalUS * 100) / 100,
+      totalHTG: Math.round(methods[m].totalHTG * 100) / 100,
       count: methods[m].count || 0,
       pendingCount: methods[m].pendingCount || 0,
     }));
-  }, [payments, selectedYear, isAllTime]);
+  }, [decomposedPayments, selectedYear, isAllTime]);
 
   const tableColumns = useMemo(() => {
     if (enabledPlayerColumns.length > 0) return enabledPlayerColumns;

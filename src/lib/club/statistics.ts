@@ -155,6 +155,9 @@ export const decomposePaymentTransactions = (payments: Payment[], players?: Play
     let sumVersementsUSD = 0;
     let sumVersementsHTG = 0;
 
+    const progMatch = remark.match(/\[PROGRAMME:\s*([^\]]+)\]/i);
+    const progTag = progMatch ? ` [PROGRAMME:${progMatch[1]}]` : "";
+
     const parsedVersements = versementMatches.map((m, idx) => {
       const amt = parseFloat(m[1]) || 0;
       const devRaw = (m[2] || "US").toUpperCase();
@@ -180,7 +183,7 @@ export const decomposePaymentTransactions = (payments: Payment[], players?: Play
         devise: dev,
         taux: taux > 0 ? taux : undefined,
         datePaiement: vDate,
-        remarque: `Versement solde #${idx + 1} (${vDate})`,
+        remarque: `Versement solde #${idx + 1} (${vDate})${progTag}`,
       };
     });
 

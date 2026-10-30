@@ -27,6 +27,7 @@ import { ActiveBellIcon } from "@/icons/ActiveBellIcon";
 import { ConfirmModal } from "@/components/ui/modal/ConfirmModal";
 import { CustomReminderMessageModal } from "@/components/club/modals/CustomReminderMessageModal";
 import { generateReceiptPDFBase64, generatePlayerHistoryPDFBase64 } from "@/lib/club/pdf-generator";
+import { decomposePaymentTransactions } from "@/lib/club/statistics";
 import { generatePlayerMatricule } from "@/lib/club/season";
 import { useConfirm } from "@/hooks/useConfirm";
 
@@ -584,7 +585,7 @@ function PaymentsPageContent() {
             );
 
             const mntStr = editDevise === "HTG" ? `${newAmountNum.toLocaleString()} HTG` : `$${newAmountNum.toFixed(2)} USD`;
-            const receiptNo = `REC-${editingPayment.id.slice(0, 8).toUpperCase()}-${Date.now().toString().slice(-4)}`;
+            const receiptNo = `REC-${String(editingPayment.id).slice(0, 8).toUpperCase()}-${Date.now().toString().slice(-4)}`;
 
             const base64Data = receiptBase64.includes("base64,") ? receiptBase64.split("base64,")[1] : receiptBase64;
             const byteCharacters = atob(base64Data);
@@ -742,6 +743,18 @@ function PaymentsPageContent() {
     if (!player) return;
     
     try {
+      // Si c'est une ligne cumulative avec des versements, cibler le dernier versement
+      let targetPayment = payment;
+      const pid = String(payment.id || "");
+      const isSpecificTx = pid.endsWith("-init") || pid.includes("-v");
+      const hasVersements = /\[VERSEMENT:[^\]]+\]/i.test(String(payment.remarque || ""));
+      if (!isSpecificTx && hasVersements) {
+        const decomposed = decomposePaymentTransactions([payment], [player]);
+        if (decomposed.length > 0) {
+          targetPayment = decomposed[decomposed.length - 1];
+        }
+      }
+
       const nomParts = (player.parentNomPrenom || "").split(" ");
       const parentNom = nomParts[0] || "";
       const parentPrenom = nomParts.slice(1).join(" ") || "";
@@ -771,7 +784,7 @@ function PaymentsPageContent() {
       
       const receiptBase64 = await generateReceiptPDFBase64(
         player,
-        [payment],
+        [targetPayment],
         parentNom,
         parentPrenom,
         player.parentTelephone || player.telephone || "",
@@ -796,7 +809,7 @@ function PaymentsPageContent() {
       
       const link = document.createElement('a');
       link.href = blobUrl;
-      const receiptNo = `RP-FCTORO-${payment.id.slice(0, 8).toUpperCase()}`;
+      const receiptNo = `RP-FCTORO-${String(targetPayment.id).slice(0, 10).toUpperCase()}`;
       link.download = `${receiptNo}.pdf`;
       document.body.appendChild(link);
       link.click();
@@ -812,6 +825,18 @@ function PaymentsPageContent() {
     if (!player) return;
     
     try {
+      // Si c'est une ligne cumulative avec des versements, cibler le dernier versement
+      let targetPayment = payment;
+      const pid = String(payment.id || "");
+      const isSpecificTx = pid.endsWith("-init") || pid.includes("-v");
+      const hasVersements = /\[VERSEMENT:[^\]]+\]/i.test(String(payment.remarque || ""));
+      if (!isSpecificTx && hasVersements) {
+        const decomposed = decomposePaymentTransactions([payment], [player]);
+        if (decomposed.length > 0) {
+          targetPayment = decomposed[decomposed.length - 1];
+        }
+      }
+
       const nomParts = (player.parentNomPrenom || "").split(" ");
       const parentNom = nomParts[0] || "";
       const parentPrenom = nomParts.slice(1).join(" ") || "";
@@ -841,7 +866,7 @@ function PaymentsPageContent() {
       
       const receiptBase64 = await generateReceiptPDFBase64(
         player,
-        [payment],
+        [targetPayment],
         parentNom,
         parentPrenom,
         player.parentTelephone || player.telephone || "",
@@ -1367,6 +1392,9 @@ function PaymentsPageContent() {
       let sumVersementsUSD = 0;
       let sumVersementsHTG = 0;
 
+      const progMatch = remark.match(/\[PROGRAMME:\s*([^\]]+)\]/i);
+      const progTag = progMatch ? ` [PROGRAMME:${progMatch[1]}]` : "";
+
       versementMatches.forEach((m, idx) => {
         const amt = parseFloat(m[1]) || 0;
         const devRaw = (m[2] || "US").toUpperCase();
@@ -1391,7 +1419,7 @@ function PaymentsPageContent() {
           devise: dev,
           taux: taux > 0 ? taux : undefined,
           datePaiement: vDate,
-          remarque: `Versement solde #${idx + 1} (${formatClubDate(vDate)})`,
+          remarque: `Versement solde #${idx + 1} (${formatClubDate(vDate)})${progTag}`,
         });
       });
 
@@ -1414,7 +1442,7 @@ function PaymentsPageContent() {
             devise: "HTG",
             taux: taux > 0 ? taux : undefined,
             datePaiement: vDate,
-            remarque: `Versement solde HTG #${idx + 1} (${formatClubDate(vDate)})`,
+            remarque: `Versement solde HTG #${idx + 1} (${formatClubDate(vDate)})${progTag}`,
           });
         });
       }

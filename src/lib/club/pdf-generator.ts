@@ -139,6 +139,21 @@ export async function generateReceiptPDFBase64(
 ): Promise<string> {
   const doc = new jsPDF();
   
+  // Résolution de la transaction cible si payments contient une seule ligne brute cumulative avec versements ultérieurs
+  let targetPayments = payments;
+  if (payments.length === 1) {
+    const p = payments[0];
+    const pid = String(p.id || p.Id || "");
+    const isSpecificTx = pid.endsWith("-init") || pid.includes("-v");
+    const hasVersements = /\[VERSEMENT:[^\]]+\]/i.test(String(p.remarque || p.Remarque || ""));
+    if (!isSpecificTx && hasVersements) {
+      const decomposed = decomposePaymentTransactions([p], [player]);
+      if (decomposed.length > 0) {
+        targetPayments = [decomposed[decomposed.length - 1]];
+      }
+    }
+  }
+
   const computedName = [parentNom, parentPrenom].filter(Boolean).join(" ");
   const parentFullName = computedName.length > 0 ? computedName : "Parent / Tuteur";
     
@@ -193,9 +208,15 @@ export async function generateReceiptPDFBase64(
   doc.setTextColor(grayMedium[0], grayMedium[1], grayMedium[2]);
   doc.text("Date :", 155, 39, { align: 'right' });
   
+  const mainPaymentForDate = targetPayments[0] || {};
+  const receiptDateObj = mainPaymentForDate.datePaiement ? new Date(mainPaymentForDate.datePaiement) : new Date();
+  const receiptDateStr = !isNaN(receiptDateObj.getTime())
+    ? receiptDateObj.toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric', timeZone: 'UTC' })
+    : new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' });
+
   doc.setFont("helvetica", "bold");
   doc.setTextColor(grayDark[0], grayDark[1], grayDark[2]);
-  doc.text(new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' }), 196, 39, { align: 'right' });
+  doc.text(receiptDateStr, 196, 39, { align: 'right' });
 
   doc.setDrawColor(grayLight[0], grayLight[1], grayLight[2]);
   doc.setLineWidth(0.5);
@@ -261,8 +282,8 @@ export async function generateReceiptPDFBase64(
   const tableColumn = ["Date", "Joueur (Enfant)", "Description", "Mode", "Montant"];
   const tableRows: any[] = [];
 
-  const mainPayment = payments[0] || {};
-  const isHTG = mainPayment.devise === "HTG" || payments.some((p: any) => p.devise === "HTG" || Number(p.montantHTG) > 0 || Number(p.MntPayeGd) > 0);
+  const mainPayment = targetPayments[0] || {};
+  const isHTG = mainPayment.devise === "HTG" || targetPayments.some((p: any) => p.devise === "HTG" || Number(p.montantHTG) > 0 || Number(p.MntPayeGd) > 0);
   // Lire taux depuis la colonne DB, sinon depuis le marqueur [TAUX:XXX] dans la remarque
   let taux = mainPayment.taux || 0;
   if (isHTG && taux <= 1) {
@@ -278,7 +299,7 @@ export async function generateReceiptPDFBase64(
   let totalUSD = 0;
   let totalHTG = 0;
 
-  payments.forEach((p: any) => {
+  targetPayments.forEach((p: any) => {
     const pTaux = Number(p.taux) || 0;
     let valUS = 0;
     let valHTG = 0;
@@ -350,7 +371,8 @@ export async function generateReceiptPDFBase64(
 
   // 2. Calcul du dossier complet (Total Dû et Solde Restant)
   const rawHistory = (allPlayerPayments && allPlayerPayments.length > 0) ? allPlayerPayments : payments;
-  const targetProg = extractProgrammeFromRemark(mainPayment.remarque);
+  const targetProg = extractProgrammeFromRemark(mainPayment.remarque)
+    || (payments.length > 0 ? extractProgrammeFromRemark(payments[0].remarque) : null);
   const paymentHistory = targetProg
     ? rawHistory.filter((p: any) => extractProgrammeFromRemark(p.remarque) === targetProg)
     : rawHistory.filter((p: any) => !extractProgrammeFromRemark(p.remarque));
@@ -567,7 +589,7 @@ export async function generateReceiptPDFBase64(
 
   let yPos = finalY + 10;
 
-  const appliedRabais = payments
+  const appliedRabais = (allPlayerPayments && allPlayerPayments.length > 0 ? allPlayerPayments : payments)
     .map((p: any) => extractRabaisLabelFromRemark(p.remarque, isHTG))
     .find(Boolean);
 

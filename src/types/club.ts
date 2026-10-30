@@ -23,6 +23,8 @@ export interface PricingItem {
   categorie?: string;
   estAdhesion?: boolean;
   actif?: boolean;
+  programmeId?: string;
+  programmeNom?: string;
 }
 
 export type Rubrique = PricingItem;

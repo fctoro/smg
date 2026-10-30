@@ -71,8 +71,15 @@ export const extractRabaisLabelFromRemark = (remark?: string, isHTG: boolean = f
   return null;
 };
 
+export const extractProgrammeFromRemark = (remark?: string): string | null => {
+  if (!remark) return null;
+  const match = remark.match(/\[PROGRAMME:\s*([^\]]+)\]/i);
+  return match ? match[1].trim() : null;
+};
+
 export const cleanRemarkForPDF = (remark: string, isHTG: boolean = false) => {
   if (!remark) return "Paiement de cotisation";
+  const progName = extractProgrammeFromRemark(remark);
   const rabaisLabel = extractRabaisLabelFromRemark(remark, isHTG);
 
   // Supprime tous les tags système du type [CLE:VALEUR] ou [CLE]
@@ -106,10 +113,14 @@ export const cleanRemarkForPDF = (remark: string, isHTG: boolean = false) => {
     cleaned = `${cleaned}\nRabais accordé : ${rabaisLabel}`;
   }
 
+  if (progName) {
+    cleaned = `Programme : ${progName}\n${cleaned}`.trim();
+  }
+
   // Supprimer les sauts de lignes consécutifs
   cleaned = cleaned.replace(/\n\s*\n+/g, '\n').trim();
 
-  return cleaned || "Paiement de cotisation";
+  return cleaned || (progName ? `Programme : ${progName}` : "Paiement de cotisation");
 };
 
 export async function generateReceiptPDFBase64(
@@ -337,15 +348,20 @@ export async function generateReceiptPDFBase64(
   const finalY = (doc as any).lastAutoTable.finalY || tableStartY;
 
   // 2. Calcul du dossier complet (Total Dû et Solde Restant)
-  const paymentHistory = (allPlayerPayments && allPlayerPayments.length > 0) ? allPlayerPayments : payments;
+  const rawHistory = (allPlayerPayments && allPlayerPayments.length > 0) ? allPlayerPayments : payments;
+  const targetProg = extractProgrammeFromRemark(mainPayment.remarque);
+  const paymentHistory = targetProg
+    ? rawHistory.filter((p: any) => extractProgrammeFromRemark(p.remarque) === targetProg)
+    : rawHistory.filter((p: any) => !extractProgrammeFromRemark(p.remarque));
+
   const playerStatus = (player.statutJoueur || "").toLowerCase().trim();
-  const isBoursierReceipt = playerStatus === "bourse" || playerStatus === "boursier" ||
-    paymentHistory.some((p: any) => (p.remarque || "").toLowerCase().includes("[plan:boursier]"));
-  const isDemiBoursierReceipt = playerStatus.includes("demi") ||
+  const isBoursierReceipt = !targetProg && (playerStatus === "bourse" || playerStatus === "boursier" ||
+    paymentHistory.some((p: any) => (p.remarque || "").toLowerCase().includes("[plan:boursier]")));
+  const isDemiBoursierReceipt = !targetProg && (playerStatus.includes("demi") ||
     paymentHistory.some((p: any) => {
       const rem = (p.remarque || "").toLowerCase();
       return rem.includes("demi-bourse") || rem.includes("demi bourse") || rem.includes("[reduction:half]") || rem.includes("[statut:demi-bourse]");
-    });
+    }));
   const isDemiBoursier2500Receipt = isDemiBoursierReceipt && (
     isHTG || playerStatus.includes("2500") || playerStatus.includes("2 500") ||
     paymentHistory.some((p: any) => {
@@ -357,7 +373,22 @@ export async function generateReceiptPDFBase64(
   let totalDueValue = 0; // en USD ou unité standard
   let totalDueHTG = 0;
 
-  if (isBoursierReceipt) {
+  if (targetProg) {
+    // Cas Programme Spécial : total dû propre au programme
+    const explicitDueMarkers = paymentHistory
+      .map((p: any) => p.remarque?.match(/\[TOTAL_DUE:\s*([\d.]+)\s*\]/i)?.[1])
+      .filter(Boolean);
+
+    if (explicitDueMarkers.length > 0) {
+      totalDueValue = parseFloat(explicitDueMarkers[0]);
+    } else {
+      paymentHistory.forEach((p: any) => {
+        const pTaux = p.taux || 0;
+        totalDueValue += (p.devise === "HTG" && pTaux > 0) ? p.montant / pTaux : (p.montant || 0);
+      });
+    }
+    totalDueHTG = (isHTG && taux > 0) ? Math.round(totalDueValue * taux) : 0;
+  } else if (isBoursierReceipt) {
     totalDueValue = paymentHistory.reduce((sum, p) => {
       const match = (p.remarque || "").match(/\[TOTAL_DUE:\s*([\d.]+)\s*\]/i);
       if (match && match[1]) return sum + parseFloat(match[1]);

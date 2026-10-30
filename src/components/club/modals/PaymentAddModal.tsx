@@ -11,6 +11,8 @@ import { validatePaymentPhotoFile, getPaymentPhotoPreviewUrl, uploadPaymentPhoto
 import { calculateDiscountedAmount } from "@/lib/club/payment-reduction-utils";
 import { generateReceiptPDFBase64 } from "@/lib/club/pdf-generator";
 import { ToastNotification } from "@/components/ui/toast/ToastNotification";
+import { fetchProgrammes } from "@/lib/club/programmes";
+import { ProgrammeMatch } from "@/types/club";
 
 const inputClassName =
   "h-11 w-full rounded-lg border border-gray-300 bg-transparent px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs placeholder:text-gray-400 focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90";
@@ -32,6 +34,8 @@ interface PricingItem {
   categorie?: string;
   estAdhesion?: boolean;
   actif?: boolean;
+  programmeId?: string;
+  programmeNom?: string;
 }
 
 interface PaymentPlan {
@@ -186,20 +190,36 @@ interface PaymentAddModalProps {
   isOpen: boolean;
   onClose: () => void;
   initialPlayerId?: string;
+  initialProgrammeNom?: string;
 }
 
-export function PaymentAddModal({ isOpen, onClose, initialPlayerId }: PaymentAddModalProps) {
+export function PaymentAddModal({ isOpen, onClose, initialPlayerId, initialProgrammeNom }: PaymentAddModalProps) {
   const { players, setPlayers, payments, setPayments, rubriques, refreshRubriques } = useClubData();
+  const [programmesList, setProgrammesList] = useState<ProgrammeMatch[]>([]);
+  const [selectedProgrammeNom, setSelectedProgrammeNom] = useState<string>(initialProgrammeNom || "");
 
   useEffect(() => {
-    if (isOpen && refreshRubriques) {
-      refreshRubriques();
+    if (isOpen) {
+      if (refreshRubriques) refreshRubriques();
+      setSelectedProgrammeNom(initialProgrammeNom || "");
+      fetchProgrammes().then((res) => {
+        setProgrammesList(res || []);
+      }).catch((err) => {
+        console.warn("Erreur chargement programmes:", err);
+      });
     }
-  }, [isOpen, refreshRubriques]);
+  }, [isOpen, refreshRubriques, initialProgrammeNom]);
 
   const rubricOptions = useMemo(() => {
-    return (rubriques || []).filter((item) => item.actif !== false && item.categorie !== "Payroll");
-  }, [rubriques]);
+    const allActive = (rubriques || []).filter((item) => item.actif !== false && item.categorie !== "Payroll");
+    if (selectedProgrammeNom) {
+      const progFiltered = allActive.filter(
+        (item) => (item.programmeNom || "").toLowerCase().trim() === selectedProgrammeNom.toLowerCase().trim()
+      );
+      return progFiltered.length > 0 ? progFiltered : allActive;
+    }
+    return allActive.filter((item) => !item.programmeNom);
+  }, [rubriques, selectedProgrammeNom]);
 
   const adhesionOptions = useMemo(() => {
     return rubricOptions.filter(
@@ -214,11 +234,11 @@ export function PaymentAddModal({ isOpen, onClose, initialPlayerId }: PaymentAdd
     if (isOpen && initialPlayerId) {
       setPlayerId(initialPlayerId);
       const player = players.find((p) => p.id === initialPlayerId);
-      if (player) {
+      if (player && !selectedProgrammeNom) {
         setSelectedPricing((current) => applyAutoAdhesionForPlayer(player, current, rubricOptions));
       }
     }
-  }, [isOpen, initialPlayerId, players, rubricOptions]);
+  }, [isOpen, initialPlayerId, players, rubricOptions, selectedProgrammeNom]);
   const [showPlayerDropdown, setShowPlayerDropdown] = useState(false);
   const [montantDuManuel, setMontantDuManuel] = useState<number | "">("");
   const [montantDonne, setMontantDonne] = useState<number | "">("");
@@ -277,6 +297,7 @@ export function PaymentAddModal({ isOpen, onClose, initialPlayerId }: PaymentAdd
     setPlayerId("");
     setPlayerSearch("");
     setShowPlayerDropdown(false);
+    setSelectedProgrammeNom(initialProgrammeNom || "");
     setMontantDuManuel("");
     setMontantDonne("");
     setDevise("US");
@@ -316,8 +337,8 @@ export function PaymentAddModal({ isOpen, onClose, initialPlayerId }: PaymentAdd
       return;
     }
 
-    if (!isBoursierPlayer) {
-      // Validations uniquement pour les joueurs non-boursiers (100%)
+    if (!isBoursierPlayer && !selectedProgrammeNom) {
+      // Validations uniquement pour les joueurs non-boursiers (100%) hors programme
       if (montantDonne === "" || Number(montantDonne) <= 0 || (devise === "HTG" && taux <= 0 && !isDemiBoursier2500Player)) {
         setToast({ message: "Veuillez remplir le montant payé et le taux de change.", type: "error" });
         return;
@@ -326,13 +347,18 @@ export function PaymentAddModal({ isOpen, onClose, initialPlayerId }: PaymentAdd
         setToast({ message: "Veuillez obligatoirement sélectionner un plan de paiement.", type: "error" });
         return;
       }
+    } else if (selectedProgrammeNom) {
+      if (montantDonne === "" || Number(montantDonne) <= 0 || (devise === "HTG" && taux <= 0)) {
+        setToast({ message: "Veuillez remplir le montant payé et le taux de change.", type: "error" });
+        return;
+      }
     }
 
     setIsSubmitting(true);
     try {
       const selectedAdhesionItem = selectedPricingItems.find((item) => item.estAdhesion || item.id === "adhesion-fc" || item.id === "adhesion-ti");
       const isTiToro = selectedAdhesionItem ? (selectedAdhesionItem.rubrique.toLowerCase().includes("ti toro") || selectedAdhesionItem.id === "adhesion-ti") : isPlayerTiToro(selectedPlayer);
-      const plan = isBoursierPlayer
+      const plan = isBoursierPlayer || selectedProgrammeNom
         ? null
         : isDemiBoursierPlayer
           ? { id: "mensuel", plan: "Mensuel", modalites: isDemiBoursier2500Player ? "Demi-bourse (2 500 HTG)" : "Demi-bourse (50%)", montantFCToro: isDemiBoursier2500Player ? 25 : 77.5, montantTIToro: isDemiBoursier2500Player ? 25 : 57.5, avantage: isDemiBoursier2500Player ? "Demi-bourse (2 500 HTG)" : "Demi-bourse (50%)", nombreVersements: 12 }
@@ -377,19 +403,23 @@ export function PaymentAddModal({ isOpen, onClose, initialPlayerId }: PaymentAdd
       const moisMarker = (isDemiBoursierPlayer || selectedPlan === "mensuel")
         ? ` [MOIS_PAYES:${nombreDeMois}] [MOIS_RESTANTS:${remainingMonthsSeason}]`
         : "";
-      const paymentMarkers = isBoursierPlayer
+      const progMarker = selectedProgrammeNom ? ` [PROGRAMME:${selectedProgrammeNom}]` : "";
+      const paymentMarkers = isBoursierPlayer && !selectedProgrammeNom
         ? `[ADHESION:BOURSE] [PLAN:BOURSIER]${tauxMarker} [STATUT:${statut.toUpperCase()}] [TOTAL_DUE:${Number(totalDueInUSD).toFixed(2)}]`
-        : isDemiBoursierPlayer
+        : isDemiBoursierPlayer && !selectedProgrammeNom
           ? `${adhesionCode ? `[ADHESION:${adhesionCode}] ` : ""}[PLAN:MENSUEL]${moisMarker} [STATUT:${isDemiBoursier2500Player ? "DEMI-BOURSE-2500" : "DEMI-BOURSE"}]${rabaisMarker}${tauxMarker} [TOTAL_DUE:${Number(totalDueInUSD).toFixed(2)}]`
-          : `${adhesionCode ? `[ADHESION:${adhesionCode}] ` : ""}[PLAN:${selectedPlan ? selectedPlan.toUpperCase() : "AUCUN"}]${(selectedPlan === "mensuel" ? ` [MOIS_PAYES:${nombreDeMois}]` : "")} [STATUT:${statut.toUpperCase()}]${rabaisMarker}${tauxMarker} [TOTAL_DUE:${Number(totalDueInUSD).toFixed(2)}]`;
-      const adhesionLabel = isBoursierPlayer
+          : selectedProgrammeNom
+            ? `[STATUT:${statut.toUpperCase()}]${tauxMarker} [TOTAL_DUE:${Number(totalDueInUSD).toFixed(2)}]`
+            : `${adhesionCode ? `[ADHESION:${adhesionCode}] ` : ""}[PLAN:${selectedPlan ? selectedPlan.toUpperCase() : "AUCUN"}]${(selectedPlan === "mensuel" ? ` [MOIS_PAYES:${nombreDeMois}]` : "")} [STATUT:${statut.toUpperCase()}]${rabaisMarker}${tauxMarker} [TOTAL_DUE:${Number(totalDueInUSD).toFixed(2)}]`;
+      const adhesionLabel = isBoursierPlayer && !selectedProgrammeNom
         ? "Bourse (Montant défini)"
-        : isDemiBoursierPlayer
+        : isDemiBoursierPlayer && !selectedProgrammeNom
           ? (isDemiBoursier2500Player
               ? `Demi-bourse: ${nombreDeMois} mois × 2,500 HTG (Reste: ${remainingMonthsSeason} mois)${taux > 0 ? ` • $${((nombreDeMois * 2500) / taux).toFixed(2)} USD` : ""}`
               : `Demi-bourse: ${nombreDeMois} mois × $${demiMonthlyUSD.toFixed(2)} (50%) (Reste: ${remainingMonthsSeason} mois)${taux > 0 ? ` • ${Math.round(demiMonthlyUSD * taux).toLocaleString()} HTG/mois` : ""}`)
-          : (selectedAdhesionItem ? (isTiToro ? "Adhésion: TI TORO" : "Adhésion: FC TORO") : "");
-      const finalRemarque = `${paymentMarkers} ${description.trim()} ${adhesionLabel}${selectedRubricsLabel ? ` | Rubriques: ${selectedRubricsLabel}` : ""}${plan && !isDemiBoursierPlayer ? ` Plan: ${plan.plan}` : ""}`.trim();
+          : (!selectedProgrammeNom && selectedAdhesionItem ? (isTiToro ? "Adhésion: TI TORO" : "Adhésion: FC TORO") : "");
+      const progLabel = selectedProgrammeNom ? `Programme: ${selectedProgrammeNom}` : "";
+      const finalRemarque = `${paymentMarkers}${progMarker} ${description.trim()} ${progLabel} ${adhesionLabel}${selectedRubricsLabel ? ` | Rubriques: ${selectedRubricsLabel}` : ""}${plan && !isDemiBoursierPlayer && !selectedProgrammeNom ? ` Plan: ${plan.plan}` : ""}`.trim();
       
       const actualDatePaiement = datePaiement || new Date().toISOString().split("T")[0];
       const uploadPromise = paymentPhotos.length > 0 ? uploadPaymentPhotosToSupabase(paymentPhotos) : Promise.resolve([]);
@@ -565,14 +595,20 @@ export function PaymentAddModal({ isOpen, onClose, initialPlayerId }: PaymentAdd
       setDevise("HTG");
     }
 
-    // Auto-select adhesion based on player category/programme
-    setSelectedPricing((current) => applyAutoAdhesionForPlayer(player, current, rubricOptions));
+    // Auto-select adhesion based on player category/programme if not in a special program
+    if (!selectedProgrammeNom) {
+      setSelectedPricing((current) => applyAutoAdhesionForPlayer(player, current, rubricOptions));
+    }
   };
 
   const handlePricingChange = (itemId: string) => {
     setSelectedPricing((current) => {
       if (current.includes(itemId)) {
         return current.filter((value) => value !== itemId);
+      }
+
+      if (selectedProgrammeNom) {
+        return [...current, itemId];
       }
 
       const clickedItem = rubricOptions.find((r) => r.id === itemId);
@@ -596,7 +632,7 @@ export function PaymentAddModal({ isOpen, onClose, initialPlayerId }: PaymentAdd
     setSelectedPlan(planId);
 
     const plan = paymentPlans.find((p) => p.id === planId);
-    if (plan && selectedPlayer) {
+    if (plan && selectedPlayer && !selectedProgrammeNom) {
       setSelectedPricing((current) => applyAutoAdhesionForPlayer(selectedPlayer, current, rubricOptions));
     }
   };
@@ -607,6 +643,10 @@ export function PaymentAddModal({ isOpen, onClose, initialPlayerId }: PaymentAdd
     : isPlayerTiToro(selectedPlayer);
 
   const baseTotalDue = useMemo(() => {
+    if (selectedProgrammeNom) {
+      return selectedPricingItems.reduce((sum, item) => sum + item.montant, 0);
+    }
+
     const isDemi = (selectedPlayer?.statutJoueur || "").toLowerCase().includes("demi");
     const isDemi2500 = isDemi && ((selectedPlayer?.statutJoueur || "").toLowerCase().includes("2500") || (selectedPlayer?.statutJoueur || "").toLowerCase().includes("2 500"));
     if (isDemi) {
@@ -654,15 +694,19 @@ export function PaymentAddModal({ isOpen, onClose, initialPlayerId }: PaymentAdd
     const adhesionAfterExtraRabais = Math.max(0, adhesionBase - extraRabaisAmount);
 
     return adhesionAfterExtraRabais + nonAdhesionSum;
-  }, [selectedPlayer, nombreDeMois, selectedPricingItems, selectedPlan, selectedPlanData, isTiToro, selectedAdhesionItem, rabaisPercent]);
+  }, [selectedProgrammeNom, selectedPlayer, nombreDeMois, selectedPricingItems, selectedPlan, selectedPlanData, isTiToro, selectedAdhesionItem, rabaisPercent]);
 
-  // Filter past payments for selected player
+  // Filter past payments for selected player (isolating special program vs season)
   const playerPastPayments = useMemo(() => {
     if (!playerId) return [];
-    return (payments || []).filter(
+    const playerAll = (payments || []).filter(
       (p: any) => String(p.etudiantId) === String(playerId) || String(p.etudiant_id) === String(playerId) || String(p.playerId) === String(playerId)
     );
-  }, [payments, playerId]);
+    if (selectedProgrammeNom) {
+      return playerAll.filter((p: any) => (p.remarque || "").includes(`[PROGRAMME:${selectedProgrammeNom}]`));
+    }
+    return playerAll.filter((p: any) => !(p.remarque || "").includes("[PROGRAMME:"));
+  }, [payments, playerId, selectedProgrammeNom]);
 
   // Détection d'un rabais accordé antérieurement au joueur
   const detectedPastRabais = useMemo(() => {
@@ -954,6 +998,35 @@ export function PaymentAddModal({ isOpen, onClose, initialPlayerId }: PaymentAdd
 
         <div className="p-6 overflow-y-auto custom-scrollbar space-y-4">
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            {/* Programme Spécifique (Optionnel) */}
+            <div className="md:col-span-2">
+              <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
+                Programme / Tournoi spécifique (Optionnel)
+              </label>
+              <select
+                value={selectedProgrammeNom}
+                onChange={(event) => {
+                  const val = event.target.value;
+                  setSelectedProgrammeNom(val);
+                  setSelectedPricing([]);
+                  setSelectedPlan("");
+                }}
+                className={selectClassName}
+              >
+                <option value="">Aucun (Cotisation régulière de saison)</option>
+                {programmesList.map((prog) => (
+                  <option key={prog.id} value={prog.nom}>
+                    🏆 {prog.nom} ({prog.saison || "Tous"})
+                  </option>
+                ))}
+              </select>
+              {selectedProgrammeNom ? (
+                <div className="mt-2 flex items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 p-2.5 text-xs font-semibold text-amber-800 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-300">
+                  <span>🏆 Ce paiement est lié uniquement au programme <strong>{selectedProgrammeNom}</strong> (isolé des cotisations de saison).</span>
+                </div>
+              ) : null}
+            </div>
+
             {/* Recherche Joueur */}
             <div className="md:col-span-2">
               <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
@@ -1049,43 +1122,54 @@ export function PaymentAddModal({ isOpen, onClose, initialPlayerId }: PaymentAdd
                )}
             </div>
 
-            {/* Rubriques (masquées pour les boursiers et demi-boursiers) */}
-            {!isBoursier && !isDemiBoursier && (
+            {/* Rubriques */}
+            {((!isBoursier && !isDemiBoursier) || !!selectedProgrammeNom) && (
               <div className="md:col-span-2">
-                <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
-                  Rubriques
-                </label>
-                <div className="max-h-48 overflow-auto rounded-lg border border-gray-300 bg-white dark:border-gray-700 dark:bg-gray-900">
-                  {rubricOptions.map((item) => (
-                    <label
-                      key={item.id}
-                      className="flex cursor-pointer items-start gap-3 border-b border-gray-100 px-4 py-2.5 last:border-b-0 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={selectedPricing.includes(item.id)}
-                        onChange={() => handlePricingChange(item.id)}
-                        className="mt-0.5 h-4 w-4 rounded border-gray-300 text-brand-500 focus:ring-brand-500"
-                      />
-                      <div className="flex-1">
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm font-medium text-gray-800 dark:text-white/90">
-                            {item.rubrique}
-                          </span>
-                          <span className="text-sm font-semibold text-brand-600 dark:text-brand-400">
-                            ${item.montant}
-                          </span>
-                        </div>
-                        <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
-                          {item.precision}
-                        </p>
-                      </div>
-                    </label>
-                  ))}
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-400">
+                    {selectedProgrammeNom ? `Rubriques liées à « ${selectedProgrammeNom} »` : "Rubriques"}
+                  </label>
+                  {selectedProgrammeNom && rubricOptions.length === 0 && (
+                    <span className="text-xs text-amber-600 dark:text-amber-400">
+                      Aucune rubrique n'est encore étiquetée pour ce programme.
+                    </span>
+                  )}
                 </div>
-                <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                  Choisissez une adhésion FC/TI et autant d'autres rubriques que nécessaire.
-                </p>
+                {rubricOptions.length > 0 && (
+                  <div className="max-h-48 overflow-auto rounded-lg border border-gray-300 bg-white dark:border-gray-700 dark:bg-gray-900">
+                    {rubricOptions.map((item) => (
+                      <label
+                        key={item.id}
+                        className="flex cursor-pointer items-start gap-3 border-b border-gray-100 px-4 py-2.5 last:border-b-0 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedPricing.includes(item.id)}
+                          onChange={() => handlePricingChange(item.id)}
+                          className="mt-0.5 h-4 w-4 rounded border-gray-300 text-brand-500 focus:ring-brand-500"
+                        />
+                        <div className="flex-1">
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm font-medium text-gray-800 dark:text-white/90">
+                              {item.rubrique}
+                            </span>
+                            <span className="text-sm font-semibold text-brand-600 dark:text-brand-400">
+                              ${item.montant}
+                            </span>
+                          </div>
+                          <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                            {item.precision}
+                          </p>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                )}
+                {!selectedProgrammeNom && (
+                  <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                    Choisissez une adhésion FC/TI et autant d'autres rubriques que nécessaire.
+                  </p>
+                )}
                 {selectedPricingItems.length > 0 && (
                   <div className="mt-2 rounded-lg bg-brand-50 px-3 py-2 dark:bg-brand-500/10">
                     <p className="text-sm font-medium text-brand-900 dark:text-brand-100">
@@ -1097,7 +1181,7 @@ export function PaymentAddModal({ isOpen, onClose, initialPlayerId }: PaymentAdd
             )}
 
             {/* Rabais sur adhésion */}
-            {!isBoursier && !isDemiBoursier && (
+            {!isBoursier && !isDemiBoursier && !selectedProgrammeNom && (
               <div className="md:col-span-2">
                 <div className="flex flex-wrap items-center justify-between gap-2 mb-1.5">
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-400">
@@ -1682,7 +1766,7 @@ export function PaymentAddModal({ isOpen, onClose, initialPlayerId }: PaymentAdd
                   </div>
                 </div>
               </div>
-            ) : (
+            ) : selectedProgrammeNom ? null : (
               <div>
                 <label className="mb-1.5 flex items-center justify-between text-sm font-medium text-gray-700 dark:text-gray-400">
                   <span>Plan de paiement <span className="text-red-500 font-bold">*</span></span>

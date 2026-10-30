@@ -4,9 +4,10 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import { useClubData } from "@/context/ClubDataContext";
 import { useUserRole } from "@/context/UserRoleContext";
-import { PricingItem } from "@/types/club";
+import { PricingItem, ProgrammeMatch } from "@/types/club";
 import { Modal } from "@/components/ui/modal";
 import { ToastNotification, ToastType } from "@/components/ui/toast/ToastNotification";
+import { fetchProgrammes } from "@/lib/club/programmes";
 
 const inputClassName =
   "h-11 w-full rounded-lg border border-gray-300 bg-transparent px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs placeholder:text-gray-400 focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90";
@@ -27,6 +28,9 @@ export default function RubriquesPage() {
   const [filterDevise, setFilterDevise] = useState<"ALL" | "US" | "HTG">("ALL");
   const [filterStatus, setFilterStatus] = useState<"ALL" | "active" | "inactive">("ALL");
 
+  // Liste des programmes existants (ex: Vertière Cup)
+  const [programmes, setProgrammes] = useState<ProgrammeMatch[]>([]);
+
   // State for Add / Edit Modal
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingRubrique, setEditingRubrique] = useState<PricingItem | null>(null);
@@ -37,6 +41,7 @@ export default function RubriquesPage() {
   const [devise, setDevise] = useState<"US" | "HTG">("US");
   const [precision, setPrecision] = useState("");
   const [categorie, setCategorie] = useState("");
+  const [programmeNom, setProgrammeNom] = useState("");
   const [estAdhesion, setEstAdhesion] = useState(false);
   const [actif, setActif] = useState(true);
 
@@ -44,6 +49,10 @@ export default function RubriquesPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   useEffect(() => {
+    // Charger les programmes créés dans le club
+    fetchProgrammes().then((data) => {
+      if (Array.isArray(data)) setProgrammes(data);
+    }).catch((err) => console.warn("Erreur chargement programmes:", err));
     // Load the server-action proxy before the user clicks save or delete.
     void import("@/app/actions/club").catch(() => undefined);
 
@@ -92,6 +101,7 @@ export default function RubriquesPage() {
     setDevise("US");
     setPrecision("");
     setCategorie("");
+    setProgrammeNom("");
     setEstAdhesion(false);
     setActif(true);
     setIsModalOpen(true);
@@ -104,6 +114,7 @@ export default function RubriquesPage() {
     setDevise(item.devise);
     setPrecision(item.precision || "");
     setCategorie(item.categorie || "");
+    setProgrammeNom(item.programmeNom || "");
     setEstAdhesion(Boolean(item.estAdhesion));
     setActif(item.actif !== false);
     setIsModalOpen(true);
@@ -128,6 +139,9 @@ export default function RubriquesPage() {
     saveInFlightRef.current = true;
     setIsSaving(true);
 
+    const selectedProg = programmes.find((p) => p.nom === programmeNom.trim());
+    const finalProgId = selectedProg ? selectedProg.id : undefined;
+
     try {
       if (editingRubrique) {
         await updateRubrique(editingRubrique.id, {
@@ -136,6 +150,8 @@ export default function RubriquesPage() {
           devise,
           precision: precision.trim(),
           categorie: categorie.trim() || undefined,
+          programmeNom: programmeNom.trim() || undefined,
+          programmeId: finalProgId,
           estAdhesion,
           actif,
         });
@@ -146,6 +162,8 @@ export default function RubriquesPage() {
           devise,
           precision: precision.trim(),
           categorie: categorie.trim() || undefined,
+          programmeNom: programmeNom.trim() || undefined,
+          programmeId: finalProgId,
           estAdhesion,
           actif,
         });
@@ -297,13 +315,20 @@ export default function RubriquesPage() {
                         {item.precision || "—"}
                       </td>
                       <td className="px-6 py-4">
-                        {item.categorie ? (
-                          <span className="rounded-md bg-purple-50 px-2 py-1 text-xs font-medium text-purple-700 dark:bg-purple-900/30 dark:text-purple-300">
-                            {item.categorie}
-                          </span>
-                        ) : (
-                          <span className="text-gray-400 text-xs">Standard</span>
-                        )}
+                        <div className="flex flex-col gap-1 items-start">
+                          {item.programmeNom && (
+                            <span className="inline-flex items-center gap-1 rounded-md bg-indigo-50 border border-indigo-200 px-2 py-0.5 text-xs font-semibold text-indigo-700 dark:bg-indigo-950/40 dark:border-indigo-800 dark:text-indigo-300">
+                              🏆 {item.programmeNom}
+                            </span>
+                          )}
+                          {item.categorie ? (
+                            <span className="rounded-md bg-purple-50 px-2 py-0.5 text-xs font-medium text-purple-700 dark:bg-purple-900/30 dark:text-purple-300">
+                              {item.categorie}
+                            </span>
+                          ) : !item.programmeNom ? (
+                            <span className="text-gray-400 text-xs">Standard</span>
+                          ) : null}
+                        </div>
                       </td>
                       <td className="px-6 py-4">
                         <button
@@ -421,6 +446,27 @@ export default function RubriquesPage() {
               <option value="Événement">Événement</option>
               <option value="Autre">Autre</option>
             </select>
+          </div>
+
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
+              Programme / Événement spécifique (Optionnel)
+            </label>
+            <select
+              value={programmeNom}
+              onChange={(e) => setProgrammeNom(e.target.value)}
+              className={selectClassName}
+            >
+              <option value="">Aucun (Rubrique générale de saison)</option>
+              {programmes.map((p) => (
+                <option key={p.id} value={p.nom}>
+                  🏆 {p.nom} {p.saison ? `(${p.saison})` : ""}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-gray-400">
+              Liez cette rubrique à un programme (ex: Vertière Cup) pour qu'elle soit isolée des cotisations annuelles.
+            </p>
           </div>
 
           <div>

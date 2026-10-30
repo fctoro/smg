@@ -64,6 +64,8 @@ const paymentPlans: PaymentPlan[] = [
 
 import { PaymentAddModal } from "@/components/club/modals/PaymentAddModal";
 import { TableBodySkeleton } from "@/components/ui/skeleton/Skeleton";
+import { fetchProgrammes } from "@/lib/club/programmes";
+import { ProgrammeMatch } from "@/types/club";
 
 function PaymentsPageContent() {
   const searchParams = useSearchParams();
@@ -71,6 +73,20 @@ function PaymentsPageContent() {
 
   const { payments, players, parents, setPayments, hydrated, rubriques } = useClubData();
   const { confirm, ConfirmComponent } = useConfirm();
+  const [activeTab, setActiveTab] = useState<"saison" | "programmes">("saison");
+  const [programmesList, setProgrammesList] = useState<ProgrammeMatch[]>([]);
+  const [selectedProgrammeFilter, setSelectedProgrammeFilter] = useState("all");
+  const [modalProgrammeNom, setModalProgrammeNom] = useState<string | undefined>(undefined);
+  const [progCurrentPage, setProgCurrentPage] = useState(1);
+  const [progCurrentPageSize, setProgCurrentPageSize] = useState(50);
+  const [isProgExportOpen, setIsProgExportOpen] = useState(false);
+
+  useEffect(() => {
+    fetchProgrammes()
+      .then((res) => setProgrammesList(res || []))
+      .catch((err) => console.warn("Erreur chargement programmes:", err));
+  }, []);
+
   const [searchQuery, setSearchQuery] = useState("");
   const [methodeFilter, setMethodeFilter] = useState(urlMethode);
   const [deviseFilter, setDeviseFilter] = useState("all");
@@ -164,8 +180,8 @@ function PaymentsPageContent() {
     const isBoursier = (playerStatus === "bourse" || playerStatus === "boursier" || remarkLower.includes("[plan:boursier]")) && !playerStatus.includes("demi") && !remarkLower.includes("demi");
     const isDemiBoursier = playerStatus.includes("demi") || remarkLower.includes("demi-bourse") || remarkLower.includes("demi bourse") || remarkLower.includes("[reduction:half]") || (remarkLower.includes("demi") && !remarkLower.includes("pandemie"));
 
-    // Somme cumulée de TOUS les paiements de ce joueur
-    const playerPayments = payments.filter((p) => p.playerId === currentPayment.playerId);
+    // Somme cumulée de TOUS les paiements de saison de ce joueur (hors programmes spéciaux)
+    const playerPayments = payments.filter((p) => p.playerId === currentPayment.playerId && !p.remarque?.includes("[PROGRAMME:"));
     let defaultTaux = currentPayment.taux || 0;
     if (defaultTaux <= 1) {
       const tauxMatch = currentPayment.remarque?.match(/\[TAUX:\s*([\d.]+)\s*\]/i);
@@ -978,6 +994,9 @@ function PaymentsPageContent() {
 
     const sorted = payments
       .filter((payment) => {
+        // Exclure les paiements de programmes spéciaux de la cotisation de saison
+        if (payment.remarque && payment.remarque.includes("[PROGRAMME:")) return false;
+
         if (methodeFilter !== "all") {
           const m = (payment.methode || "").toLowerCase().trim();
           const target = methodeFilter.toLowerCase().trim();
@@ -1045,8 +1064,8 @@ function PaymentsPageContent() {
 
         const latestPDate = getLatestPaymentDate(payment) || payment.datePaiement;
 
-        // Si le joueur possède d'autres versements, consolider le montant affiché
-        const playerAllP = payments.filter((p) => p.playerId === payment.playerId);
+        // Si le joueur possède d'autres versements de saison, consolider le montant affiché
+        const playerAllP = payments.filter((p) => p.playerId === payment.playerId && !p.remarque?.includes("[PROGRAMME:"));
         if (playerAllP.length > 1) {
           let sumMontant = 0;
           let sumUS = 0;
@@ -1074,6 +1093,112 @@ function PaymentsPageContent() {
 
     return uniquePayments;
   }, [payments, playerMap, searchQuery, codeUniqueFilter, startDate, endDate, methodeFilter, deviseFilter, selectedSeason]);
+
+  // Helper pour extraire le nom du programme depuis la remarque
+  const getProgrammeNameFromRemark = (remarque?: string) => {
+    const m = (remarque || "").match(/\[PROGRAMME:\s*([^\]]+)\]/i);
+    return m ? m[1].trim() : "Programme spécifique";
+  };
+
+  const getCleanDescriptionForProgramme = (remarque?: string) => {
+    if (!remarque) return "-";
+    let cleaned = remarque.replace(/\[.*?\]\s*/g, "").trim();
+    cleaned = cleaned.replace(/Programme:\s*[^\s|]+/gi, "").trim();
+    cleaned = cleaned.replace(/Rubriques:\s*/gi, "").trim();
+    return cleaned || "-";
+  };
+
+  // Mode de paiement lisible
+  const mapModeStr = (m: any) => {
+    const s = String(m || "").toLowerCase().trim();
+    if (s === "1" || s.includes("espece") || s.includes("espèce")) return "Espèces";
+    if (s === "2" || s.includes("virement")) return "Virement";
+    if (s === "3" || s.includes("cheque") || s.includes("chèque")) return "Chèque";
+    if (s === "4" || s.includes("carte")) return "Carte";
+    if (s === "5" || s.includes("depot") || s.includes("dépôt")) return "Dépôt bancaire";
+    return String(m || "Espèces");
+  };
+
+  // Liste de TOUS les paiements de programmes spéciaux
+  const allProgrammePayments = useMemo(() => {
+    return payments.filter((p) => (p.remarque || "").includes("[PROGRAMME:"));
+  }, [payments]);
+
+  // Liste de tous les programmes créés ou présents dans les paiements
+  const availableProgrammes = useMemo(() => {
+    const set = new Set<string>();
+    programmesList.forEach((p) => {
+      if (p.nom) set.add(p.nom);
+    });
+    allProgrammePayments.forEach((p) => {
+      const name = getProgrammeNameFromRemark(p.remarque);
+      if (name) set.add(name);
+    });
+    return Array.from(set).sort();
+  }, [programmesList, allProgrammePayments]);
+
+  // Paiements filtrés pour l'onglet Programmes Spéciaux
+  const filteredProgrammePayments = useMemo(() => {
+    return allProgrammePayments
+      .filter((p) => {
+        if (selectedProgrammeFilter !== "all") {
+          const prog = getProgrammeNameFromRemark(p.remarque).toLowerCase();
+          if (prog !== selectedProgrammeFilter.toLowerCase()) return false;
+        }
+        if (methodeFilter !== "all") {
+          const m = (p.methode || "").toLowerCase().trim();
+          if (m !== methodeFilter.toLowerCase().trim()) return false;
+        }
+        if (deviseFilter !== "all" && p.devise !== deviseFilter) return false;
+        if (startDate || endDate) {
+          const pDate = p.datePaiement ? p.datePaiement.split("T")[0] : "";
+          if (startDate && pDate < startDate) return false;
+          if (endDate && pDate > endDate) return false;
+        }
+        if (searchQuery.trim()) {
+          const q = searchQuery.trim().toLowerCase();
+          const pl = playerMap.get(p.playerId);
+          const plName = pl ? getPlayerFullName(pl).toLowerCase() : "";
+          const matricule = (pl?.matricule || "").toLowerCase();
+          if (!plName.includes(q) && !matricule.includes(q) && !String(p.id).toLowerCase().includes(q)) {
+            return false;
+          }
+        }
+        return true;
+      })
+      .sort((a, b) => new Date(b.datePaiement || 0).getTime() - new Date(a.datePaiement || 0).getTime());
+  }, [allProgrammePayments, selectedProgrammeFilter, methodeFilter, deviseFilter, startDate, endDate, searchQuery, playerMap]);
+
+  // Métriques financières pour le programme affiché
+  const programmeMetrics = useMemo(() => {
+    let totalUSD = 0;
+    let totalHTG = 0;
+    const playersSet = new Set<string>();
+
+    filteredProgrammePayments.forEach((p) => {
+      playersSet.add(p.playerId);
+      if (p.devise === "HTG") {
+        totalHTG += Number(p.montant) || 0;
+      } else {
+        totalUSD += Number(p.montant) || 0;
+      }
+    });
+
+    return {
+      totalUSD,
+      totalHTG,
+      count: filteredProgrammePayments.length,
+      uniquePlayersCount: playersSet.size,
+    };
+  }, [filteredProgrammePayments]);
+
+  // Pagination pour l'onglet Programmes Spéciaux
+  const progTotalPages = Math.max(1, Math.ceil(filteredProgrammePayments.length / progCurrentPageSize));
+  const progCurrentPageSafe = Math.min(progCurrentPage, progTotalPages);
+  const paginatedProgrammePayments = useMemo(() => {
+    const start = (progCurrentPageSafe - 1) * progCurrentPageSize;
+    return filteredProgrammePayments.slice(start, start + progCurrentPageSize);
+  }, [filteredProgrammePayments, progCurrentPageSafe, progCurrentPageSize]);
 
   // ----- Logique de Rappel en Masse -----
   const targetPlayers = useMemo(() => {
@@ -1637,11 +1762,209 @@ function PaymentsPageContent() {
     });
   };
 
+  const exportProgHeaders = [
+    "Matricule",
+    "Joueur (Nom & Prénom)",
+    "Catégorie",
+    "Programme",
+    "Articles / Rubriques Payés",
+    "Montant Versé",
+    "Devise",
+    "Taux de Change",
+    "Mode de Paiement",
+    "Date du Paiement",
+    "Statut",
+    "Justificatif Joint",
+    "Remarque Complète",
+  ];
+
+  const getExportDataRowsForProgrammes = () => {
+    return filteredProgrammePayments.map((p) => {
+      const player = playerMap.get(p.playerId);
+      const safeMatricule = player?.matricule || "";
+      const playerName = player ? getPlayerFullName(player) : "Joueur inconnu";
+      const cat = player?.categorie || "-";
+      const progName = getProgrammeNameFromRemark(p.remarque);
+      const cleanDesc = getCleanDescriptionForProgramme(p.remarque);
+      const proofUrls = extractPhotoUrlsFromRemark(p.remarque);
+      const hasProof = proofUrls.length > 0 ? `Oui (${proofUrls.length})` : "Non";
+      return [
+        safeMatricule,
+        playerName,
+        cat,
+        progName,
+        cleanDesc,
+        p.montant,
+        p.devise || "US",
+        p.taux || "",
+        mapModeStr(p.methode),
+        p.datePaiement ? formatClubDate(p.datePaiement) : "-",
+        p.statut === "paid" ? "Payé" : p.statut === "pending" ? "En attente" : "En retard",
+        hasProof,
+        p.remarque || "",
+      ];
+    });
+  };
+
+  const handleExportProgrammeCSV = () => {
+    setIsProgExportOpen(false);
+    confirm({
+      title: "Exporter les paiements de programmes",
+      message: "Voulez-vous exporter cette liste de paiements de programmes au format CSV ?",
+      confirmText: "Exporter",
+      cancelText: "Annuler",
+      onConfirm: () => {
+        let csvContent = exportProgHeaders.map((h) => `"${h}"`).join(",") + "\n";
+        const rows = getExportDataRowsForProgrammes();
+        rows.forEach((row) => {
+          const csvRow = row.map((field) => {
+            if (typeof field === "number") return String(field);
+            return `"${(field ?? "").toString().replace(/"/g, '""')}"`;
+          });
+          csvContent += csvRow.join(",") + "\n";
+        });
+        const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.setAttribute("download", `paiements_programmes_${new Date().toISOString().slice(0, 10)}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      },
+    });
+  };
+
+  const handleExportProgrammeExcel = () => {
+    setIsProgExportOpen(false);
+    confirm({
+      title: "Exporter les paiements de programmes",
+      message: "Voulez-vous exporter cette liste de paiements de programmes au format Excel ?",
+      confirmText: "Exporter",
+      cancelText: "Annuler",
+      onConfirm: () => {
+        const rows = getExportDataRowsForProgrammes();
+        const thead = exportProgHeaders.map((h) => `<th>${h}</th>`).join("");
+        const tbody = rows
+          .map((row) => {
+            return `<tr>${row
+              .map((field) => {
+                if (typeof field === "number") {
+                  return `<td style="text-align: right;" align="right">${field}</td>`;
+                }
+                return `<td>${(field ?? "").toString().replace(/</g, "&lt;").replace(/>/g, "&gt;")}</td>`;
+              })
+              .join("")}</tr>`;
+          })
+          .join("");
+
+        const htmlContent = `
+          <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+          <head>
+            <meta charset="utf-8" />
+            <style>
+              table { border-collapse: collapse; }
+              td, th { border: 1px solid #dddddd; padding: 4px; }
+              th { background-color: #f2f2f2; font-weight: bold; }
+            </style>
+          </head>
+          <body>
+            <table>
+              <thead><tr>${thead}</tr></thead>
+              <tbody>${tbody}</tbody>
+            </table>
+          </body>
+          </html>
+        `;
+
+        const blob = new Blob([htmlContent], { type: "application/vnd.ms-excel;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.setAttribute("download", `paiements_programmes_${new Date().toISOString().slice(0, 10)}.xls`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      },
+    });
+  };
+
   return (
     <div className="space-y-4">
       <PageBreadcrumb pageTitle="Paiements" />
 
-      <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-white/[0.03] space-y-3">
+      {/* Sélecteur d'onglets Saison vs Programmes Spéciaux */}
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 pb-3 dark:border-gray-800">
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setActiveTab("saison")}
+            className={`inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-all cursor-pointer ${
+              activeTab === "saison"
+                ? "bg-brand-500 text-white shadow-md shadow-brand-500/20"
+                : "bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+            }`}
+          >
+            <span>⚽ Cotisations de Saison</span>
+            <span
+              className={`inline-flex items-center justify-center rounded-full px-2 py-0.5 text-xs font-bold ${
+                activeTab === "saison"
+                  ? "bg-white/20 text-white"
+                  : "bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-200"
+              }`}
+            >
+              {payments.filter((p) => !p.remarque || !p.remarque.includes("[PROGRAMME:")).length}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab("programmes")}
+            className={`inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-all cursor-pointer ${
+              activeTab === "programmes"
+                ? "bg-brand-500 text-white shadow-md shadow-brand-500/20"
+                : "bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+            }`}
+          >
+            <span>🏆 Programmes Spéciaux & Tournois</span>
+            <span
+              className={`inline-flex items-center justify-center rounded-full px-2 py-0.5 text-xs font-bold ${
+                activeTab === "programmes"
+                  ? "bg-white/20 text-white"
+                  : "bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-200"
+              }`}
+            >
+              {allProgrammePayments.length}
+            </span>
+          </button>
+        </div>
+
+        {activeTab === "programmes" && (
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                const targetProg =
+                  selectedProgrammeFilter !== "all"
+                    ? selectedProgrammeFilter
+                    : availableProgrammes[0] || (programmesList[0]?.nom ?? "");
+                setModalProgrammeNom(targetProg);
+                setIsAddModalOpen(true);
+              }}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-brand-500 px-4 py-2 text-xs font-semibold text-white shadow-theme-xs hover:bg-brand-600 transition cursor-pointer"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              <span>+ Nouveau paiement programme</span>
+            </button>
+          </div>
+        )}
+      </div>
+
+      {activeTab === "saison" && (
+        <>
+          <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-white/[0.03] space-y-3">
         {/* Ligne 1: Recherche globale, Code Unique, Méthode, Devise, Saison */}
         <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
           <div>
@@ -2441,14 +2764,480 @@ function PaymentsPageContent() {
           }}
         />
       </div>
+        </>
+      )}
+
+      {activeTab === "programmes" && (
+        <div className="space-y-4">
+          {/* Filtres de l'onglet Programmes Spéciaux */}
+          <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-white/[0.03] space-y-3">
+            <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-gray-600 dark:text-gray-400">
+                  Programme / Tournoi
+                </label>
+                <select
+                  value={selectedProgrammeFilter}
+                  onChange={(e) => {
+                    setSelectedProgrammeFilter(e.target.value);
+                    setProgCurrentPage(1);
+                  }}
+                  className="h-10 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90 font-medium cursor-pointer"
+                >
+                  <option value="all">Tous les programmes ({availableProgrammes.length})</option>
+                  {availableProgrammes.map((prog) => (
+                    <option key={prog} value={prog}>
+                      🏆 {prog}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-gray-600 dark:text-gray-400">
+                  Rechercher joueur / matricule
+                </label>
+                <input
+                  value={searchQuery}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value);
+                    setProgCurrentPage(1);
+                  }}
+                  placeholder="Nom du joueur, matricule..."
+                  className="h-10 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-800 shadow-theme-xs placeholder:text-gray-400 focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-gray-600 dark:text-gray-400">
+                  Mode de paiement
+                </label>
+                <select
+                  value={methodeFilter}
+                  onChange={(e) => {
+                    setMethodeFilter(e.target.value);
+                    setProgCurrentPage(1);
+                  }}
+                  className="h-10 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90 cursor-pointer"
+                >
+                  <option value="all">Tous les modes</option>
+                  <option value="especes">Cash / Espèces</option>
+                  <option value="virement">Virement bancaire</option>
+                  <option value="mobile">MonCash / Mobile</option>
+                  <option value="cheque">Chèque</option>
+                  <option value="carte">Carte bancaire</option>
+                  <option value="depot">Dépôt bancaire</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-gray-600 dark:text-gray-400">
+                  Devise
+                </label>
+                <select
+                  value={deviseFilter}
+                  onChange={(e) => {
+                    setDeviseFilter(e.target.value);
+                    setProgCurrentPage(1);
+                  }}
+                  className="h-10 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90 cursor-pointer"
+                >
+                  <option value="all">Toutes les devises</option>
+                  <option value="US">USD ($)</option>
+                  <option value="HTG">HTG (Gourdes)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-gray-600 dark:text-gray-400">
+                  Période (Du / Au)
+                </label>
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => {
+                      setStartDate(e.target.value);
+                      setProgCurrentPage(1);
+                    }}
+                    className="h-10 w-full rounded-lg border border-gray-300 bg-white px-2 py-1 text-xs text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-hidden dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
+                  />
+                  <input
+                    type="date"
+                    value={endDate}
+                    onChange={(e) => {
+                      setEndDate(e.target.value);
+                      setProgCurrentPage(1);
+                    }}
+                    className="h-10 w-full rounded-lg border border-gray-300 bg-white px-2 py-1 text-xs text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-hidden dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-1 border-t border-gray-100 dark:border-gray-800">
+              <div className="flex items-center gap-3">
+                {(selectedProgrammeFilter !== "all" || searchQuery || methodeFilter !== "all" || deviseFilter !== "all" || startDate || endDate) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedProgrammeFilter("all");
+                      setSearchQuery("");
+                      setMethodeFilter("all");
+                      setDeviseFilter("all");
+                      setStartDate("");
+                      setEndDate("");
+                      setProgCurrentPage(1);
+                    }}
+                    className="text-xs text-brand-600 dark:text-brand-400 hover:underline font-semibold cursor-pointer"
+                  >
+                    ✕ Réinitialiser les filtres
+                  </button>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2">
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setIsProgExportOpen(!isProgExportOpen)}
+                    className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 text-xs font-semibold text-gray-700 shadow-theme-xs hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700 cursor-pointer"
+                  >
+                    <svg className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    <span>Exporter</span>
+                    <svg className="w-3.5 h-3.5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+                  <Dropdown
+                    isOpen={isProgExportOpen}
+                    onClose={() => setIsProgExportOpen(false)}
+                    className="absolute right-0 top-full mt-1 w-44 z-20"
+                  >
+                    <DropdownItem onItemClick={handleExportProgrammeExcel} className="cursor-pointer">
+                      📊 Format Excel (.xls)
+                    </DropdownItem>
+                    <DropdownItem onItemClick={handleExportProgrammeCSV} className="cursor-pointer">
+                      📄 Format CSV (.csv)
+                    </DropdownItem>
+                  </Dropdown>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const targetProg =
+                      selectedProgrammeFilter !== "all"
+                        ? selectedProgrammeFilter
+                        : availableProgrammes[0] || (programmesList[0]?.nom ?? "");
+                    setModalProgrammeNom(targetProg);
+                    setIsAddModalOpen(true);
+                  }}
+                  className="inline-flex h-9 items-center justify-center whitespace-nowrap rounded-lg bg-brand-500 px-4 text-xs font-semibold text-white shadow-theme-xs hover:bg-brand-600 transition cursor-pointer"
+                >
+                  + Nouveau paiement programme
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Cartes KPI du programme sélectionné */}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-white/[0.03]">
+              <span className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                Programme Sélectionné
+              </span>
+              <div className="mt-1.5 flex items-center gap-2">
+                <span className="text-xl font-bold text-gray-800 dark:text-white truncate">
+                  {selectedProgrammeFilter === "all" ? "Tous les programmes" : selectedProgrammeFilter}
+                </span>
+              </div>
+              <span className="mt-1 block text-xs text-gray-400">
+                {filteredProgrammePayments.length} versement(s) répertorié(s)
+              </span>
+            </div>
+
+            <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-white/[0.03]">
+              <span className="text-xs font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+                Total Encaissé (USD)
+              </span>
+              <div className="mt-1.5 text-2xl font-bold text-emerald-600 dark:text-emerald-400">
+                {formatClubCurrency(programmeMetrics.totalUSD, "US")}
+              </div>
+              <span className="mt-1 block text-xs text-gray-400">
+                Devise US Dollars
+              </span>
+            </div>
+
+            <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-white/[0.03]">
+              <span className="text-xs font-semibold uppercase tracking-wider text-brand-600 dark:text-brand-400">
+                Total Encaissé (HTG)
+              </span>
+              <div className="mt-1.5 text-2xl font-bold text-brand-600 dark:text-brand-400">
+                {formatClubCurrency(programmeMetrics.totalHTG, "HTG")}
+              </div>
+              <span className="mt-1 block text-xs text-gray-400">
+                Devise Gourdes haïtiennes
+              </span>
+            </div>
+
+            <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-white/[0.03]">
+              <span className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                Participation Joueurs
+              </span>
+              <div className="mt-1.5 text-2xl font-bold text-gray-800 dark:text-white">
+                {programmeMetrics.uniquePlayersCount}{" "}
+                <span className="text-sm font-normal text-gray-500 dark:text-gray-400">
+                  joueur{programmeMetrics.uniquePlayersCount > 1 ? "s" : ""}
+                </span>
+              </div>
+              <span className="mt-1 block text-xs text-gray-400">
+                Sur {programmeMetrics.count} versement{programmeMetrics.count > 1 ? "s" : ""}
+              </span>
+            </div>
+          </div>
+
+          {/* Tableau des paiements de programmes */}
+          <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white px-4 pb-3 pt-4 dark:border-gray-800 dark:bg-white/[0.03] sm:px-6">
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-800 dark:text-white/90">
+                  Paiements des Programmes & Tournois
+                </h3>
+                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                  {filteredProgrammePayments.length} versement(s) · Indépendant des cotisations annuelles
+                </p>
+              </div>
+            </div>
+
+            <div className="max-w-full overflow-x-auto">
+              <Table>
+                <TableHeader className="border-y border-gray-100 dark:border-gray-800">
+                  <TableRow>
+                    <TableCell isHeader className="py-3 text-start text-theme-xs font-medium text-gray-500 dark:text-gray-400">
+                      Joueur
+                    </TableCell>
+                    <TableCell isHeader className="py-3 text-start text-theme-xs font-medium text-gray-500 dark:text-gray-400">
+                      Date paiement
+                    </TableCell>
+                    <TableCell isHeader className="py-3 text-start text-theme-xs font-medium text-gray-500 dark:text-gray-400">
+                      Programme
+                    </TableCell>
+                    <TableCell isHeader className="py-3 text-start text-theme-xs font-medium text-gray-500 dark:text-gray-400">
+                      Rubrique / Objet
+                    </TableCell>
+                    <TableCell isHeader className="py-3 text-start text-theme-xs font-medium text-gray-500 dark:text-gray-400">
+                      Montant & Mode
+                    </TableCell>
+                    <TableCell isHeader className="py-3 text-start text-theme-xs font-medium text-gray-500 dark:text-gray-400">
+                      Justificatif
+                    </TableCell>
+                    <TableCell isHeader className="py-3 text-start text-theme-xs font-medium text-gray-500 dark:text-gray-400">
+                      Action
+                    </TableCell>
+                  </TableRow>
+                </TableHeader>
+                <TableBody className="divide-y divide-gray-100 dark:divide-gray-800">
+                  {!hydrated && payments.length === 0 ? (
+                    <TableBodySkeleton rows={5} columns={7} />
+                  ) : paginatedProgrammePayments.length === 0 ? (
+                    <TableRow>
+                      <td colSpan={7} className="py-12 text-center text-theme-sm text-gray-500 dark:text-gray-400">
+                        <div className="mx-auto max-w-sm space-y-2">
+                          <p className="text-base font-semibold text-gray-700 dark:text-gray-300">
+                            Aucun paiement de programme trouvé
+                          </p>
+                          <p className="text-xs text-gray-400">
+                            Enregistrez un versement pour un tournoi ou camp en cliquant sur « + Nouveau paiement programme ».
+                          </p>
+                        </div>
+                      </td>
+                    </TableRow>
+                  ) : (
+                    paginatedProgrammePayments.map((payment) => {
+                      const player = playerMap.get(payment.playerId);
+                      const progName = getProgrammeNameFromRemark(payment.remarque);
+                      const cleanDesc = getCleanDescriptionForProgramme(payment.remarque);
+                      const photoUrls = extractPhotoUrlsFromRemark(payment.remarque);
+
+                      return (
+                        <TableRow key={payment.id}>
+                          <TableCell className="py-3 text-theme-sm text-gray-800 dark:text-white/90">
+                            <div className="flex flex-col">
+                              <span className="font-semibold">{player ? getPlayerFullName(player) : "Joueur inconnu"}</span>
+                              <span className="text-[11px] font-mono text-gray-400 dark:text-gray-500 font-medium">
+                                {player?.matricule && !player.matricule.includes("XXXX")
+                                  ? player.matricule
+                                  : player ? generatePlayerMatricule(player.id, player.saison, player.sourceDetection) : "-"}
+                              </span>
+                              {player?.categorie && (
+                                <span className="text-[10px] text-gray-400">{player.categorie}</span>
+                              )}
+                            </div>
+                          </TableCell>
+
+                          <TableCell className="py-3 text-theme-sm text-gray-700 dark:text-gray-300 font-medium">
+                            {payment.datePaiement ? formatClubDate(payment.datePaiement) : "-"}
+                          </TableCell>
+
+                          <TableCell className="py-3 text-theme-sm">
+                            <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-700 border border-brand-200 dark:bg-brand-950/40 dark:border-brand-800 dark:text-brand-300">
+                              🏆 {progName}
+                            </span>
+                          </TableCell>
+
+                          <TableCell className="py-3 text-theme-sm text-gray-700 dark:text-gray-300">
+                            <span className="font-medium text-xs block max-w-xs truncate" title={cleanDesc}>
+                              {cleanDesc}
+                            </span>
+                          </TableCell>
+
+                          <TableCell className="py-3 text-theme-sm text-gray-500 dark:text-gray-400">
+                            <div className="flex flex-col">
+                              <span className="font-semibold text-gray-900 dark:text-white">
+                                {formatClubCurrency(payment.montant, payment.devise)}
+                              </span>
+                              {payment.devise === "HTG" && payment.taux && (
+                                <span className="text-[10px] text-gray-400">
+                                  Taux: {payment.taux} HTG/$
+                                </span>
+                              )}
+                              <span className="text-[11px] text-gray-400 dark:text-gray-500 font-medium capitalize">
+                                {mapModeStr(payment.methode)}
+                              </span>
+                            </div>
+                          </TableCell>
+
+                          <TableCell className="py-3 text-theme-sm">
+                            {photoUrls.length === 0 ? (
+                              <span className="text-gray-400">-</span>
+                            ) : (
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                {photoUrls.map((url, idx) => {
+                                  const isPdf = isPdfProof(url);
+                                  return (
+                                    <button
+                                      key={idx}
+                                      type="button"
+                                      onClick={() => {
+                                        setSelectedPaymentImage(url);
+                                        setIsImageModalOpen(true);
+                                      }}
+                                      className={`relative flex h-10 w-10 items-center justify-center overflow-hidden rounded border transition-all focus:outline-none cursor-pointer ${
+                                        isPdf
+                                          ? "flex-col border-red-200 bg-red-50 hover:border-red-400 hover:bg-red-100 dark:border-red-900/50 dark:bg-red-950/30"
+                                          : "border-gray-200 bg-gray-50 hover:border-brand-500 hover:opacity-90 dark:border-gray-700 dark:bg-gray-800"
+                                      }`}
+                                      title={isPdf ? `Voir le document PDF #${idx + 1}` : `Voir le justificatif #${idx + 1}`}
+                                    >
+                                      {isPdf ? (
+                                        <>
+                                          <svg className="w-4 h-4 text-red-600 dark:text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                                          </svg>
+                                          <span className="text-[8px] font-bold text-red-700 dark:text-red-300">PDF</span>
+                                        </>
+                                      ) : (
+                                        <img src={url} alt={`Justificatif ${idx + 1}`} className="h-full w-full object-cover" />
+                                      )}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </TableCell>
+
+                          <TableCell className="py-3 text-theme-sm">
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => handlePrintSinglePaymentPDF(payment)}
+                                className="inline-flex items-center justify-center text-brand-500 hover:text-brand-600 dark:text-brand-400 dark:hover:text-brand-300 transition cursor-pointer"
+                                aria-label="Imprimer le reçu"
+                                title="Imprimer le reçu officiel du programme"
+                              >
+                                <svg className="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                                </svg>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDownloadSinglePaymentPDF(payment)}
+                                className="inline-flex items-center justify-center text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 dark:hover:text-emerald-300 transition cursor-pointer"
+                                aria-label="Télécharger le reçu PDF"
+                                title="Télécharger le reçu PDF"
+                              >
+                                <svg className="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                </svg>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setHistoryPlayerId(payment.playerId)}
+                                className="inline-flex items-center justify-center text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 transition cursor-pointer"
+                                aria-label="Historique des paiements"
+                                title="Historique des versements du joueur"
+                              >
+                                <svg className="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                              </button>
+                              <Link
+                                href={`/paiements/modifier/${payment.id}`}
+                                className="inline-flex items-center justify-center text-gray-500 transition hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200 cursor-pointer"
+                                aria-label="Modifier"
+                                title="Modifier ce paiement"
+                              >
+                                <PencilIcon className="size-5" />
+                              </Link>
+                              <button
+                                type="button"
+                                className="inline-flex items-center justify-center text-error-500 transition hover:text-error-600 dark:text-error-500 dark:hover:text-error-400 cursor-pointer"
+                                onClick={() => handleDeletePayment(payment.id)}
+                                aria-label="Supprimer"
+                                title="Supprimer ce paiement"
+                              >
+                                <TrashBinIcon className="size-5" />
+                              </button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </div>
+
+          {/* Pagination Programmes */}
+          <div className="mt-4 flex justify-end print:hidden">
+            <Pagination
+              currentPage={progCurrentPageSafe}
+              totalPages={progTotalPages}
+              onPageChange={setProgCurrentPage}
+              pageSize={progCurrentPageSize}
+              pageSizeOptions={[10, 25, 50, 100]}
+              onPageSizeChange={(size) => {
+                setProgCurrentPageSize(size);
+                setProgCurrentPage(1);
+              }}
+            />
+          </div>
+        </div>
+      )}
 
       <PaymentAddModal
         isOpen={isAddModalOpen}
         onClose={() => {
           setIsAddModalOpen(false);
           setModalPlayerId(undefined);
+          setModalProgrammeNom(undefined);
         }}
         initialPlayerId={modalPlayerId}
+        initialProgrammeNom={modalProgrammeNom}
       />
 
       <ImageModal

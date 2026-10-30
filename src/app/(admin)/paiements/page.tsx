@@ -135,6 +135,8 @@ function PaymentsPageContent() {
   const [editDevise, setEditDevise] = useState<"US" | "HTG">("US");
   const [editTaux, setEditTaux] = useState<number>(0);
   const [historyPlayerId, setHistoryPlayerId] = useState<string | null>(null);
+  const [historyTab, setHistoryTab] = useState<"saison" | "programmes">("saison");
+  const [historySelectedProgramme, setHistorySelectedProgramme] = useState<string>("all");
   const [settledReceiptModalData, setSettledReceiptModalData] = useState<{
     player: (typeof players)[number];
     payment: any;
@@ -885,7 +887,8 @@ function PaymentsPageContent() {
   const handlePrintPlayerHistory = async (
     player: (typeof players)[number],
     playerPayments: (typeof payments),
-    metrics?: { totalUSD?: number; totalHTG?: number; count?: number; totalDue?: string; balance?: string; balanceNum?: number }
+    metrics?: { totalUSD?: number; totalHTG?: number; count?: number; totalDue?: string; balance?: string; balanceNum?: number },
+    contextTitle?: string
   ) => {
     if (!player || playerPayments.length === 0) return;
     try {
@@ -902,7 +905,8 @@ function PaymentsPageContent() {
         player.parentEmail || player.email || "",
         player.parentAdresse || player.adresse || "",
         true,
-        metrics
+        metrics,
+        contextTitle
       );
 
       const base64Data = historyBase64.includes("base64,") ? historyBase64.split("base64,")[1] : historyBase64;
@@ -944,7 +948,8 @@ function PaymentsPageContent() {
   const handleDownloadPlayerHistoryPDF = async (
     player: (typeof players)[number],
     playerPayments: (typeof payments),
-    metrics?: { totalUSD?: number; totalHTG?: number; count?: number; totalDue?: string; balance?: string; balanceNum?: number }
+    metrics?: { totalUSD?: number; totalHTG?: number; count?: number; totalDue?: string; balance?: string; balanceNum?: number },
+    contextTitle?: string
   ) => {
     if (!player || playerPayments.length === 0) return;
     try {
@@ -961,7 +966,8 @@ function PaymentsPageContent() {
         player.parentEmail || player.email || "",
         player.parentAdresse || player.adresse || "",
         false,
-        metrics
+        metrics,
+        contextTitle
       );
 
       const base64Data = historyBase64.includes("base64,") ? historyBase64.split("base64,")[1] : historyBase64;
@@ -977,7 +983,8 @@ function PaymentsPageContent() {
       const link = document.createElement("a");
       link.href = blobUrl;
       const safeMatricule = player.matricule || player.id;
-      link.download = `RELEVE-TRANSACTIONS-${safeMatricule}.pdf`;
+      const suffix = contextTitle && contextTitle.includes("PROGRAMME") ? "-PROGRAMME" : "-SAISON";
+      link.download = `RELEVE-TRANSACTIONS-${safeMatricule}${suffix}.pdf`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -1453,8 +1460,38 @@ function PaymentsPageContent() {
     });
   }, [historyPlayerId, payments, playerMap]);
 
-  const historyMetrics = useMemo(() => {
-    if (!historyPlayerPayments.length) {
+  const historySeasonPayments = useMemo(() => {
+    return historyPlayerPayments.filter((p) => !p.remarque || !p.remarque.includes("[PROGRAMME:"));
+  }, [historyPlayerPayments]);
+
+  const historyAllProgrammePayments = useMemo(() => {
+    return historyPlayerPayments.filter((p) => (p.remarque || "").includes("[PROGRAMME:"));
+  }, [historyPlayerPayments]);
+
+  const historyPlayerProgrammesList = useMemo(() => {
+    const set = new Set<string>();
+    historyAllProgrammePayments.forEach((p) => {
+      const prog = getProgrammeNameFromRemark(p.remarque);
+      if (prog) set.add(prog);
+    });
+    return Array.from(set).sort();
+  }, [historyAllProgrammePayments]);
+
+  const historyFilteredProgrammePayments = useMemo(() => {
+    if (historySelectedProgramme === "all") return historyAllProgrammePayments;
+    return historyAllProgrammePayments.filter((p) => {
+      const prog = getProgrammeNameFromRemark(p.remarque);
+      return prog.toLowerCase().trim() === historySelectedProgramme.toLowerCase().trim();
+    });
+  }, [historyAllProgrammePayments, historySelectedProgramme]);
+
+  const activeHistoryPayments = useMemo(() => {
+    if (historyTab === "saison") return historySeasonPayments;
+    return historyFilteredProgrammePayments;
+  }, [historyTab, historySeasonPayments, historyFilteredProgrammePayments]);
+
+  const seasonHistoryMetrics = useMemo(() => {
+    if (!historySeasonPayments.length) {
       return {
         totalUSD: 0,
         totalHTG: 0,
@@ -1467,7 +1504,7 @@ function PaymentsPageContent() {
 
     let totalUSD = 0;
     let totalHTG = 0;
-    historyPlayerPayments.forEach((p) => {
+    historySeasonPayments.forEach((p) => {
       const amt = Number(p.montant) || 0;
       if (p.devise === "HTG") {
         totalHTG += amt;
@@ -1476,7 +1513,7 @@ function PaymentsPageContent() {
       }
     });
 
-    const latestPayment = historyPlayerPayments[0];
+    const latestPayment = historySeasonPayments[0];
     const b = calculateBalance(latestPayment);
     const totalDueMarker = latestPayment.remarque?.match(/\[TOTAL_DUE:\s*([\d.]+)\s*\]/i)?.[1];
 
@@ -1499,12 +1536,70 @@ function PaymentsPageContent() {
     return {
       totalUSD,
       totalHTG,
-      count: historyPlayerPayments.length,
+      count: historySeasonPayments.length,
       totalDue: totalDueStr,
       balance: balanceStr,
       balanceNum: b.balance,
     };
-  }, [historyPlayerPayments]);
+  }, [historySeasonPayments, calculateBalance]);
+
+  const programmeHistoryMetrics = useMemo(() => {
+    if (!historyFilteredProgrammePayments.length) {
+      return {
+        totalUSD: 0,
+        totalHTG: 0,
+        count: 0,
+        totalDue: "-",
+        balance: "0",
+        balanceNum: 0,
+      };
+    }
+
+    let totalUSD = 0;
+    let totalHTG = 0;
+    let totalDueNum = 0;
+    let explicitDueFound = false;
+
+    historyFilteredProgrammePayments.forEach((p) => {
+      const amt = Number(p.montant) || 0;
+      if (p.devise === "HTG") {
+        totalHTG += amt;
+      } else {
+        totalUSD += amt;
+      }
+      const dueMatch = p.remarque?.match(/\[TOTAL_DUE:\s*([\d.]+)\s*\]/i);
+      if (dueMatch && !explicitDueFound) {
+        totalDueNum = parseFloat(dueMatch[1]);
+        explicitDueFound = true;
+      }
+    });
+
+    if (totalDueNum === 0) totalDueNum = totalUSD;
+    const balanceNum = Math.max(0, totalDueNum - totalUSD);
+    const balanceStr = balanceNum > 0 ? formatClubCurrency(balanceNum, "US") : "À jour (0.00)";
+
+    return {
+      totalUSD,
+      totalHTG,
+      count: historyFilteredProgrammePayments.length,
+      totalDue: formatClubCurrency(totalDueNum, "US"),
+      balance: balanceStr,
+      balanceNum,
+    };
+  }, [historyFilteredProgrammePayments]);
+
+  const activeHistoryMetrics = useMemo(() => {
+    return historyTab === "saison" ? seasonHistoryMetrics : programmeHistoryMetrics;
+  }, [historyTab, seasonHistoryMetrics, programmeHistoryMetrics]);
+
+  const activeHistoryTitle = useMemo(() => {
+    if (historyTab === "saison") return "COTISATIONS DE SAISON";
+    if (historySelectedProgramme === "all") return "PROGRAMMES SPÉCIAUX & TOURNOIS";
+    return `PROGRAMME : ${historySelectedProgramme}`;
+  }, [historyTab, historySelectedProgramme]);
+
+  // Alias for backward compatibility
+  const historyMetrics = activeHistoryMetrics;
 
   const getPaymentPlanLabel = (remark?: string) => {
     const remarkLower = (remark || "").toLowerCase();
@@ -2486,7 +2581,11 @@ function PaymentsPageContent() {
                           </button>
                           <button
                             type="button"
-                            onClick={() => setHistoryPlayerId(payment.playerId)}
+                            onClick={() => {
+                              setHistoryTab("saison");
+                              setHistorySelectedProgramme("all");
+                              setHistoryPlayerId(payment.playerId);
+                            }}
                             className="inline-flex items-center justify-center text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 transition cursor-pointer"
                             aria-label="Historique des paiements du joueur"
                             title="Historique des paiements du joueur"
@@ -3214,7 +3313,16 @@ function PaymentsPageContent() {
                               </button>
                               <button
                                 type="button"
-                                onClick={() => setHistoryPlayerId(payment.playerId)}
+                                onClick={() => {
+                                  setHistoryTab("programmes");
+                                  const progName = getProgrammeNameFromRemark(payment.remarque);
+                                  if (progName) {
+                                    setHistorySelectedProgramme(progName);
+                                  } else {
+                                    setHistorySelectedProgramme("all");
+                                  }
+                                  setHistoryPlayerId(payment.playerId);
+                                }}
                                 className="inline-flex items-center justify-center text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 transition cursor-pointer"
                                 aria-label="Historique des paiements"
                                 title="Historique des versements du joueur"
@@ -3351,8 +3459,10 @@ function PaymentsPageContent() {
               <div className="flex items-center gap-2.5">
                 <button
                   type="button"
-                  onClick={() => handlePrintPlayerHistory(historyPlayer, historyPlayerPayments, historyMetrics)}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 text-xs font-semibold shadow-xs transition cursor-pointer"
+                  onClick={() => handlePrintPlayerHistory(historyPlayer, activeHistoryPayments, activeHistoryMetrics, activeHistoryTitle)}
+                  className={`inline-flex items-center gap-1.5 rounded-lg text-white px-3 py-1.5 text-xs font-semibold shadow-xs transition cursor-pointer ${
+                    historyTab === "saison" ? "bg-blue-600 hover:bg-blue-700" : "bg-amber-600 hover:bg-amber-700"
+                  }`}
                   title="Imprimer l'historique des transactions"
                 >
                   <svg className="size-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -3362,7 +3472,7 @@ function PaymentsPageContent() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => handleDownloadPlayerHistoryPDF(historyPlayer, historyPlayerPayments, historyMetrics)}
+                  onClick={() => handleDownloadPlayerHistoryPDF(historyPlayer, activeHistoryPayments, activeHistoryMetrics, activeHistoryTitle)}
                   className="hidden sm:inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700/50 transition cursor-pointer"
                   title="Télécharger l'historique des transactions au format PDF"
                 >
@@ -3392,6 +3502,65 @@ function PaymentsPageContent() {
               </div>
             </div>
 
+            {/* Onglets de séparation Saison vs Programmes */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-6 py-3 border-b border-gray-100 dark:border-gray-800 bg-gray-50/70 dark:bg-gray-800/30">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setHistoryTab("saison");
+                    setHistorySelectedProgramme("all");
+                  }}
+                  className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${
+                    historyTab === "saison"
+                      ? "bg-blue-600 text-white shadow-xs"
+                      : "bg-white text-gray-700 hover:bg-gray-100 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700/60 border border-gray-200 dark:border-gray-700"
+                  }`}
+                >
+                  <span>⚽ Cotisations de Saison</span>
+                  <span className={`px-1.5 py-0.5 rounded-full text-[11px] font-bold ${
+                    historyTab === "saison" ? "bg-white/20 text-white" : "bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300"
+                  }`}>
+                    {historySeasonPayments.length}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setHistoryTab("programmes")}
+                  className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${
+                    historyTab === "programmes"
+                      ? "bg-amber-600 text-white shadow-xs"
+                      : "bg-white text-gray-700 hover:bg-gray-100 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700/60 border border-gray-200 dark:border-gray-700"
+                  }`}
+                >
+                  <span>🏆 Programmes Spéciaux & Tournois</span>
+                  <span className={`px-1.5 py-0.5 rounded-full text-[11px] font-bold ${
+                    historyTab === "programmes" ? "bg-white/20 text-white" : "bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300"
+                  }`}>
+                    {historyAllProgrammePayments.length}
+                  </span>
+                </button>
+              </div>
+
+              {historyTab === "programmes" && historyPlayerProgrammesList.length > 0 && (
+                <div className="flex items-center gap-2 text-xs">
+                  <label className="text-gray-500 dark:text-gray-400 font-medium whitespace-nowrap">Tournoi / Programme :</label>
+                  <select
+                    value={historySelectedProgramme}
+                    onChange={(e) => setHistorySelectedProgramme(e.target.value)}
+                    className="rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-xs font-semibold text-gray-800 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-amber-500 cursor-pointer"
+                  >
+                    <option value="all">Tous les programmes ({historyAllProgrammePayments.length})</option>
+                    {historyPlayerProgrammesList.map((prog) => (
+                      <option key={prog} value={prog}>
+                        {prog}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </div>
+
             {/* Metric Cards Summary */}
             <div className="px-6 py-4 bg-gray-50 dark:bg-gray-800/20 border-b border-gray-100 dark:border-gray-800">
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -3399,17 +3568,17 @@ function PaymentsPageContent() {
                 <div className="rounded-xl border border-gray-200/80 bg-white p-3 shadow-xs dark:border-gray-800 dark:bg-gray-800/80">
                   <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Total déjà versé</span>
                   <div className="mt-1 flex flex-col">
-                    {historyMetrics.totalUSD > 0 && (
+                    {activeHistoryMetrics.totalUSD > 0 && (
                       <span className="text-base font-bold text-emerald-600 dark:text-emerald-400">
-                        {formatClubCurrency(historyMetrics.totalUSD, "US")}
+                        {formatClubCurrency(activeHistoryMetrics.totalUSD, "US")}
                       </span>
                     )}
-                    {historyMetrics.totalHTG > 0 && (
+                    {activeHistoryMetrics.totalHTG > 0 && (
                       <span className="text-base font-bold text-emerald-600 dark:text-emerald-400">
-                        {formatClubCurrency(historyMetrics.totalHTG, "HTG")}
+                        {formatClubCurrency(activeHistoryMetrics.totalHTG, "HTG")}
                       </span>
                     )}
-                    {historyMetrics.totalUSD === 0 && historyMetrics.totalHTG === 0 && (
+                    {activeHistoryMetrics.totalUSD === 0 && activeHistoryMetrics.totalHTG === 0 && (
                       <span className="text-base font-bold text-gray-600 dark:text-gray-300">$0.00</span>
                     )}
                   </div>
@@ -3417,20 +3586,24 @@ function PaymentsPageContent() {
 
                 {/* Card 2: Total Dû */}
                 <div className="rounded-xl border border-gray-200/80 bg-white p-3 shadow-xs dark:border-gray-800 dark:bg-gray-800/80">
-                  <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Total Dû (Dossier)</span>
+                  <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
+                    Total Dû ({historyTab === "saison" ? "Saison" : "Programme"})
+                  </span>
                   <div className="mt-1">
                     <span className="text-base font-bold text-gray-900 dark:text-white">
-                      {historyMetrics.totalDue}
+                      {activeHistoryMetrics.totalDue}
                     </span>
                   </div>
                 </div>
 
                 {/* Card 3: Solde Restant */}
                 <div className="rounded-xl border border-gray-200/80 bg-white p-3 shadow-xs dark:border-gray-800 dark:bg-gray-800/80">
-                  <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Solde Restant Dû</span>
+                  <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
+                    Solde Restant Dû ({historyTab === "saison" ? "Saison" : "Programme"})
+                  </span>
                   <div className="mt-1">
-                    <span className={`text-base font-bold ${(historyMetrics.balanceNum || 0) > 0 ? "text-error-500" : "text-emerald-600 dark:text-emerald-400"}`}>
-                      {historyMetrics.balance}
+                    <span className={`text-base font-bold ${(activeHistoryMetrics.balanceNum || 0) > 0 ? "text-error-500" : "text-emerald-600 dark:text-emerald-400"}`}>
+                      {activeHistoryMetrics.balance}
                     </span>
                   </div>
                 </div>
@@ -3439,8 +3612,8 @@ function PaymentsPageContent() {
                 <div className="rounded-xl border border-gray-200/80 bg-white p-3 shadow-xs dark:border-gray-800 dark:bg-gray-800/80">
                   <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Versements</span>
                   <div className="mt-1">
-                    <span className="text-base font-bold text-blue-600 dark:text-blue-400">
-                      {historyMetrics.count} versement{historyMetrics.count > 1 ? "s" : ""}
+                    <span className={`text-base font-bold ${historyTab === "saison" ? "text-blue-600 dark:text-blue-400" : "text-amber-600 dark:text-amber-400"}`}>
+                      {activeHistoryMetrics.count} versement{activeHistoryMetrics.count > 1 ? "s" : ""}
                     </span>
                   </div>
                 </div>
@@ -3449,9 +3622,11 @@ function PaymentsPageContent() {
 
             {/* Payments Table */}
             <div className="flex-1 overflow-y-auto px-6 py-4 custom-scrollbar">
-              {historyPlayerPayments.length === 0 ? (
+              {activeHistoryPayments.length === 0 ? (
                 <div className="py-12 text-center text-sm text-gray-500 dark:text-gray-400">
-                  Aucun paiement enregistré pour ce joueur.
+                  {historyTab === "saison"
+                    ? "Aucun versement de cotisation de saison enregistré pour ce joueur."
+                    : "Aucun versement de programme spécial ou tournoi enregistré pour ce joueur."}
                 </div>
               ) : (
                 <div className="overflow-x-auto rounded-xl border border-gray-100 dark:border-gray-800">
@@ -3467,7 +3642,7 @@ function PaymentsPageContent() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
-                      {historyPlayerPayments.map((p) => {
+                      {activeHistoryPayments.map((p) => {
                         const proofUrls = extractPhotoUrlsFromRemark(p.remarque);
                         const cleanRub = (p.remarque || "")
                           .replace(/\[.*?\]\s*/g, "")
@@ -3577,8 +3752,10 @@ function PaymentsPageContent() {
             <div className="flex items-center justify-between px-6 py-3 border-t border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/40">
               <button
                 type="button"
-                onClick={() => handlePrintPlayerHistory(historyPlayer, historyPlayerPayments, historyMetrics)}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 text-sm font-semibold shadow-xs transition cursor-pointer"
+                onClick={() => handlePrintPlayerHistory(historyPlayer, activeHistoryPayments, activeHistoryMetrics, activeHistoryTitle)}
+                className={`inline-flex items-center gap-1.5 rounded-lg text-white px-4 py-2 text-sm font-semibold shadow-xs transition cursor-pointer ${
+                  historyTab === "saison" ? "bg-blue-600 hover:bg-blue-700" : "bg-amber-600 hover:bg-amber-700"
+                }`}
               >
                 <svg className="size-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />

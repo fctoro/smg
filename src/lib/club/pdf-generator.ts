@@ -762,7 +762,8 @@ export async function generatePlayerHistoryPDFBase64(
   parentEmail?: string,
   parentAddress?: string,
   autoPrint: boolean = false,
-  metrics?: PlayerHistoryMetrics
+  metrics?: PlayerHistoryMetrics,
+  contextTitle?: string
 ): Promise<string> {
   const doc = new jsPDF({
     orientation: "portrait",
@@ -855,11 +856,16 @@ export async function generatePlayerHistoryPDFBase64(
   doc.setTextColor(15, 23, 42);
   doc.text("HISTORIQUE DES TRANSACTIONS", 195, 17.5, { align: "right" });
 
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(8);
-  doc.setTextColor(71, 85, 105);
-  doc.text("Relevé & Preuve des Versements Effectués", 195, 22.5, { align: "right" });
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8.5);
+  if (contextTitle && contextTitle.includes("PROGRAMME")) {
+    doc.setTextColor(180, 83, 9); // amber-700
+  } else {
+    doc.setTextColor(37, 99, 235); // blue-600
+  }
+  doc.text(contextTitle ? contextTitle.toUpperCase() : "COTISATIONS DE SAISON", 195, 22.5, { align: "right" });
 
+  doc.setFont("helvetica", "normal");
   doc.setFontSize(7.5);
   doc.setTextColor(100, 116, 139);
   doc.text(`Date d'édition : ${nowFormatted}`, 195, 27, { align: "right" });

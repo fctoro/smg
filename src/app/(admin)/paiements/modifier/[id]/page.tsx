@@ -9,6 +9,8 @@ import { getPlayerFullName } from "@/lib/club/metrics";
 import { updatePaymentInSupabase } from "@/lib/club/supabase-crud";
 import { validatePaymentPhotoFile, getPaymentPhotoPreviewUrl, uploadPaymentPhotosToSupabase, isPdfProof, extractPhotoUrlsFromRemark } from "@/lib/club/payment-photo-utils";
 import { ToastNotification } from "@/components/ui/toast/ToastNotification";
+import { SEASON_MONTHS, extractPlayerPaidMonths } from "@/lib/club/season";
+import { MonthSelector } from "@/components/club/MonthSelector";
 
 const inputClassName =
   "h-11 w-full rounded-lg border border-gray-300 bg-transparent px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs placeholder:text-gray-400 focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90";
@@ -43,6 +45,8 @@ export default function ModifyPaymentPage({ params }: { params?: Promise<{ id: s
   const [toast, setToast] = useState<{ message: string; type?: "success" | "error" | "info" } | null>(null);
   const [planPaiement, setPlanPaiement] = useState<string>("annuel");
   const [nombreDeMois, setNombreDeMois] = useState<number>(1);
+  const [selectedMonths, setSelectedMonths] = useState<string[]>([]);
+  const [pastPaidMonths, setPastPaidMonths] = useState<string[]>([]);
   const [totalDue, setTotalDue] = useState<number | "">("");
   const [rabaisType, setRabaisType] = useState<"percent" | "amount">("percent");
   const [rabaisValue, setRabaisValue] = useState<number>(0);
@@ -71,6 +75,7 @@ export default function ModifyPaymentPage({ params }: { params?: Promise<{ id: s
     (currentPayment?.remarque || "").toLowerCase().includes("[reduction:half]") ||
     (currentPayment?.remarque || "").toLowerCase().includes("demi")
   );
+  const isTi = (selectedPlayer?.categorie || "").toLowerCase().includes("ti");
 
   const filteredPlayers = players.filter((player) => {
     const query = playerSearch.trim().toLowerCase();
@@ -204,6 +209,19 @@ export default function ModifyPaymentPage({ params }: { params?: Promise<{ id: s
         rawRemarque = rawRemarque.replace(/\[MOIS_PAYES:\s*\d+\s*\]/gi, "").trim();
       }
       setNombreDeMois(parsedNombreDeMois);
+
+      const nomsMatch = rawRemarque.match(/\[MOIS_NOMS:\s*([^\]]+)\]/i);
+      let loadedMonths: string[] = [];
+      if (nomsMatch && nomsMatch[1]) {
+        loadedMonths = nomsMatch[1].split(",").map((s) => s.trim()).filter(Boolean);
+        rawRemarque = rawRemarque.replace(/\[MOIS_NOMS:\s*[^\]]+\]/gi, "").trim();
+      } else {
+        loadedMonths = SEASON_MONTHS.slice(0, parsedNombreDeMois);
+      }
+      setSelectedMonths(loadedMonths);
+
+      const otherPayments = payments.filter((p) => p.id !== payment.id && p.playerId === payment.playerId);
+      setPastPaidMonths(extractPlayerPaidMonths(otherPayments));
 
       // --- Extract Rubriques ---
       const loadedPricingIds: string[] = [];
@@ -522,9 +540,10 @@ export default function ModifyPaymentPage({ params }: { params?: Promise<{ id: s
 
       const adhesionPart = adhesionCode ? `[ADHESION:${adhesionCode}] ` : "";
       const planPart = `[PLAN:${planPaiement.toUpperCase()}] `;
-      const remainingMonthsSeason = Math.max(0, 12 - (nombreDeMois || 1));
+      const activeMonths = selectedMonths.length > 0 ? selectedMonths : SEASON_MONTHS.slice(0, nombreDeMois || 1);
+      const remainingMonthsSeason = Math.max(0, 12 - (activeMonths.length || 1));
       const moisPart = (planPaiement === "boursier" || isDemiBoursier || planPaiement === "mensuel")
-        ? `[MOIS_PAYES:${nombreDeMois}] [MOIS_RESTANTS:${remainingMonthsSeason}] `
+        ? `[MOIS_PAYES:${activeMonths.length}] [MOIS_NOMS:${activeMonths.join(",")}] [MOIS_RESTANTS:${remainingMonthsSeason}] `
         : "";
       const statutPart = `[STATUT:${statut.toUpperCase()}] `;
       const isDemiBoursier2500 = isDemiBoursier && (devise === "HTG" || (selectedPlayer?.statutJoueur || "").toLowerCase().includes("2500") || (selectedPlayer?.statutJoueur || "").toLowerCase().includes("2 500"));
@@ -846,17 +865,18 @@ export default function ModifyPaymentPage({ params }: { params?: Promise<{ id: s
             </select>
           </div>
           {planPaiement === "mensuel" && (
-            <div>
-              <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
-                Nombre de mois réglés
-              </label>
-              <input
-                type="number"
-                min={1}
-                step={1}
-                value={nombreDeMois}
-                onChange={(event) => handleMoisChange(Math.max(1, parseInt(event.target.value) || 1))}
-                className={inputClassName}
+            <div className="col-span-full">
+              <MonthSelector
+                pastPaidMonths={pastPaidMonths}
+                selectedMonths={selectedMonths}
+                onChange={(m) => {
+                  setSelectedMonths(m);
+                  setNombreDeMois(m.length);
+                  handleMoisChange(m.length);
+                }}
+                monthlyAmount={isTi ? 115 : 155}
+                currency={devise}
+                taux={taux}
               />
             </div>
           )}

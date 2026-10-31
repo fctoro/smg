@@ -6,7 +6,8 @@ import { useClubData } from "@/context/ClubDataContext";
 import { PaymentMethod, PaymentStatus, Player } from "@/types/club";
 import { getPlayerFullName } from "@/lib/club/metrics";
 import { addPaymentToSupabase, addInvoiceToSupabase, updatePlayerInSupabase } from "@/lib/club/supabase-crud";
-import { getCurrentSeason, SEASON_MONTHS, getCoveredSeasonMonths, formatCoveredMonthsLabel } from "@/lib/club/season";
+import { getCurrentSeason, SEASON_MONTHS, getCoveredSeasonMonths, formatCoveredMonthsLabel, extractPlayerPaidMonths, getNextUnpaidMonths } from "@/lib/club/season";
+import { MonthSelector } from "@/components/club/MonthSelector";
 import { validatePaymentPhotoFile, getPaymentPhotoPreviewUrl, uploadPaymentPhotosToSupabase, isPdfProof, filesToBase64 } from "@/lib/club/payment-photo-utils";
 import { calculateDiscountedAmount } from "@/lib/club/payment-reduction-utils";
 import { generateReceiptPDFBase64 } from "@/lib/club/pdf-generator";
@@ -252,6 +253,7 @@ export function PaymentAddModal({ isOpen, onClose, initialPlayerId, initialProgr
   const [selectedPricing, setSelectedPricing] = useState<string[]>([]);
   const [selectedPlan, setSelectedPlan] = useState<string>("");
   const [nombreDeMois, setNombreDeMois] = useState<number>(1);
+  const [selectedMonthNames, setSelectedMonthNames] = useState<string[]>([]);
   const [rabaisPercent, setRabaisPercent] = useState<number>(0);
   const [isUserEditedMontantDonne, setIsUserEditedMontantDonne] = useState(false);
   const [isUserEditedMontantDu, setIsUserEditedMontantDu] = useState(false);
@@ -341,6 +343,7 @@ export function PaymentAddModal({ isOpen, onClose, initialPlayerId, initialProgr
     setSelectedPlan("");
     setRabaisPercent(0);
     setNombreDeMois(1);
+    setSelectedMonthNames([]);
     setIsUserEditedMontantDonne(false);
     setIsUserEditedMontantDu(false);
     paymentPhotoPreviews.forEach((p) => {
@@ -397,8 +400,9 @@ export function PaymentAddModal({ isOpen, onClose, initialPlayerId, initialProgr
         .filter((item) => !item.estAdhesion && item.id !== "adhesion-fc" && item.id !== "adhesion-ti")
         .reduce((sum, item) => sum + item.montant, 0);
       const demiMonthlyUSD = isTiToro ? 57.5 : 77.5;
+      const actualMonthsCount = selectedMonthNames.length > 0 ? selectedMonthNames.length : (nombreDeMois || 1);
       const planBaseAmount = plan ? (isTiToro ? plan.montantTIToro : plan.montantFCToro) : 0;
-      const finalPlanAmount = (plan && (selectedPlan === "mensuel" || isDemiBoursierPlayer)) ? planBaseAmount * nombreDeMois : planBaseAmount;
+      const finalPlanAmount = (plan && (selectedPlan === "mensuel" || isDemiBoursierPlayer)) ? planBaseAmount * actualMonthsCount : planBaseAmount;
       // Le total dû
       const boursierDefinedDue = Number(montantDuManuel) || Number(montantDonne) || 0;
       const totalDue = isBoursierPlayer
@@ -431,10 +435,13 @@ export function PaymentAddModal({ isOpen, onClose, initialPlayerId, initialProgr
         : (!isBoursierPlayer && !selectedProgrammeNom && rabaisPercent > 0) ? ` [RABAIS:${rabaisPercent}%]` : "";
       const tauxMarker = (actualDevise === "HTG" && taux > 0) ? ` [TAUX:${taux}]` : (isDemiBoursierPlayer && taux > 0 ? ` [TAUX:${taux}]` : "");
       
-      const coveredSeasonMonths = getCoveredSeasonMonths(pastMonthsPaid, nombreDeMois);
+      const coveredSeasonMonths = selectedMonthNames.length > 0
+        ? selectedMonthNames
+        : getCoveredSeasonMonths(pastMonthsPaid, actualMonthsCount);
       const coveredMonthsLabel = formatCoveredMonthsLabel(coveredSeasonMonths);
+      const actualRemainingMonths = Math.max(0, 12 - pastMonthsPaid - actualMonthsCount);
       const moisMarker = (isDemiBoursierPlayer || selectedPlan === "mensuel")
-        ? ` [MOIS_PAYES:${nombreDeMois}] [MOIS_NOMS:${coveredSeasonMonths.join(",")}] [MOIS_RESTANTS:${remainingMonthsSeason}]`
+        ? ` [MOIS_PAYES:${actualMonthsCount}] [MOIS_NOMS:${coveredSeasonMonths.join(",")}] [MOIS_RESTANTS:${actualRemainingMonths}]`
         : "";
       const progMarker = selectedProgrammeNom ? ` [PROGRAMME:${selectedProgrammeNom}]` : "";
       const paymentMarkers = isBoursierPlayer && !selectedProgrammeNom
@@ -443,13 +450,13 @@ export function PaymentAddModal({ isOpen, onClose, initialPlayerId, initialProgr
           ? `${adhesionCode ? `[ADHESION:${adhesionCode}] ` : ""}[PLAN:MENSUEL]${moisMarker} [STATUT:${isDemiBoursier2500Player ? "DEMI-BOURSE-2500" : "DEMI-BOURSE"}]${rabaisMarker}${tauxMarker} [TOTAL_DUE:${Number(totalDueInUSD).toFixed(2)}]`
           : selectedProgrammeNom
             ? `[STATUT:${statut.toUpperCase()}]${tauxMarker} [TOTAL_DUE:${Number(totalDueInUSD).toFixed(2)}]`
-            : `${adhesionCode ? `[ADHESION:${adhesionCode}] ` : ""}[PLAN:${selectedPlan ? selectedPlan.toUpperCase() : "AUCUN"}]${(selectedPlan === "mensuel" ? ` [MOIS_PAYES:${nombreDeMois}] [MOIS_NOMS:${coveredSeasonMonths.join(",")}]` : "")} [STATUT:${statut.toUpperCase()}]${rabaisMarker}${tauxMarker} [TOTAL_DUE:${Number(totalDueInUSD).toFixed(2)}]`;
+            : `${adhesionCode ? `[ADHESION:${adhesionCode}] ` : ""}[PLAN:${selectedPlan ? selectedPlan.toUpperCase() : "AUCUN"}]${(selectedPlan === "mensuel" ? ` [MOIS_PAYES:${actualMonthsCount}] [MOIS_NOMS:${coveredSeasonMonths.join(",")}]` : "")} [STATUT:${statut.toUpperCase()}]${rabaisMarker}${tauxMarker} [TOTAL_DUE:${Number(totalDueInUSD).toFixed(2)}]`;
       const adhesionLabel = isBoursierPlayer && !selectedProgrammeNom
         ? "Bourse (Montant défini)"
         : isDemiBoursierPlayer && !selectedProgrammeNom
           ? (isDemiBoursier2500Player
-              ? `Demi-bourse: ${nombreDeMois} mois (${coveredMonthsLabel}) × 2,500 HTG (Reste: ${remainingMonthsSeason} mois)${taux > 0 ? ` • $${((nombreDeMois * 2500) / taux).toFixed(2)} USD` : ""}`
-              : `Demi-bourse: ${nombreDeMois} mois (${coveredMonthsLabel}) × $${demiMonthlyUSD.toFixed(2)} (50%) (Reste: ${remainingMonthsSeason} mois)${taux > 0 ? ` • ${Math.round(demiMonthlyUSD * taux).toLocaleString()} HTG/mois` : ""}`)
+              ? `Demi-bourse: ${actualMonthsCount} mois (${coveredMonthsLabel}) × 2,500 HTG (Reste: ${actualRemainingMonths} mois)${taux > 0 ? ` • $${((actualMonthsCount * 2500) / taux).toFixed(2)} USD` : ""}`
+              : `Demi-bourse: ${actualMonthsCount} mois (${coveredMonthsLabel}) × $${demiMonthlyUSD.toFixed(2)} (50%) (Reste: ${actualRemainingMonths} mois)${taux > 0 ? ` • ${Math.round(demiMonthlyUSD * taux).toLocaleString()} HTG/mois` : ""}`)
           : (!selectedProgrammeNom && selectedAdhesionItem ? (isTiToro ? "Adhésion: TI TORO" : "Adhésion: FC TORO") : "");
       const progLabel = selectedProgrammeNom ? `Programme: ${selectedProgrammeNom}` : "";
       const finalRemarque = `${paymentMarkers}${progMarker} ${description.trim()} ${progLabel} ${adhesionLabel}${selectedRubricsLabel ? ` | Rubriques: ${selectedRubricsLabel}` : ""}${plan && !isDemiBoursierPlayer && !selectedProgrammeNom ? ` Plan: ${plan.plan}${selectedPlan === "mensuel" ? ` (${coveredMonthsLabel})` : ""}` : ""}`.trim();
@@ -813,22 +820,58 @@ export function PaymentAddModal({ isOpen, onClose, initialPlayerId, initialProgr
     return s.includes("demi");
   }, [selectedPlayer]);
 
-  // Calcul du nombre de mois déjà payés par le joueur dans ses paiements passés
-  const pastMonthsPaid = useMemo(() => {
-    return playerPastPayments.reduce((total: number, p: any) => {
-      const remark = String(p.remarque || "");
-      const match = remark.match(/\[MOIS_PAYES:\s*(\d+)\s*\]/i) || remark.match(/(\d+)\s*mois/i);
-      if (match && match[1]) {
-        return total + (parseInt(match[1], 10) || 0);
-      }
-      return total;
-    }, 0);
+  // Extraction des mois déjà payés par le joueur dans ses paiements passés
+  const pastPaidMonthNames = useMemo<string[]>(() => {
+    return extractPlayerPaidMonths(playerPastPayments);
   }, [playerPastPayments]);
 
+  const pastMonthsPaid = pastPaidMonthNames.length;
+
   const totalSeasonMonths = 12;
-  const currentTransactionMonths = nombreDeMois || 1;
+  const currentTransactionMonths = selectedMonthNames.length > 0 ? selectedMonthNames.length : (nombreDeMois || 1);
   const totalMonthsPaidAfterCurrent = pastMonthsPaid + currentTransactionMonths;
   const remainingMonthsSeason = Math.max(0, totalSeasonMonths - totalMonthsPaidAfterCurrent);
+
+  // Initialisation automatique des mois sélectionnés pour Plan Mensuel ou Demi-Bourse
+  useEffect(() => {
+    if (selectedPlan === "mensuel" || isDemiBoursier) {
+      const pastSet = new Set(pastPaidMonthNames.map((m) => m.toLowerCase()));
+      const hasUnpaidSelected = selectedMonthNames.some((m) => !pastSet.has(m.toLowerCase()));
+      if (selectedMonthNames.length === 0 || !hasUnpaidSelected) {
+        const next = getNextUnpaidMonths(pastPaidMonthNames, 1);
+        setSelectedMonthNames(next);
+        setNombreDeMois(next.length);
+      }
+    }
+  }, [playerId, selectedPlan, isDemiBoursier, pastPaidMonthNames]);
+
+  const handleSelectedMonthsChange = (months: string[]) => {
+    setSelectedMonthNames(months);
+    const count = months.length;
+    setNombreDeMois(count);
+
+    if (isDemiBoursier) {
+      if (isDemiBoursier2500) {
+        setMontantDonne(count * 2500);
+        setIsUserEditedMontantDonne(true);
+      } else if (devise === "HTG" && taux > 0) {
+        setMontantDonne(Math.round(count * (isTiToro ? 57.5 : 77.5) * taux));
+        setIsUserEditedMontantDonne(true);
+      } else if (devise === "US") {
+        setMontantDonne(Number((count * (isTiToro ? 57.5 : 77.5)).toFixed(2)));
+        setIsUserEditedMontantDonne(true);
+      }
+    } else if (selectedPlan === "mensuel") {
+      const monthlyRate = isTiToro ? 115 : 155;
+      if (devise === "HTG" && taux > 0) {
+        setMontantDonne(Math.round(count * monthlyRate * taux));
+        setIsUserEditedMontantDonne(true);
+      } else {
+        setMontantDonne(count * monthlyRate);
+        setIsUserEditedMontantDonne(true);
+      }
+    }
+  };
 
   // Rubriques supplémentaires (ex: Jeux d'uniforme, kit...) hors adhésion
   const extraRubricOptions = useMemo(() => {
@@ -1770,83 +1813,16 @@ export function PaymentAddModal({ isOpen, onClose, initialPlayerId, initialProgr
                   </div>
                 </div>
 
-                {/* Nombre de mois payés */}
+                {/* Sélecteur interactif des mois payés */}
                 <div className="mt-3">
-                  <label className="mb-1.5 block text-xs font-bold text-slate-800 dark:text-slate-200">
-                    Nombre de mois payés aujourd'hui
-                  </label>
-                  <select
-                    value={nombreDeMois}
-                    onChange={(e) => {
-                      const m = Number(e.target.value);
-                      setNombreDeMois(m);
-                      if (isDemiBoursier2500) {
-                        setMontantDonne(m * 2500);
-                        setIsUserEditedMontantDonne(true);
-                      } else if (devise === "HTG" && taux > 0) {
-                        setMontantDonne(Math.round(m * (isTiToro ? 57.5 : 77.5) * taux));
-                        setIsUserEditedMontantDonne(true);
-                      } else if (devise === "US") {
-                        setMontantDonne(Number((m * (isTiToro ? 57.5 : 77.5)).toFixed(2)));
-                        setIsUserEditedMontantDonne(true);
-                      }
-                    }}
-                    className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-900 shadow-sm dark:border-slate-700 dark:bg-gray-800 dark:text-slate-100 focus:ring-2 focus:ring-brand-500"
-                  >
-                    {Array.from({ length: Math.max(1, 12 - pastMonthsPaid) }, (_, i) => i + 1).map((m) => {
-                      const covered = getCoveredSeasonMonths(pastMonthsPaid, m);
-                      const monthLabel = formatCoveredMonthsLabel(covered);
-                      if (isDemiBoursier2500) {
-                        const mHTG = m * 2500;
-                        const mUSD = taux > 0 ? mHTG / taux : 0;
-                        return (
-                          <option key={m} value={m}>
-                            {m} mois : {monthLabel} ({mHTG.toLocaleString('fr-FR')} HTG{taux > 0 ? ` • $${mUSD.toFixed(2)} USD` : ""})
-                          </option>
-                        );
-                      }
-                      const mUSD = m * (isTiToro ? 57.5 : 77.5);
-                      const mHTG = taux > 0 ? mUSD * taux : 0;
-                      return (
-                        <option key={m} value={m}>
-                          {m} mois : {monthLabel} (${mUSD.toFixed(2)} USD{taux > 0 ? ` • ${mHTG.toLocaleString('fr-FR', { maximumFractionDigits: 2 })} HTG` : ""})
-                        </option>
-                      );
-                    })}
-                  </select>
-
-                  {/* Calendrier visuel des 12 mois de la saison */}
-                  <div className="mt-2.5">
-                    <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400 block mb-1.5">
-                      Calendrier de la saison (12 mois) :
-                    </span>
-                    <div className="flex flex-wrap gap-1.5">
-                      {SEASON_MONTHS.map((mName, idx) => {
-                        const isPaid = idx < pastMonthsPaid;
-                        const isCurrent = idx >= pastMonthsPaid && idx < pastMonthsPaid + nombreDeMois;
-                        return (
-                          <span
-                            key={mName}
-                            className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-medium border ${
-                              isPaid
-                                ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300"
-                                : isCurrent
-                                ? "border-brand-300 bg-brand-50 text-brand-700 font-semibold ring-1 ring-brand-500/20 dark:border-brand-700 dark:bg-brand-950/50 dark:text-brand-300"
-                                : "border-gray-200 bg-gray-50 text-gray-400 dark:border-gray-800 dark:bg-gray-800/40 dark:text-gray-500"
-                            }`}
-                            title={isPaid ? `${mName} : Déjà réglé` : isCurrent ? `${mName} : Réglé par ce versement` : `${mName} : Restant`}
-                          >
-                            {isPaid && (
-                              <svg className="w-3 h-3 text-emerald-600 dark:text-emerald-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-                              </svg>
-                            )}
-                            {mName}
-                          </span>
-                        );
-                      })}
-                    </div>
-                  </div>
+                  <MonthSelector
+                    pastPaidMonths={pastPaidMonthNames}
+                    selectedMonths={selectedMonthNames}
+                    onChange={handleSelectedMonthsChange}
+                    monthlyAmount={isDemiBoursier2500 ? 2500 : (isTiToro ? 57.5 : 77.5)}
+                    currency={isDemiBoursier2500 ? "HTG" : (devise || "US")}
+                    taux={taux}
+                  />
                 </div>
 
                 {/* Rubriques ou articles supplémentaires optionnels */}
@@ -2007,58 +1983,14 @@ export function PaymentAddModal({ isOpen, onClose, initialPlayerId, initialProgr
 
                 {selectedPlan === "mensuel" && (
                   <div className="mt-3">
-                    <label className="mb-1.5 block text-xs font-semibold text-gray-700 dark:text-gray-300">
-                      Nombre de mois réglés
-                    </label>
-                    <select
-                      value={nombreDeMois}
-                      onChange={(e) => setNombreDeMois(Number(e.target.value))}
-                      className={selectClassName}
-                    >
-                      {Array.from({ length: Math.max(1, 12 - pastMonthsPaid) }, (_, i) => i + 1).map((m) => {
-                        const covered = getCoveredSeasonMonths(pastMonthsPaid, m);
-                        const monthLabel = formatCoveredMonthsLabel(covered);
-                        const mUSD = m * (isTiToro ? 115 : 155);
-                        return (
-                          <option key={m} value={m}>
-                            {m} mois : {monthLabel} (${mUSD} USD)
-                          </option>
-                        );
-                      })}
-                    </select>
-
-                    {/* Calendrier visuel des 12 mois de la saison */}
-                    <div className="mt-2.5">
-                      <span className="text-[11px] font-medium text-gray-500 dark:text-gray-400 block mb-1.5">
-                        Calendrier de la saison (12 mois) :
-                      </span>
-                      <div className="flex flex-wrap gap-1.5">
-                        {SEASON_MONTHS.map((mName, idx) => {
-                          const isPaid = idx < pastMonthsPaid;
-                          const isCurrent = idx >= pastMonthsPaid && idx < pastMonthsPaid + nombreDeMois;
-                          return (
-                            <span
-                              key={mName}
-                              className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-medium border ${
-                                isPaid
-                                  ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300"
-                                  : isCurrent
-                                  ? "border-brand-300 bg-brand-50 text-brand-700 font-semibold ring-1 ring-brand-500/20 dark:border-brand-700 dark:bg-brand-950/50 dark:text-brand-300"
-                                  : "border-gray-200 bg-gray-50 text-gray-400 dark:border-gray-800 dark:bg-gray-800/40 dark:text-gray-500"
-                              }`}
-                              title={isPaid ? `${mName} : Déjà réglé` : isCurrent ? `${mName} : Réglé par ce versement` : `${mName} : Restant`}
-                            >
-                              {isPaid && (
-                                <svg className="w-3 h-3 text-emerald-600 dark:text-emerald-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-                                </svg>
-                              )}
-                              {mName}
-                            </span>
-                          );
-                        })}
-                      </div>
-                    </div>
+                    <MonthSelector
+                      pastPaidMonths={pastPaidMonthNames}
+                      selectedMonths={selectedMonthNames}
+                      onChange={handleSelectedMonthsChange}
+                      monthlyAmount={isTiToro ? 115 : 155}
+                      currency={devise}
+                      taux={taux}
+                    />
                   </div>
                 )}
 

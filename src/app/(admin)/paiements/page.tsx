@@ -28,7 +28,8 @@ import { ConfirmModal } from "@/components/ui/modal/ConfirmModal";
 import { CustomReminderMessageModal } from "@/components/club/modals/CustomReminderMessageModal";
 import { generateReceiptPDFBase64, generatePlayerHistoryPDFBase64 } from "@/lib/club/pdf-generator";
 import { decomposePaymentTransactions } from "@/lib/club/statistics";
-import { generatePlayerMatricule, SEASON_MONTHS, getCoveredSeasonMonths, formatCoveredMonthsLabel } from "@/lib/club/season";
+import { generatePlayerMatricule, SEASON_MONTHS, getCoveredSeasonMonths, formatCoveredMonthsLabel, extractPlayerPaidMonths, getNextUnpaidMonths } from "@/lib/club/season";
+import { MonthSelector } from "@/components/club/MonthSelector";
 import { useConfirm } from "@/hooks/useConfirm";
 
 interface PaymentPlan {
@@ -129,6 +130,8 @@ function PaymentsPageContent() {
   const [paymentPhotoPreviews, setPaymentPhotoPreviews] = useState<{ file: File; url: string; name: string; isPdf: boolean }[]>([]);
   const [paymentPhotoError, setPaymentPhotoError] = useState<string | null>(null);
   const [nombreDeMois, setNombreDeMois] = useState<number>(1);
+  const [editSelectedMonths, setEditSelectedMonths] = useState<string[]>([]);
+  const [editPastPaidMonths, setEditPastPaidMonths] = useState<string[]>([]);
   const [isMonthlyPlan, setIsMonthlyPlan] = useState<boolean>(false);
   const [editPlan, setEditPlan] = useState<string>("annuel");
 
@@ -443,11 +446,23 @@ function PaymentsPageContent() {
     setIsMonthlyPlan(isMonthly);
 
     const moisMatch = payment.remarque?.match(/\[MOIS_PAYES:\s*(\d+)\s*\]/i) || payment.remarque?.match(/(\d+)\s*mois/i);
-    if (moisMatch && moisMatch[1]) {
-      setNombreDeMois(parseInt(moisMatch[1], 10) || 1);
+    const count = moisMatch && moisMatch[1] ? parseInt(moisMatch[1], 10) || 1 : 1;
+    setNombreDeMois(count);
+
+    // Mois de cette transaction
+    const nomsMatch = payment.remarque?.match(/\[MOIS_NOMS:\s*([^\]]+)\]/i);
+    let selectedMonthsList: string[] = [];
+    if (nomsMatch && nomsMatch[1]) {
+      selectedMonthsList = nomsMatch[1].split(",").map((s) => s.trim()).filter(Boolean);
     } else {
-      setNombreDeMois(1);
+      selectedMonthsList = SEASON_MONTHS.slice(0, count);
     }
+    setEditSelectedMonths(selectedMonthsList);
+
+    // Mois passés des AUTRES paiements du même joueur
+    const otherPayments = payments.filter((p) => p.id !== payment.id && p.playerId === payment.playerId);
+    const otherPaid = extractPlayerPaidMonths(otherPayments);
+    setEditPastPaidMonths(otherPaid);
   };
 
   const closeEditModal = () => {
@@ -536,12 +551,13 @@ function PaymentsPageContent() {
           baseRemarque = `[PLAN:${planUpper}] ${baseRemarque}`;
         }
 
-        if (editPlan === "mensuel") {
-          const coveredMonths = SEASON_MONTHS.slice(0, Math.min(12, nombreDeMois));
+        if (editPlan === "mensuel" || isMonthlyPlan) {
+          const coveredMonths = editSelectedMonths.length > 0 ? editSelectedMonths : SEASON_MONTHS.slice(0, Math.min(12, nombreDeMois));
+          const monthsCount = coveredMonths.length;
           if (/\[MOIS_PAYES:\s*\d+\s*\]/i.test(baseRemarque)) {
-            baseRemarque = baseRemarque.replace(/\[MOIS_PAYES:\s*\d+\s*\]/gi, `[MOIS_PAYES:${nombreDeMois}]`);
+            baseRemarque = baseRemarque.replace(/\[MOIS_PAYES:\s*\d+\s*\]/gi, `[MOIS_PAYES:${monthsCount}]`);
           } else {
-            baseRemarque = `${baseRemarque} [MOIS_PAYES:${nombreDeMois}]`;
+            baseRemarque = `${baseRemarque} [MOIS_PAYES:${monthsCount}]`;
           }
           if (/\[MOIS_NOMS:\s*[^\]]+\]/i.test(baseRemarque)) {
             baseRemarque = baseRemarque.replace(/\[MOIS_NOMS:\s*[^\]]+\]/gi, `[MOIS_NOMS:${coveredMonths.join(",")}]`);
@@ -2914,55 +2930,18 @@ function PaymentsPageContent() {
               </div>
 
               {isMonthlyPlan && (
-                <div>
-                  <label htmlFor="nombre-mois-payes" className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Nombre total de mois réglés (cumul)
-                  </label>
-                  <select
-                    id="nombre-mois-payes"
-                    value={nombreDeMois}
-                    onChange={(event) => setNombreDeMois(Math.max(1, parseInt(event.target.value) || 1))}
-                    className="h-11 w-full rounded-lg border border-gray-300 px-3 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white font-medium cursor-pointer"
-                  >
-                    {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((m) => {
-                      const covered = SEASON_MONTHS.slice(0, m);
-                      const monthLabel = formatCoveredMonthsLabel(covered);
-                      return (
-                        <option key={m} value={m}>
-                          {m} mois : {monthLabel}
-                        </option>
-                      );
-                    })}
-                  </select>
-
-                  <div className="mt-2.5">
-                    <span className="text-[11px] font-medium text-gray-500 dark:text-gray-400 block mb-1.5">
-                      Calendrier de la saison (12 mois) :
-                    </span>
-                    <div className="flex flex-wrap gap-1.5">
-                      {SEASON_MONTHS.map((mName, idx) => {
-                        const isCovered = idx < nombreDeMois;
-                        return (
-                          <span
-                            key={mName}
-                            className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-medium border ${
-                              isCovered
-                                ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300"
-                                : "border-gray-200 bg-gray-50 text-gray-400 dark:border-gray-800 dark:bg-gray-800/40 dark:text-gray-500"
-                            }`}
-                            title={isCovered ? `${mName} : Couvert (${idx + 1}/${nombreDeMois})` : `${mName} : Restant`}
-                          >
-                            {isCovered && (
-                              <svg className="w-3 h-3 text-emerald-600 dark:text-emerald-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-                              </svg>
-                            )}
-                            {mName}
-                          </span>
-                        );
-                      })}
-                    </div>
-                  </div>
+                <div className="mt-1">
+                  <MonthSelector
+                    pastPaidMonths={editPastPaidMonths}
+                    selectedMonths={editSelectedMonths}
+                    onChange={(months) => {
+                      setEditSelectedMonths(months);
+                      setNombreDeMois(months.length);
+                    }}
+                    monthlyAmount={editingPayment.remarque?.toLowerCase().includes("2500") ? 2500 : (editingPayment.devise === "HTG" ? 0 : 155)}
+                    currency={editingPayment.devise === "HTG" ? "HTG" : "US"}
+                    taux={editTaux}
+                  />
                 </div>
               )}
 

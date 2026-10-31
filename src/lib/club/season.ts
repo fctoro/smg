@@ -99,11 +99,74 @@ export function getCoveredSeasonMonths(pastMonthsPaid: number = 0, count: number
 }
 
 /**
- * Returns a human-friendly label for covered months (e.g. "Septembre", "Septembre & Octobre", "Septembre à Décembre").
+ * Returns a human-friendly label for covered months (e.g. "Septembre", "Septembre & Octobre", "Septembre, Octobre & Novembre", "Septembre à Décembre").
  */
 export function formatCoveredMonthsLabel(months: string[]): string {
   if (!months || months.length === 0) return "";
   if (months.length === 1) return months[0];
   if (months.length === 2) return `${months[0]} & ${months[1]}`;
-  return `${months[0]} à ${months[months.length - 1]}`;
+  if (months.length <= 4) {
+    return `${months.slice(0, -1).join(", ")} & ${months[months.length - 1]}`;
+  }
+  return `${months[0]} à ${months[months.length - 1]} (${months.length} mois)`;
+}
+
+/**
+ * Extracts the exact set of season months already paid by a player from their past payments.
+ * Supports [MOIS_NOMS:Septembre,Octobre] as well as fallback [MOIS_PAYES:N] or "N mois".
+ */
+export function extractPlayerPaidMonths(payments: any[]): string[] {
+  if (!payments || payments.length === 0) return [];
+
+  const paidSet = new Set<string>();
+
+  // Trier les paiements par date (du plus ancien au plus récent)
+  const sorted = [...payments].sort((a, b) => {
+    const da = new Date(a.datePaiement || a.createdAt || 0).getTime();
+    const db = new Date(b.datePaiement || b.createdAt || 0).getTime();
+    return da - db;
+  });
+
+  for (const p of sorted) {
+    const remark = String(p.remarque || "");
+    const isCancelled = String(p.statut || "").toLowerCase() === "annule" || String(p.statut || "").toLowerCase() === "annulé";
+    if (isCancelled) continue;
+
+    // 1. Chercher [MOIS_NOMS:...]
+    const nomsMatch = remark.match(/\[MOIS_NOMS:\s*([^\]]+)\]/i);
+    if (nomsMatch && nomsMatch[1]) {
+      const parts = nomsMatch[1].split(",").map((s) => s.trim()).filter(Boolean);
+      for (const m of parts) {
+        const matched = SEASON_MONTHS.find((sm) => sm.toLowerCase() === m.toLowerCase());
+        if (matched) paidSet.add(matched);
+      }
+      continue;
+    }
+
+    // 2. Fallback: [MOIS_PAYES:N] ou "N mois"
+    const payesMatch = remark.match(/\[MOIS_PAYES:\s*(\d+)\s*\]/i) || remark.match(/(\d+)\s*mois/i);
+    if (payesMatch && payesMatch[1]) {
+      const count = parseInt(payesMatch[1], 10) || 0;
+      let added = 0;
+      for (const sm of SEASON_MONTHS) {
+        if (added >= count) break;
+        if (!paidSet.has(sm)) {
+          paidSet.add(sm);
+          added++;
+        }
+      }
+    }
+  }
+
+  // Retourner les mois dans l'ordre chronologique de SEASON_MONTHS
+  return SEASON_MONTHS.filter((m) => paidSet.has(m));
+}
+
+/**
+ * Returns the next `count` unpaid season months that are not yet in `paidMonths`.
+ */
+export function getNextUnpaidMonths(paidMonths: string[] = [], count: number = 1): string[] {
+  const paidSet = new Set(paidMonths.map((m) => m.toLowerCase()));
+  const unpaid = SEASON_MONTHS.filter((m) => !paidSet.has(m.toLowerCase()));
+  return unpaid.slice(0, Math.max(1, count));
 }

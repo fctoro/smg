@@ -121,8 +121,10 @@ export const cleanRemarkForPDF = (remark: string, isHTG: boolean = false) => {
 
   const moisNomsMatch = remark.match(/\[MOIS_NOMS:\s*([^\]]+)\]/i);
   if (moisNomsMatch && moisNomsMatch[1]) {
-    const moisNoms = moisNomsMatch[1].trim();
-    if (!cleaned.toLowerCase().includes(moisNoms.toLowerCase())) {
+    const moisNoms = moisNomsMatch[1].split(',').map((s) => s.trim()).filter(Boolean).join(', ');
+    if (/Plan\s*:\s*Mensuel/i.test(cleaned)) {
+      cleaned = cleaned.replace(/Plan\s*:\s*Mensuel(\s*\([^)]*\))?/gi, `Plan : Mensuel (${moisNoms})`);
+    } else if (!cleaned.toLowerCase().includes(moisNoms.toLowerCase())) {
       cleaned = `${cleaned}\nMois réglés : ${moisNoms}`;
     }
   }

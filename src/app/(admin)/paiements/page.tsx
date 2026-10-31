@@ -28,7 +28,7 @@ import { ConfirmModal } from "@/components/ui/modal/ConfirmModal";
 import { CustomReminderMessageModal } from "@/components/club/modals/CustomReminderMessageModal";
 import { generateReceiptPDFBase64, generatePlayerHistoryPDFBase64 } from "@/lib/club/pdf-generator";
 import { decomposePaymentTransactions } from "@/lib/club/statistics";
-import { generatePlayerMatricule } from "@/lib/club/season";
+import { generatePlayerMatricule, SEASON_MONTHS, getCoveredSeasonMonths, formatCoveredMonthsLabel } from "@/lib/club/season";
 import { useConfirm } from "@/hooks/useConfirm";
 
 interface PaymentPlan {
@@ -177,6 +177,67 @@ function PaymentsPageContent() {
     const zero = { balance: 0, devise: paymentDevise };
     const player = playerMap.get(currentPayment.playerId);
     if (!player) return { ...zero, dbg: "no_player" };
+
+    // 0. Cas Programme Spécial (Isolé des cotisations de saison)
+    const progMatch = currentPayment.remarque?.match(/\[PROGRAMME:\s*([^\]]+)\]/i);
+    if (progMatch) {
+      const progName = progMatch[1].trim();
+      const progPayments = payments.filter(
+        (p) => p.playerId === currentPayment.playerId &&
+        p.remarque?.toLowerCase().includes(`[programme:${progName.toLowerCase()}]`)
+      );
+
+      let defaultTaux = currentPayment.taux || 0;
+      if (defaultTaux <= 1) {
+        const tauxMatch = currentPayment.remarque?.match(/\[TAUX:\s*([\d.]+)\s*\]/i);
+        defaultTaux = tauxMatch ? parseFloat(tauxMatch[1]) : 130;
+      }
+
+      let totalDueUSD = 0;
+      progPayments.forEach((p) => {
+        const m = p.remarque?.match(/\[TOTAL_DUE:\s*([\d.]+)\s*\]/i);
+        if (m && parseFloat(m[1]) > 0) {
+          totalDueUSD = Math.max(totalDueUSD, parseFloat(m[1]));
+        }
+      });
+
+      let progPaidUSD = 0;
+      let progPaidHTG = 0;
+      progPayments.forEach((p) => {
+        const pAmt = Number(p.montant) || 0;
+        const pTaux = Number(p.taux) || defaultTaux;
+        if (p.devise === "HTG") {
+          progPaidHTG += pAmt;
+          progPaidUSD += pTaux > 0 ? pAmt / pTaux : 0;
+        } else {
+          progPaidUSD += pAmt;
+          progPaidHTG += pTaux > 0 ? pAmt * pTaux : 0;
+        }
+      });
+
+      if (totalDueUSD <= 0) {
+        return { balance: 0, devise: paymentDevise, isSpecial: true, dbg: "prog_no_total_due" };
+      }
+
+      if (paymentDevise === "HTG") {
+        const totalDueHTG = Math.round(totalDueUSD * defaultTaux);
+        const balHTG = Math.max(0, totalDueHTG - progPaidHTG);
+        return {
+          balance: balHTG,
+          devise: "HTG",
+          isSpecial: true,
+          dbg: `prog_${progName}_balance_htg_${balHTG}`,
+        };
+      } else {
+        const balUSD = Math.max(0, totalDueUSD - progPaidUSD);
+        return {
+          balance: Number(balUSD.toFixed(2)),
+          devise: "US",
+          isSpecial: true,
+          dbg: `prog_${progName}_balance_usd_${balUSD}`,
+        };
+      }
+    }
 
     const remarkLower = (currentPayment.remarque || "").toLowerCase();
     const playerStatus = (player.statutJoueur || "").toLowerCase().trim();
@@ -360,16 +421,25 @@ function PaymentsPageContent() {
     setPaymentPhotoPreviews([]);
     setPaymentPhotoError(null);
 
+    const isProg = (payment.remarque || "").includes("[PROGRAMME:");
     const remarkLower = (payment.remarque || "").toLowerCase();
     let rawPlan = "annuel";
-    if (remarkLower.includes("demi")) rawPlan = "demi-bourse";
-    else if ((remarkLower.includes("boursier") || remarkLower.includes("bourse")) && !remarkLower.includes("demi")) rawPlan = "boursier";
-    else if (remarkLower.includes("semestriel")) rawPlan = "semestriel";
-    else if (remarkLower.includes("mensuel")) rawPlan = "mensuel";
-    else rawPlan = "annuel";
+    if (isProg) {
+      rawPlan = "programme";
+    } else if (remarkLower.includes("demi")) {
+      rawPlan = "demi-bourse";
+    } else if ((remarkLower.includes("boursier") || remarkLower.includes("bourse")) && !remarkLower.includes("demi")) {
+      rawPlan = "boursier";
+    } else if (remarkLower.includes("semestriel")) {
+      rawPlan = "semestriel";
+    } else if (remarkLower.includes("mensuel")) {
+      rawPlan = "mensuel";
+    } else {
+      rawPlan = "annuel";
+    }
     setEditPlan(rawPlan);
 
-    const isMonthly = rawPlan === "mensuel" || rawPlan === "demi-bourse" || remarkLower.includes("[plan:mensuel]") || remarkLower.includes("mensuel");
+    const isMonthly = !isProg && (rawPlan === "mensuel" || rawPlan === "demi-bourse" || remarkLower.includes("[plan:mensuel]") || remarkLower.includes("mensuel"));
     setIsMonthlyPlan(isMonthly);
 
     const moisMatch = payment.remarque?.match(/\[MOIS_PAYES:\s*(\d+)\s*\]/i) || payment.remarque?.match(/(\d+)\s*mois/i);
@@ -455,23 +525,32 @@ function PaymentsPageContent() {
         : paymentPhotos.map((p) => ` [JUSTIFICATIF:${p.name}]`).join("");
 
       let baseRemarque = editingPayment.remarque || "";
+      const isProgPayment = baseRemarque.includes("[PROGRAMME:");
 
-      // Mettre à jour le marqueur [PLAN:...]
-      const planUpper = editPlan.toUpperCase();
-      if (/\[PLAN:\s*[^\]]+\s*\]/i.test(baseRemarque)) {
-        baseRemarque = baseRemarque.replace(/\[PLAN:\s*[^\]]+\s*\]/gi, `[PLAN:${planUpper}]`);
-      } else {
-        baseRemarque = `[PLAN:${planUpper}] ${baseRemarque}`;
-      }
-
-      if (editPlan === "mensuel") {
-        if (/\[MOIS_PAYES:\s*\d+\s*\]/i.test(baseRemarque)) {
-          baseRemarque = baseRemarque.replace(/\[MOIS_PAYES:\s*\d+\s*\]/gi, `[MOIS_PAYES:${nombreDeMois}]`);
+      // Mettre à jour le marqueur [PLAN:...] uniquement pour les cotisations de saison
+      if (!isProgPayment) {
+        const planUpper = editPlan.toUpperCase();
+        if (/\[PLAN:\s*[^\]]+\s*\]/i.test(baseRemarque)) {
+          baseRemarque = baseRemarque.replace(/\[PLAN:\s*[^\]]+\s*\]/gi, `[PLAN:${planUpper}]`);
         } else {
-          baseRemarque = `${baseRemarque} [MOIS_PAYES:${nombreDeMois}]`;
+          baseRemarque = `[PLAN:${planUpper}] ${baseRemarque}`;
         }
-      } else {
-        baseRemarque = baseRemarque.replace(/\[MOIS_PAYES:\s*\d+\s*\]/gi, "").trim();
+
+        if (editPlan === "mensuel") {
+          const coveredMonths = SEASON_MONTHS.slice(0, Math.min(12, nombreDeMois));
+          if (/\[MOIS_PAYES:\s*\d+\s*\]/i.test(baseRemarque)) {
+            baseRemarque = baseRemarque.replace(/\[MOIS_PAYES:\s*\d+\s*\]/gi, `[MOIS_PAYES:${nombreDeMois}]`);
+          } else {
+            baseRemarque = `${baseRemarque} [MOIS_PAYES:${nombreDeMois}]`;
+          }
+          if (/\[MOIS_NOMS:\s*[^\]]+\]/i.test(baseRemarque)) {
+            baseRemarque = baseRemarque.replace(/\[MOIS_NOMS:\s*[^\]]+\]/gi, `[MOIS_NOMS:${coveredMonths.join(",")}]`);
+          } else {
+            baseRemarque = `${baseRemarque} [MOIS_NOMS:${coveredMonths.join(",")}]`;
+          }
+        } else {
+          baseRemarque = baseRemarque.replace(/\[MOIS_PAYES:\s*\d+\s*\]/gi, "").replace(/\[MOIS_NOMS:\s*[^\]]+\]/gi, "").trim();
+        }
       }
 
       const paymentDateToSave = newPaymentDate || new Date().toISOString().split("T")[0];
@@ -2697,11 +2776,21 @@ function PaymentsPageContent() {
             <div className="mb-4 flex items-start justify-between gap-4 shrink-0 pb-3 border-b border-gray-100 dark:border-gray-800">
               <div>
                 <h2 id="edit-payment-title" className="text-lg font-semibold text-gray-800 dark:text-white">
-                  Modifier le paiement / Solde
+                  {editingPayment.remarque?.includes("[PROGRAMME:")
+                    ? "Régler le solde du programme"
+                    : "Modifier le paiement / Solde"}
                 </h2>
                 <p className="mt-1 text-base font-bold text-brand-600 dark:text-brand-400">
                   {getPlayerFullName(playerMap.get(editingPayment.playerId)!)}
                 </p>
+                {editingPayment.remarque?.includes("[PROGRAMME:") && (() => {
+                  const prog = getProgrammeNameFromRemark(editingPayment.remarque);
+                  return (
+                    <span className="mt-1 inline-flex items-center gap-1 text-xs font-semibold text-amber-700 bg-amber-50 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800 px-2 py-0.5 rounded-full border border-amber-200">
+                      Programme : {prog}
+                    </span>
+                  );
+                })()}
               </div>
               <button type="button" onClick={closeEditModal} className="text-xl text-gray-400 hover:text-gray-700" aria-label="Fermer">
                 ×
@@ -2826,8 +2915,54 @@ function PaymentsPageContent() {
 
               {isMonthlyPlan && (
                 <div>
-                  <label htmlFor="nombre-mois-payes" className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">Nombre de mois payés</label>
-                  <input id="nombre-mois-payes" type="number" min="1" step="1" value={nombreDeMois} onChange={(event) => setNombreDeMois(Math.max(1, parseInt(event.target.value) || 1))} className="h-11 w-full rounded-lg border border-gray-300 px-3 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white" />
+                  <label htmlFor="nombre-mois-payes" className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Nombre total de mois réglés (cumul)
+                  </label>
+                  <select
+                    id="nombre-mois-payes"
+                    value={nombreDeMois}
+                    onChange={(event) => setNombreDeMois(Math.max(1, parseInt(event.target.value) || 1))}
+                    className="h-11 w-full rounded-lg border border-gray-300 px-3 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white font-medium cursor-pointer"
+                  >
+                    {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((m) => {
+                      const covered = SEASON_MONTHS.slice(0, m);
+                      const monthLabel = formatCoveredMonthsLabel(covered);
+                      return (
+                        <option key={m} value={m}>
+                          {m} mois : {monthLabel}
+                        </option>
+                      );
+                    })}
+                  </select>
+
+                  <div className="mt-2.5">
+                    <span className="text-[11px] font-medium text-gray-500 dark:text-gray-400 block mb-1.5">
+                      Calendrier de la saison (12 mois) :
+                    </span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {SEASON_MONTHS.map((mName, idx) => {
+                        const isCovered = idx < nombreDeMois;
+                        return (
+                          <span
+                            key={mName}
+                            className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-medium border ${
+                              isCovered
+                                ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300"
+                                : "border-gray-200 bg-gray-50 text-gray-400 dark:border-gray-800 dark:bg-gray-800/40 dark:text-gray-500"
+                            }`}
+                            title={isCovered ? `${mName} : Couvert (${idx + 1}/${nombreDeMois})` : `${mName} : Restant`}
+                          >
+                            {isCovered && (
+                              <svg className="w-3 h-3 text-emerald-600 dark:text-emerald-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                              </svg>
+                            )}
+                            {mName}
+                          </span>
+                        );
+                      })}
+                    </div>
+                  </div>
                 </div>
               )}
 
@@ -3244,6 +3379,7 @@ function PaymentsPageContent() {
                       const progName = getProgrammeNameFromRemark(payment.remarque);
                       const cleanDesc = getCleanDescriptionForProgramme(payment.remarque);
                       const photoUrls = extractPhotoUrlsFromRemark(payment.remarque);
+                      const balance = calculateBalance(payment);
 
                       return (
                         <TableRow key={payment.id}>
@@ -3293,6 +3429,15 @@ function PaymentsPageContent() {
                               <span className="text-[11px] text-gray-400 dark:text-gray-500 font-medium capitalize">
                                 {mapModeStr(payment.methode)}
                               </span>
+                              {balance.balance > 0 ? (
+                                <span className="mt-1 text-[11px] font-semibold text-error-600 dark:text-error-400">
+                                  Reste : {formatClubCurrency(balance.balance, balance.devise)}
+                                </span>
+                              ) : balance.balance === 0 && payment.remarque?.includes("[TOTAL_DUE:") ? (
+                                <span className="mt-1 text-[10px] font-medium text-emerald-600 dark:text-emerald-400 flex items-center gap-0.5">
+                                  ✓ Soldé
+                                </span>
+                              ) : null}
                             </div>
                           </TableCell>
 
@@ -3396,6 +3541,17 @@ function PaymentsPageContent() {
                               >
                                 <TrashBinIcon className="size-5" />
                               </button>
+
+                              {balance.balance > 0 && (
+                                <button
+                                  type="button"
+                                  onClick={() => openEditModal(payment)}
+                                  className="rounded-lg bg-red-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-600 transition cursor-pointer"
+                                  title="Ajouter un solde pour ce programme"
+                                >
+                                  Solde
+                                </button>
+                              )}
                             </div>
                           </TableCell>
                         </TableRow>

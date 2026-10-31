@@ -68,3 +68,42 @@ export function getDynamicSeasonOptions(pastYears = 3, futureYears = 0): string[
   
   return seasons;
 }
+
+export const SEASON_MONTHS = [
+  "Septembre",
+  "Octobre",
+  "Novembre",
+  "Décembre",
+  "Janvier",
+  "Février",
+  "Mars",
+  "Avril",
+  "Mai",
+  "Juin",
+  "Juillet",
+  "Août",
+] as const;
+
+/**
+ * Returns the list of month names covered by a payment of `count` months,
+ * starting after `pastMonthsPaid` already settled months.
+ */
+export function getCoveredSeasonMonths(pastMonthsPaid: number = 0, count: number = 1): string[] {
+  const safePast = Math.max(0, pastMonthsPaid);
+  const result: string[] = [];
+  for (let i = 0; i < count; i++) {
+    const idx = (safePast + i) % SEASON_MONTHS.length;
+    result.push(SEASON_MONTHS[idx]);
+  }
+  return result;
+}
+
+/**
+ * Returns a human-friendly label for covered months (e.g. "Septembre", "Septembre & Octobre", "Septembre à Décembre").
+ */
+export function formatCoveredMonthsLabel(months: string[]): string {
+  if (!months || months.length === 0) return "";
+  if (months.length === 1) return months[0];
+  if (months.length === 2) return `${months[0]} & ${months[1]}`;
+  return `${months[0]} à ${months[months.length - 1]}`;
+}

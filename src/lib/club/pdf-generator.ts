@@ -49,7 +49,7 @@ export const extractRabaisLabelFromRemark = (remark?: string, isHTG: boolean = f
     if (val > 0) explicitRabais = `$${val.toFixed(2)}`;
   }
 
-  // 2. Détection du Plan (Annuel = 10%, Semestriel = 5%)
+  // 2. Détection du Plan avec rabais explicite
   const isPlanAnnuel = /\[PLAN:\s*ANNUEL\s*\]/i.test(remark) || /Plan\s*:\s*Annuel/i.test(remark);
   const isPlanSemestriel = /\[PLAN:\s*SEMESTRIEL\s*\]/i.test(remark) || /Plan\s*:\s*Semestriel/i.test(remark);
 
@@ -62,12 +62,7 @@ export const extractRabaisLabelFromRemark = (remark?: string, isHTG: boolean = f
   if (explicitRabais) {
     return explicitRabais;
   }
-  if (isPlanAnnuel) {
-    return "10% (Plan Annuel)";
-  }
-  if (isPlanSemestriel) {
-    return "5% (Plan Semestriel)";
-  }
+  // Ne pas afficher "Rabais accordé" automatiquement si aucun rabais n'a été explicitement saisi
 
   // 3. Bourses / Demi-bourses
   if (/\[REDUCTION:\s*FULL\s*\]/i.test(remark)) return "100% (Bourse)";
@@ -122,6 +117,14 @@ export const cleanRemarkForPDF = (remark: string, isHTG: boolean = false) => {
   
   if (cleaned.includes('•')) {
     cleaned = cleaned.replace(/,\s*/g, '\n• ');
+  }
+
+  const moisNomsMatch = remark.match(/\[MOIS_NOMS:\s*([^\]]+)\]/i);
+  if (moisNomsMatch && moisNomsMatch[1]) {
+    const moisNoms = moisNomsMatch[1].trim();
+    if (!cleaned.toLowerCase().includes(moisNoms.toLowerCase())) {
+      cleaned = `${cleaned}\nMois réglés : ${moisNoms}`;
+    }
   }
 
   if (rabaisLabel) {
@@ -610,7 +613,8 @@ export async function generateReceiptPDFBase64(
 
   let yPos = finalY + 10;
 
-  const appliedRabais = (allPlayerPayments && allPlayerPayments.length > 0 ? allPlayerPayments : payments)
+  const rabaisHistory = paymentHistory && paymentHistory.length > 0 ? paymentHistory : payments;
+  const appliedRabais = rabaisHistory
     .map((p: any) => extractRabaisLabelFromRemark(p.remarque, isHTG))
     .find(Boolean);
 
